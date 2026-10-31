@@ -9,7 +9,7 @@ The Library and On Kobo panels remain mounted when switching tabs. The inactive 
 - Library imports, edits and removals invalidate library data and collection-rule previews. Metadata edits and removals also invalidate the affected book's cover search. Cover changes invalidate library data and device-copy status.
 - Device writes invalidate that mount's books, collections, copy status, history, folder groups and rule previews, including when an operation fails after partial changes. Successful reconciliation only invalidates when it actually changes something.
 - Rule edits invalidate the rule list and all rule previews.
-- Device detection is never cached. Disconnects, reconnects and changes of serial at the same mount discard that mount's cached reads. The retained device panel is unmounted on disconnect and keyed by mount and serial.
+- Completed device detection results are never reused; simultaneous detections share an outstanding request, and polling waits for the previous detection to finish. Device detection and copy-status reads run on background workers, keeping slow USB reads off the UI thread. Disconnects, reconnects and changes of serial at the same mount discard that mount's cached reads. The retained device panel is unmounted on disconnect and keyed by mount and serial.
 
 Invalidating a pending read removes its entry; completing it later cannot put old data back in the cache. The retained Kobo panel also numbers requests so late responses cannot replace a newer screen snapshot. Transfers and reconciliation trigger a refresh while retaining the current grid until fresh data arrives. Device-local operations refresh the same panel after completion.
 

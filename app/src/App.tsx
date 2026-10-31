@@ -96,10 +96,13 @@ export default function App() {
       .finally(() => setLoaded(true));
   }, []);
 
-  // Poll for a connected Kobo. Cheap: it only stats /Volumes/*/.kobo/version.
+  // Poll for a connected Kobo without queuing work behind slow USB reads.
   useEffect(() => {
     let alive = true;
-    const poll = () =>
+    let pending = false;
+    const poll = () => {
+      if (pending || !alive) return;
+      pending = true;
       listDevices()
         .then((devices) =>
           setDevice((prev) => {
@@ -110,7 +113,11 @@ export default function App() {
               : prev;
           }),
         )
-        .catch(() => alive && setDevice(null));
+        .catch(() => alive && setDevice(null))
+        .finally(() => {
+          pending = false;
+        });
+    };
     poll();
     const timer = setInterval(poll, DEVICE_POLL_MS);
     return () => {

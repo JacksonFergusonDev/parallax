@@ -242,7 +242,13 @@ async function write<T>(
 export async function listDevices(): Promise<DeviceInfo[]> {
   let devices: DeviceInfo[];
   try {
-    devices = await invoke<DeviceInfo[]>("list_devices");
+    // Coalesce concurrent detections without reusing a completed result.
+    devices = await readCache.get(
+      ["list_devices"],
+      () => invoke<DeviceInfo[]>("list_devices"),
+      [],
+      0,
+    );
   } catch (e) {
     // Detection failure makes the USB session uncertain, just like disconnect.
     for (const mount of connectedDevices.keys())

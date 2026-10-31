@@ -177,6 +177,39 @@ describe("retained app screens", () => {
     expect(panel("On Kobo").querySelector("img")).not.toBe(oldImage);
   });
 
+  it("keeps Library usable without piling up polls while device detection stalls", async () => {
+    let finishDetection!: (devices: DeviceInfo[]) => void;
+    const normal = vi.mocked(invoke).getMockImplementation()!;
+    let first = true;
+    vi.mocked(invoke).mockImplementation((command, args) => {
+      if (command === "list_devices" && first) {
+        first = false;
+        return new Promise((resolve) => {
+          finishDetection = resolve;
+        });
+      }
+      return normal(command, args);
+    });
+    await render();
+    expect(panel("Library").textContent).toContain("Local book");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(calls("list_devices")).toHaveLength(1);
+    await click(panel("Library").querySelector("button.card")!);
+    expect(
+      panel("Library")
+        .querySelector("button.card")
+        ?.getAttribute("aria-pressed"),
+    ).toBe("true");
+    await act(async () => finishDetection([device]));
+    expect(panel("On Kobo")).not.toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(calls("list_devices")).toHaveLength(2);
+  });
+
   it("keeps newer data when an earlier read completes after reconciliation", async () => {
     let finishOld!: (books: DeviceBook[]) => void;
     let finishReconcile!: (result: { series: number; grouped: number }) => void;

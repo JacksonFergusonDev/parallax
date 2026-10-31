@@ -61,11 +61,16 @@ fn err(e: impl ToString) -> String {
 }
 
 #[tauri::command]
-fn list_devices() -> Vec<DeviceInfo> {
-    KoboDevice::detect(Path::new(MACOS_VOLUMES))
-        .iter()
-        .map(KoboDevice::info)
-        .collect()
+async fn list_devices() -> CmdResult<Vec<DeviceInfo>> {
+    // Removable-media reads can stall. Never perform them on the UI thread.
+    tauri::async_runtime::spawn_blocking(|| {
+        KoboDevice::detect(Path::new(MACOS_VOLUMES))
+            .iter()
+            .map(KoboDevice::info)
+            .collect()
+    })
+    .await
+    .map_err(err)
 }
 
 #[tauri::command]
@@ -116,9 +121,15 @@ fn library_remove(state: State<AppState>, ids: Vec<i64>) -> CmdResult<()> {
 
 /// Library books whose recorded copy is present on the mounted device.
 #[tauri::command]
-fn books_on_device(state: State<AppState>, mount: PathBuf) -> CmdResult<Vec<OnDevice>> {
-    let kobo = KoboDevice::open(&mount).map_err(err)?;
-    erc_core::device::books_on_device(&state.library(), &kobo).map_err(err)
+async fn books_on_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<Vec<OnDevice>> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        erc_core::device::books_on_device(&lib, &kobo).map_err(err)
+    })
+    .await
+    .map_err(err)?
 }
 
 #[derive(Serialize)]
