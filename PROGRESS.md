@@ -4,6 +4,7 @@ Read this first each session. Plan: `docs/PLAN.md`.
 
 ## Completed
 - Planning: research + Kobo MVP plan (`docs/PLAN.md`).
+- Read-only inspection of the reference Kobo (Libra 2, fw 4.38, DbVersion 174): `docs/device-notes.md`.
 
 ## Current
 - Awaiting user decisions listed in `docs/PLAN.md` before starting M0.

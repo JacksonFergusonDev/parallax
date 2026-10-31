@@ -91,7 +91,7 @@ Spike **S1** (runs inside M1/M2, before M6 is designed in detail): on a real dev
 
 ## 6. Open decisions
 
-1. **Hardware**: which Kobo model + firmware, and is Kobo account sync on? Can you share a copy of `.kobo/KoboReader.sqlite` as a test fixture (kept out of git if you prefer)?
+1. ~~**Hardware**~~ — answered: Kobo Libra 2, fw 4.38.23697, DbVersion 174, account sync on. See `docs/device-notes.md`. Still open: keep a gitignored copy of the real DB as a local fixture?
 2. **Library model**: app-managed local library (recommended) vs. device-only (no persistent desktop library).
 3. **Pending collections for new books**: allow installing namespaced triggers in the device DB (recommended, after S1) vs. next-connect reconcile only.
 4. **kepubify sidecar** for the MVP (recommended) vs. a native Rust port up front.
