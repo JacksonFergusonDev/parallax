@@ -21,7 +21,7 @@ Status: **approved** (decisions in §6). S1 done; M0 in progress. Source brief: 
 
 ## 2. Architecture
 
-```
+```text
 calibre-rewrite/
 ├─ crates/           (each crate is added by the milestone that first needs it)
 │  ├─ epub/          OPF read/edit, cover swap, safe re-zip (zip + quick-xml). No Tauri deps.
@@ -77,6 +77,7 @@ Each milestone is sized for ~1 session, ends with green `just check` (fmt, clipp
 | S2 | Do collections survive Kobo cloud sync with Wi-Fi on, and does soft-delete propagate? | Deferred to M6; needs a throwaway collection on a synced account. |
 
 **S1 outcome → design:**
+
 - **Collections for new books: write the `Shelf`/`ShelfContent` rows in the same session as the file copy (approach A).** The ContentId is predictable (`file:///mnt/onboard/<path>`), Nickel honours the row on import, and no triggers are installed. "Send to collection" is one step.
 - **Series (and other `content` columns) for new books: replug reconcile (approach C)**, since the `content` row doesn't exist until import. The app shows "N books have pending details — replug to finish". A trigger is not used: it needs a Kobo restart to show, which is worse UX than a replug.
 - Triggers dropped from the plan; nothing persistent is installed in Nickel's DB.

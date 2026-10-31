@@ -4,8 +4,7 @@ Manual checks only a person holding the Kobo can do. Record results in the table
 
 ## Spike S1 — collections for newly sent books (**done 2026-10-30**: A immediate, B after restart, C immediate)
 
-**Question:** when the app sends a book, can it also put the book in a collection without you replugging the Kobo?
-Three approaches are tested at once with three tiny test books:
+**Question:** when the app sends a book, can it also put the book in a collection without you replugging the Kobo? Three approaches are tested at once with three tiny test books:
 
 | Book | Approach | What it proves |
 |---|---|---|
@@ -16,16 +15,20 @@ Three approaches are tested at once with three tiny test books:
 What the script changes on the device: it adds a folder `ERC-Spike/` with 3 small EPUBs, 3 collections named `ERC Spike A/B/C`, and one trigger with a side table. It backs up `KoboReader.sqlite` into `.spike-backups/` in this repo before every write. `cleanup` removes everything it added.
 
 ### Before you start
+
 1. On the Kobo, **turn Wi-Fi off** (so the test collections never sync to your Kobo account).
 2. Connect the Kobo and tap **Connect** so it shows up as `KOBOeReader`.
 
 ### Round 1 — A and B
+
 ```bash
 scripts/spike-s1.sh prepare
 ```
+
 ```bash
 diskutil eject /Volumes/KOBOeReader
 ```
+
 3. Unplug, then wait for the Kobo to finish "Importing content".
 4. On the Kobo, open **My Books → Collections** and check the table below. If a collection is empty, **restart the Kobo** (Settings → Device information → Restart, or hold the power button → Power off, then on) and check again.
 
@@ -36,16 +39,21 @@ diskutil eject /Volumes/KOBOeReader
 | All 3 test books appear in My Books and open | | |
 
 ### Round 2 — C (replug flow)
+
 5. Plug the Kobo back in and tap **Connect**.
+
 ```bash
 scripts/spike-s1.sh check
 ```
+
 ```bash
 scripts/spike-s1.sh replug-test
 ```
+
 ```bash
 diskutil eject /Volumes/KOBOeReader
 ```
+
 6. On the Kobo, check:
 
 | Check | Result |
@@ -55,22 +63,29 @@ diskutil eject /Volumes/KOBOeReader
 | A and B are still in their collections | |
 
 ### Round 3 — clean up
+
 7. Plug in, tap **Connect**, then run:
+
 ```bash
 scripts/spike-s1.sh check
 ```
+
 ```bash
 scripts/spike-s1.sh cleanup
 ```
+
 ```bash
 diskutil eject /Volumes/KOBOeReader
 ```
+
 8. Confirm the 3 test books and 3 collections are gone, then turn Wi-Fi back on.
 
 If anything looks wrong at any point, plug in and run `scripts/spike-s1.sh restore` to put back the most recent backup.
 
 ## Later checkpoints (need app code first)
+
 Batched so you can do several in one sitting when Claude asks:
+
 - M1: `erc kobo ls` output matches the library on the device.
 - M2: a book sent by the app opens and shows KEPUB features (pages per chapter, reading stats).
 - M4: a replaced cover shows on the device.

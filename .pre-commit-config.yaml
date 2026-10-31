@@ -1,0 +1,138 @@
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+  - pre-push
+
+default_stages:
+  - pre-commit
+
+fail_fast: true
+
+repos:
+  # Generic hooks
+  - repo: builtin
+    hooks:
+      - id: check-added-large-files
+        args: ['--maxkb=2000']
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-symlinks
+      - id: check-executables-have-shebangs
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+        # tsconfig files are JSON with comments.
+        exclude: (^|/)tsconfig.*\.json$
+      - id: check-toml
+
+  # Rust (Cargo workspace at the repository root). Rust is Homebrew's
+  # keg-only rustup, so each hook puts it on PATH.
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: bash -c 'PATH="/opt/homebrew/opt/rustup/bin:$PATH" cargo fmt --all'
+        language: system
+        files: \.rs$
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: bash -c 'PATH="/opt/homebrew/opt/rustup/bin:$PATH" cargo clippy --workspace --all-targets -- -D warnings'
+        language: system
+        files: (\.rs|Cargo\.(toml|lock)|tauri\.conf\.json)$
+        pass_filenames: false
+
+      - id: cargo-test
+        name: cargo test
+        entry: bash -c 'PATH="/opt/homebrew/opt/rustup/bin:$PATH" cargo test --workspace'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+  # Desktop UI (app/), mirroring `just check`. Hooks run from the repository
+  # root, so each one moves into app/ and drops the app/ prefix from file names.
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier
+        entry: bash -c 'cd app && pnpm exec prettier --write --ignore-unknown "${@#app/}"' --
+        language: system
+        files: ^app/
+        exclude: ^app/src-tauri/
+        require_serial: true
+
+      - id: eslint
+        name: eslint
+        entry: bash -c 'cd app && pnpm exec eslint "${@#app/}"' --
+        language: system
+        files: ^app/src/.*\.[cm]?[jt]sx?$
+        require_serial: true
+
+      - id: tsc
+        name: tsc
+        entry: bash -c 'cd app && pnpm typecheck'
+        language: system
+        files: ^app/(src/|tsconfig.*\.json|package\.json|pnpm-lock\.yaml)
+        pass_filenames: false
+
+      - id: pnpm-lock-check
+        name: pnpm lockfile up to date
+        entry: bash -c 'cd app && pnpm install --frozen-lockfile --offline'
+        language: system
+        files: ^app/(package\.json|pnpm-lock\.yaml)$
+        pass_filenames: false
+
+      - id: vitest
+        name: vitest
+        entry: bash -c 'cd app && pnpm test'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+  # Markdown and GitHub Actions
+  - repo: local
+    hooks:
+      - id: rumdl-check
+        name: rumdl check
+        entry: rumdl check --fix
+        language: system
+        types: [markdown]
+        require_serial: true
+
+      - id: rumdl-fmt
+        name: rumdl fmt
+        entry: rumdl fmt
+        language: system
+        types: [markdown]
+        require_serial: true
+
+      - id: zizmor
+        name: zizmor
+        entry: uvx zizmor --offline .github/
+        language: system
+        pass_filenames: false
+        files: ^\.github/(workflows/.*\.ya?ml|actions/.*)$
+
+  # Check for accidental commits of secrets
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  # Commit message validation
+  - repo: https://github.com/Goldziher/gitfluff
+    rev: v0.8.0
+    hooks:
+      - id: gitfluff-lint
+        args: [--write]
+        stages: [commit-msg]
+
+  # GitHub Actions workflow validation
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint

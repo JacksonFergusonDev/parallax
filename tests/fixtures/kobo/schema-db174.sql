@@ -5,7 +5,7 @@ CREATE TABLE shortcover_page ( 		shortcoverId TEXT not null, 		PageNumber INTEGE
 CREATE TABLE volume_shortcovers(		volumeId TEXT NOT NULL,		shortcoverId TEXT NOT NULL,		VolumeIndex INTEGER,		PRIMARY KEY (volumeId, shortcoverId));
 CREATE TABLE content_keys ( volumeId TEXT NOT NULL, elementId TEXT NOT NULL, elementKey TEXT, PRIMARY KEY (volumeId, elementId));
 CREATE TABLE Bookmark ( BookmarkID TEXT NOT NULL, VolumeID TEXT NOT NULL, ContentID TEXT NOT NULL, StartContainerPath TEXT NOT NULL, StartContainerChildIndex INTEGER NOT NULL, StartOffset INTEGER NOT NULL, EndContainerPath TEXT NOT NULL, EndContainerChildIndex INTEGER NOT NULL, EndOffset INTEGER NOT NULL, Text TEXT, Annotation TEXT, ExtraAnnotationData BLOB, DateCreated TEXT, ChapterProgress REAL NOT NULL DEFAULT 0, Hidden BOOL NOT NULL DEFAULT 0, Version TEXT, DateModified TEXT, Creator TEXT, UUID TEXT, UserID TEXT, SyncTime TEXT, Published BIT default false, ContextString TEXT, Type TEXT, PRIMARY KEY (BookmarkID) );
-CREATE TABLE Event ( 
+CREATE TABLE Event (
 	EventType INTEGER NOT NULL,
 	FirstOccurrence TEXT,
 	LastOccurrence TEXT,
@@ -13,7 +13,7 @@ CREATE TABLE Event (
 	ContentID TEXT,
 	ExtraData BLOB, Checksum TEXT,
 	PRIMARY KEY (EventType, ContentID) );
-CREATE TABLE Achievement( 
+CREATE TABLE Achievement(
 	Acknowledged BOOL,
 	CompleteDescription TEXT,
 	DateCreated TEXT,
@@ -22,7 +22,7 @@ CREATE TABLE Achievement(
 	Hidden BOOL,
 	Id TEXT NOT NULL,
 	ImageId TEXT NOT NULL,
-	IncompleteDescription TEXT, 
+	IncompleteDescription TEXT,
 	Name TEXT NOT NULL,
 	Ordinal INTEGER,
 	PercentComplete INTEGER,
@@ -30,16 +30,16 @@ CREATE TABLE Achievement(
 	Synchronized BOOL,
 	UserId TEXT, Checksum TEXT, FacebookImageId TEXT,
 	PRIMARY KEY (Id) );
-CREATE TABLE Rules( 
-	AchievementId	 TEXT, 
-	EventProperty	 TEXT, 
-	EventType	 TEXT, 
-	GoalValue	 TEXT NOT NULL, 
-	Id		 TEXT NOT NULL, 
-	Operation	 INT  NOT NULL, 
-	ParentRuleId	 TEXT, 
-	ConjunctionType	INT, 
-	IsConjunction	 BOOL, Checksum TEXT, 
+CREATE TABLE Rules(
+	AchievementId	 TEXT,
+	EventProperty	 TEXT,
+	EventType	 TEXT,
+	GoalValue	 TEXT NOT NULL,
+	Id		 TEXT NOT NULL,
+	Operation	 INT  NOT NULL,
+	ParentRuleId	 TEXT,
+	ConjunctionType	INT,
+	IsConjunction	 BOOL, Checksum TEXT,
 	PRIMARY KEY(Id));
 CREATE TABLE volume_tabs (volumeId TEXT NOT NULL,tabId TEXT NOT NULL DEFAULT 'abcdefff-ffff-ffff-ffff-fffffffffffd',PRIMARY KEY (volumeId, tabId));
 CREATE TABLE ratings (ContentID TEXT NOT NULL, Rating INTEGER, Review TEXT, DateModified TEXT NOT NULL, PRIMARY KEY(ContentID));
@@ -71,23 +71,23 @@ CREATE TABLE SyncQueue (
 	State		INT,
 	PRIMARY KEY(VolumeId)
 );
-CREATE TABLE AbTest( 
-	Id TEXT, 
-	Expiration TEXT, 
-	Name TEXT, 
-	GroupId INT, 
-	Variables TEXT, 
-	Status INT, 
-	Description TEXT, 
-	Checksum TEXT, TestKey TEXT, 
+CREATE TABLE AbTest(
+	Id TEXT,
+	Expiration TEXT,
+	Name TEXT,
+	GroupId INT,
+	Variables TEXT,
+	Status INT,
+	Description TEXT,
+	Checksum TEXT, TestKey TEXT,
 	PRIMARY KEY(Id));
-CREATE TABLE AnalyticsEvents( 
-	Id TEXT, 
-	Type TEXT, 
-	Timestamp TEXT, 
-	Attributes TEXT, 
-	Metrics TEXT, 
-	TestGroups TEXT, ClientApplicationVersion TEXT, Mandatory BIT DEFAULT FALSE, 
+CREATE TABLE AnalyticsEvents(
+	Id TEXT,
+	Type TEXT,
+	Timestamp TEXT,
+	Attributes TEXT,
+	Metrics TEXT,
+	TestGroups TEXT, ClientApplicationVersion TEXT, Mandatory BIT DEFAULT FALSE,
 	PRIMARY KEY(Id));
 CREATE TABLE Activity (
 	Id		TEXT,
@@ -98,15 +98,15 @@ CREATE TABLE Activity (
 	Data	BLOB,
 	PRIMARY KEY(Id, Type)
 );
-CREATE TABLE Authors( 
-	UserId  TEXT, 
-	Avatar TEXT, 
-	Name TEXT, 
-	FacebookId TEXT, 
+CREATE TABLE Authors(
+	UserId  TEXT,
+	Avatar TEXT,
+	Name TEXT,
+	FacebookId TEXT,
 	PRIMARY KEY(UserID));
-CREATE TABLE BookAuthors( 
-	AuthorId  TEXT, 
-	BookId TEXT, 
+CREATE TABLE BookAuthors(
+	AuthorId  TEXT,
+	BookId TEXT,
 	PRIMARY KEY(AuthorId, BookId));
 CREATE TABLE Reviews (
 Id TEXT NOT NULL,
@@ -150,16 +150,16 @@ title TEXT,
 libraryKey TEXT,
 cardId TEXT, isAvailable TEXT, suspensionFlag BIT, placedDate TEXT, expireDate TEXT, estimatedAvailableDate TEXT,
 PRIMARY KEY(id));
-CREATE TABLE WordList( 
-	Text  TEXT, 
-	VolumeId TEXT, 
-	DictSuffix TEXT, DateCreated TEXT, 
+CREATE TABLE WordList(
+	Text  TEXT,
+	VolumeId TEXT,
+	DictSuffix TEXT, DateCreated TEXT,
 	PRIMARY KEY(Text));
-CREATE TABLE Wishlist( 
-	CrossRevisionId TEXT, 
-	DateModified TEXT NOT NULL, 
-	IsAdded BOOL, 
-	IsSynced BOOL, 
+CREATE TABLE Wishlist(
+	CrossRevisionId TEXT,
+	DateModified TEXT NOT NULL,
+	IsAdded BOOL,
+	IsSynced BOOL,
 	PRIMARY KEY(CrossRevisionId));
 CREATE TABLE SubscriptionProducts ( CrossRevisionId TEXT NOT NULL,Id TEXT NOT NULL,Name TEXT,IsPreOrder BOOL,Tiers TEXT,ActivationDate TEXT,DeactivationDate TEXT,PRIMARY KEY (CrossRevisionId) );
 CREATE TABLE DropboxItem ( Id TEXT NOT NULL,Json TEXT,PRIMARY KEY (Id) );

@@ -1,0 +1,12 @@
+# Markdown is never hard-wrapped (see AGENTS.md): no line length limit, and
+# `rumdl check --fix` joins any wrapped paragraph or list item into one line.
+[MD013]
+line-length = 0
+reflow = true
+reflow-mode = "normalize"
+
+[per-file-ignores]
+# Agent instruction files: CLAUDE.md is a bare `@AGENTS.md` include and
+# AGENTS.md starts at a second-level section.
+"CLAUDE.md" = ["MD041"]
+"AGENTS.md" = ["MD041"]

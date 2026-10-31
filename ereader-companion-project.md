@@ -9,12 +9,14 @@ This should be a focused alternative to calibre's complexity, not a full calibre
 ## Features
 
 ### Book preparation
+
 - Import local EPUB files via drag-and-drop, including multiple books at once.
 - View and edit basic metadata: title, author, series, genre/tags.
 - Replace poor-quality covers with local images or find higher-resolution alternatives online.
 - Convert automatically to an appropriate device format, especially **EPUB → KEPUB for Kobo**, with suitable Kindle conversion/delivery options.
 
 ### Device and library management
+
 - Detect connected Kobo and Kindle devices and browse their installed books.
 - Transfer, remove, and manage books with clear feedback.
 - Make native e-reader organization genuinely easy: collections, genres, series, bulk edits, and optional automatic grouping rules.
@@ -22,6 +24,7 @@ This should be a focused alternative to calibre's complexity, not a full calibre
 - Respect differences between devices. In particular, don't pretend Kindle supports native collection management when it doesn't; clearly distinguish local-only organization from on-device changes.
 
 ### Reading insights
+
 - Show reading status (unread, in progress, finished), percentage completed, and last-read date where accessible.
 - Track how long books have been on a device.
 - Explore reading history and statistics, including time spent reading, when device data permits. Detailed analytics are optional and must not rely on invented or unreliable data.

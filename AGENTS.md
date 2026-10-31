@@ -18,3 +18,7 @@
 - Escalate only genuinely blocking ambiguities or operations that risk irreversible damage to external systems or real device data.
 - Verify functionality through automated tests wherever possible.
 - Do not claim real-device functionality has been verified unless tested against actual hardware.
+
+## Writing conventions
+
+- Never hard-wrap Markdown. Write each paragraph and list item as a single line and let the editor soft-wrap. rumdl enforces this (`.rumdl.toml`) and its pre-commit hook joins wrapped lines automatically.
