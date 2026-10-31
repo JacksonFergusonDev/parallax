@@ -87,10 +87,8 @@ impl KoboDevice {
     /// `.Spotlight-V100`). Best effort.
     fn disable_indexing(&self) {
         let marker = self.mount().join(".metadata_never_index");
-        if !marker.exists() {
-            if File::create(&marker).is_ok() {
-                remove_apple_double(&marker);
-            }
+        if !marker.exists() && File::create(&marker).is_ok() {
+            remove_apple_double(&marker);
         }
     }
 }
