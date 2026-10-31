@@ -132,3 +132,84 @@ fn sends_library_books_with_edited_metadata() {
         format!("file:///mnt/onboard/{}", sent.device_path)
     );
 }
+
+#[test]
+fn updates_and_removes_books_on_device() {
+    use erc_core::device::{books_on_device, remove_from_device};
+    use erc_core::send::update_on_device;
+    use rusqlite::Connection;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mount = dir.path().join("KOBOeReader");
+    fs::create_dir_all(mount.join(".kobo")).unwrap();
+    fs::write(mount.join(".kobo/version"), VERSION).unwrap();
+    let db = mount.join(".kobo/KoboReader.sqlite");
+    let conn = Connection::open(&db).unwrap();
+    conn.execute_batch(include_str!(
+        "../../../tests/fixtures/kobo/schema-db174.sql"
+    ))
+    .unwrap();
+    conn.pragma_update(None, "journal_mode", "wal").unwrap();
+    drop(conn);
+    let kobo = KoboDevice::open(&mount).unwrap();
+    let backups = dir.path().join("backups");
+    let converter = Kepubify::locate().unwrap();
+    let mut library = Library::open(dir.path().join("lib")).unwrap();
+    let ImportOutcome::Added { book, .. } = library.import(&fixture("minimal.epub")).unwrap()
+    else {
+        panic!();
+    };
+
+    let sent = send_library_books(&library, &kobo, &converter, &[book.id], |_| {});
+    let content_id = sent[0].result.as_ref().unwrap().content_id.clone();
+    // Nickel imports the book on eject.
+    Connection::open(&db)
+        .unwrap()
+        .execute(
+            "INSERT INTO content (ContentID, ContentType, MimeType, ___UserID, Title, Accessibility, IsDownloaded, ___PercentRead)
+             VALUES (?1, 6, 'application/x-kobo-epub+zip', 'kepub_user', 'ERC Test Book', -1, 'true', 55)",
+            [&content_id],
+        )
+        .unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(1100)); // timestamps have 1 s resolution
+    let mut edit = library.book(book.id).unwrap().edit();
+    edit.title = "Better Title".into();
+    edit.series = Some("Saga".into());
+    edit.series_index = Some("2".into());
+    library.update(book.id, &edit).unwrap();
+    assert!(books_on_device(&library, &kobo).unwrap()[0].stale);
+
+    let updated =
+        update_on_device(&library, &kobo, &converter, &backups, &[book.id], |_| {}).unwrap();
+    assert!(updated[0].result.is_ok(), "{:?}", updated[0].result);
+    let (title, series, pct): (String, String, i64) = Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT Title, Series, ___PercentRead FROM content WHERE ContentID = ?1",
+            [&content_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(
+        (title.as_str(), series.as_str(), pct),
+        ("Better Title", "Saga", 55)
+    );
+    let on_device = books_on_device(&library, &kobo).unwrap();
+    assert!(!on_device[0].stale);
+    // Same file name as before: the path (and progress) is kept.
+    assert_eq!(
+        on_device[0].device_path,
+        sent[0].result.as_ref().unwrap().device_path
+    );
+
+    let removed = remove_from_device(
+        Some(&library),
+        &kobo,
+        &backups,
+        std::slice::from_ref(&content_id),
+    )
+    .unwrap();
+    assert!(removed[0].result.is_ok());
+    assert!(books_on_device(&library, &kobo).unwrap().is_empty());
+    assert!(!mount.join(&on_device[0].device_path).exists());
+}

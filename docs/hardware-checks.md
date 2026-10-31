@@ -90,5 +90,8 @@ Batched so you can do several in one sitting when Claude asks:
 - M2: a book sent by the app opens and shows KEPUB features (pages per chapter, reading stats).
 - M3: edit a library book's title and series, send it, and confirm the Kobo shows the new title and series.
 - M4: a replaced cover shows on the device.
-- M5: a book removed by the app leaves no ghost entry; `._*` files are tidied.
+- M5, in the On Kobo tab:
+  - Remove a book you don't need: after ejecting, it's gone from the Kobo's library with no blank entry.
+  - Click "Remove macOS clutter": it should report about 68 files, and the Kobo still works normally afterwards.
+  - Send a library book, read a few pages on the Kobo, reconnect, edit its title and cover in the app, click "Update 1 on Kobo", eject: the new title and cover show, and your reading position is kept.
 - M6: bulk collection assignment and "folders → collections" on your real library.

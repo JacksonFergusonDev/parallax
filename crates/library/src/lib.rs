@@ -377,6 +377,15 @@ impl Library {
         Ok(copies)
     }
 
+    /// Forgets that a book is on a device (after removing it there).
+    pub fn remove_device_copy(&self, book_id: i64, device_serial: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM device_copies WHERE book_id = ?1 AND device_serial = ?2",
+            params![book_id, device_serial],
+        )?;
+        Ok(())
+    }
+
     fn book_dir(&self, id: i64) -> PathBuf {
         book_dir(&self.root, id)
     }

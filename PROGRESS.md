@@ -14,11 +14,12 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 - M2 verified on the device (2026-10-31): book sent from the app, imported and opened as KEPUB; no `._*` file next to it. File name came from the source file name (long, ugly), fixed in M3.
 - M3: `crates/epub` (OPF read for EPUB2/3 incl. calibre + EPUB3 series, cover extraction, byte-preserving metadata splice, raw zip copy; all 94 device books parse), `crates/library` (SQLite `user_version` migrations, managed `books/<id>/book.epub` + `cover.jpg` thumbnail, SHA-256 exact dedupe + ISBN/title-author likely-duplicate, author normalisation, export with edits, `device_copies`), `send_library_books` (device names `KEpub/<Title> - <Author>.kepub.epub`, records copies, refuses a second copy of a renamed book), `erc library add|ls|edit|rm|send`, `erc epub-info`, app library UI (cover grid, search, multi-select, edit panel, per-book send status, On Kobo badges). Browser mock backend for UI work: `.claude/launch.json` `ui-mock` (dev only, not bundled).
 - M4: covers. `erc-epub` writes a replacement cover (same media type → bytes swapped in place so title pages update; otherwise a new `erc-cover.*` item + `meta name=cover` + EPUB3 `cover-image` moved). `erc-library` schema v2 `custom_cover`, `set_cover` (capped at 1680 px tall, JPEG q90), `reset_cover`, export re-encodes to PNG when the original cover is PNG. `erc-covers`: Apple Books (`3000x3000bb` artwork, returns up to original size), Open Library (search + ISBN), Google Books (keyless quota often exhausted → 429, skipped silently). CLI `erc library covers|cover|export`; app cover picker modal with measured resolution (soft < 1200 px tall), choose local image, reset.
+- M5: `DeviceWriter` safe-write session (refuses leftover `-wal/-shm/-journal` and DbVersion outside calibre's 53–222; `quick_check`; SQLite online backup to `<app data>/device-backups/<serial>/`, newest 10 kept; immediate transactions; `integrity_check` on close with automatic restore; WAL checkpoint; removes `._` companions of the DB). Ops: `remove_book` (calibre `delete_via_sql` tables + file + `.kobo-images` cache via `qhash` + empty folders), `replace_book` (same path → progress kept; updates Title/Attribution/Series/SeriesID; clears cover cache so Nickel regenerates), `tidy_apple_double` (magic-number checked, skips `.kobo*`). Core `update_on_device`, `remove_from_device`, `books_on_device` (stale = edited after send). CLI `erc kobo rm|tidy|backups|restore`, `erc library update`. App: Library / On Kobo tabs, device list with status/last read/added, multi-select remove, "Update available" badges + "Update N on Kobo", native confirm dialogs (`dialog:allow-message`; `window.confirm` is unreliable in WKWebView). Tests: fixture DB, real DB copy, FAT32 image (`just test-fat`).
 
 ## Current
 
-- Batched device checks for M3 + M4 (user): see docs/hardware-checks.md.
-- Next up: M5 safe device writes.
+- Batched device checks for M3–M5 (user): docs/hardware-checks.md.
+- Next up: M6 native collections.
 
 ## Unresolved
 
@@ -26,7 +27,7 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 ## Next
 
-- M5: safe-write layer for `KoboReader.sqlite` (version gate, backup via SQLite backup API, integrity check before/after, single transaction, journal, `persist_wal` off + `wal_checkpoint(TRUNCATE)`), remove book from device (file + calibre's `delete_via_sql` cleanup), "replace on device" for books edited after sending, tidy existing `._*` files.
+- M6: collections (create/rename/soft-delete, bulk add/remove) through `DeviceWriter`; pre-import `ShelfContent` rows written with each send (S1-A); replug reconcile of series for newly imported books; "device folders → collections"; spike S2 (cloud sync) checklist.
 - Google Books needs an API key to be useful; optional setting later.
 
 ## Notes for agents

@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use erc_convert::Converter;
-use erc_device_kobo::{BOOKS_DIR, KoboDevice, device_file_name};
+use erc_device_kobo::{BOOKS_DIR, DisplayMetadata, KoboDevice, device_file_name, replace_book};
 use erc_library::{Book, Library};
 use serde::Serialize;
 
@@ -158,6 +158,72 @@ pub fn send_library_books(
             result,
         }
     })
+}
+
+/// Re-sends library books that are already on the device, replacing each
+/// copy in place (same path, so reading progress is kept) and updating the
+/// title, author and series Nickel shows. Runs in one backed-up write session.
+pub fn update_on_device(
+    library: &Library,
+    device: &KoboDevice,
+    converter: &dyn Converter,
+    backup_root: &Path,
+    ids: &[i64],
+    on_progress: impl FnMut(Progress),
+) -> erc_device_kobo::Result<Vec<SendOutcome>> {
+    let serial = device.version().serial.clone();
+    let copies = library.device_copies(&serial).unwrap_or_default();
+    let labels: Vec<String> = ids
+        .iter()
+        .map(|&id| {
+            library
+                .book(id)
+                .map_or_else(|_| format!("Book {id}"), |b| b.title)
+        })
+        .collect();
+    let mut writer = device.open_writer(backup_root)?;
+    let outcomes = run_batch(&labels, on_progress, |i, stage| {
+        let id = ids[i];
+        let result = (|| {
+            let copy = copies
+                .iter()
+                .find(|c| c.book_id == id && device.mount().join(&c.device_path).is_file())
+                .ok_or("not on the device")?;
+            stage(|index, total, file| Progress::Preparing { index, total, file });
+            let workdir = tempfile::tempdir().map_err(|e| e.to_string())?;
+            let exported = workdir.path().join("book.epub");
+            let book = library.export(id, &exported).map_err(|e| e.to_string())?;
+            stage(|index, total, file| Progress::Converting { index, total, file });
+            let kepub = workdir.path().join(format!("book{KEPUB_EXT}"));
+            converter
+                .convert(&exported, &kepub)
+                .map_err(|e| e.to_string())?;
+            stage(|index, total, file| Progress::Copying { index, total, file });
+            let meta = DisplayMetadata {
+                title: book.title.clone(),
+                author: (!book.authors.is_empty()).then(|| book.authors.join(", ")),
+                series: book.series.clone(),
+                series_number: book.series.as_ref().and(book.series_index.clone()),
+            };
+            replace_book(&mut writer, &kepub, &copy.device_path, &meta)
+                .map_err(|e| e.to_string())?;
+            library
+                .record_device_copy(id, &serial, &copy.device_path, &copy.content_id)
+                .map_err(|e| e.to_string())?;
+            Ok(SentInfo {
+                device_path: copy.device_path.clone(),
+                content_id: copy.content_id.clone(),
+                bytes: std::fs::metadata(&kepub).map_or(0, |m| m.len()),
+            })
+        })();
+        SendOutcome {
+            source: labels[i].clone(),
+            book_id: Some(id),
+            result,
+        }
+    });
+    writer.close()?;
+    Ok(outcomes)
 }
 
 type Stage = fn(usize, usize, String) -> Progress;

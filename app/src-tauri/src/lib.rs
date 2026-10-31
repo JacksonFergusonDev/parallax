@@ -4,10 +4,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use erc_convert::Kepubify;
-use erc_core::send::{SendOutcome, send_library_books};
+use erc_core::device::{OnDevice, RemoveOutcome};
+use erc_core::send::{SendOutcome, send_library_books, update_on_device};
 use erc_covers::{Candidate, CoverQuery};
-use erc_device::DeviceInfo;
-use erc_device_kobo::{KoboDevice, MACOS_VOLUMES};
+use erc_device::{DeviceBook, DeviceInfo};
+use erc_device_kobo::{KoboDevice, MACOS_VOLUMES, tidy_apple_double};
 use erc_epub::MetadataEdit;
 use erc_library::{Book, ImportOutcome, Library};
 use serde::Serialize;
@@ -18,6 +19,8 @@ const SEND_PROGRESS: &str = "send-progress";
 
 struct AppState {
     library: Arc<Mutex<Library>>,
+    /// Pre-change backups of device databases.
+    backup_root: PathBuf,
 }
 
 impl AppState {
@@ -111,17 +114,73 @@ fn library_remove(state: State<AppState>, ids: Vec<i64>) -> CmdResult<()> {
 
 /// Library books whose recorded copy is present on the mounted device.
 #[tauri::command]
-fn books_on_device(state: State<AppState>, mount: PathBuf) -> CmdResult<Vec<i64>> {
+fn books_on_device(state: State<AppState>, mount: PathBuf) -> CmdResult<Vec<OnDevice>> {
     let kobo = KoboDevice::open(&mount).map_err(err)?;
-    let copies = state
-        .library()
-        .device_copies(&kobo.version().serial)
-        .map_err(err)?;
-    Ok(copies
-        .into_iter()
-        .filter(|c| mount.join(&c.device_path).is_file())
-        .map(|c| c.book_id)
-        .collect())
+    erc_core::device::books_on_device(&state.library(), &kobo).map_err(err)
+}
+
+/// Everything on the device, as Nickel lists it (read-only).
+#[tauri::command]
+async fn device_books(mount: PathBuf) -> CmdResult<Vec<DeviceBook>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        KoboDevice::open(&mount)
+            .and_then(|k| k.open_db())
+            .and_then(|db| db.books())
+            .map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
+async fn remove_from_device(
+    state: State<'_, AppState>,
+    mount: PathBuf,
+    content_ids: Vec<String>,
+) -> CmdResult<Vec<RemoveOutcome>> {
+    let library = state.library.clone();
+    let backups = state.backup_root.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        erc_core::device::remove_from_device(Some(&lib), &kobo, &backups, &content_ids).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
+async fn update_books(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    mount: PathBuf,
+    ids: Vec<i64>,
+) -> CmdResult<Vec<SendOutcome>> {
+    let library = state.library.clone();
+    let backups = state.backup_root.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        let converter = Kepubify::locate().map_err(err)?;
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        update_on_device(&lib, &kobo, &converter, &backups, &ids, |progress| {
+            let _ = app.emit(SEND_PROGRESS, progress);
+        })
+        .map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Deletes macOS `._*` files from the device; returns how many.
+#[tauri::command]
+async fn tidy_device(mount: PathBuf) -> CmdResult<usize> {
+    tauri::async_runtime::spawn_blocking(move || {
+        KoboDevice::open(&mount)
+            .map(|k| tidy_apple_double(&k))
+            .map_err(err)
+    })
+    .await
+    .map_err(err)?
 }
 
 #[tauri::command]
@@ -212,10 +271,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let root = app.path().app_data_dir()?.join("library");
-            let library = Library::open(root)?;
+            let data = app.path().app_data_dir()?;
+            let library = Library::open(data.join("library"))?;
             app.manage(AppState {
                 library: Arc::new(Mutex::new(library)),
+                backup_root: data.join("device-backups"),
             });
             Ok(())
         })
@@ -226,6 +286,10 @@ pub fn run() {
             library_update,
             library_remove,
             books_on_device,
+            device_books,
+            remove_from_device,
+            update_books,
+            tidy_device,
             send_books,
             eject_device,
             cover_search,

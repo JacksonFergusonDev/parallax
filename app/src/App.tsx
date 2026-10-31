@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { open } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import {
   booksOnDevice,
   ejectDevice,
@@ -11,9 +11,11 @@ import {
   removeBooks,
   sendBooks,
   updateBook,
+  updateBooks,
   type Book,
   type DeviceInfo,
   type MetadataEdit,
+  type OnDevice,
 } from "./api";
 import {
   applyProgress,
@@ -24,6 +26,7 @@ import {
 } from "./library";
 import { BookCard } from "./components/BookCard";
 import { DeviceBadge } from "./components/DeviceBadge";
+import { DeviceView } from "./components/DeviceView";
 import { EditPanel } from "./components/EditPanel";
 import "./styles.css";
 
@@ -35,13 +38,14 @@ export default function App() {
   const [books, setBooks] = useState<Book[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [device, setDevice] = useState<DeviceInfo | null>(null);
-  const [onDevice, setOnDevice] = useState<Set<number>>(new Set());
+  const [onDevice, setOnDevice] = useState<Map<number, OnDevice>>(new Map());
+  const [view, setView] = useState<"library" | "device">("library");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [query, setQuery] = useState("");
   const [statuses, setStatuses] = useState<Record<number, SendStatus>>({});
-  const [busy, setBusy] = useState<"importing" | "sending" | "ejecting" | null>(
-    null,
-  );
+  const [busy, setBusy] = useState<
+    "importing" | "sending" | "updating" | "ejecting" | null
+  >(null);
   const [dragging, setDragging] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const batch = useRef<number[]>([]);
@@ -88,8 +92,8 @@ export default function App() {
   }, []);
 
   const refreshOnDevice = useCallback(async (d: DeviceInfo | null) => {
-    const ids = d ? await booksOnDevice(d.mount).catch(() => []) : [];
-    setOnDevice(new Set(ids));
+    const list = d ? await booksOnDevice(d.mount).catch(() => []) : [];
+    setOnDevice(new Map(list.map((o) => [o.book_id, o])));
   }, []);
 
   useEffect(() => {
@@ -97,7 +101,9 @@ export default function App() {
     const ids = device
       ? booksOnDevice(device.mount).catch(() => [])
       : Promise.resolve([]);
-    ids.then((list) => alive && setOnDevice(new Set(list)));
+    ids.then(
+      (list) => alive && setOnDevice(new Map(list.map((o) => [o.book_id, o]))),
+    );
     return () => {
       alive = false;
     };
@@ -154,6 +160,23 @@ export default function App() {
     [books, selected],
   );
   const editing = selectedBooks.length === 1 ? selectedBooks[0] : null;
+  const toSend = visible.filter(
+    (b) => selected.has(b.id) && !onDevice.has(b.id),
+  );
+  const toUpdate = visible.filter(
+    (b) => selected.has(b.id) && onDevice.get(b.id)?.stale,
+  );
+  const libraryByContentId = useMemo(() => {
+    const byId = new Map(books.map((b) => [b.id, b]));
+    const map = new Map<string, Book>();
+    for (const o of onDevice.values()) {
+      const b = byId.get(o.book_id);
+      if (b) map.set(o.content_id, b);
+    }
+    return map;
+  }, [books, onDevice]);
+  // The Kobo tab only exists while one is connected.
+  const activeView = device ? view : "library";
 
   const onSelect = useCallback(
     (id: number, e: React.MouseEvent) => {
@@ -204,25 +227,30 @@ export default function App() {
     setBooks((bs) => bs.map((b) => (b.id === id ? updated : b)));
   };
 
-  const send = async () => {
-    if (!device || selected.size === 0) return;
-    const ids = visible.filter((b) => selected.has(b.id)).map((b) => b.id);
+  const transfer = async (kind: "sending" | "updating", ids: number[]) => {
+    if (!device || ids.length === 0) return;
     batch.current = ids;
     setStatuses(Object.fromEntries(ids.map((id) => [id, { stage: "queued" }])));
-    setBusy("sending");
+    setBusy(kind);
     setNotice(null);
     try {
-      const outcomes = await sendBooks(device.mount, ids);
+      const outcomes = await (kind === "sending" ? sendBooks : updateBooks)(
+        device.mount,
+        ids,
+      );
       const failed = outcomes.filter((o) => "Err" in o.result).length;
       setNotice(
         failed
           ? {
               kind: "error",
-              text: `${failed} of ${outcomes.length} could not be sent. Hover a book to see why.`,
+              text: `${failed} of ${outcomes.length} failed. Hover a book to see why.`,
             }
           : {
               kind: "info",
-              text: "Sent. Eject your Kobo and unplug it to import the new books.",
+              text:
+                kind === "sending"
+                  ? "Sent. Eject your Kobo and unplug it to import the new books."
+                  : "Updated. Eject your Kobo to see the changes.",
             },
       );
       await refreshOnDevice(device);
@@ -235,12 +263,16 @@ export default function App() {
 
   const remove = async () => {
     const n = selected.size;
-    if (
-      !window.confirm(
-        `Remove ${n} ${n === 1 ? "book" : "books"} from your library? Copies on your Kobo stay.`,
-      )
-    )
-      return;
+    const ok = await ask(
+      `Remove ${n} ${n === 1 ? "book" : "books"} from your library? Copies on your Kobo stay.`,
+      {
+        title: "Remove from library",
+        kind: "warning",
+        okLabel: "Remove",
+        cancelLabel: "Cancel",
+      },
+    );
+    if (!ok) return;
     try {
       await removeBooks([...selected]);
       setSelected(new Set());
@@ -275,7 +307,29 @@ export default function App() {
   return (
     <div className={`app ${dragging ? "dragging" : ""}`}>
       <header className="topbar">
-        <h1>Library</h1>
+        {device ? (
+          <div className="tabs" role="tablist">
+            <button
+              role="tab"
+              className={activeView === "library" ? "active" : ""}
+              onClick={() => setView("library")}
+            >
+              Library
+            </button>
+            <button
+              role="tab"
+              className={activeView === "device" ? "active" : ""}
+              onClick={() => {
+                setSelected(new Set());
+                setView("device");
+              }}
+            >
+              On Kobo
+            </button>
+          </div>
+        ) : (
+          <h1>Library</h1>
+        )}
         <input
           className="search"
           type="search"
@@ -286,99 +340,149 @@ export default function App() {
         <DeviceBadge device={device} />
       </header>
 
-      <div className="body">
-        <main
-          className="content"
-          onClick={(e) =>
-            e.target === e.currentTarget && setSelected(new Set())
-          }
-        >
-          {loaded && books.length === 0 ? (
-            <div className="dropzone">
-              <p className="dropzone-title">Drop EPUB files here</p>
-              <p className="muted">
-                They're added to your library, ready to edit and send to your
-                Kobo.
-              </p>
-              <button className="secondary" onClick={chooseFiles}>
-                Choose files…
-              </button>
-            </div>
-          ) : visible.length === 0 && loaded ? (
-            <p className="muted empty">No books match “{query}”.</p>
-          ) : (
-            <div className="grid">
-              {visible.map((b) => (
-                <BookCard
-                  key={b.id}
-                  book={b}
-                  selected={selected.has(b.id)}
-                  onDevice={onDevice.has(b.id)}
-                  status={statuses[b.id]}
-                  onSelect={onSelect}
-                />
-              ))}
-            </div>
-          )}
-        </main>
-        {editing && (
-          <EditPanel
-            key={editing.id}
-            book={editing}
-            onSave={save}
-            onChanged={(updated) =>
-              setBooks((bs) =>
-                bs.map((b) => (b.id === updated.id ? updated : b)),
-              )
-            }
-            onClose={() => setSelected(new Set())}
-          />
-        )}
-      </div>
+      {activeView === "device" && device ? (
+        <DeviceView
+          key={device.mount}
+          device={device}
+          query={query}
+          libraryByContentId={libraryByContentId}
+          onChanged={() => refreshOnDevice(device)}
+          onEjected={() => {
+            setDevice(null);
+            setStatuses({});
+            setNotice({
+              kind: "info",
+              text: "Ejected. Unplug your Kobo; it will refresh its library.",
+            });
+          }}
+        />
+      ) : (
+        <>
+          <div className="body">
+            <main
+              className="content"
+              onClick={(e) =>
+                e.target === e.currentTarget && setSelected(new Set())
+              }
+            >
+              {loaded && books.length === 0 ? (
+                <div className="dropzone">
+                  <p className="dropzone-title">Drop EPUB files here</p>
+                  <p className="muted">
+                    They're added to your library, ready to edit and send to
+                    your Kobo.
+                  </p>
+                  <button className="secondary" onClick={chooseFiles}>
+                    Choose files…
+                  </button>
+                </div>
+              ) : visible.length === 0 && loaded ? (
+                <p className="muted empty">No books match “{query}”.</p>
+              ) : (
+                <div className="grid">
+                  {visible.map((b) => (
+                    <BookCard
+                      key={b.id}
+                      book={b}
+                      selected={selected.has(b.id)}
+                      deviceState={
+                        onDevice.get(b.id)?.stale
+                          ? "stale"
+                          : onDevice.has(b.id)
+                            ? "on"
+                            : undefined
+                      }
+                      status={statuses[b.id]}
+                      onSelect={onSelect}
+                    />
+                  ))}
+                </div>
+              )}
+            </main>
+            {editing && (
+              <EditPanel
+                key={editing.id}
+                book={editing}
+                onSave={save}
+                onChanged={(updated) =>
+                  setBooks((bs) =>
+                    bs.map((b) => (b.id === updated.id ? updated : b)),
+                  )
+                }
+                onClose={() => setSelected(new Set())}
+              />
+            )}
+          </div>
 
-      <footer className="actions">
-        <button
-          className="secondary"
-          onClick={chooseFiles}
-          disabled={busy !== null}
-        >
-          {busy === "importing" ? "Adding…" : "Add books…"}
-        </button>
-        {notice && (
-          <span className={`notice notice-${notice.kind}`}>{notice.text}</span>
-        )}
-        <span className="spacer" />
-        {selected.size > 0 && (
-          <button
-            className="secondary danger"
-            onClick={remove}
-            disabled={busy !== null}
-          >
-            Remove
-          </button>
-        )}
-        {device && sentThisSession && (
-          <button
-            className="secondary"
-            onClick={eject}
-            disabled={busy !== null}
-          >
-            {busy === "ejecting" ? "Ejecting…" : "Eject Kobo"}
-          </button>
-        )}
-        <button
-          className="primary"
-          onClick={send}
-          disabled={!device || selected.size === 0 || busy !== null}
-          title={device ? undefined : "Connect your Kobo to send books"}
-        >
-          {busy === "sending"
-            ? "Sending…"
-            : selected.size > 0
-              ? `Send ${selected.size} to Kobo`
-              : "Send to Kobo"}
-        </button>
-      </footer>
+          <footer className="actions">
+            <button
+              className="secondary"
+              onClick={chooseFiles}
+              disabled={busy !== null}
+            >
+              {busy === "importing" ? "Adding…" : "Add books…"}
+            </button>
+            {notice && (
+              <span className={`notice notice-${notice.kind}`}>
+                {notice.text}
+              </span>
+            )}
+            <span className="spacer" />
+            {selected.size > 0 && (
+              <button
+                className="secondary danger"
+                onClick={remove}
+                disabled={busy !== null}
+              >
+                Remove
+              </button>
+            )}
+            {device && sentThisSession && (
+              <button
+                className="secondary"
+                onClick={eject}
+                disabled={busy !== null}
+              >
+                {busy === "ejecting" ? "Ejecting…" : "Eject Kobo"}
+              </button>
+            )}
+            {toUpdate.length > 0 && (
+              <button
+                className="secondary"
+                onClick={() =>
+                  transfer(
+                    "updating",
+                    toUpdate.map((b) => b.id),
+                  )
+                }
+                disabled={!device || busy !== null}
+                title="Replace the copies on your Kobo with your edits, keeping reading progress"
+              >
+                {busy === "updating"
+                  ? "Updating…"
+                  : `Update ${toUpdate.length} on Kobo`}
+              </button>
+            )}
+            <button
+              className="primary"
+              onClick={() =>
+                transfer(
+                  "sending",
+                  toSend.map((b) => b.id),
+                )
+              }
+              disabled={!device || toSend.length === 0 || busy !== null}
+              title={device ? undefined : "Connect your Kobo to send books"}
+            >
+              {busy === "sending"
+                ? "Sending…"
+                : toSend.length > 0
+                  ? `Send ${toSend.length} to Kobo`
+                  : "Send to Kobo"}
+            </button>
+          </footer>
+        </>
+      )}
     </div>
   );
 }

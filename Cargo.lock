@@ -1009,6 +1009,7 @@ dependencies = [
  "erc-device-kobo",
  "erc-epub",
  "erc-library",
+ "rusqlite",
  "serde",
  "tempfile",
  "thiserror 2.0.21",

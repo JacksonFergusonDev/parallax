@@ -555,3 +555,141 @@ button.link {
   bottom: auto;
   top: 6px;
 }
+
+/* View switcher */
+
+.tabs {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--sunken);
+}
+
+.tabs button {
+  border: none;
+  background: none;
+  padding: 4px 12px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+
+.tabs button.active {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
+}
+
+/* Kobo view */
+
+.device-toolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.device-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.device-row {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 32px 1fr 76px 104px 104px;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: default;
+}
+
+.device-row:hover {
+  background: var(--sunken);
+}
+
+.device-row.selected {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.thumb {
+  width: 32px;
+  height: 48px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--sunken);
+  border: 1px solid var(--border);
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.row-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.row-title,
+.row-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-sub {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.row-status,
+.row-date {
+  font-size: 12px;
+  text-align: right;
+}
+
+.status-reading {
+  color: var(--warn);
+}
+
+.status-finished {
+  color: var(--ok);
+}
+
+.status-unread {
+  color: var(--muted);
+}
+
+.on-device.stale {
+  background: color-mix(in srgb, var(--warn) 88%, black);
+}
+
+button.danger-fill {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.device-row.header {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-top: 0;
+  padding-bottom: 4px;
+}
+
+.device-row.header:hover {
+  background: none;
+}
+
+.device-row.header span:nth-child(n + 3) {
+  text-align: right;
+}

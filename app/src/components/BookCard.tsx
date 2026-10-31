@@ -14,7 +14,8 @@ const STATUS_LABEL: Record<SendStatus["stage"], string> = {
 interface Props {
   book: Book;
   selected: boolean;
-  onDevice: boolean;
+  /** On the connected Kobo; "stale" if edited since it was sent. */
+  deviceState: "on" | "stale" | undefined;
   status: SendStatus | undefined;
   onSelect: (id: number, event: React.MouseEvent) => void;
 }
@@ -22,7 +23,7 @@ interface Props {
 export const BookCard = memo(function BookCard({
   book,
   selected,
-  onDevice,
+  deviceState,
   status,
   onSelect,
 }: Props) {
@@ -46,7 +47,11 @@ export const BookCard = memo(function BookCard({
             {STATUS_LABEL[status.stage]}
           </span>
         )}
-        {!status && onDevice && <span className="on-device">On Kobo</span>}
+        {!status && deviceState && (
+          <span className={`on-device ${deviceState}`}>
+            {deviceState === "stale" ? "Update available" : "On Kobo"}
+          </span>
+        )}
       </div>
       <div className="card-title">{book.title}</div>
       <div className="card-author">

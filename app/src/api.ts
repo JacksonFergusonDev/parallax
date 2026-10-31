@@ -95,6 +95,39 @@ export interface SendOutcome {
     | { Err: string };
 }
 
+/** A library book whose copy is on the connected device. */
+export interface OnDevice {
+  book_id: number;
+  device_path: string;
+  content_id: string;
+  sent_at: string;
+  /** Edited since it was sent. */
+  stale: boolean;
+}
+
+/** A book as the device lists it. */
+export interface DeviceBook {
+  id: string;
+  title: string;
+  author: string | null;
+  path: string | null;
+  sideloaded: boolean;
+  series: string | null;
+  series_number: string | null;
+  read_status: "unread" | "reading" | "finished";
+  percent_read: number;
+  last_read: string | null;
+  reading_time_secs: number | null;
+  added: string | null;
+  file_size: number | null;
+  collections: string[];
+}
+
+export interface RemoveOutcome {
+  content_id: string;
+  result: { Ok: null } | { Err: string };
+}
+
 export interface CoverCandidate {
   source: string;
   url: string;
@@ -110,7 +143,15 @@ export const updateBook = (id: number, edit: MetadataEdit) =>
 export const removeBooks = (ids: number[]) =>
   invoke<void>("library_remove", { ids });
 export const booksOnDevice = (mount: string) =>
-  invoke<number[]>("books_on_device", { mount });
+  invoke<OnDevice[]>("books_on_device", { mount });
+export const deviceBooks = (mount: string) =>
+  invoke<DeviceBook[]>("device_books", { mount });
+export const removeFromDevice = (mount: string, contentIds: string[]) =>
+  invoke<RemoveOutcome[]>("remove_from_device", { mount, contentIds });
+export const updateBooks = (mount: string, ids: number[]) =>
+  invoke<SendOutcome[]>("update_books", { mount, ids });
+export const tidyDevice = (mount: string) =>
+  invoke<number>("tidy_device", { mount });
 export const sendBooks = (mount: string, ids: number[]) =>
   invoke<SendOutcome[]>("send_books", { mount, ids });
 export const searchCovers = (id: number) =>

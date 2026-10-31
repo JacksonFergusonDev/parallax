@@ -3,7 +3,7 @@
 // when not running inside Tauri; never part of the app bundle.
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
-import type { Book, DeviceInfo, MetadataEdit } from "../api";
+import type { Book, DeviceBook, DeviceInfo, MetadataEdit } from "../api";
 
 const PALETTE = [
   "#2f6f5e",
@@ -84,7 +84,39 @@ const device: DeviceInfo = {
     reading_time: true,
   },
 };
-const onDevice = new Set([3]);
+const onDevice = new Map<number, string>([
+  [3, "2026-10-01T00:00:00Z"],
+  [5, "2026-10-01T00:00:00Z"],
+]);
+const contentId = (id: number) =>
+  `file:///mnt/onboard/KEpub/book-${id}.kepub.epub`;
+let storeBooks: DeviceBook[] = [
+  ["Endurance", "Alfred Lansing", "reading", 63, "2026-10-29T20:00:00Z"],
+  ["What If?", "Randall Munroe", "reading", 8, "2024-10-11T10:00:00Z"],
+  [
+    "We Are Legion (We Are Bob)",
+    "Dennis E. Taylor",
+    "finished",
+    100,
+    "2026-07-13T10:00:00Z",
+  ],
+  ["Underland", "Robert Macfarlane", "unread", 0, null],
+].map(([title, author, status, pct, last], i) => ({
+  id: `file:///mnt/onboard/KEpub/Nonfiction/${title}.kepub.epub`,
+  title: title as string,
+  author: author as string,
+  path: `KEpub/Nonfiction/${title}.kepub.epub`,
+  sideloaded: true,
+  series: i === 2 ? "Bobiverse" : null,
+  series_number: i === 2 ? "1" : null,
+  read_status: status as DeviceBook["read_status"],
+  percent_read: pct as number,
+  last_read: last as string | null,
+  reading_time_secs: null,
+  added: "2024-10-09T15:27:08Z",
+  file_size: 1_000_000,
+  collections: [],
+}));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function installMockBackend() {
@@ -105,7 +137,67 @@ export function installMockBackend() {
         case "library_list":
           return books;
         case "books_on_device":
-          return [...onDevice];
+          return [...onDevice].map(([id, sentAt]) => ({
+            book_id: id,
+            device_path: `KEpub/book-${id}.kepub.epub`,
+            content_id: contentId(id),
+            sent_at: sentAt,
+            stale: books.find((b) => b.id === id)!.modified_at > sentAt,
+          }));
+        case "device_books":
+          await sleep(300);
+          return [
+            ...books
+              .filter((b) => onDevice.has(b.id))
+              .map((b): DeviceBook => ({
+                id: contentId(b.id),
+                title: b.title,
+                author: b.authors.join(", "),
+                path: `KEpub/book-${b.id}.kepub.epub`,
+                sideloaded: true,
+                series: b.series,
+                series_number: b.series_index,
+                read_status: "unread",
+                percent_read: 0,
+                last_read: null,
+                reading_time_secs: null,
+                added: onDevice.get(b.id)!,
+                file_size: b.file_size,
+                collections: [],
+              })),
+            ...storeBooks,
+          ].sort((x, y) => x.title.localeCompare(y.title));
+        case "remove_from_device": {
+          const ids = a.contentIds as string[];
+          storeBooks = storeBooks.filter((b) => !ids.includes(b.id));
+          for (const id of [...onDevice.keys()])
+            if (ids.includes(contentId(id))) onDevice.delete(id);
+          return ids.map((content_id) => ({
+            content_id,
+            result: { Ok: null },
+          }));
+        }
+        case "tidy_device":
+          return 68;
+        case "update_books": {
+          const ids = a.ids as number[];
+          for (const [i, id] of ids.entries()) {
+            const base = { index: i + 1, total: ids.length, file: String(id) };
+            await emit("send-progress", { stage: "copying", ...base });
+            await sleep(300);
+            await emit("send-progress", {
+              stage: "done",
+              ...base,
+              device_path: "KEpub/x.kepub.epub",
+            });
+            onDevice.set(id, new Date().toISOString());
+          }
+          return ids.map((id) => ({
+            source: String(id),
+            book_id: id,
+            result: { Ok: {} },
+          }));
+        }
         case "library_update": {
           const edit = a.edit as MetadataEdit;
           books = books.map((b) =>
@@ -137,7 +229,7 @@ export function installMockBackend() {
               ...base,
               device_path: "KEpub/x.kepub.epub",
             });
-            onDevice.add(id);
+            onDevice.set(id, new Date().toISOString());
           }
           return ids.map((id) => ({
             source: String(id),
@@ -175,6 +267,18 @@ export function installMockBackend() {
             b.id === a.id ? { ...b, custom_cover: false } : b,
           );
           return books.find((b) => b.id === a.id);
+        case "plugin:dialog|message": {
+          // ask() resolves true when the returned label matches its OK label.
+          const buttons = a.buttons as
+            { OkCancelCustom?: [string, string] } | string | undefined;
+          const ok =
+            typeof buttons === "object" && buttons.OkCancelCustom
+              ? buttons.OkCancelCustom[0]
+              : "Yes";
+          return window.confirm(String(a.message ?? "Are you sure?"))
+            ? ok
+            : "No";
+        }
         default:
           // Plugin and event-system calls the UI doesn't depend on.
           return null;

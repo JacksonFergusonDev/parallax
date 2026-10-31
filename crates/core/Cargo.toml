@@ -16,6 +16,7 @@ thiserror.workspace = true
 
 [dev-dependencies]
 erc-epub.workspace = true
+rusqlite.workspace = true
 
 [lints]
 workspace = true

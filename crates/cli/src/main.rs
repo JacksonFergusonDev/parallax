@@ -1,16 +1,19 @@
 //! `erc`: a developer CLI that exercises the core crates end to end without
-//! the desktop UI. Device commands are read-only unless stated otherwise;
-//! `send` and `library send` write book files to the device (never its
-//! database). `library` commands share the desktop app's library.
+//! the desktop UI. Device commands are read-only unless their help says they
+//! write; database writes go through the backed-up write session.
+//! `library` commands share the desktop app's library and backups.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use erc_convert::Kepubify;
-use erc_core::send::{Progress, SendOutcome, send_books, send_library_books};
+use erc_core::device::remove_from_device;
+use erc_core::send::{Progress, SendOutcome, send_books, send_library_books, update_on_device};
 use erc_device::{DeviceBook, ReadStatus};
-use erc_device_kobo::{KoboDb, KoboDevice, MACOS_VOLUMES};
+use erc_device_kobo::{
+    KoboDb, KoboDevice, MACOS_VOLUMES, ONBOARD_PREFIX, restore, tidy_apple_double,
+};
 use erc_epub::MetadataEdit;
 use erc_library::{ImportOutcome, Library};
 use serde::Serialize;
@@ -101,6 +104,16 @@ enum LibraryCommand {
         #[arg(long)]
         reset: bool,
     },
+    /// Re-send books already on the Kobo with their latest edits, keeping
+    /// reading progress. Writes, with a backup.
+    Update {
+        #[arg(required = true)]
+        ids: Vec<i64>,
+        #[arg(long)]
+        mount: Option<PathBuf>,
+        #[arg(long)]
+        no_eject: bool,
+    },
     /// Write a book with its edits applied (what a device receives, before KEPUB conversion).
     Export { id: i64, out: PathBuf },
     /// Send books to the Kobo with their edited metadata, then eject. Writes files.
@@ -115,9 +128,35 @@ enum LibraryCommand {
 }
 
 /// Same folder the desktop app uses (Tauri's app data dir on macOS).
-fn default_library_root() -> Result<PathBuf> {
+/// The desktop app's data folder (Tauri's app data dir on macOS).
+fn app_data_dir() -> Result<PathBuf> {
     let home = std::env::var_os("HOME").context("HOME is not set")?;
-    Ok(PathBuf::from(home).join("Library/Application Support/dev.erc.companion/library"))
+    Ok(PathBuf::from(home).join("Library/Application Support/dev.erc.companion"))
+}
+
+fn default_library_root() -> Result<PathBuf> {
+    Ok(app_data_dir()?.join("library"))
+}
+
+/// Shared with the desktop app so backups from either show up together.
+fn backup_root() -> Result<PathBuf> {
+    Ok(app_data_dir()?.join("device-backups"))
+}
+
+fn device_backups(kobo: &KoboDevice) -> Result<Vec<PathBuf>> {
+    let serial: String = kobo
+        .version()
+        .serial
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    let dir = backup_root()?.join(serial);
+    let mut found: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .map(|entries| entries.flatten().map(|e| e.path()).collect())
+        .unwrap_or_default();
+    found.retain(|p| p.extension().is_some_and(|e| e == "sqlite"));
+    found.sort();
+    Ok(found)
 }
 
 #[derive(Subcommand)]
@@ -126,6 +165,31 @@ enum KoboCommand {
     Ls(Source),
     /// List collections on the device.
     Collections(Source),
+    /// Remove books from the device (files and database rows). Writes, with a backup.
+    Rm {
+        /// Paths on the device (e.g. `KEpub/Dune - Frank Herbert.kepub.epub`) or ContentIDs.
+        #[arg(required = true)]
+        books: Vec<String>,
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
+    /// Delete macOS `._*` clutter from the device.
+    Tidy {
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
+    /// List database backups for the connected device.
+    Backups {
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
+    /// Put a database backup back on the device.
+    Restore {
+        /// Backup file (default: the newest for this device).
+        backup: Option<PathBuf>,
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
 }
 
 #[derive(Args)]
@@ -217,6 +281,54 @@ fn main() -> Result<()> {
             let root = library.map_or_else(default_library_root, Ok)?;
             let mut lib = Library::open(&root)?;
             library_command(&mut lib, command, cli.json)?;
+        }
+        Command::Kobo(KoboCommand::Rm { books, mount }) => {
+            let kobo = find_kobo(mount.as_deref())?;
+            let ids: Vec<String> = books
+                .iter()
+                .map(|b| {
+                    if b.starts_with("file://") {
+                        b.clone()
+                    } else {
+                        format!("{ONBOARD_PREFIX}{}", b.trim_start_matches('/'))
+                    }
+                })
+                .collect();
+            let library = Library::open(default_library_root()?).ok();
+            let outcomes = remove_from_device(library.as_ref(), &kobo, &backup_root()?, &ids)?;
+            let mut failed = 0;
+            for o in &outcomes {
+                match &o.result {
+                    Ok(()) => println!("removed {}", o.content_id),
+                    Err(e) => {
+                        failed += 1;
+                        eprintln!("FAILED {}: {e}", o.content_id)
+                    }
+                }
+            }
+            if failed > 0 {
+                bail!("{failed} of {} books failed", outcomes.len());
+            }
+        }
+        Command::Kobo(KoboCommand::Tidy { mount }) => {
+            let kobo = find_kobo(mount.as_deref())?;
+            println!("removed {} macOS ._ files", tidy_apple_double(&kobo));
+        }
+        Command::Kobo(KoboCommand::Backups { mount }) => {
+            for b in device_backups(&find_kobo(mount.as_deref())?)? {
+                println!("{}", b.display());
+            }
+        }
+        Command::Kobo(KoboCommand::Restore { backup, mount }) => {
+            let kobo = find_kobo(mount.as_deref())?;
+            let backup = match backup {
+                Some(b) => b,
+                None => device_backups(&kobo)?
+                    .pop()
+                    .context("no backups for this device")?,
+            };
+            restore(&kobo.db_path(), &backup)?;
+            println!("restored {}", backup.display());
         }
         Command::Kobo(KoboCommand::Collections(source)) => {
             let collections = source.open()?.collections()?;
@@ -340,6 +452,22 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
         LibraryCommand::Rm { id } => {
             lib.remove(id)?;
             println!("removed #{id}");
+        }
+        LibraryCommand::Update {
+            ids,
+            mount,
+            no_eject,
+        } => {
+            let kobo = find_kobo(mount.as_deref())?;
+            let outcomes = update_on_device(
+                lib,
+                &kobo,
+                &Kepubify::locate()?,
+                &backup_root()?,
+                &ids,
+                print_progress,
+            )?;
+            finish_send(&kobo, &outcomes, no_eject, json)?;
         }
         LibraryCommand::Send {
             ids,
