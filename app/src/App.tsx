@@ -21,8 +21,11 @@ import {
   reconcileDevice,
 } from "./api";
 import {
+  SORT_LABELS,
   applyProgress,
   filterBooks,
+  sortBooks,
+  type SortKey,
   isBookFile,
   summarizeImport,
   type SendStatus,
@@ -34,6 +37,18 @@ import { EditPanel } from "./components/EditPanel";
 import "./styles.css";
 
 const DEVICE_POLL_MS = 2000;
+const SORT_STORAGE_KEY = "library-sort";
+
+/** Remembered per viewer; storage can be unavailable, so never required. */
+function initialSort(): SortKey {
+  try {
+    const saved = localStorage.getItem(SORT_STORAGE_KEY);
+    if (saved && saved in SORT_LABELS) return saved as SortKey;
+  } catch {
+    /* storage unavailable */
+  }
+  return "title";
+}
 const NEW_COLLECTION = "\u0000new";
 
 type Notice = { kind: "error" | "info"; text: string };
@@ -50,6 +65,8 @@ export default function App() {
   const [newCollection, setNewCollection] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>(initialSort);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [statuses, setStatuses] = useState<Record<number, SendStatus>>({});
   const [busy, setBusy] = useState<
     "importing" | "sending" | "updating" | "ejecting" | null
@@ -182,7 +199,17 @@ export default function App() {
     };
   }, [doImport]);
 
-  const visible = useMemo(() => filterBooks(books, query), [books, query]);
+  const visible = useMemo(
+    () => sortBooks(filterBooks(books, query), sort),
+    [books, query, sort],
+  );
+  useEffect(() => {
+    try {
+      localStorage.setItem(SORT_STORAGE_KEY, sort);
+    } catch {
+      /* storage unavailable */
+    }
+  }, [sort]);
   const selectedBooks = useMemo(
     () => books.filter((b) => selected.has(b.id)),
     [books, selected],
@@ -229,26 +256,51 @@ export default function App() {
     [visible],
   );
 
+  const chooseFiles = useCallback(async () => {
+    const picked = await open({
+      multiple: true,
+      filters: [{ name: "EPUB", extensions: ["epub"] }],
+    });
+    if (picked) doImport(Array.isArray(picked) ? picked : [picked]);
+  }, [doImport]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest("input, textarea")) return;
+      const mod = e.metaKey || e.ctrlKey;
+      // App-wide shortcuts work even while typing.
+      if (mod && e.key === "f") {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+        return;
+      }
+      if (mod && e.key === "o") {
+        e.preventDefault();
+        chooseFiles();
+        return;
+      }
+      if (mod && (e.key === "1" || e.key === "2")) {
+        e.preventDefault();
+        setSelected(new Set());
+        setView(e.key === "1" ? "library" : "device");
+        return;
+      }
+      const typing = (e.target as HTMLElement).closest(
+        "input, textarea, select",
+      );
+      if (typing) {
+        if (e.key === "Escape") (e.target as HTMLElement).blur();
+        return;
+      }
       if (e.key === "Escape") setSelected(new Set());
-      if ((e.metaKey || e.ctrlKey) && e.key === "a") {
+      if (mod && e.key === "a") {
         e.preventDefault();
         setSelected(new Set(visible.map((b) => b.id)));
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [visible]);
-
-  const chooseFiles = async () => {
-    const picked = await open({
-      multiple: true,
-      filters: [{ name: "EPUB", extensions: ["epub"] }],
-    });
-    if (picked) doImport(Array.isArray(picked) ? picked : [picked]);
-  };
+  }, [visible, chooseFiles]);
 
   const save = async (id: number, edit: MetadataEdit) => {
     const updated = await updateBook(id, edit);
@@ -348,6 +400,8 @@ export default function App() {
           <div className="tabs" role="tablist">
             <button
               role="tab"
+              aria-selected={activeView === "library"}
+              title="Library (⌘1)"
               className={activeView === "library" ? "active" : ""}
               onClick={() => setView("library")}
             >
@@ -355,6 +409,8 @@ export default function App() {
             </button>
             <button
               role="tab"
+              aria-selected={activeView === "device"}
+              title="On Kobo (⌘2)"
               className={activeView === "device" ? "active" : ""}
               onClick={() => {
                 setSelected(new Set());
@@ -368,12 +424,28 @@ export default function App() {
           <h1>Library</h1>
         )}
         <input
+          ref={searchRef}
           className="search"
           type="search"
-          placeholder="Search title, author, series, tag"
+          aria-label="Search"
+          placeholder="Search title, author, series, tag  (⌘F)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+        {activeView === "library" && books.length > 0 && (
+          <select
+            className="sort-select"
+            aria-label="Sort by"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+          >
+            {Object.entries(SORT_LABELS).map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        )}
         <DeviceBadge device={device} />
       </header>
 

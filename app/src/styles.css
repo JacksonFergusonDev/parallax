@@ -854,3 +854,30 @@ button.link.danger {
 .new-collection {
   width: 160px;
 }
+
+.sort-select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 8px;
+}
+
+/* Large libraries: skip layout and paint for off-screen cards and rows. */
+.card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 132px auto 260px;
+}
+
+.device-list > li {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 62px;
+}
+
+/* Visible keyboard focus everywhere. */
+button:focus-visible,
+select:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 2px;
+}

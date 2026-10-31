@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a8572"/>
+      <stop offset="1" stop-color="#1f4f42"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbfaf6"/>
+      <stop offset="1" stop-color="#ebe7de"/>
+    </linearGradient>
+  </defs>
+  <!-- macOS icon grid: 824px rounded square inside the 1024 canvas -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <!-- e-reader body -->
+  <rect x="300" y="210" width="424" height="604" rx="52" fill="#16352d" opacity="0.35" transform="translate(10 16)"/>
+  <rect x="300" y="210" width="424" height="604" rx="52" fill="#20201f"/>
+  <!-- screen -->
+  <rect x="338" y="252" width="348" height="476" rx="14" fill="url(#screen)"/>
+  <!-- text lines -->
+  <g fill="#9c968b">
+    <rect x="378" y="304" width="210" height="22" rx="11" fill="#3a8572"/>
+    <rect x="378" y="364" width="268" height="14" rx="7"/>
+    <rect x="378" y="400" width="252" height="14" rx="7"/>
+    <rect x="378" y="436" width="268" height="14" rx="7"/>
+    <rect x="378" y="472" width="200" height="14" rx="7"/>
+    <rect x="378" y="532" width="268" height="14" rx="7"/>
+    <rect x="378" y="568" width="236" height="14" rx="7"/>
+    <rect x="378" y="604" width="258" height="14" rx="7"/>
+    <rect x="378" y="640" width="150" height="14" rx="7"/>
+  </g>
+  <!-- page-turn bar -->
+  <rect x="470" y="756" width="84" height="12" rx="6" fill="#4a4946"/>
+</svg>

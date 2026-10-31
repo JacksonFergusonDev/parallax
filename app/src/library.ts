@@ -88,3 +88,61 @@ export const fromForm = (f: EditForm): MetadataEdit => ({
 });
 
 export const isBookFile = (path: string) => /\.(epub|kepub)$/i.test(path);
+
+export type SortKey = "title" | "author" | "series" | "added";
+
+export const SORT_LABELS: Record<SortKey, string> = {
+  title: "Title",
+  author: "Author",
+  series: "Series",
+  added: "Recently added",
+};
+
+const collator = new Intl.Collator(undefined, {
+  sensitivity: "base",
+  numeric: true,
+});
+
+/** "The Hobbit" sorts under H. */
+const titleKey = (t: string) => t.replace(/^(the|a|an)\s+/i, "");
+/** "Frank Herbert" sorts under Herbert. */
+const surnameKey = (b: Book) => {
+  const first = b.authors[0] ?? "";
+  const parts = first.trim().split(/\s+/);
+  return parts.length > 1
+    ? `${parts.at(-1)} ${parts.slice(0, -1).join(" ")}`
+    : first;
+};
+const seriesIndex = (b: Book) => {
+  const n = parseFloat(b.series_index ?? "");
+  return Number.isFinite(n) ? n : Number.MAX_VALUE;
+};
+
+export function sortBooks(books: Book[], key: SortKey): Book[] {
+  const byTitle = (a: Book, b: Book) =>
+    collator.compare(titleKey(a.title), titleKey(b.title));
+  const sorted = [...books];
+  switch (key) {
+    case "title":
+      return sorted.sort(byTitle);
+    case "author":
+      return sorted.sort(
+        (a, b) =>
+          collator.compare(surnameKey(a), surnameKey(b)) || byTitle(a, b),
+      );
+    case "series":
+      // Books in a series first, in reading order; the rest by title.
+      return sorted.sort((a, b) => {
+        if (!a.series !== !b.series) return a.series ? -1 : 1;
+        return (
+          collator.compare(a.series ?? "", b.series ?? "") ||
+          seriesIndex(a) - seriesIndex(b) ||
+          byTitle(a, b)
+        );
+      });
+    case "added":
+      return sorted.sort(
+        (a, b) => b.added_at.localeCompare(a.added_at) || b.id - a.id,
+      );
+  }
+}

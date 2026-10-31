@@ -338,6 +338,8 @@ fn cover_reset(state: State<AppState>, id: i64) -> CmdResult<LibraryBook> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Reopens the window where and how big it was last time.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
             let data = app.path().app_data_dir()?;
             let library = Library::open(data.join("library"))?;

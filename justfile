@@ -34,3 +34,7 @@ dev: setup
 # Opt-in tests that mount FAT32 disk images to check the device write path.
 test-fat:
     cargo test -p erc-device-kobo -- --ignored
+
+# Build the macOS app bundle (target/release/bundle/macos/).
+build: setup
+    cd app && pnpm tauri build --bundles app

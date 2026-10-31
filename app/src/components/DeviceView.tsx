@@ -316,6 +316,7 @@ export function DeviceView({
                   <li key={b.id}>
                     <button
                       className={`device-row ${selected.has(b.id) ? "selected" : ""}`}
+                      aria-pressed={selected.has(b.id)}
                       onClick={(e) => toggle(b.id, e)}
                     >
                       <span className="thumb">

@@ -4,6 +4,7 @@ import {
   applyProgress,
   filterBooks,
   fromForm,
+  sortBooks,
   summarizeImport,
   toForm,
 } from "./library";
@@ -132,5 +133,59 @@ describe("edit form", () => {
       series_index: null,
       tags: [],
     });
+  });
+});
+
+describe("sortBooks", () => {
+  const books = [
+    book(1, "The Hobbit", ["J. R. R. Tolkien"], {
+      added_at: "2026-10-01T00:00:00Z",
+    }),
+    book(2, "Dune Messiah", ["Frank Herbert"], {
+      series: "Dune",
+      series_index: "2",
+      added_at: "2026-10-03T00:00:00Z",
+    }),
+    book(3, "Dune", ["Frank Herbert"], {
+      series: "Dune",
+      series_index: "1",
+      added_at: "2026-10-02T00:00:00Z",
+    }),
+    book(4, "Emma", ["Jane Austen"], { added_at: "2026-10-04T00:00:00Z" }),
+  ];
+  const titles = (key: Parameters<typeof sortBooks>[1]) =>
+    sortBooks(books, key).map((b) => b.title);
+
+  it("sorts titles ignoring leading articles", () => {
+    expect(titles("title")).toEqual([
+      "Dune",
+      "Dune Messiah",
+      "Emma",
+      "The Hobbit",
+    ]);
+  });
+  it("sorts authors by surname", () => {
+    expect(titles("author")).toEqual([
+      "Emma",
+      "Dune",
+      "Dune Messiah",
+      "The Hobbit",
+    ]);
+  });
+  it("puts series first, in reading order", () => {
+    expect(titles("series")).toEqual([
+      "Dune",
+      "Dune Messiah",
+      "Emma",
+      "The Hobbit",
+    ]);
+  });
+  it("puts recently added first", () => {
+    expect(titles("added")).toEqual([
+      "Emma",
+      "Dune Messiah",
+      "Dune",
+      "The Hobbit",
+    ]);
   });
 });

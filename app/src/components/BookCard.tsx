@@ -31,6 +31,8 @@ export const BookCard = memo(function BookCard({
   return (
     <button
       className={`card ${selected ? "selected" : ""}`}
+      aria-pressed={selected}
+      aria-label={`${book.title}${book.authors[0] ? ` by ${book.authors[0]}` : ""}`}
       onClick={(e) => onSelect(book.id, e)}
       title={status?.stage === "failed" ? status.error : undefined}
     >
