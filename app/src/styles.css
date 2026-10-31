@@ -39,16 +39,36 @@
   box-sizing: border-box;
 }
 
+/* The window itself never scrolls or rubber-bands; only the panels that hold
+   lists do, and their overscroll doesn't chain up to the page. */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   user-select: none;
   -webkit-user-select: none;
 }
 
+.content,
+.panel,
+.sidebar,
+.picker-grid,
+.plan-list,
+.check-list,
+.menu {
+  overscroll-behavior: contain;
+}
+
 .app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
 }
 
 /* Top bar */

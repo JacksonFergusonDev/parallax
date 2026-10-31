@@ -110,3 +110,46 @@ Each milestone is sized for ~1 session, ends with green `just check` (fmt, clipp
 5. Online covers: Open Library, Google Books and Apple Books search APIs approved.
 6. Distribution: unsigned personal builds.
 7. Licence: **GPLv3** (`LICENSE`). calibre's Kobo code (KoboTouch driver, Kobo Utilities) may be ported directly; ported functions cite their calibre source in a comment.
+
+## 7. Phase 1.5 — Kobo depth (before Kindle)
+
+Goal: make ERC the only tool a Kobo owner with an existing, messy device needs. Guiding rule (user, 2026-10-31): **no fragile features.** Anything that scrapes a website, depends on an undocumented cloud service, or writes Kobo settings/firmware-specific files is skipped or kept optional.
+
+### 7.1 Plugin review (port / partial / skip)
+
+| Plugin | Verdict | What we take | What we leave and why |
+|---|---|---|---|
+| Kobo Utilities (janlarres) | **Partial — biggest source** | Set reading status / reset progress; read reading stats (status, %, last read, time spent) into the library; show device books missing from the DB and DB rows whose file is gone; clean orphaned `.kobo-images` entries; remove cover cache so Nickel regenerates; fix duplicate collections (merge same-name shelves); back up the annotation files. Already done: DB backup, integrity check, series, collections. | Reader font/margin settings (writes `Kobo eReader.conf`, changes between firmware); blocking analytics with a trigger (triggers need a restart and firmware updates can break them); set related books; update ToC (rewrites `content` chapter rows, firmware-specific); upload `.parsed` covers in device-specific sizes (clearing the cache is the robust version); firmware update check (scrapes Kobo). Store/restore reading positions: not needed, because ERC replaces books in place and keeps progress. |
+| ePub Extended Metadata (un-pogaz) | **Port** | Contributors with MARC roles (translator, illustrator, editor, narrator…) read/written in the OPF for EPUB2 (`opf:role`) and EPUB3 (`refines` + `role`); shown and edited in the edit panel. Fits `erc-epub`'s byte-preserving splice. | Nothing important. |
+| Goodreads (kiwidude68) | **Skip** | Nothing. | The public API has been closed since 2020, so the plugin depends on scraping and on login cookies. Open Library (already used for covers) gives series and subjects without a key. |
+| Quality Check (kiwidude68) | **Partial** | A local "Library health" view: missing cover, low-resolution cover, missing author/series index, series gaps and duplicates, duplicate ISBNs, DRM present, EPUB problems (missing `container.xml`, files outside the manifest, manifest items missing, broken internal links), OS junk inside the zip (`__MACOSX`, `.DS_Store`, `Thumbs.db`), embedded fonts. One safe fix: strip the OS junk. | Checks tied to calibre's own columns and formats (MOBI/AZW, calibre custom columns); automatic EPUB repairs beyond the junk strip (rewriting structure risks breaking a valid book). |
+| Kobo-Metadata (NotSimone) | **Skip** | Nothing. | Scrapes the Kobo store through `cloudscraper` and gets locked out by Cloudflare regularly; exactly the "breaks suddenly" class. |
+| Kobo annotations (Sergius, MobileRead) | **Partial** | Read highlights and notes from the `Bookmark` table (stable for years and also used by calibre's annotation import) into the library; export per book as Markdown and JSON; keep date-read and % in the library. | Generating annotated EPUB copies (rewrites book content and positions; the plugin is new and only tested on one device). |
+
+### 7.2 New features requested
+
+1. **Overscroll lock** — done: `html, body, #root` never scroll; list panels use `overscroll-behavior: contain`.
+2. **List and cover views on both screens** — one toggle per screen, remembered. The grid and list share selection, search and sort.
+3. **Tri-state column sort** — clicking a header sorts descending (e.g. status → most read first), a second click sorts ascending, a third click returns to the default order. Every column sortable; the grid uses the same sort state through a menu.
+4. **ERC state on the device** — inspired by calibre's `driveinfo.calibre` (device UUID, library UUID, calibre version, last connected) and `metadata.calibre` (its view of every book). ERC writes `/.erc/` at the volume root (Nickel ignores dot folders; `._` companions removed as usual):
+   - `device.json`: device UUID ERC assigned, library UUID, ERC version and firmware/DbVersion at first and last write, last connected time.
+   - `books.json`: every book ERC sent or modified: content ID, library book ID, source SHA-256, device-file SHA-256 and size at write time, ERC version, operations applied. Lets ERC tell "ours and untouched" from "changed by something else", and recognise its books from another computer.
+   - `log.jsonl`: append-only operation log (time, ERC version, operation, content IDs, backup file name, result), capped in size. Used for debugging and shown in an "About this Kobo" panel and `erc kobo history`. Written inside the safe-write session; a missing or corrupt file never blocks anything (ERC rebuilds from the DB).
+5. **Import from the Kobo into the library** — sideloaded books only (store books are DRM-protected and excluded). KEPUBs are cleaned back to plain EPUB by removing `koboSpan` markup and Kobo's injected scripts and styles (port of calibre's KEPUB input cleanup), keeping a kepub-as-is fallback when cleaning fails. Carries over what Nickel knows (series, reading state) and links the device copy so the book shows as "On Kobo" without being re-sent.
+6. **Enhance and organise** — a wizard for devices with books in folders or one unorganised folder: (1) import from the device, (2) propose metadata from local sources first (EPUB metadata, Kobo DB series, folder names) and Open Library second (series, subjects mapped to a short fixed genre list), (3) review every proposed change as a diff, accepting per book or per field, (4) apply to the library, push updated books back with in-place replace (progress kept), (5) create collections from folders, series or genre through the existing rules preview. Nothing is written to the device before the final preview.
+7. **Duplicate review** — groups by identical file, identical ISBN, same normalised title+author, and same book in several formats (EPUB + KEPUB, store copy + sideloaded copy). Reviewed one group at a time with covers, sizes, formats and reading progress side by side; pick what to keep; removals use the existing safe paths (library remove, device remove with backup). A book with reading progress is never preselected for removal.
+
+### 7.3 Milestones
+
+| # | Milestone | Done when |
+|---|---|---|
+| M9 | **Views and sorting** — list/grid toggle on Library and On Kobo, shared tri-state header sort (pure, unit-tested sort state), overscroll lock. | vitest for sort state; UI checked in the mock. |
+| M10 | **ERC device state** — `/.erc/` files written in every write session; atomic writes; size-capped log; "About this Kobo" panel; `erc kobo history`. | Tests on fixture + FAT32 image; corrupt/missing files tolerated. 🔌 Files appear after a send; Nickel shows no ghost books. |
+| M11 | **Import from Kobo** — sideloaded books → library with KEPUB cleanup, Nickel series/status, linked device copies; DRM/store books listed as skipped. | Round trip: clean → kepubify → identical text; all 94 real-device books import or skip with a reason. |
+| M12 | **Duplicate review** — grouping engine (library + device), one-group-at-a-time review UI. | Engine unit tests; real-DB dry run lists groups. |
+| M13 | **Enhance and organise wizard** — metadata proposals (local, then Open Library), diff review, apply, replace on device, collections via rules. | Proposal engine tests with recorded Open Library responses; 🔌 a folder-organised device ends with series + genre collections and progress intact. |
+| M14 | **Kobo Utilities ports** — set reading status/reset progress, reading stats into the library, ghost/missing book report, orphaned image cleanup, duplicate collection merge. | Fixture + real-DB-copy tests through `DeviceWriter`. |
+| M15 | **Library health + extended metadata** — Quality Check subset with the OS-junk fix; contributors with roles in `erc-epub` and the edit panel. | Fixture EPUBs for each check; OPF round-trip tests for EPUB2/3 roles. |
+| M16 | **Annotations** — highlights/notes from `Bookmark` into the library, Markdown/JSON export, annotation-file backup. | Tests on the real DB copy; 🔌 export matches what the Kobo shows. |
+
+Order: M9 is pure UI. M10 comes before every new device write (M11–M14 log through it). Phase 2 (Kindle) follows M16.

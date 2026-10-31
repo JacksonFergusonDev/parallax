@@ -22,7 +22,8 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 ## Current
 
 - Kobo MVP roadmap (M0–M8) complete in code. Awaiting batched device checks for M3–M8 + spike S2: docs/hardware-checks.md.
-- Next: phase 2 (Kindle) — start with an investigation of MTP access on macOS and Kindle formats/delivery.
+- Phase 1.5 planned (PLAN §7: plugin port/skip review, M9–M16). Overscroll lock done (part of M9).
+- Next: M9 (list/grid on both screens, tri-state header sort), then M10 (ERC device state) before any new device writes.
 
 ## Unresolved
 
@@ -30,7 +31,8 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 ## Next
 
-- Phase 2 kickoff: research spike on Kindle (2024+ models use MTP; older ones USB mass storage), sideload formats (AZW3/KFX/EPUB via Send to Kindle), what reading data is accessible, and collection limitations. Produce a plan like docs/PLAN.md before coding.
+- Phase 1.5: M9 → M16 (PLAN §7.3). Skip list: Goodreads, Kobo-Metadata scraping, Kobo settings/firmware-specific writes.
+- Phase 2 kickoff (after M16): research spike on Kindle (2024+ models use MTP; older ones USB mass storage), sideload formats (AZW3/KFX/EPUB via Send to Kindle), what reading data is accessible, and collection limitations. Produce a plan like docs/PLAN.md before coding.
 - Optional: app name decision (working name "E-Reader Companion"); Google Books API key setting.
 
 ## Notes for agents
