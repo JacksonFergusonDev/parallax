@@ -4,6 +4,7 @@ description = "E-Reader Companion desktop app"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [lib]
 # The `_lib` suffix avoids a name clash with the bin target on Windows (cargo#8519).

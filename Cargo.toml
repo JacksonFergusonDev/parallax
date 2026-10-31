@@ -6,6 +6,7 @@ members = ["app/src-tauri"]
 edition = "2024"
 version = "0.1.0"
 publish = false
+license = "GPL-3.0-only"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
