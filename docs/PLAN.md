@@ -88,7 +88,7 @@ Each milestone is sized for ~1 session, ends with green `just check` (fmt, clipp
 3. **Pre-import collection rows** rely on Nickel matching ContentId by path at import (verified on fw 4.38). If a future firmware stops doing so, the replug reconcile re-applies them. ContentId must exactly match the on-device path, including case.
 4. **Kobo cloud sync** interfering with collections. Mitigate: soft-deletes, documentation, spike S2.
 5. **kepubify sidecar** — unmaintained-but-stable Go binary; needs code signing/notarization inside the macOS bundle; universal binary (arm64 + x64). Mitigate: checksum-pinned download, Converter trait for a future Rust port.
-6. **macOS FAT32 artefacts** (`._*` files) creating ghost books. Mitigate in M2 and test explicitly.
+6. **macOS FAT32 artefacts** (`._*` files). fw 4.38 does not import them, but they clutter the volume and older firmware did import them. Never create them (M2) and offer a tidy-up.
 7. **Verification gap** — I can't touch hardware; 🔌 checkpoints depend on you, and an unverified feature will be reported as such.
 8. **Online cover sources** — API terms/rate limits, quality variance; keep providers pluggable, no scraping of sites that forbid it.
 

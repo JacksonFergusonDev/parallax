@@ -142,7 +142,7 @@ cmd_check() {
   echo "== pending (trigger side table; empty after B imported)"
   sqlite3 "$copy" "SELECT * FROM _erc_pending_shelf" 2>/dev/null || echo "(no side table)"
   echo "== ghost ._ rows"
-  sqlite3 "$copy" "SELECT count(*) FROM content WHERE ContentID LIKE '%/._%'"
+  sqlite3 "$copy" "SELECT count(*) FROM content WHERE instr(ContentID, '/._') > 0"
   rm -rf "$(dirname "$copy")"
 }
 

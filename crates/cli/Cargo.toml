@@ -1,0 +1,22 @@
+[package]
+name = "erc-cli"
+description = "Developer CLI over the E-Reader Companion core"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "erc"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+erc-device.workspace = true
+erc-device-kobo.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

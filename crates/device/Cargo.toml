@@ -1,0 +1,14 @@
+[package]
+name = "erc-device"
+description = "Device-agnostic types shared by all e-reader backends"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true

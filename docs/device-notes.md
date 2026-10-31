@@ -10,6 +10,8 @@
 - `DbVersion` = **174**. 38 MB. `PRAGMA integrity_check` = ok.
 - **`journal_mode=wal`**. No `-wal`/`-shm` files exist while in USB mode (Nickel checkpoints before exposing the volume). Any desktop write creates `-wal`/`-shm` on the device, so a write session must end with `PRAGMA wal_checkpoint(TRUNCATE)` and a clean close so nothing is left beside the DB. `sqlite3 -readonly` on a bare copy fails (SQLITE_CANTOPEN), so reads should use a copy opened read-write or `immutable=1` URI.
 - `content`: 101 columns. Books are `ContentType=6`.
+- calibre's book filter (`BookID IS NULL AND ((Accessibility=-1 AND IsDownloaded IN ('true',1)) OR (Accessibility IN (1,2,8,9) AND IsDownloaded IN ('true',1)))`) yields the 93 sideloaded books; the 18 store books are `IsDownloaded='false'` (in the cloud, not on the device).
+- Dates are UTC without a zone suffix (`2024-10-10T06:36:38.327`). For sideloads `DateAdded` is empty; `DateCreated` is when the file arrived ("on device since"). `TimeSpentReading` is in seconds.
 - Existing triggers: only Kobo's `kobo_plus_asset_cleanup`. No seriesmeta/calibre triggers installed.
 - `Shelf(CreationDate, Id PK, InternalName, LastModified, Name, Type, _IsDeleted, _IsVisible, _IsSynced, _SyncTime, LastAccessed)`.
 - `ShelfContent(ShelfName, ContentId, DateModified, _IsDeleted, _IsSynced, PK(ShelfName, ContentId))`. Booleans are stored as the strings `'true'`/`'false'`.
@@ -22,5 +24,5 @@
 - Reading data: ReadStatus 0/1/2 = 73/34/4. `___PercentRead`, `DateLastRead` and `TimeSpentReading` are populated for books that have been opened. Enough for MVP status badges.
 
 ## Confirmed hazards
-- **AppleDouble ghosts are real here**: 68 `._*` files in `KEpub/` and **2 `._*` rows already imported into `content`** as bogus books. The app should (a) never create them (copy without xattrs), and (b) offer a cleanup of existing ones (delete the file plus its `content` row through the safe-write layer).
+- **AppleDouble files**: 68 `._*` files in `KEpub/`, but **none imported into `content`** (fw 4.38 skips dotfiles; an earlier count of 2 was a `LIKE` false positive, since `_` is a wildcard: use `instr()` or escape the `_`). The app should still never create them (copy without xattrs) and can offer to tidy existing ones as a low-priority cleanup.
 - `.Spotlight-V100`, `.fseventsd` and `.Trashes` exist on the volume, so macOS indexing has been active. Add `.metadata_never_index`.

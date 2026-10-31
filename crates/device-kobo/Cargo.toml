@@ -1,0 +1,19 @@
+[package]
+name = "erc-device-kobo"
+description = "Kobo e-reader backend: detection and database access"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono.workspace = true
+erc-device.workspace = true
+rusqlite.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

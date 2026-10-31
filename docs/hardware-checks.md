@@ -74,5 +74,5 @@ Batched so you can do several in one sitting when Claude asks:
 - M1: `erc kobo ls` output matches the library on the device.
 - M2: a book sent by the app opens and shows KEPUB features (pages per chapter, reading stats).
 - M4: a replaced cover shows on the device.
-- M5: a book removed by the app leaves no ghost entry; `._*` cleanup removes the 2 existing ghost books.
+- M5: a book removed by the app leaves no ghost entry; `._*` files are tidied.
 - M6: bulk collection assignment and "folders → collections" on your real library.
