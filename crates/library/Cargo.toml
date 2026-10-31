@@ -1,0 +1,26 @@
+[package]
+name = "erc-library"
+description = "The local book library: managed files plus a SQLite catalogue"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono.workspace = true
+erc-epub.workspace = true
+image.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+erc-epub.workspace = true
+image.workspace = true
+tempfile.workspace = true
+zip.workspace = true
+
+[lints]
+workspace = true

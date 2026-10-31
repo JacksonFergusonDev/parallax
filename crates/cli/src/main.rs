@@ -33,6 +33,8 @@ enum Command {
     /// Kobo commands.
     #[command(subcommand)]
     Kobo(KoboCommand),
+    /// Show an EPUB's metadata and cover details.
+    EpubInfo { file: PathBuf },
     /// Convert EPUBs to KEPUB, copy them to the Kobo and eject it. Writes files.
     Send {
         /// EPUB or KEPUB files.
@@ -118,6 +120,18 @@ fn main() -> Result<()> {
                 println!("{}", book_line(b));
             }
             println!("{} books", books.len());
+        }
+        Command::EpubInfo { file } => {
+            let epub = erc_epub::Epub::open(&file)?;
+            let metadata = epub.metadata();
+            let cover = epub
+                .cover()?
+                .map(|c| format!("{} ({} bytes)", c.media_type, c.data.len()));
+            if cli.json {
+                return print_json(&serde_json::json!({ "metadata": metadata, "cover": cover }));
+            }
+            println!("{metadata:#?}");
+            println!("cover: {}", cover.as_deref().unwrap_or("none"));
         }
         Command::Send {
             files,

@@ -17,6 +17,7 @@ erc-convert.workspace = true
 erc-core.workspace = true
 erc-device.workspace = true
 erc-device-kobo.workspace = true
+erc-epub.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

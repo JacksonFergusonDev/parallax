@@ -11,10 +11,11 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 - M1 (code): `crates/device` (shared types + Capabilities), `crates/device-kobo` (detect, version parse, immutable read-only DB, books via calibre's KoboTouch filter, collections), `crates/cli` (`erc devices`, `erc kobo ls|collections [--mount|--db] [--json]`). Tests: synthetic DB from `tests/fixtures/kobo/schema-db174.sql` + private real DB (93 books).
 - M1 verified on the device: `erc devices` / `erc kobo ls` match (93 books, 0 collections), DB checksum unchanged.
 - M2 (code): `crates/convert` (Kepubify sidecar, `ERC_KEPUBIFY` override), Kobo transfer (temp name + rename, size check, no xattr copy, deletes the `._*` companions macOS creates on FAT32 for every new file/dir, `.metadata_never_index`), eject via `diskutil`, `crates/core::send` (per-book convert+copy with progress events), `erc send`, app UI (device badge polling, drag-and-drop/picker queue, Send, Eject). FAT32 disk-image test: `just test-fat`.
+- M2 verified on the device (2026-10-31): book sent from the app, imported and opened as KEPUB; no `._*` file next to it. File name came from the source file name (long, ugly), fixed in M3.
 
 ## Current
 
-- M2 device check (user): send a real book from the app, eject, confirm it opens with KEPUB features and no `._*` file appears next to it.
+- M3: library + metadata.
 
 ## Unresolved
 
