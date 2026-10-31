@@ -4,10 +4,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use erc_convert::Kepubify;
+use erc_core::collections::{CollectionChange, FolderGroup};
 use erc_core::device::{OnDevice, RemoveOutcome};
 use erc_core::send::{SendOutcome, send_library_books, update_on_device};
 use erc_covers::{Candidate, CoverQuery};
-use erc_device::{DeviceBook, DeviceInfo};
+use erc_device::{Collection, DeviceBook, DeviceInfo};
 use erc_device_kobo::{KoboDevice, MACOS_VOLUMES, tidy_apple_double};
 use erc_epub::MetadataEdit;
 use erc_library::{Book, ImportOutcome, Library};
@@ -189,21 +190,88 @@ async fn send_books(
     state: State<'_, AppState>,
     mount: PathBuf,
     ids: Vec<i64>,
+    collection: Option<String>,
 ) -> CmdResult<Vec<SendOutcome>> {
     let library = state.library.clone();
+    let backups = state.backup_root.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let converter = Kepubify::locate().map_err(err)?;
         let lib = library.lock().unwrap_or_else(|e| e.into_inner());
-        Ok(send_library_books(
-            &lib,
-            &kobo,
-            &converter,
-            &ids,
-            |progress| {
-                let _ = app.emit(SEND_PROGRESS, progress);
-            },
-        ))
+        let outcomes = send_library_books(&lib, &kobo, &converter, &ids, |progress| {
+            let _ = app.emit(SEND_PROGRESS, progress);
+        });
+        // Collection rows can be written before Nickel imports the books.
+        if let Some(name) = collection.filter(|n| !n.trim().is_empty()) {
+            let content_ids: Vec<String> = outcomes
+                .iter()
+                .filter_map(|o| o.result.as_ref().ok().map(|s| s.content_id.clone()))
+                .collect();
+            if !content_ids.is_empty() {
+                erc_core::collections::apply(
+                    &kobo,
+                    &backups,
+                    &[CollectionChange::Add { name, content_ids }],
+                )
+                .map_err(err)?;
+            }
+        }
+        Ok(outcomes)
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
+async fn list_collections(mount: PathBuf) -> CmdResult<Vec<Collection>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        KoboDevice::open(&mount)
+            .and_then(|k| k.open_db())
+            .and_then(|db| db.collections())
+            .map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
+async fn change_collections(
+    state: State<'_, AppState>,
+    mount: PathBuf,
+    changes: Vec<CollectionChange>,
+) -> CmdResult<()> {
+    let backups = state.backup_root.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        erc_core::collections::apply(&kobo, &backups, &changes).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
+async fn folder_groups(mount: PathBuf) -> CmdResult<Vec<FolderGroup>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let books = KoboDevice::open(&mount)
+            .and_then(|k| k.open_db())
+            .and_then(|db| db.books())
+            .map_err(err)?;
+        Ok(erc_core::collections::folder_groups(&books))
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Applies series to books Nickel has imported since they were sent.
+/// Opens no write session when nothing is pending.
+#[tauri::command]
+async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<usize> {
+    let library = state.library.clone();
+    let backups = state.backup_root.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        erc_core::collections::reconcile_series(&lib, &kobo, &backups).map_err(err)
     })
     .await
     .map_err(err)?
@@ -291,6 +359,10 @@ pub fn run() {
             update_books,
             tidy_device,
             send_books,
+            list_collections,
+            change_collections,
+            folder_groups,
+            reconcile_device,
             eject_device,
             cover_search,
             cover_set_url,

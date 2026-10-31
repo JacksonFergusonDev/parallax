@@ -94,4 +94,22 @@ Batched so you can do several in one sitting when Claude asks:
   - Remove a book you don't need: after ejecting, it's gone from the Kobo's library with no blank entry.
   - Click "Remove macOS clutter": it should report about 68 files, and the Kobo still works normally afterwards.
   - Send a library book, read a few pages on the Kobo, reconnect, edit its title and cover in the app, click "Update 1 on Kobo", eject: the new title and cover show, and your reading position is kept.
-- M6: bulk collection assignment and "folders → collections" on your real library.
+- M6, in the app:
+  - Library tab: select two books, choose "New collection…" next to Send, name it, send and eject. Both books appear in that collection on the Kobo straight away. Reconnect: if they have a series, the app says it added series details; eject again and the series shows on the Kobo.
+  - On Kobo tab: "Folders → collections…" (dry run on your device: Fantasy 20, Fiction 8, Horror 1, Nonfiction 40, Sci-Fi 24). Create them, eject, and check My Books → Collections.
+  - Rename one collection and delete another; eject and confirm.
+
+## Spike S2 — collections and Kobo cloud sync (with M6)
+
+**Question:** do collections the app creates survive a Kobo sync, and does deleting one stick?
+
+1. After the M6 checks, keep one app-made collection with books in it (say "ERC Sync Test").
+2. On the Kobo, turn Wi-Fi on and sync (Settings → Sync, or the sync icon). Wait for it to finish.
+3. Check: the collection still exists and still holds its books. (Expected: the name syncs to your account; sideloaded books in it stay because the membership is local.)
+4. Connect, delete "ERC Sync Test" in the app, eject, sync again.
+5. Check: it doesn't come back after the sync. If it does, tell Claude; deletions of synced collections may need a different approach.
+
+| Check | Result |
+|---|---|
+| Collection survives sync with its books | |
+| Deleted collection stays deleted after sync | |

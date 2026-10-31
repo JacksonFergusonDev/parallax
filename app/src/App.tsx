@@ -15,7 +15,10 @@ import {
   type Book,
   type DeviceInfo,
   type MetadataEdit,
+  type Collection,
   type OnDevice,
+  listCollections,
+  reconcileDevice,
 } from "./api";
 import {
   applyProgress,
@@ -31,6 +34,7 @@ import { EditPanel } from "./components/EditPanel";
 import "./styles.css";
 
 const DEVICE_POLL_MS = 2000;
+const NEW_COLLECTION = "\u0000new";
 
 type Notice = { kind: "error" | "info"; text: string };
 
@@ -40,6 +44,10 @@ export default function App() {
   const [device, setDevice] = useState<DeviceInfo | null>(null);
   const [onDevice, setOnDevice] = useState<Map<number, OnDevice>>(new Map());
   const [view, setView] = useState<"library" | "device">("library");
+  const [collections, setCollections] = useState<Collection[]>([]);
+  /** Collection to put sent books in: "" none, NEW_COLLECTION, or a name. */
+  const [sendCollection, setSendCollection] = useState("");
+  const [newCollection, setNewCollection] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [query, setQuery] = useState("");
   const [statuses, setStatuses] = useState<Record<number, SendStatus>>({});
@@ -96,6 +104,9 @@ export default function App() {
     setOnDevice(new Map(list.map((o) => [o.book_id, o])));
   }, []);
 
+  // When a Kobo connects: learn which library books are on it, list its
+  // collections, and apply series to books it has imported since they were
+  // sent (Nickel ignores series in sideloaded EPUBs).
   useEffect(() => {
     let alive = true;
     const ids = device
@@ -104,6 +115,23 @@ export default function App() {
     ids.then(
       (list) => alive && setOnDevice(new Map(list.map((o) => [o.book_id, o]))),
     );
+    const shelves = device
+      ? listCollections(device.mount).catch(() => [])
+      : Promise.resolve([]);
+    shelves.then((list) => alive && setCollections(list));
+    if (device) {
+      reconcileDevice(device.mount)
+        .then(
+          (n) =>
+            alive &&
+            n > 0 &&
+            setNotice({
+              kind: "info",
+              text: `Added series details to ${n} ${n === 1 ? "book" : "books"} on your Kobo.`,
+            }),
+        )
+        .catch((e) => alive && setNotice({ kind: "error", text: String(e) }));
+    }
     return () => {
       alive = false;
     };
@@ -234,10 +262,19 @@ export default function App() {
     setBusy(kind);
     setNotice(null);
     try {
-      const outcomes = await (kind === "sending" ? sendBooks : updateBooks)(
-        device.mount,
-        ids,
-      );
+      const collection =
+        sendCollection === NEW_COLLECTION
+          ? newCollection.trim() || null
+          : sendCollection || null;
+      const outcomes =
+        kind === "sending"
+          ? await sendBooks(device.mount, ids, collection)
+          : await updateBooks(device.mount, ids);
+      if (kind === "sending" && collection) {
+        setCollections(await listCollections(device.mount).catch(() => []));
+        setSendCollection(collection);
+        setNewCollection("");
+      }
       const failed = outcomes.filter((o) => "Err" in o.result).length;
       setNotice(
         failed
@@ -346,7 +383,12 @@ export default function App() {
           device={device}
           query={query}
           libraryByContentId={libraryByContentId}
-          onChanged={() => refreshOnDevice(device)}
+          onChanged={() => {
+            refreshOnDevice(device);
+            listCollections(device.mount)
+              .then(setCollections)
+              .catch(() => {});
+          }}
           onEjected={() => {
             setDevice(null);
             setStatuses({});
@@ -462,6 +504,34 @@ export default function App() {
                   ? "Updating…"
                   : `Update ${toUpdate.length} on Kobo`}
               </button>
+            )}
+            {device && toSend.length > 0 && (
+              <>
+                <select
+                  className="collection-select"
+                  aria-label="Collection for sent books"
+                  value={sendCollection}
+                  onChange={(e) => setSendCollection(e.target.value)}
+                  disabled={busy !== null}
+                >
+                  <option value="">No collection</option>
+                  {collections.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      Into “{c.name}”
+                    </option>
+                  ))}
+                  <option value={NEW_COLLECTION}>New collection…</option>
+                </select>
+                {sendCollection === NEW_COLLECTION && (
+                  <input
+                    className="new-collection"
+                    placeholder="Collection name"
+                    value={newCollection}
+                    onChange={(e) => setNewCollection(e.target.value)}
+                    autoFocus
+                  />
+                )}
+              </>
             )}
             <button
               className="primary"

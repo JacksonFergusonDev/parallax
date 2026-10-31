@@ -151,16 +151,11 @@ pub fn replace_book(
     let content_id = format!("{ONBOARD_PREFIX}{device_path}");
     writer.device().replace_file(src, device_path)?;
     let image_id = writer.transaction(|tx| {
-        // SeriesID: reuse a store book's id for the same series if there is
-        // one, else the series name, as seriesmeta does for sideloads.
         tx.execute(
-            "UPDATE content SET Title = ?2, Attribution = ?3, Series = ?4, SeriesNumber = ?5,
-                 SeriesID = CASE WHEN ?4 IS NULL THEN NULL ELSE coalesce(
-                     (SELECT c2.SeriesID FROM content c2 WHERE c2.Series = ?4 AND c2.WorkId IS NOT NULL
-                      AND c2.WorkId != '' AND c2.SeriesID IS NOT NULL AND c2.SeriesID != '' LIMIT 1), ?4) END
-             WHERE ContentID = ?1 AND BookID IS NULL",
-            params![content_id, meta.title, meta.author, meta.series, meta.series_number],
+            "UPDATE content SET Title = ?2, Attribution = ?3 WHERE ContentID = ?1 AND BookID IS NULL",
+            params![content_id, meta.title, meta.author],
         )?;
+        set_series(tx, &content_id, meta.series.as_deref(), meta.series_number.as_deref())?;
         Ok(tx
             .query_row("SELECT ImageId FROM content WHERE ContentID = ?1 AND BookID IS NULL", [&content_id], |r| r.get(0))
             .optional()?
@@ -170,6 +165,29 @@ pub fn replace_book(
         .device()
         .clear_cover_cache(&image_id.unwrap_or_else(|| image_id_for(&content_id)));
     Ok(())
+}
+
+/// Sets (or clears) the series Nickel shows for an imported book. SeriesID
+/// reuses a store book's id for the same series if there is one, else the
+/// series name, as kepubify's seriesmeta does for sideloads (otherwise one
+/// series shows up twice).
+pub fn set_series(
+    tx: &rusqlite::Transaction,
+    content_id: &str,
+    series: Option<&str>,
+    number: Option<&str>,
+) -> Result<bool> {
+    let number = series.and(number);
+    let changed = tx.execute(
+        "UPDATE content SET Series = ?2, SeriesNumber = ?3,
+             SeriesNumberFloat = CAST(?3 AS REAL),
+             SeriesID = CASE WHEN ?2 IS NULL THEN NULL ELSE coalesce(
+                 (SELECT c2.SeriesID FROM content c2 WHERE c2.Series = ?2 AND c2.WorkId IS NOT NULL
+                  AND c2.WorkId != '' AND c2.SeriesID IS NOT NULL AND c2.SeriesID != '' LIMIT 1), ?2) END
+         WHERE ContentID = ?1 AND BookID IS NULL",
+        params![content_id, series, number],
+    )?;
+    Ok(changed > 0)
 }
 
 /// Folders macOS and Kobo use for their own bookkeeping; never touched.

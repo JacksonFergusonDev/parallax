@@ -1006,6 +1006,7 @@ name = "erc-core"
 version = "0.1.0"
 dependencies = [
  "erc-convert",
+ "erc-device",
  "erc-device-kobo",
  "erc-epub",
  "erc-library",

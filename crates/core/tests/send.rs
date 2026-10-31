@@ -213,3 +213,84 @@ fn updates_and_removes_books_on_device() {
     assert!(books_on_device(&library, &kobo).unwrap().is_empty());
     assert!(!mount.join(&on_device[0].device_path).exists());
 }
+
+#[test]
+fn sends_into_collection_and_applies_series_after_import() {
+    use erc_core::collections::{CollectionChange, apply, pending_series, reconcile_series};
+    use rusqlite::Connection;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mount = dir.path().join("KOBOeReader");
+    fs::create_dir_all(mount.join(".kobo")).unwrap();
+    fs::write(mount.join(".kobo/version"), VERSION).unwrap();
+    let db = mount.join(".kobo/KoboReader.sqlite");
+    let conn = Connection::open(&db).unwrap();
+    conn.execute_batch(include_str!(
+        "../../../tests/fixtures/kobo/schema-db174.sql"
+    ))
+    .unwrap();
+    conn.pragma_update(None, "journal_mode", "wal").unwrap();
+    drop(conn);
+    let kobo = KoboDevice::open(&mount).unwrap();
+    let backups = dir.path().join("backups");
+    let mut library = Library::open(dir.path().join("lib")).unwrap();
+    let ImportOutcome::Added { book, .. } = library.import(&fixture("minimal.epub")).unwrap()
+    else {
+        panic!();
+    };
+    let mut edit = library.book(book.id).unwrap().edit();
+    edit.series = Some("Saga".into());
+    edit.series_index = Some("3".into());
+    library.update(book.id, &edit).unwrap();
+
+    // Send, then put it in a collection before Nickel has imported it.
+    let sent = send_library_books(
+        &library,
+        &kobo,
+        &Kepubify::locate().unwrap(),
+        &[book.id],
+        |_| {},
+    );
+    let content_id = sent[0].result.as_ref().unwrap().content_id.clone();
+    apply(
+        &kobo,
+        &backups,
+        &[CollectionChange::Add {
+            name: "Favourites".into(),
+            content_ids: vec![content_id.clone()],
+        }],
+    )
+    .unwrap();
+    // Not imported yet: nothing to reconcile.
+    assert!(pending_series(&library, &kobo).unwrap().is_empty());
+
+    // Nickel imports the book (without series, as it does for sideloads).
+    Connection::open(&db)
+        .unwrap()
+        .execute(
+            "INSERT INTO content (ContentID, ContentType, MimeType, ___UserID, Title, Accessibility, IsDownloaded)
+             VALUES (?1, 6, 'application/x-kobo-epub+zip', 'kepub_user', 'ERC Test Book', -1, 'true')",
+            [&content_id],
+        )
+        .unwrap();
+    let shown = kobo.open_db().unwrap().books().unwrap();
+    assert_eq!(shown[0].collections, ["Favourites"]);
+    assert_eq!(pending_series(&library, &kobo).unwrap().len(), 1);
+
+    assert_eq!(reconcile_series(&library, &kobo, &backups).unwrap(), 1);
+    let shown = kobo.open_db().unwrap().books().unwrap();
+    assert_eq!(
+        (
+            shown[0].series.as_deref(),
+            shown[0].series_number.as_deref()
+        ),
+        (Some("Saga"), Some("3"))
+    );
+    // Nothing pending: no write session (no new backup).
+    let backups_before = fs::read_dir(backups.join("N000000000001")).unwrap().count();
+    assert_eq!(reconcile_series(&library, &kobo, &backups).unwrap(), 0);
+    assert_eq!(
+        fs::read_dir(backups.join("N000000000001")).unwrap().count(),
+        backups_before
+    );
+}

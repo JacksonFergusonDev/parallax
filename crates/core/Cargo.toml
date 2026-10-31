@@ -8,6 +8,7 @@ license.workspace = true
 
 [dependencies]
 erc-convert.workspace = true
+erc-device.workspace = true
 erc-device-kobo.workspace = true
 erc-library.workspace = true
 serde.workspace = true

@@ -103,6 +103,8 @@ impl KoboDb {
                      WHERE sc.ShelfName = s.Name AND NOT (sc._IsDeleted = 'true' OR sc._IsDeleted = 1)) \
              FROM Shelf s \
              WHERE NOT (s._IsDeleted = 'true' OR s._IsDeleted = 1) AND s.Name IS NOT NULL \
+               AND s.InternalName NOT IN ('Shortlist', 'Wishlist') \
+               AND (s.Type IS NULL OR s.Type != 'SystemTag') \
              ORDER BY s.Name COLLATE NOCASE",
         )?;
         let collections = stmt

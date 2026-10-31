@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use erc_convert::Kepubify;
+use erc_core::collections::{self, CollectionChange, folder_groups, reconcile_series};
 use erc_core::device::remove_from_device;
 use erc_core::send::{Progress, SendOutcome, send_books, send_library_books, update_on_device};
 use erc_device::{DeviceBook, ReadStatus};
@@ -64,6 +65,41 @@ enum Command {
 }
 
 #[derive(Subcommand)]
+enum CollectionCommand {
+    Create {
+        name: String,
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
+    Rename {
+        from: String,
+        to: String,
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
+    Delete {
+        name: String,
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
+    /// Add books (device paths or ContentIDs) to a collection, creating it if needed.
+    Add {
+        name: String,
+        #[arg(required = true)]
+        books: Vec<String>,
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
+    Remove {
+        name: String,
+        #[arg(required = true)]
+        books: Vec<String>,
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
 enum LibraryCommand {
     /// Import EPUB files.
     Add {
@@ -116,10 +152,18 @@ enum LibraryCommand {
     },
     /// Write a book with its edits applied (what a device receives, before KEPUB conversion).
     Export { id: i64, out: PathBuf },
+    /// Apply series to books the Kobo has imported since they were sent. Writes, with a backup.
+    Reconcile {
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
     /// Send books to the Kobo with their edited metadata, then eject. Writes files.
     Send {
         #[arg(required = true)]
         ids: Vec<i64>,
+        /// Also add the books to this collection (created if needed).
+        #[arg(long)]
+        collection: Option<String>,
         #[arg(long)]
         mount: Option<PathBuf>,
         #[arg(long)]
@@ -170,6 +214,17 @@ enum KoboCommand {
         /// Paths on the device (e.g. `KEpub/Dune - Frank Herbert.kepub.epub`) or ContentIDs.
         #[arg(required = true)]
         books: Vec<String>,
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
+    /// Change collections on the device. Writes, with a backup.
+    #[command(subcommand)]
+    Collection(CollectionCommand),
+    /// Turn the device's folders (e.g. `KEpub/Fantasy`) into collections.
+    Folders {
+        /// Create the collections; without this, only shows what would happen.
+        #[arg(long)]
+        apply: bool,
         #[arg(long)]
         mount: Option<PathBuf>,
     },
@@ -284,16 +339,7 @@ fn main() -> Result<()> {
         }
         Command::Kobo(KoboCommand::Rm { books, mount }) => {
             let kobo = find_kobo(mount.as_deref())?;
-            let ids: Vec<String> = books
-                .iter()
-                .map(|b| {
-                    if b.starts_with("file://") {
-                        b.clone()
-                    } else {
-                        format!("{ONBOARD_PREFIX}{}", b.trim_start_matches('/'))
-                    }
-                })
-                .collect();
+            let ids: Vec<String> = books.iter().map(|b| content_id_for(b)).collect();
             let library = Library::open(default_library_root()?).ok();
             let outcomes = remove_from_device(library.as_ref(), &kobo, &backup_root()?, &ids)?;
             let mut failed = 0;
@@ -308,6 +354,56 @@ fn main() -> Result<()> {
             }
             if failed > 0 {
                 bail!("{failed} of {} books failed", outcomes.len());
+            }
+        }
+        Command::Kobo(KoboCommand::Collection(command)) => {
+            let (mount, change) = match command {
+                CollectionCommand::Create { name, mount } => {
+                    (mount, CollectionChange::Create { name })
+                }
+                CollectionCommand::Rename { from, to, mount } => {
+                    (mount, CollectionChange::Rename { from, to })
+                }
+                CollectionCommand::Delete { name, mount } => {
+                    (mount, CollectionChange::Delete { name })
+                }
+                CollectionCommand::Add { name, books, mount } => (
+                    mount,
+                    CollectionChange::Add {
+                        name,
+                        content_ids: books.iter().map(|b| content_id_for(b)).collect(),
+                    },
+                ),
+                CollectionCommand::Remove { name, books, mount } => (
+                    mount,
+                    CollectionChange::Remove {
+                        name,
+                        content_ids: books.iter().map(|b| content_id_for(b)).collect(),
+                    },
+                ),
+            };
+            let kobo = find_kobo(mount.as_deref())?;
+            collections::apply(&kobo, &backup_root()?, &[change])?;
+            println!("done");
+        }
+        Command::Kobo(KoboCommand::Folders { apply, mount }) => {
+            let kobo = find_kobo(mount.as_deref())?;
+            let groups = folder_groups(&kobo.open_db()?.books()?);
+            for g in &groups {
+                println!("{:<30} {:>4} books", g.folder, g.content_ids.len());
+            }
+            if apply && !groups.is_empty() {
+                let changes: Vec<CollectionChange> = groups
+                    .into_iter()
+                    .map(|g| CollectionChange::Add {
+                        name: g.folder,
+                        content_ids: g.content_ids,
+                    })
+                    .collect();
+                collections::apply(&kobo, &backup_root()?, &changes)?;
+                println!("created {} collections", changes.len());
+            } else if !apply {
+                println!("(dry run; pass --apply to create these collections)");
             }
         }
         Command::Kobo(KoboCommand::Tidy { mount }) => {
@@ -469,18 +565,52 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             )?;
             finish_send(&kobo, &outcomes, no_eject, json)?;
         }
+        LibraryCommand::Reconcile { mount } => {
+            let kobo = find_kobo(mount.as_deref())?;
+            println!(
+                "applied series to {} books",
+                reconcile_series(lib, &kobo, &backup_root()?)?
+            );
+        }
         LibraryCommand::Send {
             ids,
+            collection,
             mount,
             no_eject,
         } => {
             let kobo = find_kobo(mount.as_deref())?;
             let outcomes =
                 send_library_books(lib, &kobo, &Kepubify::locate()?, &ids, print_progress);
+            if let Some(name) = collection {
+                let content_ids: Vec<String> = outcomes
+                    .iter()
+                    .filter_map(|o| o.result.as_ref().ok().map(|s| s.content_id.clone()))
+                    .collect();
+                if !content_ids.is_empty() {
+                    collections::apply(
+                        &kobo,
+                        &backup_root()?,
+                        &[CollectionChange::Add {
+                            name: name.clone(),
+                            content_ids,
+                        }],
+                    )?;
+                    eprintln!("added to collection “{name}”");
+                }
+            }
             finish_send(&kobo, &outcomes, no_eject, json)?;
         }
     }
     Ok(())
+}
+
+/// Accepts a device path (`KEpub/x.kepub.epub`) or a full ContentID.
+fn content_id_for(book: &str) -> String {
+    if book.starts_with("file://") {
+        book.to_owned()
+    } else {
+        format!("{ONBOARD_PREFIX}{}", book.trim_start_matches('/'))
+    }
 }
 
 fn print_progress(p: Progress) {

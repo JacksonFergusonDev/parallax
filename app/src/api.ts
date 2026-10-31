@@ -128,6 +128,23 @@ export interface RemoveOutcome {
   result: { Ok: null } | { Err: string };
 }
 
+export interface Collection {
+  name: string;
+  book_count: number;
+}
+
+export type CollectionChange =
+  | { kind: "create"; name: string }
+  | { kind: "rename"; from: string; to: string }
+  | { kind: "delete"; name: string }
+  | { kind: "add"; name: string; content_ids: string[] }
+  | { kind: "remove"; name: string; content_ids: string[] };
+
+export interface FolderGroup {
+  folder: string;
+  content_ids: string[];
+}
+
 export interface CoverCandidate {
   source: string;
   url: string;
@@ -152,8 +169,19 @@ export const updateBooks = (mount: string, ids: number[]) =>
   invoke<SendOutcome[]>("update_books", { mount, ids });
 export const tidyDevice = (mount: string) =>
   invoke<number>("tidy_device", { mount });
-export const sendBooks = (mount: string, ids: number[]) =>
-  invoke<SendOutcome[]>("send_books", { mount, ids });
+export const sendBooks = (
+  mount: string,
+  ids: number[],
+  collection: string | null = null,
+) => invoke<SendOutcome[]>("send_books", { mount, ids, collection });
+export const listCollections = (mount: string) =>
+  invoke<Collection[]>("list_collections", { mount });
+export const changeCollections = (mount: string, changes: CollectionChange[]) =>
+  invoke<void>("change_collections", { mount, changes });
+export const folderGroups = (mount: string) =>
+  invoke<FolderGroup[]>("folder_groups", { mount });
+export const reconcileDevice = (mount: string) =>
+  invoke<number>("reconcile_device", { mount });
 export const searchCovers = (id: number) =>
   invoke<CoverCandidate[]>("cover_search", { id });
 export const setCoverFromUrl = (id: number, url: string) =>

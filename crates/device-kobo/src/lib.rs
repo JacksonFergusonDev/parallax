@@ -1,5 +1,6 @@
 //! Kobo e-reader backend.
 
+mod collections;
 mod db;
 mod error;
 mod ops;
@@ -12,11 +13,17 @@ use std::path::{Path, PathBuf};
 
 use erc_device::{Capabilities, DeviceInfo, DeviceKind};
 
+pub use collections::{
+    add_to_collection, create_collection, delete_collection, remove_from_collection,
+    rename_collection,
+};
 pub use db::{
     KoboDb, MAX_TESTED_DB_VERSION, MIN_SUPPORTED_DB_VERSION, ONBOARD_PREFIX, parse_kobo_date,
 };
 pub use error::{Error, Result};
-pub use ops::{DisplayMetadata, image_id_for, qhash, remove_book, replace_book, tidy_apple_double};
+pub use ops::{
+    DisplayMetadata, image_id_for, qhash, remove_book, replace_book, set_series, tidy_apple_double,
+};
 pub use transfer::{BOOKS_DIR, SentBook, device_file_name};
 pub use version::{FirmwareVersion, VersionInfo};
 pub use writer::{BACKUPS_KEPT, DeviceWriter, restore};

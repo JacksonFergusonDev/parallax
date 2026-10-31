@@ -88,6 +88,9 @@ const onDevice = new Map<number, string>([
   [3, "2026-10-01T00:00:00Z"],
   [5, "2026-10-01T00:00:00Z"],
 ]);
+const shelves = new Map<string, Set<string>>([["Favourites", new Set()]]);
+const shelvesOf = (id: string) =>
+  [...shelves].filter(([, ids]) => ids.has(id)).map(([n]) => n);
 const contentId = (id: number) =>
   `file:///mnt/onboard/KEpub/book-${id}.kepub.epub`;
 let storeBooks: DeviceBook[] = [
@@ -166,7 +169,9 @@ export function installMockBackend() {
                 collections: [],
               })),
             ...storeBooks,
-          ].sort((x, y) => x.title.localeCompare(y.title));
+          ]
+            .map((b) => ({ ...b, collections: shelvesOf(b.id) }))
+            .sort((x, y) => x.title.localeCompare(y.title));
         case "remove_from_device": {
           const ids = a.contentIds as string[];
           storeBooks = storeBooks.filter((b) => !ids.includes(b.id));
@@ -176,6 +181,43 @@ export function installMockBackend() {
             content_id,
             result: { Ok: null },
           }));
+        }
+        case "list_collections":
+          return [...shelves]
+            .map(([name, ids]) => ({ name, book_count: ids.size }))
+            .sort((x, y) => x.name.localeCompare(y.name));
+        case "folder_groups":
+          return [
+            { folder: "Nonfiction", content_ids: storeBooks.map((b) => b.id) },
+            { folder: "Classics", content_ids: [contentId(5)] },
+          ];
+        case "reconcile_device":
+          return 0;
+        case "change_collections": {
+          type Change = {
+            kind: string;
+            name?: string;
+            from?: string;
+            to?: string;
+            content_ids?: string[];
+          };
+          for (const c of a.changes as Change[]) {
+            if (c.kind === "create")
+              shelves.set(c.name!, shelves.get(c.name!) ?? new Set());
+            if (c.kind === "delete") shelves.delete(c.name!);
+            if (c.kind === "rename") {
+              shelves.set(c.to!, shelves.get(c.from!) ?? new Set());
+              shelves.delete(c.from!);
+            }
+            if (c.kind === "add") {
+              const set = shelves.get(c.name!) ?? new Set();
+              c.content_ids!.forEach((id) => set.add(id));
+              shelves.set(c.name!, set);
+            }
+            if (c.kind === "remove")
+              c.content_ids!.forEach((id) => shelves.get(c.name!)?.delete(id));
+          }
+          return null;
         }
         case "tidy_device":
           return 68;

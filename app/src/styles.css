@@ -693,3 +693,164 @@ button.danger-fill {
 .device-row.header span:nth-child(n + 3) {
   text-align: right;
 }
+
+/* Collections sidebar */
+
+.sidebar {
+  width: 210px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+}
+
+.shelf {
+  all: unset;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: default;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shelf:hover {
+  background: var(--sunken);
+}
+
+.shelf.active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  font-weight: 500;
+}
+
+.sidebar-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 14px 10px 4px;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sidebar-heading .icon {
+  font-size: 16px;
+}
+
+.sidebar-empty {
+  font-size: 12px;
+  padding: 2px 10px;
+}
+
+.sidebar-foot {
+  margin-top: auto;
+  padding: 12px 10px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.device-toolbar {
+  gap: 10px;
+}
+
+button.link.danger {
+  color: var(--danger);
+}
+
+.chips {
+  color: var(--accent);
+}
+
+/* Menus and small dialogs */
+
+.menu-root {
+  position: relative;
+}
+
+.menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  max-height: 320px;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 25%);
+  padding: 4px;
+  z-index: 5;
+}
+
+.menu button {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: default;
+}
+
+.menu button:hover {
+  background: var(--sunken);
+}
+
+.menu hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 4px 0;
+}
+
+.modal.small {
+  width: min(420px, calc(100vw - 48px));
+  gap: 12px;
+}
+
+.modal.small h2 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.check-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.check-list label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+}
+
+.check-list .grow {
+  flex: 1;
+}
+
+.collection-select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.new-collection {
+  width: 160px;
+}
