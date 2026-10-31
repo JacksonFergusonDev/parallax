@@ -27,10 +27,31 @@ impl KoboDevice {
     /// book where Nickel would import it, then removes the `._*` AppleDouble
     /// files macOS creates on FAT32 for every new file and folder.
     pub fn send_file(&self, src: &Path, dest: &str) -> Result<SentBook> {
-        let target = self.mount().join(dest);
-        if target.exists() {
+        if self.mount().join(dest).exists() {
             return Err(Error::AlreadyOnDevice(dest.to_owned()));
         }
+        self.write_file(src, dest)
+    }
+
+    /// Like [`KoboDevice::send_file`] but overwrites an existing book at
+    /// `dest` in one rename, so the path (and Nickel's `ContentID`, which
+    /// carries reading progress) stays the same.
+    pub fn replace_file(&self, src: &Path, dest: &str) -> Result<SentBook> {
+        let target = self.mount().join(dest);
+        if !target.is_file() {
+            return Err(Error::Io {
+                path: target,
+                source: std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "book is not on the device",
+                ),
+            });
+        }
+        self.write_file(src, dest)
+    }
+
+    fn write_file(&self, src: &Path, dest: &str) -> Result<SentBook> {
+        let target = self.mount().join(dest);
         let parent = target.parent().unwrap_or(self.mount());
         let mut created_dirs: Vec<&Path> = parent
             .ancestors()
@@ -97,7 +118,7 @@ impl KoboDevice {
 /// it cannot be removed; on FAT32 that becomes a `._<name>` companion file.
 /// Deleting the companion is safe and it is not recreated (verified on the
 /// reference Kobo, see docs/device-notes.md).
-fn remove_apple_double(path: &Path) {
+pub(crate) fn remove_apple_double(path: &Path) {
     if let (Some(parent), Some(name)) = (path.parent(), path.file_name()) {
         let mut companion = std::ffi::OsString::from("._");
         companion.push(name);
@@ -107,7 +128,7 @@ fn remove_apple_double(path: &Path) {
 
 /// Streams bytes only: no xattrs, ACLs or resource forks. `fs::copy` uses
 /// `fcopyfile` on macOS, which would copy extended attributes.
-fn copy_plain(src: &Path, dest: &Path) -> Result<u64> {
+pub(crate) fn copy_plain(src: &Path, dest: &Path) -> Result<u64> {
     let mut reader =
         BufReader::with_capacity(1 << 20, File::open(src).map_err(|e| io_err(src, e))?);
     let file = OpenOptions::new()

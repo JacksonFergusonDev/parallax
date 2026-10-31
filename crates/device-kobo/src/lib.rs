@@ -2,8 +2,10 @@
 
 mod db;
 mod error;
+mod ops;
 mod transfer;
 mod version;
+mod writer;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,8 +16,10 @@ pub use db::{
     KoboDb, MAX_TESTED_DB_VERSION, MIN_SUPPORTED_DB_VERSION, ONBOARD_PREFIX, parse_kobo_date,
 };
 pub use error::{Error, Result};
+pub use ops::{DisplayMetadata, image_id_for, qhash, remove_book, replace_book, tidy_apple_double};
 pub use transfer::{BOOKS_DIR, SentBook, device_file_name};
 pub use version::{FirmwareVersion, VersionInfo};
+pub use writer::{BACKUPS_KEPT, DeviceWriter, restore};
 
 /// Where macOS mounts removable volumes.
 pub const MACOS_VOLUMES: &str = "/Volumes";

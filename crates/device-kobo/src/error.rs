@@ -23,6 +23,20 @@ pub enum Error {
     },
     #[error("could not eject the Kobo: {0}")]
     Eject(String),
+    #[error(
+        "Kobo database version {0} is newer than any tested; changes are disabled to protect your device"
+    )]
+    UntestedDbVersion(u32),
+    #[error(
+        "the Kobo database is busy or was not closed cleanly ({0} exists); eject and reconnect the Kobo"
+    )]
+    DatabaseBusy(String),
+    #[error("the Kobo database failed its integrity check before any change was made: {0}")]
+    CorruptBefore(String),
+    #[error(
+        "the change was undone because the database failed its integrity check afterwards: {0}"
+    )]
+    RolledBack(String),
     #[error("Kobo database error: {0}")]
     Sqlite(#[from] rusqlite::Error),
 }

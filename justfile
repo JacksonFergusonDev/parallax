@@ -31,6 +31,6 @@ test:
 dev: setup
     cd app && pnpm tauri dev
 
-# Opt-in test that mounts a FAT32 disk image to check for `._*` files.
+# Opt-in tests that mount FAT32 disk images to check the device write path.
 test-fat:
-    cargo test -p erc-device-kobo --test transfer -- --ignored
+    cargo test -p erc-device-kobo -- --ignored
