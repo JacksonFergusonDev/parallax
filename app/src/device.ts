@@ -1,5 +1,7 @@
 // Pure helpers for the Kobo view.
 import type { DeviceBook } from "./api";
+import { seriesValue, surnameKey, titleKey } from "./library";
+import type { Column } from "./sort";
 
 export function filterDeviceBooks(
   books: DeviceBook[],
@@ -49,3 +51,54 @@ export function shortDate(iso: string | null, now = new Date()): string {
     year: "numeric",
   });
 }
+
+export type DeviceKey =
+  "title" | "author" | "series" | "status" | "last_read" | "added";
+
+export const deviceColumns: Column<DeviceBook, DeviceKey>[] = [
+  {
+    key: "title",
+    label: "Title",
+    width: "minmax(0, 2fr)",
+    value: (b) => titleKey(b.title),
+  },
+  {
+    key: "author",
+    label: "Author",
+    width: "minmax(0, 1.2fr)",
+    value: (b) => (b.author ? surnameKey(b.author) : null),
+  },
+  {
+    key: "series",
+    label: "Series",
+    width: "minmax(0, 1.2fr)",
+    value: (b) => seriesValue(b.series, b.series_number),
+  },
+  {
+    key: "status",
+    label: "Status",
+    width: "76px",
+    align: "end",
+    // Descending: finished, then most read, then unread.
+    value: (b) =>
+      b.read_status === "finished"
+        ? 101
+        : b.read_status === "reading"
+          ? b.percent_read
+          : -1,
+  },
+  {
+    key: "last_read",
+    label: "Last read",
+    width: "100px",
+    align: "end",
+    value: (b) => b.last_read,
+  },
+  {
+    key: "added",
+    label: "On Kobo since",
+    width: "100px",
+    align: "end",
+    value: (b) => b.added,
+  },
+];

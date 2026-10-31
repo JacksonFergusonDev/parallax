@@ -4,10 +4,12 @@ import {
   applyProgress,
   filterBooks,
   fromForm,
-  sortBooks,
+  defaultOrder,
+  libraryColumns,
   summarizeImport,
   toForm,
 } from "./library";
+import { applySort, nextSort, parseSort, type Sort } from "./sort";
 
 const book = (
   id: number,
@@ -136,7 +138,7 @@ describe("edit form", () => {
   });
 });
 
-describe("sortBooks", () => {
+describe("sorting", () => {
   const books = [
     book(1, "The Hobbit", ["J. R. R. Tolkien"], {
       added_at: "2026-10-01T00:00:00Z",
@@ -153,39 +155,74 @@ describe("sortBooks", () => {
     }),
     book(4, "Emma", ["Jane Austen"], { added_at: "2026-10-04T00:00:00Z" }),
   ];
-  const titles = (key: Parameters<typeof sortBooks>[1]) =>
-    sortBooks(books, key).map((b) => b.title);
+  const columns = libraryColumns((b) =>
+    b.id === 2 ? "stale" : b.id === 4 ? "on" : undefined,
+  );
+  type Key = Parameters<typeof nextSort>[1];
+  const titles = (sort: Sort<Key>) =>
+    applySort(defaultOrder(books), sort as never, columns).map((b) => b.title);
 
-  it("sorts titles ignoring leading articles", () => {
-    expect(titles("title")).toEqual([
+  it("defaults to title order ignoring leading articles", () => {
+    expect(titles(null)).toEqual([
       "Dune",
       "Dune Messiah",
       "Emma",
       "The Hobbit",
     ]);
+  });
+  it("cycles descending, ascending, default", () => {
+    let s = nextSort<Key>(null, "title");
+    expect(s).toEqual({ key: "title", dir: "desc" });
+    s = nextSort(s, "title");
+    expect(s).toEqual({ key: "title", dir: "asc" });
+    expect(nextSort(s, "title")).toBeNull();
+    expect(nextSort(s, "author")).toEqual({ key: "author", dir: "desc" });
   });
   it("sorts authors by surname", () => {
-    expect(titles("author")).toEqual([
+    expect(titles({ key: "author", dir: "asc" })).toEqual([
       "Emma",
       "Dune",
       "Dune Messiah",
       "The Hobbit",
     ]);
   });
-  it("puts series first, in reading order", () => {
-    expect(titles("series")).toEqual([
+  it("keeps series in reading order and books without one last", () => {
+    expect(titles({ key: "series", dir: "asc" })).toEqual([
       "Dune",
       "Dune Messiah",
+      "Emma",
+      "The Hobbit",
+    ]);
+    expect(titles({ key: "series", dir: "desc" })).toEqual([
+      "Dune Messiah",
+      "Dune",
       "Emma",
       "The Hobbit",
     ]);
   });
-  it("puts recently added first", () => {
-    expect(titles("added")).toEqual([
+  it("puts recently added first when descending", () => {
+    expect(titles({ key: "added", dir: "desc" })).toEqual([
       "Emma",
       "Dune Messiah",
       "Dune",
       "The Hobbit",
     ]);
+  });
+  it("puts books needing an update first, then books on the Kobo", () => {
+    expect(titles({ key: "kobo", dir: "desc" })).toEqual([
+      "Dune Messiah",
+      "Emma",
+      "Dune",
+      "The Hobbit",
+    ]);
+  });
+  it("ignores a stored sort for a column that no longer exists", () => {
+    const keys = columns.map((c) => c.key);
+    expect(parseSort('{"key":"added","dir":"asc"}', keys)).toEqual({
+      key: "added",
+      dir: "asc",
+    });
+    expect(parseSort('{"key":"rating","dir":"asc"}', keys)).toBeNull();
+    expect(parseSort("title", keys)).toBeNull();
   });
 });

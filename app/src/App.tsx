@@ -21,11 +21,12 @@ import {
   reconcileDevice,
 } from "./api";
 import {
-  SORT_LABELS,
   applyProgress,
+  defaultOrder,
   filterBooks,
-  sortBooks,
-  type SortKey,
+  libraryColumns,
+  type DeviceState,
+  type LibraryKey,
   isBookFile,
   summarizeImport,
   type SendStatus,
@@ -34,21 +35,18 @@ import { BookCard } from "./components/BookCard";
 import { DeviceBadge } from "./components/DeviceBadge";
 import { DeviceView } from "./components/DeviceView";
 import { EditPanel } from "./components/EditPanel";
+import { LibraryRow } from "./components/LibraryRow";
+import {
+  SortHeader,
+  ViewControls,
+  listTracks,
+  useViewState,
+} from "./components/ViewControls";
+import { applySort } from "./sort";
 import "./styles.css";
 
 const DEVICE_POLL_MS = 2000;
-const SORT_STORAGE_KEY = "library-sort";
-
-/** Remembered per viewer; storage can be unavailable, so never required. */
-function initialSort(): SortKey {
-  try {
-    const saved = localStorage.getItem(SORT_STORAGE_KEY);
-    if (saved && saved in SORT_LABELS) return saved as SortKey;
-  } catch {
-    /* storage unavailable */
-  }
-  return "title";
-}
+const LIBRARY_KEYS = libraryColumns(() => undefined).map((c) => c.key);
 const NEW_COLLECTION = "\u0000new";
 
 type Notice = { kind: "error" | "info"; text: string };
@@ -65,7 +63,11 @@ export default function App() {
   const [newCollection, setNewCollection] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortKey>(initialSort);
+  const { mode, setMode, sort, setSort } = useViewState<LibraryKey>(
+    "library",
+    LIBRARY_KEYS,
+    "grid",
+  );
   const searchRef = useRef<HTMLInputElement>(null);
   const [statuses, setStatuses] = useState<Record<number, SendStatus>>({});
   const [busy, setBusy] = useState<
@@ -205,17 +207,20 @@ export default function App() {
     };
   }, [doImport]);
 
-  const visible = useMemo(
-    () => sortBooks(filterBooks(books, query), sort),
-    [books, query, sort],
+  const deviceState = useCallback(
+    (b: Book): DeviceState =>
+      onDevice.get(b.id)?.stale
+        ? "stale"
+        : onDevice.has(b.id)
+          ? "on"
+          : undefined,
+    [onDevice],
   );
-  useEffect(() => {
-    try {
-      localStorage.setItem(SORT_STORAGE_KEY, sort);
-    } catch {
-      /* storage unavailable */
-    }
-  }, [sort]);
+  const columns = useMemo(() => libraryColumns(deviceState), [deviceState]);
+  const visible = useMemo(
+    () => applySort(defaultOrder(filterBooks(books, query)), sort, columns),
+    [books, query, sort, columns],
+  );
   const selectedBooks = useMemo(
     () => books.filter((b) => selected.has(b.id)),
     [books, selected],
@@ -438,20 +443,6 @@ export default function App() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        {activeView === "library" && books.length > 0 && (
-          <select
-            className="sort-select"
-            aria-label="Sort by"
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-          >
-            {Object.entries(SORT_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-        )}
         <DeviceBadge device={device} />
       </header>
 
@@ -479,45 +470,85 @@ export default function App() {
       ) : (
         <>
           <div className="body">
-            <main
-              className="content"
-              onClick={(e) =>
-                e.target === e.currentTarget && setSelected(new Set())
-              }
-            >
-              {loaded && books.length === 0 ? (
-                <div className="dropzone">
-                  <p className="dropzone-title">Drop EPUB files here</p>
-                  <p className="muted">
-                    They're added to your library, ready to edit and send to
-                    your Kobo.
-                  </p>
-                  <button className="secondary" onClick={chooseFiles}>
-                    Choose files…
-                  </button>
-                </div>
-              ) : visible.length === 0 && loaded ? (
-                <p className="muted empty">No books match “{query}”.</p>
-              ) : (
-                <div className="grid">
-                  {visible.map((b) => (
-                    <BookCard
-                      key={b.id}
-                      book={b}
-                      selected={selected.has(b.id)}
-                      deviceState={
-                        onDevice.get(b.id)?.stale
-                          ? "stale"
-                          : onDevice.has(b.id)
-                            ? "on"
-                            : undefined
-                      }
-                      status={statuses[b.id]}
-                      onSelect={onSelect}
-                    />
-                  ))}
+            <main className="content">
+              {books.length > 0 && (
+                <div className="view-toolbar">
+                  <span className="muted">
+                    {visible.length === books.length
+                      ? `${books.length} ${books.length === 1 ? "book" : "books"}`
+                      : `${visible.length} of ${books.length}`}
+                  </span>
+                  <span className="spacer" />
+                  {selected.size > 0 && (
+                    <span className="muted">{selected.size} selected</span>
+                  )}
+                  <ViewControls
+                    mode={mode}
+                    onMode={setMode}
+                    sort={sort}
+                    onSort={setSort}
+                    columns={columns}
+                  />
                 </div>
               )}
+              <div
+                className="scroll"
+                onClick={(e) =>
+                  e.target === e.currentTarget && setSelected(new Set())
+                }
+              >
+                {loaded && books.length === 0 ? (
+                  <div className="dropzone">
+                    <p className="dropzone-title">Drop EPUB files here</p>
+                    <p className="muted">
+                      They're added to your library, ready to edit and send to
+                      your Kobo.
+                    </p>
+                    <button className="secondary" onClick={chooseFiles}>
+                      Choose files…
+                    </button>
+                  </div>
+                ) : visible.length === 0 && loaded ? (
+                  <p className="muted empty">No books match “{query}”.</p>
+                ) : mode === "grid" ? (
+                  <div className="grid">
+                    {visible.map((b) => (
+                      <BookCard
+                        key={b.id}
+                        book={b}
+                        selected={selected.has(b.id)}
+                        deviceState={deviceState(b)}
+                        status={statuses[b.id]}
+                        onSelect={onSelect}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    className="book-list"
+                    role="table"
+                    style={
+                      { "--tracks": listTracks(columns) } as React.CSSProperties
+                    }
+                  >
+                    <SortHeader
+                      columns={columns}
+                      sort={sort}
+                      onSort={setSort}
+                    />
+                    {visible.map((b) => (
+                      <LibraryRow
+                        key={b.id}
+                        book={b}
+                        selected={selected.has(b.id)}
+                        deviceState={deviceState(b)}
+                        status={statuses[b.id]}
+                        onSelect={onSelect}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </main>
             {editing && (
               <EditPanel

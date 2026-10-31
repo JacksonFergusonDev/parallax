@@ -15,15 +15,27 @@ import {
   type DeviceInfo,
 } from "../api";
 import {
+  deviceColumns,
   filterDeviceBooks,
   shortDate,
   statusLabel,
   summarize,
+  type DeviceKey,
 } from "../device";
+import { applySort } from "../sort";
 import { CollectionMenu } from "./CollectionMenu";
+import { DeviceCard } from "./DeviceCard";
 import { FolderImport } from "./FolderImport";
 import { NameDialog } from "./NameDialog";
 import { RulesDialog } from "./RulesDialog";
+import {
+  SortHeader,
+  ViewControls,
+  listTracks,
+  useViewState,
+} from "./ViewControls";
+
+const DEVICE_KEYS = deviceColumns.map((c) => c.key);
 
 interface Props {
   device: DeviceInfo;
@@ -59,6 +71,11 @@ export function DeviceView({
     text: string;
   } | null>(null);
   const anchor = useRef<string | null>(null);
+  const { mode, setMode, sort, setSort } = useViewState<DeviceKey>(
+    "device",
+    DEVICE_KEYS,
+    "list",
+  );
 
   const load = useCallback(
     () =>
@@ -83,29 +100,32 @@ export function DeviceView({
     [books, shelf],
   );
   const visible = useMemo(
-    () => filterDeviceBooks(inShelf, query),
-    [inShelf, query],
+    () => applySort(filterDeviceBooks(inShelf, query), sort, deviceColumns),
+    [inShelf, query, sort],
   );
   const chosen = visible.filter((b) => selected.has(b.id));
   const removable = chosen.filter((b) => b.sideloaded);
 
-  const toggle = (id: string, e: React.MouseEvent) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (e.shiftKey && anchor.current) {
-        const ids = visible.map((b) => b.id);
-        const [a, b] = [ids.indexOf(anchor.current), ids.indexOf(id)].sort(
-          (x, y) => x - y,
-        );
-        if (a >= 0) ids.slice(a, b + 1).forEach((i) => next.add(i));
+  const toggle = useCallback(
+    (id: string, e: React.MouseEvent) => {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (e.shiftKey && anchor.current) {
+          const ids = visible.map((b) => b.id);
+          const [a, b] = [ids.indexOf(anchor.current), ids.indexOf(id)].sort(
+            (x, y) => x - y,
+          );
+          if (a >= 0) ids.slice(a, b + 1).forEach((i) => next.add(i));
+          return next;
+        }
+        anchor.current = id;
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
         return next;
-      }
-      anchor.current = id;
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+      });
+    },
+    [visible],
+  );
 
   /** Runs a device change with busy state, notices and a reload. */
   const run = async (action: () => Promise<string>) => {
@@ -299,31 +319,60 @@ export function DeviceView({
             {chosen.length > 0 && (
               <span className="muted">{chosen.length} selected</span>
             )}
+            <ViewControls
+              mode={mode}
+              onMode={setMode}
+              sort={sort}
+              onSort={setSort}
+              columns={deviceColumns}
+            />
           </div>
-          {books && visible.length === 0 ? (
-            <p className="muted empty">
-              {query
-                ? `No books match “${query}”.`
-                : shelf
-                  ? "This collection is empty."
-                  : "No books on this Kobo."}
-            </p>
-          ) : (
-            <ul className="device-list">
-              <li className="device-row header" aria-hidden>
-                <span />
-                <span>Title</span>
-                <span>Status</span>
-                <span>Last read</span>
-                <span>On Kobo since</span>
-              </li>
-              {visible.map((b) => {
-                const lib = libraryByContentId.get(b.id);
-                const src = lib ? coverSrc(lib) : null;
-                return (
-                  <li key={b.id}>
+          <div className="scroll">
+            {books && visible.length === 0 ? (
+              <p className="muted empty">
+                {query
+                  ? `No books match “${query}”.`
+                  : shelf
+                    ? "This collection is empty."
+                    : "No books on this Kobo."}
+              </p>
+            ) : mode === "grid" ? (
+              <div className="grid">
+                {visible.map((b) => {
+                  const lib = libraryByContentId.get(b.id);
+                  return (
+                    <DeviceCard
+                      key={b.id}
+                      book={b}
+                      cover={lib ? coverSrc(lib) : null}
+                      selected={selected.has(b.id)}
+                      onSelect={toggle}
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              <div
+                className="book-list"
+                role="table"
+                style={
+                  {
+                    "--tracks": listTracks(deviceColumns),
+                  } as React.CSSProperties
+                }
+              >
+                <SortHeader
+                  columns={deviceColumns}
+                  sort={sort}
+                  onSort={setSort}
+                />
+                {visible.map((b) => {
+                  const lib = libraryByContentId.get(b.id);
+                  const src = lib ? coverSrc(lib) : null;
+                  return (
                     <button
-                      className={`device-row ${selected.has(b.id) ? "selected" : ""}`}
+                      key={b.id}
+                      className={`list-row ${selected.has(b.id) ? "selected" : ""}`}
                       aria-pressed={selected.has(b.id)}
                       onClick={(e) => toggle(b.id, e)}
                     >
@@ -332,34 +381,33 @@ export function DeviceView({
                       </span>
                       <span className="row-main">
                         <span className="row-title">{b.title}</span>
-                        <span className="row-sub">
-                          {b.author ?? "Unknown author"}
-                          {b.series
-                            ? ` · ${b.series}${b.series_number ? ` #${b.series_number}` : ""}`
-                            : ""}
-                          {b.collections.length > 0 && (
-                            <span className="chips">
-                              {" "}
-                              · {b.collections.join(", ")}
-                            </span>
-                          )}
-                        </span>
+                        {b.collections.length > 0 && (
+                          <span className="row-sub">
+                            {b.collections.join(", ")}
+                          </span>
+                        )}
                       </span>
-                      <span className={`row-status status-${b.read_status}`}>
+                      <span className="cell muted">
+                        {b.author ?? "Unknown author"}
+                      </span>
+                      <span className="cell muted">
+                        {b.series
+                          ? `${b.series}${b.series_number ? ` #${b.series_number}` : ""}`
+                          : ""}
+                      </span>
+                      <span className={`cell end status-${b.read_status}`}>
                         {statusLabel(b)}
                       </span>
-                      <span className="row-date" title="Last read">
-                        {shortDate(b.last_read)}
-                      </span>
-                      <span className="row-date muted" title="On device since">
+                      <span className="cell end">{shortDate(b.last_read)}</span>
+                      <span className="cell end muted">
                         {shortDate(b.added)}
                       </span>
                     </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </main>
       </div>
 

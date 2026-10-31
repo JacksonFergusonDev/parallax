@@ -1,5 +1,6 @@
 // Pure helpers for the library view, kept out of components so they're testable.
 import type { Book, ImportResult, MetadataEdit, Progress } from "./api";
+import { collator, type Column, type SortValue } from "./sort";
 
 export type SendStatus =
   | { stage: "queued" | "preparing" | "converting" | "copying" }
@@ -89,60 +90,78 @@ export const fromForm = (f: EditForm): MetadataEdit => ({
 
 export const isBookFile = (path: string) => /\.(epub|kepub)$/i.test(path);
 
-export type SortKey = "title" | "author" | "series" | "added";
-
-export const SORT_LABELS: Record<SortKey, string> = {
-  title: "Title",
-  author: "Author",
-  series: "Series",
-  added: "Recently added",
-};
-
-const collator = new Intl.Collator(undefined, {
-  sensitivity: "base",
-  numeric: true,
-});
+export type LibraryKey =
+  "title" | "author" | "series" | "tags" | "kobo" | "added";
 
 /** "The Hobbit" sorts under H. */
-const titleKey = (t: string) => t.replace(/^(the|a|an)\s+/i, "");
+export const titleKey = (t: string) => t.replace(/^(the|a|an)\s+/i, "");
 /** "Frank Herbert" sorts under Herbert. */
-const surnameKey = (b: Book) => {
-  const first = b.authors[0] ?? "";
-  const parts = first.trim().split(/\s+/);
+export const surnameKey = (name: string) => {
+  const parts = name.trim().split(/\s+/);
   return parts.length > 1
     ? `${parts.at(-1)} ${parts.slice(0, -1).join(" ")}`
-    : first;
+    : name;
 };
-const seriesIndex = (b: Book) => {
-  const n = parseFloat(b.series_index ?? "");
-  return Number.isFinite(n) ? n : Number.MAX_VALUE;
+/** Series name then reading order; books without a number go last. */
+export const seriesValue = (
+  series: string | null,
+  index: string | null,
+): SortValue => {
+  if (!series) return null;
+  const n = parseFloat(index ?? "");
+  return [series, Number.isFinite(n) ? n : Number.MAX_VALUE];
 };
 
-export function sortBooks(books: Book[], key: SortKey): Book[] {
-  const byTitle = (a: Book, b: Book) =>
-    collator.compare(titleKey(a.title), titleKey(b.title));
-  const sorted = [...books];
-  switch (key) {
-    case "title":
-      return sorted.sort(byTitle);
-    case "author":
-      return sorted.sort(
-        (a, b) =>
-          collator.compare(surnameKey(a), surnameKey(b)) || byTitle(a, b),
-      );
-    case "series":
-      // Books in a series first, in reading order; the rest by title.
-      return sorted.sort((a, b) => {
-        if (!a.series !== !b.series) return a.series ? -1 : 1;
-        return (
-          collator.compare(a.series ?? "", b.series ?? "") ||
-          seriesIndex(a) - seriesIndex(b) ||
-          byTitle(a, b)
-        );
-      });
-    case "added":
-      return sorted.sort(
-        (a, b) => b.added_at.localeCompare(a.added_at) || b.id - a.id,
-      );
-  }
-}
+/** The library's default order: by title, ignoring leading articles. */
+export const defaultOrder = (books: Book[]) =>
+  [...books].sort(
+    (a, b) =>
+      collator.compare(titleKey(a.title), titleKey(b.title)) || a.id - b.id,
+  );
+
+/** On the Kobo: "stale" when edited since it was sent. */
+export type DeviceState = "on" | "stale" | undefined;
+
+export const libraryColumns = (
+  deviceState: (b: Book) => DeviceState,
+): Column<Book, LibraryKey>[] => [
+  {
+    key: "title",
+    label: "Title",
+    width: "minmax(0, 2fr)",
+    value: (b) => titleKey(b.title),
+  },
+  {
+    key: "author",
+    label: "Author",
+    width: "minmax(0, 1.2fr)",
+    value: (b) => (b.authors[0] ? surnameKey(b.authors[0]) : null),
+  },
+  {
+    key: "series",
+    label: "Series",
+    width: "minmax(0, 1.2fr)",
+    value: (b) => seriesValue(b.series, b.series_index),
+  },
+  {
+    key: "tags",
+    label: "Tags",
+    width: "minmax(0, 1fr)",
+    value: (b) => (b.tags.length ? b.tags.join(", ") : null),
+  },
+  {
+    key: "kobo",
+    label: "On Kobo",
+    width: "92px",
+    align: "end",
+    // Descending puts books needing an update first, then the rest on the Kobo.
+    value: (b) => ({ stale: 2, on: 1, none: 0 })[deviceState(b) ?? "none"],
+  },
+  {
+    key: "added",
+    label: "Added",
+    width: "100px",
+    align: "end",
+    value: (b) => b.added_at,
+  },
+];

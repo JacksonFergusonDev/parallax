@@ -1,8 +1,8 @@
 import { memo } from "react";
 import { coverSrc, type Book } from "../api";
-import type { SendStatus } from "../library";
+import type { DeviceState, SendStatus } from "../library";
 
-const STATUS_LABEL: Record<SendStatus["stage"], string> = {
+export const STATUS_LABEL: Record<SendStatus["stage"], string> = {
   queued: "Waiting…",
   preparing: "Preparing…",
   converting: "Converting…",
@@ -15,7 +15,7 @@ interface Props {
   book: Book;
   selected: boolean;
   /** On the connected Kobo; "stale" if edited since it was sent. */
-  deviceState: "on" | "stale" | undefined;
+  deviceState: DeviceState;
   status: SendStatus | undefined;
   onSelect: (id: number, event: React.MouseEvent) => void;
 }

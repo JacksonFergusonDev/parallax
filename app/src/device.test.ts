@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { DeviceBook } from "./api";
-import { filterDeviceBooks, shortDate, statusLabel, summarize } from "./device";
+import {
+  deviceColumns,
+  filterDeviceBooks,
+  shortDate,
+  statusLabel,
+  summarize,
+} from "./device";
+import { applySort } from "./sort";
 
 const book = (title: string, extra: Partial<DeviceBook> = {}): DeviceBook => ({
   id: `file:///mnt/onboard/KEpub/${title}.kepub.epub`,
@@ -55,5 +62,35 @@ describe("device helpers", () => {
     expect(shortDate("2026-10-31T08:00:00Z", now)).toBe("Today");
     expect(shortDate("2026-10-30T08:00:00Z", now)).toBe("Yesterday");
     expect(shortDate("2026-10-27T08:00:00Z", now)).toBe("4 days ago");
+  });
+});
+
+describe("device sorting", () => {
+  it("sorts status by progress, finished first and unread last", () => {
+    const books = [
+      book("A"),
+      book("B", { read_status: "reading", percent_read: 40 }),
+      book("C", { read_status: "finished", percent_read: 100 }),
+      book("D", { read_status: "reading", percent_read: 75 }),
+    ];
+    const titles = (dir: "asc" | "desc") =>
+      applySort(books, { key: "status", dir }, deviceColumns).map(
+        (b) => b.title,
+      );
+    expect(titles("desc")).toEqual(["C", "D", "B", "A"]);
+    expect(titles("asc")).toEqual(["A", "B", "D", "C"]);
+  });
+  it("keeps never-read books last in both directions", () => {
+    const books = [
+      book("A"),
+      book("B", { last_read: "2026-10-01T00:00:00Z" }),
+      book("C", { last_read: "2026-10-05T00:00:00Z" }),
+    ];
+    const titles = (dir: "asc" | "desc") =>
+      applySort(books, { key: "last_read", dir }, deviceColumns).map(
+        (b) => b.title,
+      );
+    expect(titles("desc")).toEqual(["C", "B", "A"]);
+    expect(titles("asc")).toEqual(["B", "C", "A"]);
   });
 });
