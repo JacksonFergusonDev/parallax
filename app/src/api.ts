@@ -1,6 +1,6 @@
 // Typed wrappers over the Tauri commands in src-tauri/src/lib.rs. Shapes
 // mirror the serde output of the Rust types.
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export interface DeviceInfo {
@@ -17,9 +17,59 @@ export interface DeviceInfo {
   };
 }
 
+export interface Identifier {
+  scheme: string | null;
+  value: string;
+}
+
+export interface Book {
+  id: number;
+  title: string;
+  authors: string[];
+  series: string | null;
+  series_index: string | null;
+  tags: string[];
+  language: string | null;
+  publisher: string | null;
+  description: string | null;
+  identifiers: Identifier[];
+  original_name: string;
+  file_size: number;
+  has_cover: boolean;
+  added_at: string;
+  modified_at: string;
+  /** Absolute path of the cover thumbnail. */
+  cover: string | null;
+}
+
+export interface MetadataEdit {
+  title: string;
+  authors: string[];
+  series: string | null;
+  series_index: string | null;
+  tags: string[];
+}
+
+export type ImportOutcome =
+  | {
+      kind: "added";
+      book: Omit<Book, "cover">;
+      possible_duplicate_of: number | null;
+    }
+  | { kind: "already_in_library"; book: Omit<Book, "cover"> };
+
+export interface ImportResult {
+  path: string;
+  outcome: { Ok: ImportOutcome } | { Err: string };
+}
+
 export type Progress =
-  | { stage: "converting"; index: number; total: number; file: string }
-  | { stage: "copying"; index: number; total: number; file: string }
+  | {
+      stage: "preparing" | "converting" | "copying";
+      index: number;
+      total: number;
+      file: string;
+    }
   | {
       stage: "done";
       index: number;
@@ -35,22 +85,26 @@ export type Progress =
       error: string;
     };
 
-export interface SentInfo {
-  device_path: string;
-  content_id: string;
-  bytes: number;
-}
-
 export interface SendOutcome {
   source: string;
-  result: { Ok: SentInfo } | { Err: string };
+  book_id: number | null;
+  result:
+    | { Ok: { device_path: string; content_id: string; bytes: number } }
+    | { Err: string };
 }
 
 export const listDevices = () => invoke<DeviceInfo[]>("list_devices");
-
-export const sendToDevice = (mount: string, files: string[]) =>
-  invoke<SendOutcome[]>("send_to_device", { mount, files });
-
+export const listBooks = () => invoke<Book[]>("library_list");
+export const importBooks = (paths: string[]) =>
+  invoke<ImportResult[]>("library_import", { paths });
+export const updateBook = (id: number, edit: MetadataEdit) =>
+  invoke<Book>("library_update", { id, edit });
+export const removeBooks = (ids: number[]) =>
+  invoke<void>("library_remove", { ids });
+export const booksOnDevice = (mount: string) =>
+  invoke<number[]>("books_on_device", { mount });
+export const sendBooks = (mount: string, ids: number[]) =>
+  invoke<SendOutcome[]>("send_books", { mount, ids });
 export const ejectDevice = (mount: string) =>
   invoke<void>("eject_device", { mount });
 
@@ -58,3 +112,13 @@ export const onSendProgress = (
   handler: (p: Progress) => void,
 ): Promise<UnlistenFn> =>
   listen<Progress>("send-progress", (e) => handler(e.payload));
+
+/** URL for a cover thumbnail; `version` busts the webview cache after edits. */
+export function coverSrc(book: Book): string | null {
+  if (!book.cover) return null;
+  const url = convertFileSrc(book.cover);
+  // data: URLs (the browser dev mock) can't take a query string.
+  return url.startsWith("data:")
+    ? url
+    : `${url}?v=${encodeURIComponent(book.modified_at)}`;
+}

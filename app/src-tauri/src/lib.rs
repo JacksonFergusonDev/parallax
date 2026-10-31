@@ -1,19 +1,57 @@
 //! Tauri adapter: thin commands over the core crates. No business logic here.
 
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use erc_convert::Kepubify;
-use erc_core::send::{SendOutcome, send_books};
+use erc_core::send::{SendOutcome, send_library_books};
 use erc_device::DeviceInfo;
 use erc_device_kobo::{KoboDevice, MACOS_VOLUMES};
-use tauri::{AppHandle, Emitter};
+use erc_epub::MetadataEdit;
+use erc_library::{Book, ImportOutcome, Library};
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Event carrying [`erc_core::send::Progress`] while books are sent.
 const SEND_PROGRESS: &str = "send-progress";
 
-#[tauri::command]
-fn app_version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
+struct AppState {
+    library: Arc<Mutex<Library>>,
+}
+
+impl AppState {
+    fn library(&self) -> MutexGuard<'_, Library> {
+        // A panic while holding the lock can't leave the library inconsistent
+        // (every write is a single SQLite statement or transaction).
+        self.library.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}
+
+/// A library book plus the absolute path of its cover thumbnail.
+#[derive(Serialize)]
+struct LibraryBook {
+    #[serde(flatten)]
+    book: Book,
+    cover: Option<PathBuf>,
+}
+
+fn with_cover(lib: &Library, book: Book) -> LibraryBook {
+    LibraryBook {
+        cover: lib.cover_file(book.id),
+        book,
+    }
+}
+
+#[derive(Serialize)]
+struct ImportResult {
+    path: PathBuf,
+    outcome: Result<ImportOutcome, String>,
+}
+
+type CmdResult<T> = Result<T, String>;
+
+fn err(e: impl ToString) -> String {
+    e.to_string()
 }
 
 #[tauri::command]
@@ -25,41 +63,123 @@ fn list_devices() -> Vec<DeviceInfo> {
 }
 
 #[tauri::command]
-async fn send_to_device(
-    app: AppHandle,
-    mount: PathBuf,
-    files: Vec<PathBuf>,
-) -> Result<Vec<SendOutcome>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let kobo = KoboDevice::open(&mount).map_err(|e| e.to_string())?;
-        let converter = Kepubify::locate().map_err(|e| e.to_string())?;
-        Ok(send_books(&kobo, &converter, &files, |progress| {
-            let _ = app.emit(SEND_PROGRESS, progress);
-        }))
-    })
-    .await
-    .map_err(|e| e.to_string())?
+fn library_list(state: State<AppState>) -> CmdResult<Vec<LibraryBook>> {
+    let lib = state.library();
+    Ok(lib
+        .books()
+        .map_err(err)?
+        .into_iter()
+        .map(|b| with_cover(&lib, b))
+        .collect())
 }
 
 #[tauri::command]
-async fn eject_device(mount: PathBuf) -> Result<(), String> {
+async fn library_import(
+    state: State<'_, AppState>,
+    paths: Vec<PathBuf>,
+) -> CmdResult<Vec<ImportResult>> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        paths
+            .into_iter()
+            .map(|path| ImportResult {
+                outcome: lib.import(&path).map_err(err),
+                path,
+            })
+            .collect()
+    })
+    .await
+    .map_err(err)
+}
+
+#[tauri::command]
+fn library_update(state: State<AppState>, id: i64, edit: MetadataEdit) -> CmdResult<LibraryBook> {
+    let mut lib = state.library();
+    let book = lib.update(id, &edit).map_err(err)?;
+    Ok(with_cover(&lib, book))
+}
+
+#[tauri::command]
+fn library_remove(state: State<AppState>, ids: Vec<i64>) -> CmdResult<()> {
+    let mut lib = state.library();
+    ids.into_iter()
+        .try_for_each(|id| lib.remove(id))
+        .map_err(err)
+}
+
+/// Library books whose recorded copy is present on the mounted device.
+#[tauri::command]
+fn books_on_device(state: State<AppState>, mount: PathBuf) -> CmdResult<Vec<i64>> {
+    let kobo = KoboDevice::open(&mount).map_err(err)?;
+    let copies = state
+        .library()
+        .device_copies(&kobo.version().serial)
+        .map_err(err)?;
+    Ok(copies
+        .into_iter()
+        .filter(|c| mount.join(&c.device_path).is_file())
+        .map(|c| c.book_id)
+        .collect())
+}
+
+#[tauri::command]
+async fn send_books(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    mount: PathBuf,
+    ids: Vec<i64>,
+) -> CmdResult<Vec<SendOutcome>> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        let converter = Kepubify::locate().map_err(err)?;
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        Ok(send_library_books(
+            &lib,
+            &kobo,
+            &converter,
+            &ids,
+            |progress| {
+                let _ = app.emit(SEND_PROGRESS, progress);
+            },
+        ))
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
+async fn eject_device(mount: PathBuf) -> CmdResult<()> {
     tauri::async_runtime::spawn_blocking(move || {
         KoboDevice::open(&mount)
             .and_then(|kobo| kobo.eject())
-            .map_err(|e| e.to_string())
+            .map_err(err)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(err)?
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            let root = app.path().app_data_dir()?.join("library");
+            let library = Library::open(root)?;
+            app.manage(AppState {
+                library: Arc::new(Mutex::new(library)),
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
-            app_version,
             list_devices,
-            send_to_device,
+            library_list,
+            library_import,
+            library_update,
+            library_remove,
+            books_on_device,
+            send_books,
             eject_device
         ])
         .run(tauri::generate_context!())

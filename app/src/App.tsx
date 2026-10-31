@@ -1,43 +1,83 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
+  booksOnDevice,
   ejectDevice,
+  importBooks,
+  listBooks,
   listDevices,
   onSendProgress,
-  sendToDevice,
+  removeBooks,
+  sendBooks,
+  updateBook,
+  type Book,
   type DeviceInfo,
+  type MetadataEdit,
 } from "./api";
-import { queueReducer, sendable, type ItemStatus } from "./queue";
+import {
+  applyProgress,
+  filterBooks,
+  isBookFile,
+  summarizeImport,
+  type SendStatus,
+} from "./library";
+import { BookCard } from "./components/BookCard";
+import { DeviceBadge } from "./components/DeviceBadge";
+import { EditPanel } from "./components/EditPanel";
 import "./styles.css";
 
 const DEVICE_POLL_MS = 2000;
 
-const STATUS_LABEL: Record<ItemStatus, string> = {
-  queued: "Ready",
-  converting: "Converting…",
-  copying: "Copying…",
-  sent: "On device",
-  failed: "Failed",
-};
+type Notice = { kind: "error" | "info"; text: string };
 
 export default function App() {
+  const [books, setBooks] = useState<Book[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [device, setDevice] = useState<DeviceInfo | null>(null);
-  const [items, dispatch] = useReducer(queueReducer, []);
+  const [onDevice, setOnDevice] = useState<Set<number>>(new Set());
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [query, setQuery] = useState("");
+  const [statuses, setStatuses] = useState<Record<number, SendStatus>>({});
+  const [busy, setBusy] = useState<"importing" | "sending" | "ejecting" | null>(
+    null,
+  );
   const [dragging, setDragging] = useState(false);
-  const [busy, setBusy] = useState<"sending" | "ejecting" | null>(null);
-  const [notice, setNotice] = useState<{
-    kind: "error" | "info";
-    text: string;
-  } | null>(null);
-  const batch = useRef<string[]>([]);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const batch = useRef<number[]>([]);
+  const anchor = useRef<number | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      setBooks(await listBooks());
+    } catch (e) {
+      setNotice({ kind: "error", text: String(e) });
+    } finally {
+      setLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    listBooks()
+      .then(setBooks)
+      .catch((e) => setNotice({ kind: "error", text: String(e) }))
+      .finally(() => setLoaded(true));
+  }, []);
 
   // Poll for a connected Kobo. Cheap: it only stats /Volumes/*/.kobo/version.
   useEffect(() => {
     let alive = true;
     const poll = () =>
       listDevices()
-        .then((devices) => alive && setDevice(devices[0] ?? null))
+        .then((devices) =>
+          setDevice((prev) => {
+            const next = devices[0] ?? null;
+            return alive &&
+              (prev?.mount !== next?.mount || prev?.serial !== next?.serial)
+              ? next
+              : prev;
+          }),
+        )
         .catch(() => alive && setDevice(null));
     poll();
     const timer = setInterval(poll, DEVICE_POLL_MS);
@@ -47,14 +87,51 @@ export default function App() {
     };
   }, []);
 
+  const refreshOnDevice = useCallback(async (d: DeviceInfo | null) => {
+    const ids = d ? await booksOnDevice(d.mount).catch(() => []) : [];
+    setOnDevice(new Set(ids));
+  }, []);
+
   useEffect(() => {
-    const unlisten = onSendProgress((progress) =>
-      dispatch({ type: "progress", batch: batch.current, progress }),
+    let alive = true;
+    const ids = device
+      ? booksOnDevice(device.mount).catch(() => [])
+      : Promise.resolve([]);
+    ids.then((list) => alive && setOnDevice(new Set(list)));
+    return () => {
+      alive = false;
+    };
+  }, [device]);
+
+  useEffect(() => {
+    const unlisten = onSendProgress((p) =>
+      setStatuses((s) => applyProgress(s, batch.current, p)),
     );
     return () => {
       unlisten.then((f) => f());
     };
   }, []);
+
+  const doImport = useCallback(
+    async (paths: string[]) => {
+      const files = paths.filter(isBookFile);
+      if (files.length === 0) {
+        setNotice({ kind: "error", text: "Only EPUB files can be added." });
+        return;
+      }
+      setBusy("importing");
+      try {
+        const results = await importBooks(files);
+        setNotice({ kind: "info", text: summarizeImport(results) });
+        await refresh();
+      } catch (e) {
+        setNotice({ kind: "error", text: String(e) });
+      } finally {
+        setBusy(null);
+      }
+    },
+    [refresh],
+  );
 
   useEffect(() => {
     const unlisten = getCurrentWebview().onDragDropEvent((event) => {
@@ -63,52 +140,113 @@ export default function App() {
       else if (type === "leave") setDragging(false);
       else if (type === "drop") {
         setDragging(false);
-        dispatch({ type: "add", paths: event.payload.paths });
+        doImport(event.payload.paths);
       }
     });
     return () => {
       unlisten.then((f) => f());
     };
-  }, []);
+  }, [doImport]);
 
-  const chooseFiles = useCallback(async () => {
+  const visible = useMemo(() => filterBooks(books, query), [books, query]);
+  const selectedBooks = useMemo(
+    () => books.filter((b) => selected.has(b.id)),
+    [books, selected],
+  );
+  const editing = selectedBooks.length === 1 ? selectedBooks[0] : null;
+
+  const onSelect = useCallback(
+    (id: number, e: React.MouseEvent) => {
+      setSelected((prev) => {
+        if (e.shiftKey && anchor.current !== null) {
+          const ids = visible.map((b) => b.id);
+          const [a, b] = [ids.indexOf(anchor.current), ids.indexOf(id)].sort(
+            (x, y) => x - y,
+          );
+          if (a >= 0) return new Set([...prev, ...ids.slice(a, b + 1)]);
+        }
+        anchor.current = id;
+        if (e.metaKey || e.ctrlKey) {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return next;
+        }
+        return prev.size === 1 && prev.has(id) ? new Set() : new Set([id]);
+      });
+    },
+    [visible],
+  );
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement).closest("input, textarea")) return;
+      if (e.key === "Escape") setSelected(new Set());
+      if ((e.metaKey || e.ctrlKey) && e.key === "a") {
+        e.preventDefault();
+        setSelected(new Set(visible.map((b) => b.id)));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [visible]);
+
+  const chooseFiles = async () => {
     const picked = await open({
       multiple: true,
       filters: [{ name: "EPUB", extensions: ["epub"] }],
     });
-    if (picked)
-      dispatch({
-        type: "add",
-        paths: Array.isArray(picked) ? picked : [picked],
-      });
-  }, []);
+    if (picked) doImport(Array.isArray(picked) ? picked : [picked]);
+  };
 
-  const toSend = sendable(items);
-  const sentCount = items.filter((i) => i.status === "sent").length;
+  const save = async (id: number, edit: MetadataEdit) => {
+    const updated = await updateBook(id, edit);
+    setBooks((bs) => bs.map((b) => (b.id === id ? updated : b)));
+  };
 
   const send = async () => {
-    if (!device || toSend.length === 0) return;
-    batch.current = toSend.map((i) => i.path);
+    if (!device || selected.size === 0) return;
+    const ids = visible.filter((b) => selected.has(b.id)).map((b) => b.id);
+    batch.current = ids;
+    setStatuses(Object.fromEntries(ids.map((id) => [id, { stage: "queued" }])));
     setBusy("sending");
     setNotice(null);
     try {
-      const outcomes = await sendToDevice(device.mount, batch.current);
+      const outcomes = await sendBooks(device.mount, ids);
       const failed = outcomes.filter((o) => "Err" in o.result).length;
       setNotice(
         failed
           ? {
               kind: "error",
-              text: `${failed} of ${outcomes.length} books could not be sent.`,
+              text: `${failed} of ${outcomes.length} could not be sent. Hover a book to see why.`,
             }
           : {
               kind: "info",
-              text: "Done. Eject the Kobo and unplug it to import the new books.",
+              text: "Sent. Eject your Kobo and unplug it to import the new books.",
             },
       );
+      await refreshOnDevice(device);
     } catch (e) {
       setNotice({ kind: "error", text: String(e) });
     } finally {
       setBusy(null);
+    }
+  };
+
+  const remove = async () => {
+    const n = selected.size;
+    if (
+      !window.confirm(
+        `Remove ${n} ${n === 1 ? "book" : "books"} from your library? Copies on your Kobo stay.`,
+      )
+    )
+      return;
+    try {
+      await removeBooks([...selected]);
+      setSelected(new Set());
+      await refresh();
+    } catch (e) {
+      setNotice({ kind: "error", text: String(e) });
     }
   };
 
@@ -118,7 +256,7 @@ export default function App() {
     try {
       await ejectDevice(device.mount);
       setDevice(null);
-      dispatch({ type: "clearFinished" });
+      setStatuses({});
       setNotice({
         kind: "info",
         text: "Ejected. Unplug your Kobo; it will import the new books.",
@@ -130,71 +268,90 @@ export default function App() {
     }
   };
 
+  const sentThisSession = Object.values(statuses).some(
+    (s) => s.stage === "sent",
+  );
+
   return (
     <div className={`app ${dragging ? "dragging" : ""}`}>
       <header className="topbar">
-        <h1>E-Reader Companion</h1>
+        <h1>Library</h1>
+        <input
+          className="search"
+          type="search"
+          placeholder="Search title, author, series, tag"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
         <DeviceBadge device={device} />
       </header>
 
-      <main className="content">
-        {items.length === 0 ? (
-          <div className="dropzone">
-            <p className="dropzone-title">Drop EPUB files here</p>
-            <p className="muted">
-              They're converted to KEPUB and copied to your Kobo.
-            </p>
-            <button className="secondary" onClick={chooseFiles}>
-              Choose files…
-            </button>
-          </div>
-        ) : (
-          <ul className="queue">
-            {items.map((item) => (
-              <li
-                key={item.path}
-                className={`queue-item status-${item.status}`}
-              >
-                <div className="queue-text">
-                  <span className="queue-name">{item.name}</span>
-                  {item.error && (
-                    <span className="queue-error">{item.error}</span>
-                  )}
-                </div>
-                <span className="pill">{STATUS_LABEL[item.status]}</span>
-                {(item.status === "queued" || item.status === "failed") &&
-                  !busy && (
-                    <button
-                      className="icon"
-                      aria-label={`Remove ${item.name}`}
-                      onClick={() =>
-                        dispatch({ type: "remove", path: item.path })
-                      }
-                    >
-                      ×
-                    </button>
-                  )}
-              </li>
-            ))}
-          </ul>
+      <div className="body">
+        <main
+          className="content"
+          onClick={(e) =>
+            e.target === e.currentTarget && setSelected(new Set())
+          }
+        >
+          {loaded && books.length === 0 ? (
+            <div className="dropzone">
+              <p className="dropzone-title">Drop EPUB files here</p>
+              <p className="muted">
+                They're added to your library, ready to edit and send to your
+                Kobo.
+              </p>
+              <button className="secondary" onClick={chooseFiles}>
+                Choose files…
+              </button>
+            </div>
+          ) : visible.length === 0 && loaded ? (
+            <p className="muted empty">No books match “{query}”.</p>
+          ) : (
+            <div className="grid">
+              {visible.map((b) => (
+                <BookCard
+                  key={b.id}
+                  book={b}
+                  selected={selected.has(b.id)}
+                  onDevice={onDevice.has(b.id)}
+                  status={statuses[b.id]}
+                  onSelect={onSelect}
+                />
+              ))}
+            </div>
+          )}
+        </main>
+        {editing && (
+          <EditPanel
+            book={editing}
+            onSave={save}
+            onClose={() => setSelected(new Set())}
+          />
         )}
-        {notice && (
-          <p className={`notice notice-${notice.kind}`}>{notice.text}</p>
-        )}
-      </main>
+      </div>
 
       <footer className="actions">
-        {items.length > 0 && (
-          <button
-            className="secondary"
-            onClick={chooseFiles}
-            disabled={busy !== null}
-          >
-            Add books…
-          </button>
+        <button
+          className="secondary"
+          onClick={chooseFiles}
+          disabled={busy !== null}
+        >
+          {busy === "importing" ? "Adding…" : "Add books…"}
+        </button>
+        {notice && (
+          <span className={`notice notice-${notice.kind}`}>{notice.text}</span>
         )}
         <span className="spacer" />
-        {sentCount > 0 && device && (
+        {selected.size > 0 && (
+          <button
+            className="secondary danger"
+            onClick={remove}
+            disabled={busy !== null}
+          >
+            Remove
+          </button>
+        )}
+        {device && sentThisSession && (
           <button
             className="secondary"
             onClick={eject}
@@ -206,32 +363,16 @@ export default function App() {
         <button
           className="primary"
           onClick={send}
-          disabled={!device || toSend.length === 0 || busy !== null}
+          disabled={!device || selected.size === 0 || busy !== null}
+          title={device ? undefined : "Connect your Kobo to send books"}
         >
           {busy === "sending"
             ? "Sending…"
-            : toSend.length > 0
-              ? `Send ${toSend.length} ${toSend.length === 1 ? "book" : "books"}`
-              : "Send"}
+            : selected.size > 0
+              ? `Send ${selected.size} to Kobo`
+              : "Send to Kobo"}
         </button>
       </footer>
-    </div>
-  );
-}
-
-function DeviceBadge({ device }: { device: DeviceInfo | null }) {
-  return device ? (
-    <div className="badge connected" title={`Firmware ${device.firmware}`}>
-      <span className="dot" />
-      {device.model}
-    </div>
-  ) : (
-    <div
-      className="badge"
-      title="Connect your Kobo with USB and tap Connect on its screen"
-    >
-      <span className="dot" />
-      No device
     </div>
   );
 }

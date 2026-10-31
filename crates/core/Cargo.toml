@@ -9,9 +9,13 @@ license.workspace = true
 [dependencies]
 erc-convert.workspace = true
 erc-device-kobo.workspace = true
+erc-library.workspace = true
 serde.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+erc-epub.workspace = true
 
 [lints]
 workspace = true

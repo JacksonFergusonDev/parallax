@@ -1,15 +1,18 @@
 //! `erc`: a developer CLI that exercises the core crates end to end without
-//! the desktop UI. Every command is read-only unless stated otherwise;
-//! `send` writes book files to the device (never its database).
+//! the desktop UI. Device commands are read-only unless stated otherwise;
+//! `send` and `library send` write book files to the device (never its
+//! database). `library` commands share the desktop app's library.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use erc_convert::Kepubify;
-use erc_core::send::{Progress, send_books};
+use erc_core::send::{Progress, SendOutcome, send_books, send_library_books};
 use erc_device::{DeviceBook, ReadStatus};
 use erc_device_kobo::{KoboDb, KoboDevice, MACOS_VOLUMES};
+use erc_epub::MetadataEdit;
+use erc_library::{ImportOutcome, Library};
 use serde::Serialize;
 
 #[derive(Parser)]
@@ -47,6 +50,59 @@ enum Command {
         #[arg(long)]
         no_eject: bool,
     },
+    /// The local library (shared with the desktop app).
+    Library {
+        /// Library folder (default: the desktop app's).
+        #[arg(long, global = true)]
+        library: Option<PathBuf>,
+        #[command(subcommand)]
+        command: LibraryCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum LibraryCommand {
+    /// Import EPUB files.
+    Add {
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+    },
+    /// List books.
+    Ls,
+    /// Edit a book's metadata. Unspecified fields keep their values.
+    Edit {
+        id: i64,
+        #[arg(long)]
+        title: Option<String>,
+        /// Repeat for several authors.
+        #[arg(long = "author")]
+        authors: Vec<String>,
+        /// Empty string clears the series.
+        #[arg(long)]
+        series: Option<String>,
+        #[arg(long)]
+        index: Option<String>,
+        /// Repeat for several tags; replaces existing tags.
+        #[arg(long = "tag")]
+        tags: Vec<String>,
+    },
+    /// Remove a book from the library (not from devices).
+    Rm { id: i64 },
+    /// Send books to the Kobo with their edited metadata, then eject. Writes files.
+    Send {
+        #[arg(required = true)]
+        ids: Vec<i64>,
+        #[arg(long)]
+        mount: Option<PathBuf>,
+        #[arg(long)]
+        no_eject: bool,
+    },
+}
+
+/// Same folder the desktop app uses (Tauri's app data dir on macOS).
+fn default_library_root() -> Result<PathBuf> {
+    let home = std::env::var_os("HOME").context("HOME is not set")?;
+    Ok(PathBuf::from(home).join("Library/Application Support/dev.erc.companion/library"))
 }
 
 #[derive(Subcommand)]
@@ -139,42 +195,13 @@ fn main() -> Result<()> {
             no_eject,
         } => {
             let kobo = find_kobo(mount.as_deref())?;
-            let converter = Kepubify::locate()?;
-            let outcomes = send_books(&kobo, &converter, &files, |p| match p {
-                Progress::Converting { index, total, file } => {
-                    eprintln!("[{index}/{total}] converting {file}")
-                }
-                Progress::Copying { index, total, file } => {
-                    eprintln!("[{index}/{total}] copying {file}")
-                }
-                Progress::Done {
-                    index,
-                    total,
-                    device_path,
-                    ..
-                } => {
-                    eprintln!("[{index}/{total}] sent to {device_path}")
-                }
-                Progress::Failed {
-                    index,
-                    total,
-                    file,
-                    error,
-                } => {
-                    eprintln!("[{index}/{total}] FAILED {file}: {error}")
-                }
-            });
-            let failed = outcomes.iter().filter(|o| o.result.is_err()).count();
-            if cli.json {
-                print_json(&outcomes)?;
-            }
-            if !no_eject && failed < outcomes.len() {
-                kobo.eject()?;
-                eprintln!("Ejected. Unplug the Kobo and let it import the new books.");
-            }
-            if failed > 0 {
-                bail!("{failed} of {} books failed", outcomes.len());
-            }
+            let outcomes = send_books(&kobo, &Kepubify::locate()?, &files, print_progress);
+            finish_send(&kobo, &outcomes, no_eject, cli.json)?;
+        }
+        Command::Library { library, command } => {
+            let root = library.map_or_else(default_library_root, Ok)?;
+            let mut lib = Library::open(&root)?;
+            library_command(&mut lib, command, cli.json)?;
         }
         Command::Kobo(KoboCommand::Collections(source)) => {
             let collections = source.open()?.collections()?;
@@ -188,6 +215,132 @@ fn main() -> Result<()> {
                 println!("{:<40} {:>4} books", c.name, c.book_count);
             }
         }
+    }
+    Ok(())
+}
+
+fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Result<()> {
+    match command {
+        LibraryCommand::Add { files } => {
+            for file in files {
+                match lib.import(&file) {
+                    Ok(ImportOutcome::Added {
+                        book,
+                        possible_duplicate_of,
+                    }) => {
+                        let dup = possible_duplicate_of
+                            .map(|id| format!(" (possible duplicate of #{id})"))
+                            .unwrap_or_default();
+                        println!("added #{} {}{dup}", book.id, book.title);
+                    }
+                    Ok(ImportOutcome::AlreadyInLibrary { book }) => {
+                        println!("already in library as #{} {}", book.id, book.title)
+                    }
+                    Err(e) => eprintln!("FAILED {}: {e}", file.display()),
+                }
+            }
+        }
+        LibraryCommand::Ls => {
+            let books = lib.books()?;
+            if json {
+                return print_json(&books);
+            }
+            for b in &books {
+                let series = b
+                    .series
+                    .as_ref()
+                    .map(|s| format!("  [{s} {}]", b.series_index.as_deref().unwrap_or("")))
+                    .unwrap_or_default();
+                println!(
+                    "#{:<4} {}  —  {}{series}",
+                    b.id,
+                    truncate(&b.title, 50),
+                    b.authors.join(", ")
+                );
+            }
+            println!("{} books", books.len());
+        }
+        LibraryCommand::Edit {
+            id,
+            title,
+            authors,
+            series,
+            index,
+            tags,
+        } => {
+            let current = lib.book(id)?.edit();
+            let edit = MetadataEdit {
+                title: title.unwrap_or(current.title),
+                authors: if authors.is_empty() {
+                    current.authors
+                } else {
+                    authors
+                },
+                series_index: index.or(current.series_index),
+                series: series.or(current.series),
+                tags: if tags.is_empty() { current.tags } else { tags },
+            };
+            let book = lib.update(id, &edit)?;
+            println!("updated #{} {}", book.id, book.title);
+        }
+        LibraryCommand::Rm { id } => {
+            lib.remove(id)?;
+            println!("removed #{id}");
+        }
+        LibraryCommand::Send {
+            ids,
+            mount,
+            no_eject,
+        } => {
+            let kobo = find_kobo(mount.as_deref())?;
+            let outcomes =
+                send_library_books(lib, &kobo, &Kepubify::locate()?, &ids, print_progress);
+            finish_send(&kobo, &outcomes, no_eject, json)?;
+        }
+    }
+    Ok(())
+}
+
+fn print_progress(p: Progress) {
+    match p {
+        Progress::Preparing { index, total, file } => {
+            eprintln!("[{index}/{total}] preparing {file}")
+        }
+        Progress::Converting { index, total, file } => {
+            eprintln!("[{index}/{total}] converting {file}")
+        }
+        Progress::Copying { index, total, file } => eprintln!("[{index}/{total}] copying {file}"),
+        Progress::Done {
+            index,
+            total,
+            device_path,
+            ..
+        } => eprintln!("[{index}/{total}] sent to {device_path}"),
+        Progress::Failed {
+            index,
+            total,
+            file,
+            error,
+        } => eprintln!("[{index}/{total}] FAILED {file}: {error}"),
+    }
+}
+
+fn finish_send(
+    kobo: &KoboDevice,
+    outcomes: &[SendOutcome],
+    no_eject: bool,
+    json: bool,
+) -> Result<()> {
+    let failed = outcomes.iter().filter(|o| o.result.is_err()).count();
+    if json {
+        print_json(&outcomes)?;
+    }
+    if !no_eject && failed < outcomes.len() {
+        kobo.eject()?;
+        eprintln!("Ejected. Unplug the Kobo and let it import the new books.");
+    }
+    if failed > 0 {
+        bail!("{failed} of {} books failed", outcomes.len());
     }
     Ok(())
 }

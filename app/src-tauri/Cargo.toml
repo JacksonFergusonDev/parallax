@@ -15,12 +15,14 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-dialog = "2"
 erc-convert.workspace = true
 erc-core.workspace = true
 erc-device.workspace = true
 erc-device-kobo.workspace = true
+erc-epub.workspace = true
+erc-library.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
