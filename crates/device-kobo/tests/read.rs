@@ -214,3 +214,55 @@ fn reads_reference_device_db() {
         4
     );
 }
+
+#[test]
+fn reads_database_image_ids() {
+    let dir = tempfile::tempdir().unwrap();
+    let mount = fake_kobo(dir.path());
+    let conn = Connection::open(mount.join(".kobo/KoboReader.sqlite")).unwrap();
+    conn.execute(
+        "UPDATE content SET ImageId = 'custom-cover-id' WHERE ContentID = 'store-uuid-1'",
+        [],
+    )
+    .unwrap();
+    drop(conn);
+    let images = KoboDevice::open(&mount)
+        .unwrap()
+        .open_db()
+        .unwrap()
+        .image_ids()
+        .unwrap();
+    assert_eq!(images.get("store-uuid-1").unwrap(), "custom-cover-id");
+    assert!(!images.contains_key("file:///mnt/onboard/new.epub"));
+}
+
+/// Opt-in, read-only verification against a connected Kobo. Writes only to a
+/// temporary host directory. Run with KOBO_TEST_MOUNT set to the mounted volume.
+#[test]
+fn connected_kobo_covers() {
+    use sha2::{Digest, Sha256};
+
+    let Some(mount) = std::env::var_os("KOBO_TEST_MOUNT") else {
+        return;
+    };
+    let device = KoboDevice::open(PathBuf::from(mount)).unwrap();
+    let before = Sha256::digest(fs::read(device.db_path()).unwrap());
+    let db = device.open_db().unwrap();
+    let images = db.image_ids().unwrap();
+    let books = db.books().unwrap();
+    assert!(!books.is_empty());
+    let cache = tempfile::tempdir().unwrap();
+    let mut covered = 0;
+    for book in &books {
+        if images
+            .get(&book.id)
+            .and_then(|id| device.cache_cover(id, cache.path()))
+            .is_some()
+        {
+            covered += 1;
+        }
+    }
+    println!("Loaded covers for {covered}/{} device books", books.len());
+    assert_eq!(covered, books.len(), "some device books lack cached covers");
+    assert_eq!(before, Sha256::digest(fs::read(device.db_path()).unwrap()));
+}

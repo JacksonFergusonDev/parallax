@@ -24,7 +24,8 @@
       "assetProtocol": {
         "enable": true,
         "scope": [
-          "$APPDATA/library/books/**"
+          "$APPDATA/library/books/**",
+          "$APPCACHE/device-covers/**"
         ]
       }
     }

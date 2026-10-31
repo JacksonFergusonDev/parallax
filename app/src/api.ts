@@ -107,6 +107,8 @@ export interface OnDevice {
 
 /** A book as the device lists it. */
 export interface DeviceBook {
+  /** Host-cached thumbnail read from the Kobo. */
+  cover?: string | null;
   id: string;
   title: string;
   author: string | null;
@@ -266,4 +268,16 @@ export function coverSrc(book: Book): string | null {
   return url.startsWith("data:")
     ? url
     : `${url}?v=${encodeURIComponent(book.modified_at)}`;
+}
+
+/** Prefer the cover actually on the Kobo, falling back to a library copy. */
+export function deviceCoverSrc(
+  book: DeviceBook,
+  library?: Book,
+): string | null {
+  return book.cover
+    ? convertFileSrc(book.cover)
+    : library
+      ? coverSrc(library)
+      : null;
 }

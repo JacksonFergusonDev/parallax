@@ -95,6 +95,16 @@ impl KoboDb {
         Ok(books)
     }
 
+    /// Nickel's cover cache identifiers, which can differ from the ContentID.
+    pub fn image_ids(&self) -> Result<HashMap<String, String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT ContentID, ImageId FROM content WHERE BookID IS NULL AND ImageId IS NOT NULL AND ImageId != ''",
+        )?;
+        Ok(stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<rusqlite::Result<_>>()?)
+    }
+
     /// Collections that are not soft-deleted, with their member counts.
     pub fn collections(&self) -> Result<Vec<Collection>> {
         let mut stmt = self.conn.prepare(

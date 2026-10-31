@@ -1,6 +1,7 @@
 //! Kobo e-reader backend.
 
 mod collections;
+mod covers;
 mod db;
 mod error;
 mod ops;

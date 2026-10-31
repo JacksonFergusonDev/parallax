@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   changeCollections,
-  coverSrc,
+  deviceCoverSrc,
   deviceBooks,
   ejectDevice,
   listCollections,
@@ -76,7 +76,7 @@ export function DeviceView({
   const { mode, setMode, sort, setSort } = useViewState<DeviceKey>(
     "device",
     DEVICE_KEYS,
-    "list",
+    "grid",
   );
 
   const load = useCallback(
@@ -352,7 +352,7 @@ export function DeviceView({
                     <DeviceCard
                       key={b.id}
                       book={b}
-                      cover={lib ? coverSrc(lib) : null}
+                      cover={deviceCoverSrc(b, lib)}
                       selected={selected.has(b.id)}
                       onSelect={toggle}
                     />
@@ -376,7 +376,7 @@ export function DeviceView({
                 />
                 {visible.map((b) => {
                   const lib = libraryByContentId.get(b.id);
-                  const src = lib ? coverSrc(lib) : null;
+                  const src = deviceCoverSrc(b, lib);
                   return (
                     <button
                       key={b.id}

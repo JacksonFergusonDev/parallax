@@ -41,7 +41,7 @@ pub fn image_id_for(content_id: &str) -> String {
 }
 
 impl KoboDevice {
-    fn cover_cache_dir(&self, image_id: &str) -> PathBuf {
+    pub(crate) fn cover_cache_dir(&self, image_id: &str) -> PathBuf {
         let h = qhash(image_id);
         self.mount()
             .join(".kobo-images")

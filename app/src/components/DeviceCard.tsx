@@ -4,7 +4,7 @@ import { statusLabel } from "../device";
 
 interface Props {
   book: DeviceBook;
-  /** Cover from the library copy, when there is one. */
+  /** Cover read from the device, with a library fallback. */
   cover: string | null;
   selected: boolean;
   onSelect: (id: string, event: React.MouseEvent) => void;

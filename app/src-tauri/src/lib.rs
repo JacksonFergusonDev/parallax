@@ -121,14 +121,36 @@ fn books_on_device(state: State<AppState>, mount: PathBuf) -> CmdResult<Vec<OnDe
     erc_core::device::books_on_device(&state.library(), &kobo).map_err(err)
 }
 
+#[derive(Serialize)]
+struct KoboBook {
+    #[serde(flatten)]
+    book: DeviceBook,
+    cover: Option<PathBuf>,
+}
+
 /// Everything on the device, as Nickel lists it (read-only).
 #[tauri::command]
-async fn device_books(mount: PathBuf) -> CmdResult<Vec<DeviceBook>> {
+async fn device_books(app: AppHandle, mount: PathBuf) -> CmdResult<Vec<KoboBook>> {
+    let cache = app
+        .path()
+        .app_cache_dir()
+        .map_err(err)?
+        .join("device-covers");
     tauri::async_runtime::spawn_blocking(move || {
-        KoboDevice::open(&mount)
-            .and_then(|k| k.open_db())
-            .and_then(|db| db.books())
-            .map_err(err)
+        let device = KoboDevice::open(&mount).map_err(err)?;
+        let db = device.open_db().map_err(err)?;
+        let images = db.image_ids().map_err(err)?;
+        Ok(db
+            .books()
+            .map_err(err)?
+            .into_iter()
+            .map(|book| {
+                let cover = images
+                    .get(&book.id)
+                    .and_then(|id| device.cache_cover(id, &cache));
+                KoboBook { book, cover }
+            })
+            .collect())
     })
     .await
     .map_err(err)?
