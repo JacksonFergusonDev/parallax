@@ -881,3 +881,77 @@ select:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   outline-offset: 2px;
 }
+
+/* Rules dialog */
+
+.modal.rules {
+  width: min(640px, calc(100vw - 48px));
+  gap: 10px;
+}
+
+.modal.rules h3 {
+  font-size: 13px;
+  margin: 10px 0 0;
+}
+
+.rule-list,
+.plan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rule-list li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rule-list li.disabled .rule-field {
+  opacity: 0.5;
+}
+
+.rule-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 220px;
+}
+
+.rule-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.rule-field input[type="number"] {
+  width: 52px;
+}
+
+.rule-field .prefix {
+  width: 90px;
+}
+
+.rule-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.plan-list {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.plan-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 4px;
+  font-size: 13px;
+}

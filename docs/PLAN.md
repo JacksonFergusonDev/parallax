@@ -1,6 +1,6 @@
 # Kobo MVP — Implementation Plan
 
-Status: **approved** (decisions in §6). S1 done; M0 in progress. Source brief: `ereader-companion-project.md`.
+Status: **M0–M8 implemented** (decisions in §6). Device checks for M3–M8 and spike S2 outstanding; see PROGRESS.md. Source brief: `ereader-companion-project.md`.
 
 ## 1. Research findings that shape the design
 

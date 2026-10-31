@@ -145,6 +145,24 @@ export interface FolderGroup {
   content_ids: string[];
 }
 
+export type RuleKind = "series" | "tag" | "author";
+
+export interface Rule {
+  /** 0 for a rule not saved yet. */
+  id: number;
+  kind: RuleKind;
+  enabled: boolean;
+  min_books: number;
+  prefix: string;
+}
+
+export interface PlannedCollection {
+  name: string;
+  new: boolean;
+  content_ids: string[];
+  titles: string[];
+}
+
 export interface CoverCandidate {
   source: string;
   url: string;
@@ -181,7 +199,14 @@ export const changeCollections = (mount: string, changes: CollectionChange[]) =>
 export const folderGroups = (mount: string) =>
   invoke<FolderGroup[]>("folder_groups", { mount });
 export const reconcileDevice = (mount: string) =>
-  invoke<number>("reconcile_device", { mount });
+  invoke<{ series: number; grouped: number }>("reconcile_device", { mount });
+export const rulesList = () => invoke<Rule[]>("rules_list");
+export const rulesSave = (rule: Rule) => invoke<Rule>("rules_save", { rule });
+export const rulesDelete = (id: number) => invoke<void>("rules_delete", { id });
+export const rulesPreview = (mount: string) =>
+  invoke<PlannedCollection[]>("rules_preview", { mount });
+export const rulesApply = (mount: string) =>
+  invoke<number>("rules_apply", { mount });
 export const searchCovers = (id: number) =>
   invoke<CoverCandidate[]>("cover_search", { id });
 export const setCoverFromUrl = (id: number, url: string) =>

@@ -11,6 +11,7 @@
 //! ```
 
 mod authors;
+mod rules;
 mod schema;
 
 use std::fs;
@@ -24,6 +25,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 pub use authors::normalize_authors;
+pub use rules::{Rule, RuleKind};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

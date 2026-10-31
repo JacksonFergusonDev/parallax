@@ -294,3 +294,97 @@ fn sends_into_collection_and_applies_series_after_import() {
         backups_before
     );
 }
+
+#[test]
+fn rules_group_sent_books_before_and_after_import() {
+    use erc_core::rules::{plan, run};
+    use erc_library::{Rule, RuleKind};
+    use rusqlite::Connection;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mount = dir.path().join("KOBOeReader");
+    fs::create_dir_all(mount.join(".kobo")).unwrap();
+    fs::write(mount.join(".kobo/version"), VERSION).unwrap();
+    let db = mount.join(".kobo/KoboReader.sqlite");
+    let conn = Connection::open(&db).unwrap();
+    conn.execute_batch(include_str!(
+        "../../../tests/fixtures/kobo/schema-db174.sql"
+    ))
+    .unwrap();
+    // A calibre-era book already on the device, by the same author.
+    conn.execute(
+        "INSERT INTO content (ContentID, ContentType, MimeType, ___UserID, Title, Attribution, Accessibility, IsDownloaded)
+         VALUES ('file:///mnt/onboard/KEpub/old.kepub.epub', 6, 'application/x-kobo-epub+zip', 'kepub_user', 'Old Book', 'Ann Author', -1, 'true')",
+        [],
+    )
+    .unwrap();
+    conn.pragma_update(None, "journal_mode", "wal").unwrap();
+    drop(conn);
+    let kobo = KoboDevice::open(&mount).unwrap();
+    let backups = dir.path().join("backups");
+    let mut library = Library::open(dir.path().join("lib")).unwrap();
+    let ImportOutcome::Added { book, .. } = library.import(&fixture("minimal.epub")).unwrap()
+    else {
+        panic!();
+    };
+    let mut edit = library.book(book.id).unwrap().edit();
+    edit.authors = vec!["Ann Author".into()];
+    edit.tags = vec!["Favourites".into()];
+    library.update(book.id, &edit).unwrap();
+    library
+        .save_rule(&Rule {
+            id: 0,
+            kind: RuleKind::Author,
+            enabled: true,
+            min_books: 2,
+            prefix: String::new(),
+        })
+        .unwrap();
+    library
+        .save_rule(&Rule {
+            id: 0,
+            kind: RuleKind::Tag,
+            enabled: true,
+            min_books: 1,
+            prefix: "#".into(),
+        })
+        .unwrap();
+
+    send_library_books(
+        &library,
+        &kobo,
+        &Kepubify::locate().unwrap(),
+        &[book.id],
+        |_| {},
+    );
+    let rules = library.rules().unwrap();
+    let planned = plan(&rules, &library, &kobo).unwrap();
+    let summary: Vec<(&str, usize)> = planned
+        .iter()
+        .map(|p| (p.name.as_str(), p.content_ids.len()))
+        .collect();
+    assert_eq!(summary, [("Ann Author", 2), ("#Favourites", 1)]);
+
+    assert_eq!(run(&library, &kobo, &backups).unwrap(), 3);
+    // Pre-import rows count as done: nothing more to plan, no new write session.
+    assert!(plan(&rules, &library, &kobo).unwrap().is_empty());
+    let sessions = fs::read_dir(backups.join("N000000000001")).unwrap().count();
+    assert_eq!(run(&library, &kobo, &backups).unwrap(), 0);
+    assert_eq!(
+        fs::read_dir(backups.join("N000000000001")).unwrap().count(),
+        sessions
+    );
+
+    let collections: Vec<(String, usize)> = kobo
+        .open_db()
+        .unwrap()
+        .collections()
+        .unwrap()
+        .into_iter()
+        .map(|c| (c.name, c.book_count))
+        .collect();
+    assert_eq!(
+        collections,
+        [("#Favourites".to_owned(), 1), ("Ann Author".to_owned(), 2)]
+    );
+}

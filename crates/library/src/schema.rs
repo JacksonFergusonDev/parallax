@@ -34,6 +34,14 @@ const MIGRATIONS: &[&str] = &[
     );",
     // 2: a user-chosen cover in books/<id>/custom-cover.jpg replaces the EPUB's.
     "ALTER TABLE books ADD COLUMN custom_cover INTEGER NOT NULL DEFAULT 0;",
+    // 3: automatic grouping rules (series/tag/author → collection).
+    "CREATE TABLE rules (
+        id        INTEGER PRIMARY KEY,
+        kind      TEXT NOT NULL,
+        enabled   INTEGER NOT NULL DEFAULT 1,
+        min_books INTEGER NOT NULL DEFAULT 2,
+        prefix    TEXT NOT NULL DEFAULT ''
+    );",
 ];
 
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {

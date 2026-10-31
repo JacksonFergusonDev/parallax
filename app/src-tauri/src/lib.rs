@@ -6,12 +6,13 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use erc_convert::Kepubify;
 use erc_core::collections::{CollectionChange, FolderGroup};
 use erc_core::device::{OnDevice, RemoveOutcome};
+use erc_core::rules::PlannedCollection;
 use erc_core::send::{SendOutcome, send_library_books, update_on_device};
 use erc_covers::{Candidate, CoverQuery};
 use erc_device::{Collection, DeviceBook, DeviceInfo};
 use erc_device_kobo::{KoboDevice, MACOS_VOLUMES, tidy_apple_double};
 use erc_epub::MetadataEdit;
-use erc_library::{Book, ImportOutcome, Library};
+use erc_library::{Book, ImportOutcome, Library, Rule};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -216,6 +217,8 @@ async fn send_books(
                 .map_err(err)?;
             }
         }
+        // Enabled grouping rules file the new books too (no-op otherwise).
+        erc_core::rules::run(&lib, &kobo, &backups).map_err(err)?;
         Ok(outcomes)
     })
     .await
@@ -262,16 +265,72 @@ async fn folder_groups(mount: PathBuf) -> CmdResult<Vec<FolderGroup>> {
     .map_err(err)?
 }
 
-/// Applies series to books Nickel has imported since they were sent.
-/// Opens no write session when nothing is pending.
+#[derive(Serialize)]
+struct Reconciled {
+    /// Books whose series was applied.
+    series: usize,
+    /// Books added to collections by grouping rules.
+    grouped: usize,
+}
+
+/// On connect: applies series to books Nickel has imported since they were
+/// sent, then runs enabled grouping rules. Opens no write session when
+/// there's nothing to do.
 #[tauri::command]
-async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<usize> {
+async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<Reconciled> {
     let library = state.library.clone();
     let backups = state.backup_root.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let lib = library.lock().unwrap_or_else(|e| e.into_inner());
-        erc_core::collections::reconcile_series(&lib, &kobo, &backups).map_err(err)
+        Ok(Reconciled {
+            series: erc_core::collections::reconcile_series(&lib, &kobo, &backups).map_err(err)?,
+            grouped: erc_core::rules::run(&lib, &kobo, &backups).map_err(err)?,
+        })
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
+fn rules_list(state: State<AppState>) -> CmdResult<Vec<Rule>> {
+    state.library().rules().map_err(err)
+}
+
+#[tauri::command]
+fn rules_save(state: State<AppState>, rule: Rule) -> CmdResult<Rule> {
+    state.library().save_rule(&rule).map_err(err)
+}
+
+#[tauri::command]
+fn rules_delete(state: State<AppState>, id: i64) -> CmdResult<()> {
+    state.library().delete_rule(id).map_err(err)
+}
+
+/// What enabled rules would add on the device (read-only).
+#[tauri::command]
+async fn rules_preview(
+    state: State<'_, AppState>,
+    mount: PathBuf,
+) -> CmdResult<Vec<PlannedCollection>> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        erc_core::rules::plan(&lib.rules().map_err(err)?, &lib, &kobo).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
+async fn rules_apply(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<usize> {
+    let library = state.library.clone();
+    let backups = state.backup_root.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        erc_core::rules::run(&lib, &kobo, &backups).map_err(err)
     })
     .await
     .map_err(err)?
@@ -365,6 +424,11 @@ pub fn run() {
             change_collections,
             folder_groups,
             reconcile_device,
+            rules_list,
+            rules_save,
+            rules_delete,
+            rules_preview,
+            rules_apply,
             eject_device,
             cover_search,
             cover_set_url,

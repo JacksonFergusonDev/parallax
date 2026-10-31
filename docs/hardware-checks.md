@@ -98,6 +98,7 @@ Batched so you can do several in one sitting when Claude asks:
   - Library tab: select two books, choose "New collection…" next to Send, name it, send and eject. Both books appear in that collection on the Kobo straight away. Reconnect: if they have a series, the app says it added series details; eject again and the series shows on the Kobo.
   - On Kobo tab: "Folders → collections…" (dry run on your device: Fantasy 20, Fiction 8, Horror 1, Nonfiction 40, Sci-Fi 24). Create them, eject, and check My Books → Collections.
   - Rename one collection and delete another; eject and confirm.
+- M8, On Kobo tab → "Automatic collections…": add "A collection for each author" with at least 3 books. The preview should list collections such as Brandon Sanderson (7) and Pierce Brown (5). Apply, eject, and check them on the Kobo. Sending a new book by one of those authors should file it automatically.
 
 ## Spike S2 — collections and Kobo cloud sync (with M6)
 

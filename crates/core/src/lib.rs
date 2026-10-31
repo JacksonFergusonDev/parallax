@@ -2,4 +2,5 @@
 
 pub mod collections;
 pub mod device;
+pub mod rules;
 pub mod send;

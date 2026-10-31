@@ -23,6 +23,7 @@ import {
 import { CollectionMenu } from "./CollectionMenu";
 import { FolderImport } from "./FolderImport";
 import { NameDialog } from "./NameDialog";
+import { RulesDialog } from "./RulesDialog";
 
 interface Props {
   device: DeviceInfo;
@@ -37,6 +38,7 @@ type Dialog =
   | { kind: "new"; addSelected: boolean }
   | { kind: "rename"; name: string }
   | { kind: "folders" }
+  | { kind: "rules" }
   | null;
 
 export function DeviceView({
@@ -248,6 +250,12 @@ export function DeviceView({
           <div className="sidebar-foot">
             <button
               className="link"
+              onClick={() => setDialog({ kind: "rules" })}
+            >
+              Automatic collections…
+            </button>
+            <button
+              className="link"
               onClick={() => setDialog({ kind: "folders" })}
               disabled={busy !== null}
             >
@@ -423,6 +431,20 @@ export function DeviceView({
             ]);
             setShelf(name);
             await load();
+            onChanged();
+          }}
+        />
+      )}
+      {dialog?.kind === "rules" && (
+        <RulesDialog
+          mount={device.mount}
+          onClose={() => setDialog(null)}
+          onApplied={(n) => {
+            setNotice({
+              kind: "info",
+              text: `Filed ${plural(n, "book")} into collections. Eject to see them on your Kobo.`,
+            });
+            load();
             onChanged();
           }}
         />

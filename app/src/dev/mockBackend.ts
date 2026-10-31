@@ -3,7 +3,7 @@
 // when not running inside Tauri; never part of the app bundle.
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
-import type { Book, DeviceBook, DeviceInfo, MetadataEdit } from "../api";
+import type { Book, DeviceBook, DeviceInfo, MetadataEdit, Rule } from "../api";
 
 const PALETTE = [
   "#2f6f5e",
@@ -91,6 +91,66 @@ const onDevice = new Map<number, string>([
 const shelves = new Map<string, Set<string>>([["Favourites", new Set()]]);
 const shelvesOf = (id: string) =>
   [...shelves].filter(([, ids]) => ids.has(id)).map(([n]) => n);
+let rules: Rule[] = [
+  { id: 1, kind: "series", enabled: true, min_books: 2, prefix: "" },
+];
+let nextRuleId = 2;
+/** Books on the mock device with what rules look at. */
+const ruleItems = () => [
+  ...books
+    .filter((b) => onDevice.has(b.id))
+    .map((b) => ({
+      id: contentId(b.id),
+      title: b.title,
+      series: b.series,
+      authors: b.authors,
+      tags: b.tags,
+    })),
+  ...storeBooks.map((b) => ({
+    id: b.id,
+    title: b.title,
+    series: b.series,
+    authors: b.author ? [b.author] : [],
+    tags: [],
+  })),
+];
+function mockPlan() {
+  const groups = new Map<string, { ids: string[]; titles: string[] }>();
+  for (const r of rules.filter((x) => x.enabled)) {
+    const byKey = new Map<string, typeof items>();
+    const items = ruleItems();
+    for (const it of items) {
+      const keys =
+        r.kind === "series"
+          ? it.series
+            ? [it.series]
+            : []
+          : r.kind === "tag"
+            ? it.tags
+            : it.authors;
+      for (const k of keys) byKey.set(k, [...(byKey.get(k) ?? []), it]);
+    }
+    for (const [k, members] of byKey) {
+      if (members.length < r.min_books) continue;
+      const name = r.prefix + k;
+      const g = groups.get(name) ?? { ids: [], titles: [] };
+      for (const m of members)
+        if (!shelves.get(name)?.has(m.id) && !g.ids.includes(m.id)) {
+          g.ids.push(m.id);
+          g.titles.push(m.title);
+        }
+      groups.set(name, g);
+    }
+  }
+  return [...groups]
+    .filter(([, g]) => g.ids.length)
+    .map(([name, g]) => ({
+      name,
+      new: !shelves.has(name),
+      content_ids: g.ids,
+      titles: g.titles,
+    }));
+}
 const contentId = (id: number) =>
   `file:///mnt/onboard/KEpub/book-${id}.kepub.epub`;
 let storeBooks: DeviceBook[] = [
@@ -192,7 +252,31 @@ export function installMockBackend() {
             { folder: "Classics", content_ids: [contentId(5)] },
           ];
         case "reconcile_device":
-          return 0;
+          return { series: 0, grouped: 0 };
+        case "rules_list":
+          return rules;
+        case "rules_save": {
+          const rule = { ...(a.rule as Rule) };
+          if (rule.id === 0) rule.id = nextRuleId++;
+          rules = [...rules.filter((r) => r.id !== rule.id), rule].sort(
+            (x, y) => x.id - y.id,
+          );
+          return rule;
+        }
+        case "rules_delete":
+          rules = rules.filter((r) => r.id !== a.id);
+          return null;
+        case "rules_preview":
+          return mockPlan();
+        case "rules_apply": {
+          const plan = mockPlan();
+          for (const p of plan) {
+            const set = shelves.get(p.name) ?? new Set<string>();
+            p.content_ids.forEach((id) => set.add(id));
+            shelves.set(p.name, set);
+          }
+          return plan.reduce((n, p) => n + p.content_ids.length, 0);
+        }
         case "change_collections": {
           type Change = {
             kind: string;

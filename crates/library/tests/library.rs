@@ -274,3 +274,33 @@ fn custom_cover_is_used_on_export_and_can_be_reset() {
         Err(Error::BadImage(_))
     ));
 }
+
+#[test]
+fn stores_rules() {
+    use erc_library::{Rule, RuleKind};
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("lib");
+    let saved = {
+        let lib = Library::open(&root).unwrap();
+        let rule = lib
+            .save_rule(&Rule {
+                id: 0,
+                kind: RuleKind::Series,
+                enabled: true,
+                min_books: 0,
+                prefix: "Series: ".into(),
+            })
+            .unwrap();
+        assert_eq!(rule.min_books, 1, "at least one book");
+        lib.save_rule(&Rule {
+            enabled: false,
+            ..rule.clone()
+        })
+        .unwrap()
+    };
+    let lib = Library::open(&root).unwrap();
+    assert_eq!(lib.rules().unwrap(), std::slice::from_ref(&saved));
+    assert!(!lib.rules().unwrap()[0].enabled);
+    lib.delete_rule(saved.id).unwrap();
+    assert!(lib.rules().unwrap().is_empty());
+}

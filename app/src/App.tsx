@@ -138,15 +138,21 @@ export default function App() {
     shelves.then((list) => alive && setCollections(list));
     if (device) {
       reconcileDevice(device.mount)
-        .then(
-          (n) =>
-            alive &&
-            n > 0 &&
-            setNotice({
-              kind: "info",
-              text: `Added series details to ${n} ${n === 1 ? "book" : "books"} on your Kobo.`,
-            }),
-        )
+        .then(({ series, grouped }) => {
+          const parts = [];
+          if (series)
+            parts.push(
+              `added series details to ${series} ${series === 1 ? "book" : "books"}`,
+            );
+          if (grouped)
+            parts.push(
+              `filed ${grouped} ${grouped === 1 ? "book" : "books"} into collections`,
+            );
+          if (alive && parts.length) {
+            const text = parts.join(" and ");
+            setNotice({ kind: "info", text: `On your Kobo: ${text}.` });
+          }
+        })
         .catch((e) => alive && setNotice({ kind: "error", text: String(e) }));
     }
     return () => {

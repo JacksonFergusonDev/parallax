@@ -10,13 +10,14 @@ use clap::{Args, Parser, Subcommand};
 use erc_convert::Kepubify;
 use erc_core::collections::{self, CollectionChange, folder_groups, reconcile_series};
 use erc_core::device::remove_from_device;
+use erc_core::rules;
 use erc_core::send::{Progress, SendOutcome, send_books, send_library_books, update_on_device};
 use erc_device::{DeviceBook, ReadStatus};
 use erc_device_kobo::{
     KoboDb, KoboDevice, MACOS_VOLUMES, ONBOARD_PREFIX, restore, tidy_apple_double,
 };
 use erc_epub::MetadataEdit;
-use erc_library::{ImportOutcome, Library};
+use erc_library::{ImportOutcome, Library, Rule, RuleKind};
 use serde::Serialize;
 
 #[derive(Parser)]
@@ -100,6 +101,40 @@ enum CollectionCommand {
 }
 
 #[derive(Subcommand)]
+enum RulesCommand {
+    Ls,
+    /// Add a rule: `series`, `tag` or `author`.
+    Add {
+        kind: String,
+        /// Only make a collection once this many books share the value.
+        #[arg(long, default_value_t = 2)]
+        min: usize,
+        /// Prepended to collection names, e.g. "Series: ".
+        #[arg(long, default_value = "")]
+        prefix: String,
+    },
+    Enable {
+        id: i64,
+    },
+    Disable {
+        id: i64,
+    },
+    Rm {
+        id: i64,
+    },
+    /// Show what enabled rules would add on the connected Kobo (read-only).
+    Preview {
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
+    /// Apply enabled rules on the connected Kobo. Writes, with a backup.
+    Apply {
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
 enum LibraryCommand {
     /// Import EPUB files.
     Add {
@@ -152,6 +187,9 @@ enum LibraryCommand {
     },
     /// Write a book with its edits applied (what a device receives, before KEPUB conversion).
     Export { id: i64, out: PathBuf },
+    /// Automatic grouping rules (series/tag/author → collection).
+    #[command(subcommand)]
+    Rules(RulesCommand),
     /// Apply series to books the Kobo has imported since they were sent. Writes, with a backup.
     Reconcile {
         #[arg(long)]
@@ -565,6 +603,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             )?;
             finish_send(&kobo, &outcomes, no_eject, json)?;
         }
+        LibraryCommand::Rules(command) => rules_command(lib, command, json)?,
         LibraryCommand::Reconcile { mount } => {
             let kobo = find_kobo(mount.as_deref())?;
             println!(
@@ -599,6 +638,89 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                 }
             }
             finish_send(&kobo, &outcomes, no_eject, json)?;
+        }
+    }
+    Ok(())
+}
+
+fn rules_command(lib: &Library, command: RulesCommand, json: bool) -> Result<()> {
+    let set_enabled = |id: i64, enabled: bool| -> Result<()> {
+        let rule = lib
+            .rules()?
+            .into_iter()
+            .find(|r| r.id == id)
+            .context("no such rule")?;
+        lib.save_rule(&Rule { enabled, ..rule })?;
+        Ok(())
+    };
+    match command {
+        RulesCommand::Ls => {
+            let rules = lib.rules()?;
+            if json {
+                return print_json(&rules);
+            }
+            if rules.is_empty() {
+                println!("No rules.");
+            }
+            for r in rules {
+                println!(
+                    "#{:<3} {:<7} min {:<3} prefix {:?} {}",
+                    r.id,
+                    format!("{:?}", r.kind).to_lowercase(),
+                    r.min_books,
+                    r.prefix,
+                    if r.enabled { "" } else { "(disabled)" }
+                );
+            }
+        }
+        RulesCommand::Add { kind, min, prefix } => {
+            let kind = match kind.as_str() {
+                "series" => RuleKind::Series,
+                "tag" => RuleKind::Tag,
+                "author" => RuleKind::Author,
+                other => bail!("unknown rule kind {other:?}; use series, tag or author"),
+            };
+            let rule = lib.save_rule(&Rule {
+                id: 0,
+                kind,
+                enabled: true,
+                min_books: min,
+                prefix,
+            })?;
+            println!("added rule #{}", rule.id);
+        }
+        RulesCommand::Enable { id } => set_enabled(id, true)?,
+        RulesCommand::Disable { id } => set_enabled(id, false)?,
+        RulesCommand::Rm { id } => lib.delete_rule(id)?,
+        RulesCommand::Preview { mount } => {
+            let kobo = find_kobo(mount.as_deref())?;
+            let planned = rules::plan(&lib.rules()?, lib, &kobo)?;
+            if json {
+                return print_json(&planned);
+            }
+            if planned.is_empty() {
+                println!("Nothing to do.");
+            }
+            for p in &planned {
+                println!(
+                    "{} “{}”: add {} {}",
+                    if p.new { "create" } else { "update" },
+                    p.name,
+                    p.content_ids.len(),
+                    if p.content_ids.len() == 1 {
+                        "book"
+                    } else {
+                        "books"
+                    }
+                );
+            }
+        }
+        RulesCommand::Apply { mount } => {
+            let kobo = find_kobo(mount.as_deref())?;
+            println!(
+                "added {} books to collections",
+                rules::run(lib, &kobo, &backup_root()?)?
+            );
         }
     }
     Ok(())

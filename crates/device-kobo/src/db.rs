@@ -59,7 +59,7 @@ impl KoboDb {
     /// Books on internal storage, as calibre lists them with default settings
     /// (no archived store books, previews or recommendations).
     pub fn books(&self) -> Result<Vec<DeviceBook>> {
-        let shelves = self.shelves_by_content()?;
+        let shelves = self.memberships()?;
         let cols = self.content_columns()?;
         let col = |name: &str| {
             if cols.iter().any(|c| c.eq_ignore_ascii_case(name)) {
@@ -118,8 +118,9 @@ impl KoboDb {
         Ok(collections)
     }
 
-    /// calibre KOBOTOUCH.get_bookshelvesforbook, batched for all books.
-    fn shelves_by_content(&self) -> Result<HashMap<String, Vec<String>>> {
+    /// Collection memberships by ContentID, including books Nickel hasn't
+    /// imported yet. calibre KOBOTOUCH.get_bookshelvesforbook, batched.
+    pub fn memberships(&self) -> Result<HashMap<String, Vec<String>>> {
         let mut stmt = self.conn.prepare(
             "SELECT ContentId, ShelfName FROM ShelfContent \
              WHERE NOT (_IsDeleted = 'true' OR _IsDeleted = 1) AND ShelfName IS NOT NULL \

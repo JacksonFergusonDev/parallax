@@ -17,11 +17,12 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 - M5: `DeviceWriter` safe-write session (refuses leftover `-wal/-shm/-journal` and DbVersion outside calibre's 53–222; `quick_check`; SQLite online backup to `<app data>/device-backups/<serial>/`, newest 10 kept; immediate transactions; `integrity_check` on close with automatic restore; WAL checkpoint; removes `._` companions of the DB). Ops: `remove_book` (calibre `delete_via_sql` tables + file + `.kobo-images` cache via `qhash` + empty folders), `replace_book` (same path → progress kept; updates Title/Attribution/Series/SeriesID; clears cover cache so Nickel regenerates), `tidy_apple_double` (magic-number checked, skips `.kobo*`). Core `update_on_device`, `remove_from_device`, `books_on_device` (stale = edited after send). CLI `erc kobo rm|tidy|backups|restore`, `erc library update`. App: Library / On Kobo tabs, device list with status/last read/added, multi-select remove, "Update available" badges + "Update N on Kobo", native confirm dialogs (`dialog:allow-message`; `window.confirm` is unreliable in WKWebView). Tests: fixture DB, real DB copy, FAT32 image (`just test-fat`).
 - M6: `device-kobo::collections` (create/undelete, add — pre-import OK, remove, rename, delete: unsynced hard-deleted, synced soft-deleted; Shortlist/Wishlist/SystemTag protected; ported from calibre). `set_series` shared with replace. Core `collections::apply` (all changes in one transaction), `folder_groups`, `pending_series`/`reconcile_series` (no write session when nothing pending). CLI `erc kobo collection create|rename|delete|add|remove`, `erc kobo folders [--apply]`, `erc library reconcile`, `erc library send --collection`. App: Kobo tab collections sidebar (filter, rename, delete, new), Add to collection menu, Remove from collection, Folders → collections modal; library send-into-collection picker; series reconciled automatically on connect. Dry run on the real Kobo: Fantasy 20, Fiction 8, Horror 1, Nonfiction 40, Sci-Fi 24.
 - M7: library sort (title ignoring articles, author surname, series reading order, recently added; remembered), shortcuts (⌘F search, ⌘O add, ⌘1/⌘2 tabs, ⌘A, Esc), `aria-pressed`/labels and visible focus, `content-visibility` for large libraries, window size/position remembered (tauri-plugin-window-state), app icon (`app/src-tauri/icons/source/icon.svg`, rendered with Inkscape, `pnpm tauri icon`), `just build` → 14 MB `E-Reader Companion.app` with kepubify bundled (verified: bundled kepubify converts, app launches), README.
+- M8: grouping rules (library schema v3 `rules`: series/tag/author → collection, min books, name prefix, enabled). `erc-core::rules` plans additions only (never removes/deletes), merging Nickel's view (series, author) for all device books with library metadata (tags) for library-sent books, using `ShelfContent` memberships so pre-import rows count as done; `run` opens no write session when there's nothing to add. Rules run automatically after sends and on connect (with series reconcile). CLI `erc library rules ls|add|enable|disable|rm|preview|apply`; app "Automatic collections…" dialog with live preview and Apply. Real-device preview (scratch library, author ≥3): Brandon Sanderson 7, Pierce Brown 5.
 
 ## Current
 
-- Batched device checks for M3–M6 + spike S2 (user): docs/hardware-checks.md.
-- Kobo MVP feature-complete pending those checks. Next: M8 automatic grouping rules (stretch), then phase 2 (Kindle).
+- Kobo MVP roadmap (M0–M8) complete in code. Awaiting batched device checks for M3–M8 + spike S2: docs/hardware-checks.md.
+- Next: phase 2 (Kindle) — start with an investigation of MTP access on macOS and Kindle formats/delivery.
 
 ## Unresolved
 
@@ -29,9 +30,8 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 ## Next
 
-- M7: polish pass — startup/empty/error states, keyboard shortcuts, virtualised grid for large libraries, app icon and name, window state, consistent notices (toasts), accessibility pass, sort options.
-- M8 (stretch): automatic grouping rules (series → collection, tag → collection) with preview.
-- Google Books needs an API key to be useful; optional setting later.
+- Phase 2 kickoff: research spike on Kindle (2024+ models use MTP; older ones USB mass storage), sideload formats (AZW3/KFX/EPUB via Send to Kindle), what reading data is accessible, and collection limitations. Produce a plan like docs/PLAN.md before coding.
+- Optional: app name decision (working name "E-Reader Companion"); Google Books API key setting.
 
 ## Notes for agents
 
