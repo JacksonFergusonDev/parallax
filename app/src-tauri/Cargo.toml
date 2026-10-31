@@ -1,0 +1,22 @@
+[package]
+name = "erc-app"
+description = "E-Reader Companion desktop app"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+# The `_lib` suffix avoids a name clash with the bin target on Windows (cargo#8519).
+name = "erc_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints]
+workspace = true

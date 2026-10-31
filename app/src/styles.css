@@ -1,0 +1,29 @@
+:root {
+  --bg: #fbfaf8;
+  --fg: #1d1c1a;
+  --muted: #77736c;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1a19;
+    --fg: #ecebe8;
+    --muted: #9a968f;
+  }
+}
+
+body {
+  margin: 0;
+}
+
+.shell {
+  padding: 48px;
+}
+
+.muted {
+  color: var(--muted);
+}

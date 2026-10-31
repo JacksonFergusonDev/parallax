@@ -23,7 +23,7 @@ Status: **approved** (decisions in §6). S1 done; M0 in progress. Source brief: 
 
 ```
 calibre-rewrite/
-├─ crates/
+├─ crates/           (each crate is added by the milestone that first needs it)
 │  ├─ epub/          OPF read/edit, cover swap, safe re-zip (zip + quick-xml). No Tauri deps.
 │  ├─ convert/       Converter trait; KepubifySidecar impl (spawns binary, captures errors).
 │  ├─ library/       Local library: SQLite (rusqlite, bundled) + managed book folder, import, dedupe, metadata, covers.
@@ -33,7 +33,7 @@ calibre-rewrite/
 │  └─ cli/           `erc` dev CLI over all crates — the primary E2E test harness for agents.
 ├─ app/
 │  ├─ src-tauri/     Thin command/event layer over the crates (Tauri 2).
-│  └─ ui/            React + TS + Vite; TanStack Query for command data, virtualized cover grid.
+│  └─ src/           React + TS + Vite UI; TanStack Query for command data, virtualized cover grid.
 ├─ tests/fixtures/   Sample EPUBs (public domain), synthetic KoboReader.sqlite fixtures.
 └─ docs/  PLAN.md, device notes, hardware test checklists
 ```
