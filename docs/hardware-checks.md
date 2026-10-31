@@ -2,7 +2,7 @@
 
 Manual checks only a person holding the Kobo can do. Record results in the tables, or just tell Claude what you saw.
 
-## Spike S1 — collections for newly sent books (do now, ~15 min)
+## Spike S1 — collections for newly sent books (**done 2026-10-30**: A immediate, B after restart, C immediate)
 
 **Question:** when the app sends a book, can it also put the book in a collection without you replugging the Kobo?
 Three approaches are tested at once with three tiny test books:
