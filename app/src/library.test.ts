@@ -27,6 +27,7 @@ const book = (
   original_name: `${title}.epub`,
   file_size: 1,
   has_cover: false,
+  custom_cover: false,
   added_at: "2026-10-31T00:00:00Z",
   modified_at: "2026-10-31T00:00:00Z",
   cover: null,

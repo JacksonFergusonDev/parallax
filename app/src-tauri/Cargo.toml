@@ -19,6 +19,7 @@ tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-dialog = "2"
 erc-convert.workspace = true
 erc-core.workspace = true
+erc-covers.workspace = true
 erc-device.workspace = true
 erc-device-kobo.workspace = true
 erc-epub.workspace = true

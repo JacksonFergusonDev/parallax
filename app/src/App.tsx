@@ -323,8 +323,14 @@ export default function App() {
         </main>
         {editing && (
           <EditPanel
+            key={editing.id}
             book={editing}
             onSave={save}
+            onChanged={(updated) =>
+              setBooks((bs) =>
+                bs.map((b) => (b.id === updated.id ? updated : b)),
+              )
+            }
             onClose={() => setSelected(new Set())}
           />
         )}

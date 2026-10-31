@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use erc_convert::Kepubify;
 use erc_core::send::{SendOutcome, send_library_books};
+use erc_covers::{Candidate, CoverQuery};
 use erc_device::DeviceInfo;
 use erc_device_kobo::{KoboDevice, MACOS_VOLUMES};
 use erc_epub::MetadataEdit;
@@ -160,6 +161,52 @@ async fn eject_device(mount: PathBuf) -> CmdResult<()> {
     .map_err(err)?
 }
 
+/// Cover candidates from online providers for a library book.
+#[tauri::command]
+async fn cover_search(state: State<'_, AppState>, id: i64) -> CmdResult<Vec<Candidate>> {
+    let book = state.library().book(id).map_err(err)?;
+    let query = CoverQuery {
+        title: book.title.clone(),
+        author: book.authors.first().cloned(),
+        isbn: book
+            .identifiers
+            .iter()
+            .find(|i| i.scheme.as_deref() == Some("isbn"))
+            .map(|i| i.value.clone()),
+    };
+    tauri::async_runtime::spawn_blocking(move || erc_covers::search(&query))
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+async fn cover_set_url(state: State<'_, AppState>, id: i64, url: String) -> CmdResult<LibraryBook> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let image = erc_covers::download(&url).map_err(err)?;
+        let mut lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let book = lib.set_cover(id, &image).map_err(err)?;
+        Ok(with_cover(&lib, book))
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
+fn cover_set_file(state: State<AppState>, id: i64, path: PathBuf) -> CmdResult<LibraryBook> {
+    let image = std::fs::read(&path).map_err(err)?;
+    let mut lib = state.library();
+    let book = lib.set_cover(id, &image).map_err(err)?;
+    Ok(with_cover(&lib, book))
+}
+
+#[tauri::command]
+fn cover_reset(state: State<AppState>, id: i64) -> CmdResult<LibraryBook> {
+    let mut lib = state.library();
+    let book = lib.reset_cover(id).map_err(err)?;
+    Ok(with_cover(&lib, book))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -180,7 +227,11 @@ pub fn run() {
             library_remove,
             books_on_device,
             send_books,
-            eject_device
+            eject_device,
+            cover_search,
+            cover_set_url,
+            cover_set_file,
+            cover_reset
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -104,12 +104,50 @@ impl Epub {
         Ok(Some(Cover { data, media_type }))
     }
 
+    /// Media type of the existing cover image, so a replacement can be encoded
+    /// to match and swapped in place.
+    pub fn cover_media_type(&self) -> Option<String> {
+        opf::cover_item(&self.doc()).map(|(_, media_type)| media_type)
+    }
+
     /// Writes a copy of this EPUB to `out` with `edit` applied.
     pub fn write_with_metadata(&self, edit: &MetadataEdit, out: &Path) -> Result<()> {
-        let new_opf = opf::apply_edit(&self.opf, edit)?;
+        self.write(edit, None, out)
+    }
+
+    /// Writes a copy of this EPUB to `out` with `edit` applied and, if given,
+    /// `cover` as the cover image. A cover with the same media type as the
+    /// existing one replaces its bytes, so pages that show it (title pages)
+    /// update too; otherwise a new manifest item is added and declared as the
+    /// cover in both EPUB2 and EPUB3 style.
+    pub fn write(&self, edit: &MetadataEdit, cover: Option<&Cover>, out: &Path) -> Result<()> {
+        let mut new_opf = opf::apply_edit(&self.opf, edit)?;
+        let existing = opf::cover_item(&self.doc());
+        // (zip entry name, bytes) of the cover to write.
+        let mut cover_entry: Option<(String, &[u8])> = None;
+        if let Some(cover) = cover {
+            match existing {
+                Some((href, media_type)) if media_type == cover.media_type => {
+                    cover_entry = Some((resolve_href(&self.opf_path, &href), &cover.data));
+                }
+                _ => {
+                    let ext = match cover.media_type.as_str() {
+                        "image/png" => "png",
+                        "image/gif" => "gif",
+                        "image/webp" => "webp",
+                        _ => "jpg",
+                    };
+                    let href = format!("erc-cover.{ext}");
+                    new_opf = opf::add_cover_item(&new_opf, &href, &cover.media_type)?;
+                    cover_entry = Some((resolve_href(&self.opf_path, &href), &cover.data));
+                }
+            }
+        }
+
         let mut src = open_zip(&self.path)?;
         let file = File::create(out).map_err(|e| io_err(out, e))?;
         let mut dst = ZipWriter::new(BufWriter::new(file));
+        let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
 
         // The OCF spec requires `mimetype` first and stored uncompressed.
         dst.start_file(
@@ -122,20 +160,25 @@ impl Epub {
         for i in 0..src.len() {
             let entry = src.by_index_raw(i)?;
             let name = entry.name()?.into_owned();
-            if name == "mimetype" {
+            if name == "mimetype" || cover_entry.as_ref().is_some_and(|(n, _)| *n == name) {
                 continue;
             }
             if name == self.opf_path {
                 drop(entry);
-                dst.start_file(
-                    name,
-                    SimpleFileOptions::default().compression_method(CompressionMethod::Deflated),
-                )?;
+                dst.start_file(name, deflated)?;
                 dst.write_all(new_opf.as_bytes())
                     .map_err(|e| io_err(out, e))?;
             } else {
                 dst.raw_copy_file(entry)?;
             }
+        }
+        if let Some((name, data)) = cover_entry {
+            // Images are already compressed.
+            dst.start_file(
+                name,
+                SimpleFileOptions::default().compression_method(CompressionMethod::Stored),
+            )?;
+            dst.write_all(data).map_err(|e| io_err(out, e))?;
         }
         dst.finish()?.flush().map_err(|e| io_err(out, e))?;
         Ok(())

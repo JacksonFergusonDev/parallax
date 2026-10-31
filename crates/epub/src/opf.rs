@@ -196,6 +196,90 @@ pub fn cover_item(doc: &Document) -> Option<(String, String)> {
         .and_then(pick)
 }
 
+/// Adds a manifest item for a new cover image at `href` and makes it the
+/// cover: removes other `<meta name="cover">` pointers and other items'
+/// `cover-image` property, then declares it both ways.
+pub fn add_cover_item(opf: &str, href: &str, media_type: &str) -> Result<String> {
+    const ID: &str = "erc-cover";
+    let doc = Document::parse(opf).map_err(|e| Error::Invalid(format!("OPF: {e}")))?;
+    let meta = metadata_node(&doc).ok_or_else(|| Error::Invalid("OPF has no <metadata>".into()))?;
+    let manifest = doc
+        .root_element()
+        .children()
+        .find(|n| n.tag_name().name() == "manifest")
+        .ok_or_else(|| Error::Invalid("OPF has no <manifest>".into()))?;
+    let epub3 = doc
+        .root_element()
+        .attribute("version")
+        .is_some_and(|v| v.starts_with('3'));
+
+    // (range, replacement) splices, applied back to front.
+    let mut edits: Vec<(Range<usize>, String)> = Vec::new();
+    for old in meta
+        .children()
+        .filter(|n| is_meta(n) && n.attribute("name") == Some("cover"))
+    {
+        edits.push((with_leading_whitespace(opf, old.range()), String::new()));
+    }
+    for item in manifest
+        .children()
+        .filter(|n| n.tag_name().name() == "item")
+    {
+        if let Some(attr) = item.attributes().find(|a| a.name() == "properties")
+            && attr.value().split_whitespace().any(|p| p == "cover-image")
+        {
+            let rest: Vec<&str> = attr
+                .value()
+                .split_whitespace()
+                .filter(|p| *p != "cover-image")
+                .collect();
+            if rest.is_empty() {
+                // Drop the whole attribute, including the space before it.
+                let range = attr.range();
+                let start = opf[..range.start].trim_end().len();
+                edits.push((start..range.end, String::new()));
+            } else {
+                edits.push((attr.range_value(), esc(&rest.join(" "))));
+            }
+        }
+    }
+    let properties = if epub3 {
+        r#" properties="cover-image""#
+    } else {
+        ""
+    };
+    let item = format!(
+        r#"<item id="{ID}" href="{}" media-type="{}"{properties}/>"#,
+        esc(href),
+        esc(media_type)
+    );
+    edits.push((
+        closing_insert_point(opf, &manifest)?,
+        format!("\n{}{item}", child_indent(opf, &manifest)),
+    ));
+    let pointer = format!(r#"<meta name="cover" content="{ID}"/>"#);
+    edits.push((
+        closing_insert_point(opf, &meta)?,
+        format!("\n{}{pointer}", child_indent(opf, &meta)),
+    ));
+
+    edits.sort_by_key(|(r, _)| std::cmp::Reverse(r.start));
+    let mut out = opf.to_owned();
+    for (range, text) in edits {
+        out.replace_range(range, &text);
+    }
+    Ok(out)
+}
+
+/// Empty range just after the last child of `node`, before its closing tag.
+fn closing_insert_point(src: &str, node: &Node) -> Result<Range<usize>> {
+    let close = src[..node.range().end]
+        .rfind("</")
+        .ok_or_else(|| Error::Invalid(format!("unterminated <{}>", node.tag_name().name())))?;
+    let at = src[..close].trim_end().len();
+    Ok(at..at)
+}
+
 /// Returns `opf` with the managed metadata elements replaced by `edit`.
 pub fn apply_edit(opf: &str, edit: &MetadataEdit) -> Result<String> {
     let doc = Document::parse(opf).map_err(|e| Error::Invalid(format!("OPF: {e}")))?;

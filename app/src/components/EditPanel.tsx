@@ -1,19 +1,53 @@
 import { useState } from "react";
-import { coverSrc, type Book, type MetadataEdit } from "../api";
+import { open } from "@tauri-apps/plugin-dialog";
+import {
+  coverSrc,
+  resetCover,
+  setCoverFromFile,
+  setCoverFromUrl,
+  type Book,
+  type MetadataEdit,
+} from "../api";
 import { fromForm, toForm, type EditForm } from "../library";
+import { CoverPicker } from "./CoverPicker";
 
 interface Props {
   book: Book;
   onSave: (id: number, edit: MetadataEdit) => Promise<void>;
+  /** Called with the updated book after a cover change. */
+  onChanged: (book: Book) => void;
   onClose: () => void;
 }
 
-/** Keyed by book id + modification time in the parent, so it remounts with a
- * fresh form when the selection or the saved book changes. */
-export function EditPanel({ book, onSave, onClose }: Props) {
+/** Keyed by book id in the parent, so selecting another book starts a fresh form. */
+export function EditPanel({ book, onSave, onChanged, onClose }: Props) {
   const [form, setForm] = useState<EditForm>(() => toForm(book));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [picker, setPicker] = useState(false);
+  const [coverBusy, setCoverBusy] = useState(false);
+
+  const changeCover = async (action: () => Promise<Book>) => {
+    setCoverBusy(true);
+    setError(null);
+    try {
+      onChanged(await action());
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setCoverBusy(false);
+    }
+  };
+
+  const chooseImage = async () => {
+    const path = await open({
+      filters: [
+        { name: "Images", extensions: ["jpg", "jpeg", "png", "webp", "gif"] },
+      ],
+    });
+    if (typeof path === "string")
+      changeCover(() => setCoverFromFile(book.id, path));
+  };
 
   const dirty =
     JSON.stringify(fromForm(form)) !== JSON.stringify(fromForm(toForm(book)));
@@ -40,11 +74,45 @@ export function EditPanel({ book, onSave, onClose }: Props) {
   return (
     <aside className="panel">
       <div className="panel-head">
-        {src && <img className="panel-cover" src={src} alt="" />}
+        <div className="panel-cover-wrap">
+          {src ? (
+            <img className="panel-cover" src={src} alt="" />
+          ) : (
+            <div className="panel-cover placeholder">No cover</div>
+          )}
+          <div className="cover-actions">
+            <button
+              className="link"
+              disabled={coverBusy}
+              onClick={() => setPicker(true)}
+            >
+              Find cover online…
+            </button>
+            <button className="link" disabled={coverBusy} onClick={chooseImage}>
+              Choose image…
+            </button>
+            {book.custom_cover && (
+              <button
+                className="link"
+                disabled={coverBusy}
+                onClick={() => changeCover(() => resetCover(book.id))}
+              >
+                Use original cover
+              </button>
+            )}
+          </div>
+        </div>
         <button className="icon" aria-label="Close" onClick={onClose}>
           ×
         </button>
       </div>
+      {picker && (
+        <CoverPicker
+          book={book}
+          onPick={(url) => changeCover(() => setCoverFromUrl(book.id, url))}
+          onClose={() => setPicker(false)}
+        />
+      )}
       <form onSubmit={save} className="form">
         <label>
           Title

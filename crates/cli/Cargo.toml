@@ -15,6 +15,7 @@ anyhow.workspace = true
 clap.workspace = true
 erc-convert.workspace = true
 erc-core.workspace = true
+erc-covers.workspace = true
 erc-device.workspace = true
 erc-device-kobo.workspace = true
 erc-epub.workspace = true

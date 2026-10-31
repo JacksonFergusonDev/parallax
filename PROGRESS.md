@@ -13,11 +13,12 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 - M2 (code): `crates/convert` (Kepubify sidecar, `ERC_KEPUBIFY` override), Kobo transfer (temp name + rename, size check, no xattr copy, deletes the `._*` companions macOS creates on FAT32 for every new file/dir, `.metadata_never_index`), eject via `diskutil`, `crates/core::send` (per-book convert+copy with progress events), `erc send`, app UI (device badge polling, drag-and-drop/picker queue, Send, Eject). FAT32 disk-image test: `just test-fat`.
 - M2 verified on the device (2026-10-31): book sent from the app, imported and opened as KEPUB; no `._*` file next to it. File name came from the source file name (long, ugly), fixed in M3.
 - M3: `crates/epub` (OPF read for EPUB2/3 incl. calibre + EPUB3 series, cover extraction, byte-preserving metadata splice, raw zip copy; all 94 device books parse), `crates/library` (SQLite `user_version` migrations, managed `books/<id>/book.epub` + `cover.jpg` thumbnail, SHA-256 exact dedupe + ISBN/title-author likely-duplicate, author normalisation, export with edits, `device_copies`), `send_library_books` (device names `KEpub/<Title> - <Author>.kepub.epub`, records copies, refuses a second copy of a renamed book), `erc library add|ls|edit|rm|send`, `erc epub-info`, app library UI (cover grid, search, multi-select, edit panel, per-book send status, On Kobo badges). Browser mock backend for UI work: `.claude/launch.json` `ui-mock` (dev only, not bundled).
+- M4: covers. `erc-epub` writes a replacement cover (same media type → bytes swapped in place so title pages update; otherwise a new `erc-cover.*` item + `meta name=cover` + EPUB3 `cover-image` moved). `erc-library` schema v2 `custom_cover`, `set_cover` (capped at 1680 px tall, JPEG q90), `reset_cover`, export re-encodes to PNG when the original cover is PNG. `erc-covers`: Apple Books (`3000x3000bb` artwork, returns up to original size), Open Library (search + ISBN), Google Books (keyless quota often exhausted → 429, skipped silently). CLI `erc library covers|cover|export`; app cover picker modal with measured resolution (soft < 1200 px tall), choose local image, reset.
 
 ## Current
 
-- M3 device check (user, batched): send a library book after editing its title/series and confirm the Kobo shows the new title and series.
-- Next up: M4 covers.
+- Batched device checks for M3 + M4 (user): see docs/hardware-checks.md.
+- Next up: M5 safe device writes.
 
 ## Unresolved
 
@@ -25,8 +26,8 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 ## Next
 
-- M4: replace cover from a local image; online cover search (Open Library, Google Books, Apple Books) with resolution shown; cover written into the exported EPUB.
-- M5 must include: "replace on device" for books edited after sending (today a resend is refused).
+- M5: safe-write layer for `KoboReader.sqlite` (version gate, backup via SQLite backup API, integrity check before/after, single transaction, journal, `persist_wal` off + `wal_checkpoint(TRUNCATE)`), remove book from device (file + calibre's `delete_via_sql` cleanup), "replace on device" for books edited after sending, tidy existing `._*` files.
+- Google Books needs an API key to be useful; optional setting later.
 
 ## Notes for agents
 

@@ -65,6 +65,7 @@ let books: Book[] = SAMPLE.map(([title, author, series, index, tags], i) => ({
   original_name: `${title}.epub`,
   file_size: 1_000_000,
   has_cover: i < SAMPLE.length - 1,
+  custom_cover: false,
   added_at: "2026-10-31T00:00:00Z",
   modified_at: "2026-10-31T00:00:00Z",
   cover: i < SAMPLE.length - 1 ? coverSvg(title, author, i) : null,
@@ -146,6 +147,34 @@ export function installMockBackend() {
         }
         case "eject_device":
           return null;
+        case "cover_search":
+          await sleep(600);
+          return SAMPLE.slice(0, 6).map(([title, author], i) => {
+            const url = coverSvg(title, author, i + 2);
+            return {
+              source: i % 2 ? "Open Library" : "Apple Books",
+              url,
+              preview_url: url,
+            };
+          });
+        case "cover_set_url":
+          books = books.map((b) =>
+            b.id === a.id
+              ? {
+                  ...b,
+                  cover: a.url as string,
+                  has_cover: true,
+                  custom_cover: true,
+                  modified_at: new Date().toISOString(),
+                }
+              : b,
+          );
+          return books.find((b) => b.id === a.id);
+        case "cover_reset":
+          books = books.map((b) =>
+            b.id === a.id ? { ...b, custom_cover: false } : b,
+          );
+          return books.find((b) => b.id === a.id);
         default:
           // Plugin and event-system calls the UI doesn't depend on.
           return null;

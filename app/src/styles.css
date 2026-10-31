@@ -422,3 +422,136 @@ button.icon {
   font-size: 20px;
   line-height: 1;
 }
+
+/* Cover controls */
+
+.panel-cover-wrap {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+}
+
+.panel-cover.placeholder {
+  width: 96px;
+  aspect-ratio: 2 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  box-shadow: none;
+}
+
+.cover-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+button.link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+/* Cover picker */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 45%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.modal {
+  width: min(860px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 35%);
+  padding: 18px 20px 20px;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.modal-head h2 {
+  font-size: 15px;
+  margin: 0 0 2px;
+}
+
+.modal-empty {
+  padding: 48px 0;
+  text-align: center;
+}
+
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 16px;
+  overflow: auto;
+  padding: 4px;
+}
+
+.picker-item {
+  all: unset;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.picker-item img {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--sunken);
+  outline: 3px solid transparent;
+  outline-offset: 2px;
+}
+
+.picker-item:hover img,
+.picker-item:focus-visible img,
+.picker-item.picking img {
+  outline-color: var(--accent);
+}
+
+.picker-item:disabled {
+  cursor: default;
+}
+
+.picker-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.size.sharp {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.size.soft {
+  color: var(--warn);
+}
+
+.picker-item .overlay {
+  bottom: auto;
+  top: 6px;
+}

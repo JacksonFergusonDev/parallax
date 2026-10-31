@@ -32,6 +32,8 @@ const MIGRATIONS: &[&str] = &[
         sent_at       TEXT NOT NULL,
         PRIMARY KEY (book_id, device_serial)
     );",
+    // 2: a user-chosen cover in books/<id>/custom-cover.jpg replaces the EPUB's.
+    "ALTER TABLE books ADD COLUMN custom_cover INTEGER NOT NULL DEFAULT 0;",
 ];
 
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {

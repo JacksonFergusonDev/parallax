@@ -224,3 +224,112 @@ fn rejects_non_epub() {
     std::fs::write(&path, b"nope").unwrap();
     assert!(Epub::open(&path).is_err());
 }
+
+fn cover(data: &[u8], media_type: &str) -> erc_epub::Cover {
+    erc_epub::Cover {
+        data: data.to_vec(),
+        media_type: media_type.into(),
+    }
+}
+
+#[test]
+fn replaces_same_type_cover_in_place() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = make_epub(
+        dir.path(),
+        "b.epub",
+        EPUB2_OPF,
+        &[("images/cover art.jpg", b"OLDJPEG")],
+    );
+    let out = dir.path().join("out.epub");
+    let epub = Epub::open(&path).unwrap();
+    epub.write(&edit(), Some(&cover(b"NEWJPEG", "image/jpeg")), &out)
+        .unwrap();
+
+    let edited = Epub::open(&out).unwrap();
+    assert_eq!(edited.cover().unwrap().unwrap().data, b"NEWJPEG");
+    let opf = read_opf(&out);
+    assert!(
+        !opf.contains("erc-cover"),
+        "should reuse the existing item:\n{opf}"
+    );
+    let mut zip = ZipArchive::new(File::open(&out).unwrap()).unwrap();
+    let names: Vec<String> = zip.file_names().map(|n| n.unwrap().into_owned()).collect();
+    assert_eq!(
+        names
+            .iter()
+            .filter(|n| n.ends_with("cover art.jpg"))
+            .count(),
+        1
+    );
+    assert!(zip.by_name("OEBPS/images/cover art.jpg").is_ok());
+}
+
+#[test]
+fn adds_cover_item_when_type_differs_epub2() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = make_epub(
+        dir.path(),
+        "b.epub",
+        EPUB2_OPF,
+        &[("images/cover art.jpg", b"OLDJPEG")],
+    );
+    let out = dir.path().join("out.epub");
+    Epub::open(&path)
+        .unwrap()
+        .write(&edit(), Some(&cover(b"NEWPNG", "image/png")), &out)
+        .unwrap();
+
+    let edited = Epub::open(&out).unwrap();
+    let c = edited.cover().unwrap().unwrap();
+    assert_eq!(
+        (c.data.as_slice(), c.media_type.as_str()),
+        (b"NEWPNG".as_slice(), "image/png")
+    );
+    let opf = read_opf(&out);
+    assert_eq!(opf.matches(r#"name="cover""#).count(), 1, "{opf}");
+    assert!(opf.contains(r#"<item id="erc-cover" href="erc-cover.png" media-type="image/png"/>"#));
+    roxmltree::Document::parse(&opf).expect("well-formed");
+}
+
+#[test]
+fn adds_cover_item_epub3_and_moves_cover_image_property() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = make_epub(dir.path(), "b.epub", EPUB3_OPF, &[("cover.png", b"OLDPNG")]);
+    let out = dir.path().join("out.epub");
+    Epub::open(&path)
+        .unwrap()
+        .write(&edit(), Some(&cover(b"NEWJPEG", "image/jpeg")), &out)
+        .unwrap();
+
+    assert_eq!(
+        Epub::open(&out).unwrap().cover().unwrap().unwrap().data,
+        b"NEWJPEG"
+    );
+    let opf = read_opf(&out);
+    assert_eq!(opf.matches("cover-image").count(), 1, "{opf}");
+    assert!(opf.contains(r#"<item id="cv" href="cover.png" media-type="image/png"/>"#));
+    assert!(opf.contains(r#"properties="cover-image"/>"#));
+}
+
+#[test]
+fn adds_cover_to_book_without_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let opf = EPUB2_OPF
+        .replace(r#"<meta name="cover" content="cover-img"/>"#, "")
+        .replace(
+            r#"<item id="cover-img" href="images/cover%20art.jpg" media-type="image/jpeg"/>"#,
+            "",
+        );
+    let path = make_epub(dir.path(), "b.epub", &opf, &[]);
+    assert!(Epub::open(&path).unwrap().cover().unwrap().is_none());
+    let out = dir.path().join("out.epub");
+    Epub::open(&path)
+        .unwrap()
+        .write(&edit(), Some(&cover(b"NEWJPEG", "image/jpeg")), &out)
+        .unwrap();
+    assert_eq!(
+        Epub::open(&out).unwrap().cover().unwrap().unwrap().data,
+        b"NEWJPEG"
+    );
+}

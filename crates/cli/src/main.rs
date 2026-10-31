@@ -88,6 +88,21 @@ enum LibraryCommand {
     },
     /// Remove a book from the library (not from devices).
     Rm { id: i64 },
+    /// Search online for covers for a book.
+    Covers { id: i64 },
+    /// Replace a book's cover from a URL or image file, or reset it.
+    Cover {
+        id: i64,
+        #[arg(long, conflicts_with_all = ["file", "reset"])]
+        url: Option<String>,
+        #[arg(long, conflicts_with = "reset")]
+        file: Option<PathBuf>,
+        /// Go back to the cover inside the EPUB.
+        #[arg(long)]
+        reset: bool,
+    },
+    /// Write a book with its edits applied (what a device receives, before KEPUB conversion).
+    Export { id: i64, out: PathBuf },
     /// Send books to the Kobo with their edited metadata, then eject. Writes files.
     Send {
         #[arg(required = true)]
@@ -282,6 +297,45 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             };
             let book = lib.update(id, &edit)?;
             println!("updated #{} {}", book.id, book.title);
+        }
+        LibraryCommand::Covers { id } => {
+            let book = lib.book(id)?;
+            let found = erc_covers::search(&erc_covers::CoverQuery {
+                title: book.title.clone(),
+                author: book.authors.first().cloned(),
+                isbn: book
+                    .identifiers
+                    .iter()
+                    .find(|i| i.scheme.as_deref() == Some("isbn"))
+                    .map(|i| i.value.clone()),
+            });
+            if json {
+                return print_json(&found);
+            }
+            for c in &found {
+                println!("{:<13} {}", c.source, c.url);
+            }
+        }
+        LibraryCommand::Cover {
+            id,
+            url,
+            file,
+            reset,
+        } => {
+            let book = if reset {
+                lib.reset_cover(id)?
+            } else if let Some(url) = url {
+                lib.set_cover(id, &erc_covers::download(&url)?)?
+            } else if let Some(file) = file {
+                lib.set_cover(id, &std::fs::read(&file)?)?
+            } else {
+                bail!("pass --url, --file or --reset");
+            };
+            println!("cover updated for #{} {}", book.id, book.title);
+        }
+        LibraryCommand::Export { id, out } => {
+            let book = lib.export(id, &out)?;
+            println!("exported #{} {} to {}", book.id, book.title, out.display());
         }
         LibraryCommand::Rm { id } => {
             lib.remove(id)?;

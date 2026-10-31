@@ -7,6 +7,7 @@
 //! library.sqlite
 //! books/<id>/book.epub     original file, byte for byte
 //! books/<id>/cover.jpg     thumbnail for the grid (optional)
+//! books/<id>/custom-cover.jpg  user-chosen cover, applied on export (optional)
 //! ```
 
 mod authors;
@@ -17,7 +18,7 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
-use erc_epub::{Epub, Identifier, MetadataEdit};
+use erc_epub::{Cover, Epub, Identifier, MetadataEdit};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -36,11 +37,16 @@ pub enum Error {
     NotFound(i64),
     #[error("title can't be empty")]
     EmptyTitle,
+    #[error("not a supported image: {0}")]
+    BadImage(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
 
 const COVER_HEIGHT: u32 = 600;
+/// Custom covers are stored at most this tall: the Kobo Libra 2's screen
+/// height, which is also the tallest current Kobo screen.
+const CUSTOM_COVER_MAX_HEIGHT: u32 = 1680;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Book {
@@ -57,6 +63,8 @@ pub struct Book {
     pub original_name: String,
     pub file_size: u64,
     pub has_cover: bool,
+    /// The cover was chosen by the user rather than taken from the EPUB.
+    pub custom_cover: bool,
     pub added_at: String,
     pub modified_at: String,
 }
@@ -264,11 +272,76 @@ impl Library {
         path.is_file().then_some(path)
     }
 
-    /// Writes the book with its current library metadata applied to `out`.
+    /// Writes the book with its current library metadata (and custom cover)
+    /// applied to `out`.
     pub fn export(&self, id: i64, out: &Path) -> Result<Book> {
         let book = self.book(id)?;
-        Epub::open(self.book_file(id))?.write_with_metadata(&book.edit(), out)?;
+        let epub = Epub::open(self.book_file(id))?;
+        let cover = if book.custom_cover {
+            let jpeg = fs::read(self.custom_cover_file(id))
+                .map_err(|e| io_err(&self.custom_cover_file(id), e))?;
+            Some(match epub.cover_media_type().as_deref() {
+                // Match a PNG original so it is replaced in place.
+                Some("image/png") => Cover {
+                    data: reencode(&jpeg, image::ImageFormat::Png)?,
+                    media_type: "image/png".into(),
+                },
+                _ => Cover {
+                    data: jpeg,
+                    media_type: "image/jpeg".into(),
+                },
+            })
+        } else {
+            None
+        };
+        epub.write(&book.edit(), cover.as_ref(), out)?;
         Ok(book)
+    }
+
+    /// Uses `image` (any common format) as the book's cover from now on.
+    pub fn set_cover(&mut self, id: i64, image: &[u8]) -> Result<Book> {
+        self.book(id)?;
+        let img = image::load_from_memory(image).map_err(|e| Error::BadImage(e.to_string()))?;
+        let img = if img.height() > CUSTOM_COVER_MAX_HEIGHT {
+            img.resize(
+                u32::MAX,
+                CUSTOM_COVER_MAX_HEIGHT,
+                image::imageops::FilterType::Lanczos3,
+            )
+        } else {
+            img
+        };
+        let path = self.custom_cover_file(id);
+        let mut jpeg = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 90)
+            .encode_image(&img.to_rgb8())
+            .map_err(|e| Error::BadImage(e.to_string()))?;
+        fs::write(&path, &jpeg).map_err(|e| io_err(&path, e))?;
+        let has_thumb = write_thumbnail(&jpeg, &self.book_dir(id).join("cover.jpg"));
+        self.conn.execute(
+            "UPDATE books SET custom_cover = 1, has_cover = ?1, modified_at = ?2 WHERE id = ?3",
+            params![has_thumb, now(), id],
+        )?;
+        self.book(id)
+    }
+
+    /// Goes back to the cover inside the EPUB.
+    pub fn reset_cover(&mut self, id: i64) -> Result<Book> {
+        self.book(id)?;
+        let _ = fs::remove_file(self.custom_cover_file(id));
+        let thumb = self.book_dir(id).join("cover.jpg");
+        let _ = fs::remove_file(&thumb);
+        let original = Epub::open(self.book_file(id))?.cover().ok().flatten();
+        let has_cover = original.is_some_and(|c| write_thumbnail(&c.data, &thumb));
+        self.conn.execute(
+            "UPDATE books SET custom_cover = 0, has_cover = ?1, modified_at = ?2 WHERE id = ?3",
+            params![has_cover, now(), id],
+        )?;
+        self.book(id)
+    }
+
+    fn custom_cover_file(&self, id: i64) -> PathBuf {
+        self.book_dir(id).join("custom-cover.jpg")
     }
 
     pub fn record_device_copy(
@@ -372,6 +445,7 @@ fn book_from_row(row: &Row) -> rusqlite::Result<Book> {
         original_name: row.get("original_name")?,
         file_size: row.get::<_, i64>("file_size")? as u64,
         has_cover: row.get("has_cover")?,
+        custom_cover: row.get("custom_cover")?,
         added_at: row.get("added_at")?,
         modified_at: row.get("modified_at")?,
     })
@@ -395,6 +469,14 @@ fn write_thumbnail(data: &[u8], out: &Path) -> bool {
     img.to_rgb8()
         .save_with_format(out, image::ImageFormat::Jpeg)
         .is_ok()
+}
+
+fn reencode(data: &[u8], format: image::ImageFormat) -> Result<Vec<u8>> {
+    let img = image::load_from_memory(data).map_err(|e| Error::BadImage(e.to_string()))?;
+    let mut out = std::io::Cursor::new(Vec::new());
+    img.write_to(&mut out, format)
+        .map_err(|e| Error::BadImage(e.to_string()))?;
+    Ok(out.into_inner())
 }
 
 fn hash_file(path: &Path) -> Result<(String, u64)> {

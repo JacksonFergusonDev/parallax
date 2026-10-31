@@ -32,6 +32,7 @@ strip = true
 anyhow = "1"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 clap = { version = "4", features = ["derive"] }
+reqwest = { version = "0.13", features = ["blocking", "json", "query"] }
 roxmltree = "0.21"
 rusqlite = { version = "0.41", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
@@ -44,6 +45,7 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 uuid = { version = "1", features = ["v4"] }
 erc-convert = { path = "crates/convert" }
 erc-core = { path = "crates/core" }
+erc-covers = { path = "crates/covers" }
 erc-device = { path = "crates/device" }
 erc-epub = { path = "crates/epub" }
 erc-library = { path = "crates/library" }

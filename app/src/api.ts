@@ -36,6 +36,8 @@ export interface Book {
   original_name: string;
   file_size: number;
   has_cover: boolean;
+  /** The cover was chosen by the user rather than taken from the EPUB. */
+  custom_cover: boolean;
   added_at: string;
   modified_at: string;
   /** Absolute path of the cover thumbnail. */
@@ -93,6 +95,12 @@ export interface SendOutcome {
     | { Err: string };
 }
 
+export interface CoverCandidate {
+  source: string;
+  url: string;
+  preview_url: string;
+}
+
 export const listDevices = () => invoke<DeviceInfo[]>("list_devices");
 export const listBooks = () => invoke<Book[]>("library_list");
 export const importBooks = (paths: string[]) =>
@@ -105,6 +113,13 @@ export const booksOnDevice = (mount: string) =>
   invoke<number[]>("books_on_device", { mount });
 export const sendBooks = (mount: string, ids: number[]) =>
   invoke<SendOutcome[]>("send_books", { mount, ids });
+export const searchCovers = (id: number) =>
+  invoke<CoverCandidate[]>("cover_search", { id });
+export const setCoverFromUrl = (id: number, url: string) =>
+  invoke<Book>("cover_set_url", { id, url });
+export const setCoverFromFile = (id: number, path: string) =>
+  invoke<Book>("cover_set_file", { id, path });
+export const resetCover = (id: number) => invoke<Book>("cover_reset", { id });
 export const ejectDevice = (mount: string) =>
   invoke<void>("eject_device", { mount });
 

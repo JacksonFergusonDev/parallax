@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'",
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: https://*.mzstatic.com https://covers.openlibrary.org https://*.archive.org https://archive.org https://books.google.com https://books.googleusercontent.com",
       "assetProtocol": {
         "enable": true,
         "scope": [

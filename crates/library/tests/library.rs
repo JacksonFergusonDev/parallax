@@ -222,3 +222,55 @@ fn failed_import_leaves_nothing() {
         0
     );
 }
+
+#[test]
+fn custom_cover_is_used_on_export_and_can_be_reset() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut lib = Library::open(dir.path().join("lib")).unwrap();
+    let (book, _) = added(
+        lib.import(&epub(
+            dir.path(),
+            "a.epub",
+            "Dune",
+            "Frank Herbert",
+            None,
+            "a",
+        ))
+        .unwrap(),
+    );
+    let original_thumb = fs::read(lib.cover_file(book.id).unwrap()).unwrap();
+
+    // A tall JPEG gets capped to the Kobo screen height.
+    let tall = {
+        let img = image::RgbImage::from_pixel(1400, 2100, image::Rgb([10, 120, 200]));
+        let mut out = Cursor::new(Vec::new());
+        img.write_to(&mut out, image::ImageFormat::Jpeg).unwrap();
+        out.into_inner()
+    };
+    let updated = lib.set_cover(book.id, &tall).unwrap();
+    assert!(updated.custom_cover && updated.has_cover);
+    assert_ne!(
+        fs::read(lib.cover_file(book.id).unwrap()).unwrap(),
+        original_thumb
+    );
+
+    let out = dir.path().join("out.epub");
+    lib.export(book.id, &out).unwrap();
+    let cover = Epub::open(&out).unwrap().cover().unwrap().unwrap();
+    // The fixture's cover is a PNG, so the replacement is re-encoded to PNG
+    // and swapped in place.
+    assert_eq!(cover.media_type, "image/png");
+    let img = image::load_from_memory(&cover.data).unwrap();
+    assert_eq!((img.width(), img.height()), (1120, 1680));
+
+    let reset = lib.reset_cover(book.id).unwrap();
+    assert!(!reset.custom_cover && reset.has_cover);
+    assert_eq!(
+        fs::read(lib.cover_file(book.id).unwrap()).unwrap(),
+        original_thumb
+    );
+    assert!(matches!(
+        lib.set_cover(book.id, b"not an image"),
+        Err(Error::BadImage(_))
+    ));
+}
