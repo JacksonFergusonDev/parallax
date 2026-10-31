@@ -1,0 +1,16 @@
+[package]
+name = "erc-convert"
+description = "Ebook format conversion (EPUB to KEPUB via kepubify)"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

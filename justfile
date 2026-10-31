@@ -30,3 +30,7 @@ test:
 # Run the desktop app with hot reload.
 dev: setup
     cd app && pnpm tauri dev
+
+# Opt-in test that mounts a FAT32 disk image to check for `._*` files.
+test-fat:
+    cargo test -p erc-device-kobo --test transfer -- --ignored

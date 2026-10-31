@@ -2,6 +2,7 @@
 
 mod db;
 mod error;
+mod transfer;
 mod version;
 
 use std::fs;
@@ -13,6 +14,7 @@ pub use db::{
     KoboDb, MAX_TESTED_DB_VERSION, MIN_SUPPORTED_DB_VERSION, ONBOARD_PREFIX, parse_kobo_date,
 };
 pub use error::{Error, Result};
+pub use transfer::{BOOKS_DIR, SentBook, device_file_name};
 pub use version::{FirmwareVersion, VersionInfo};
 
 /// Where macOS mounts removable volumes.
