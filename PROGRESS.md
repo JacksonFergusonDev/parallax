@@ -33,7 +33,7 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 - Phase 1.5: M9 → M16 (PLAN §7.3). Skip list: Goodreads, Kobo-Metadata scraping, Kobo settings/firmware-specific writes.
 - Phase 2 kickoff (after M16): research spike on Kindle (2024+ models use MTP; older ones USB mass storage), sideload formats (AZW3/KFX/EPUB via Send to Kindle), what reading data is accessible, and collection limitations. Produce a plan like docs/PLAN.md before coding.
-- Optional: app name decision (working name "E-Reader Companion"); Google Books API key setting.
+- Optional: app name decision (working name "E-Reader Companion"); Google Books API key and optional Hardcover token settings arrive with M13 (PLAN §7.4).
 
 ## Notes for agents
 
