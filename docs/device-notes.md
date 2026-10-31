@@ -25,4 +25,5 @@
 
 ## Confirmed hazards
 - **AppleDouble files**: 68 `._*` files in `KEpub/`, but **none imported into `content`** (fw 4.38 skips dotfiles; an earlier count of 2 was a `LIKE` false positive, since `_` is a wildcard: use `instr()` or escape the `_`). The app should still never create them (copy without xattrs) and can offer to tidy existing ones as a low-priority cleanup.
+- **Every new file or folder written from macOS gets a `._<name>` companion** on this volume: macOS attaches `com.apple.provenance`, which cannot be removed, and the msdos/fskit driver stores xattrs as AppleDouble files. Deleting the `._` file after writing works and it is not recreated (probed 2026-10-30). This is where the existing 68 `._*` files came from.
 - `.Spotlight-V100`, `.fseventsd` and `.Trashes` exist on the volume, so macOS indexing has been active. Add `.metadata_never_index`.

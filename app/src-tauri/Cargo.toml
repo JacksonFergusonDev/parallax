@@ -16,8 +16,13 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+tauri-plugin-dialog = "2"
+erc-convert.workspace = true
+erc-core.workspace = true
+erc-device.workspace = true
+erc-device-kobo.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

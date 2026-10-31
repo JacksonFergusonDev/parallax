@@ -1,0 +1,17 @@
+[package]
+name = "erc-core"
+description = "Workflows that combine conversion, library and device backends"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+erc-convert.workspace = true
+erc-device-kobo.workspace = true
+serde.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

@@ -1,10 +1,13 @@
 //! `erc`: a developer CLI that exercises the core crates end to end without
-//! the desktop UI. Every command is read-only unless stated otherwise.
+//! the desktop UI. Every command is read-only unless stated otherwise;
+//! `send` writes book files to the device (never its database).
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
+use erc_convert::Kepubify;
+use erc_core::send::{Progress, send_books};
 use erc_device::{DeviceBook, ReadStatus};
 use erc_device_kobo::{KoboDb, KoboDevice, MACOS_VOLUMES};
 use serde::Serialize;
@@ -30,6 +33,18 @@ enum Command {
     /// Kobo commands.
     #[command(subcommand)]
     Kobo(KoboCommand),
+    /// Convert EPUBs to KEPUB, copy them to the Kobo and eject it. Writes files.
+    Send {
+        /// EPUB or KEPUB files.
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+        /// Mount point of the Kobo (default: the first one found in /Volumes).
+        #[arg(long)]
+        mount: Option<PathBuf>,
+        /// Leave the Kobo mounted afterwards.
+        #[arg(long)]
+        no_eject: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -55,17 +70,19 @@ impl Source {
         if let Some(db) = &self.db {
             return KoboDb::open_read_only(db).with_context(|| format!("opening {}", db.display()));
         }
-        let device = match &self.mount {
-            Some(mount) => KoboDevice::open(mount)?,
-            None => match KoboDevice::detect(Path::new(MACOS_VOLUMES))
-                .into_iter()
-                .next()
-            {
-                Some(device) => device,
-                None => bail!("no Kobo found in {MACOS_VOLUMES}; connect it and tap Connect"),
-            },
-        };
-        Ok(device.open_db()?)
+        Ok(find_kobo(self.mount.as_deref())?.open_db()?)
+    }
+}
+
+fn find_kobo(mount: Option<&Path>) -> Result<KoboDevice> {
+    match mount {
+        Some(mount) => Ok(KoboDevice::open(mount)?),
+        None => KoboDevice::detect(Path::new(MACOS_VOLUMES))
+            .into_iter()
+            .next()
+            .with_context(|| {
+                format!("no Kobo found in {MACOS_VOLUMES}; connect it and tap Connect")
+            }),
     }
 }
 
@@ -101,6 +118,49 @@ fn main() -> Result<()> {
                 println!("{}", book_line(b));
             }
             println!("{} books", books.len());
+        }
+        Command::Send {
+            files,
+            mount,
+            no_eject,
+        } => {
+            let kobo = find_kobo(mount.as_deref())?;
+            let converter = Kepubify::locate()?;
+            let outcomes = send_books(&kobo, &converter, &files, |p| match p {
+                Progress::Converting { index, total, file } => {
+                    eprintln!("[{index}/{total}] converting {file}")
+                }
+                Progress::Copying { index, total, file } => {
+                    eprintln!("[{index}/{total}] copying {file}")
+                }
+                Progress::Done {
+                    index,
+                    total,
+                    device_path,
+                    ..
+                } => {
+                    eprintln!("[{index}/{total}] sent to {device_path}")
+                }
+                Progress::Failed {
+                    index,
+                    total,
+                    file,
+                    error,
+                } => {
+                    eprintln!("[{index}/{total}] FAILED {file}: {error}")
+                }
+            });
+            let failed = outcomes.iter().filter(|o| o.result.is_err()).count();
+            if cli.json {
+                print_json(&outcomes)?;
+            }
+            if !no_eject && failed < outcomes.len() {
+                kobo.eject()?;
+                eprintln!("Ejected. Unplug the Kobo and let it import the new books.");
+            }
+            if failed > 0 {
+                bail!("{failed} of {} books failed", outcomes.len());
+            }
         }
         Command::Kobo(KoboCommand::Collections(source)) => {
             let collections = source.open()?.collections()?;

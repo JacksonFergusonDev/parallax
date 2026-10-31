@@ -10,19 +10,22 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 - M1 (code): `crates/device` (shared types + Capabilities), `crates/device-kobo` (detect, version parse, immutable read-only DB, books via calibre's KoboTouch filter, collections), `crates/cli` (`erc devices`, `erc kobo ls|collections [--mount|--db] [--json]`). Tests: synthetic DB from `tests/fixtures/kobo/schema-db174.sql` + private real DB (93 books).
 
+- M1 verified on the device: `erc devices` / `erc kobo ls` match (93 books, 0 collections), DB checksum unchanged.
+- M2 (code): `crates/convert` (Kepubify sidecar, `ERC_KEPUBIFY` override), Kobo transfer (temp name + rename, size check, no xattr copy, deletes the `._*` companions macOS creates on FAT32 for every new file/dir, `.metadata_never_index`), eject via `diskutil`, `crates/core::send` (per-book convert+copy with progress events), `erc send`, app UI (device badge polling, drag-and-drop/picker queue, Send, Eject). FAT32 disk-image test: `just test-fat`.
+
 ## Current
-- M1 device check: run `erc devices` and `erc kobo ls` against the plugged-in Kobo (read-only; Claude can do it when the Kobo is connected) and confirm the DB checksum is unchanged.
-- Then M2: thin end-to-end send.
+- M2 device check (user): send a real book from the app, eject, confirm it opens with KEPUB features and no `._*` file appears next to it.
 
 ## Unresolved
 - S2 (cloud sync behaviour) deferred to M6.
 
 ## Next
-- M2 plan: `crates/convert` (Converter trait; kepubify sidecar from `app/src-tauri/binaries/kepubify-<triple>`, locate via env `ERC_KEPUBIFY` for CLI/tests), `crates/device-kobo` transfer (copy to `KEpub/` with `cp -X`-equivalent: plain read/write, no xattrs; temp name + rename; size check; `.metadata_never_index`), eject via `diskutil eject`. `erc send <epub>...`. Minimal UI: drop zone, device badge, Send button, progress/error toasts via Tauri events.
+- M3: local library (SQLite + managed folder), metadata read/edit (OPF), dedupe; device file names from metadata (`Author - Title`).
 
 ## Notes for agents
 - Licence is GPLv3: port calibre's Kobo logic (src/calibre/devices/kobo/driver.py) where it helps; cite it in a comment.
 - Run `just check` before committing. The justfile puts Homebrew's keg-only rustup on PATH; in raw shells prepend `/opt/homebrew/opt/rustup/bin`.
 - Apple's `sqlite3` persists `-wal`/`-shm` after close; on the device use `.filectrl persist_wal 0` (CLI) or the equivalent `SQLITE_FCNTL_PERSIST_WAL` off in Rust, then `wal_checkpoint(TRUNCATE)`.
 - SQL `LIKE` treats `_` as a wildcard: match literal paths with `instr()` (bit us once).
+- macOS adds an unremovable `com.apple.provenance` xattr to every new file; on FAT32 it becomes `._<name>`. Delete the companion after writing (verified on device).
 - Never write to `/Volumes/KOBOeReader` outside the safe-write layer or a user-run script.
