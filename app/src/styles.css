@@ -71,6 +71,16 @@ body {
   height: 100%;
 }
 
+/* Keep both screens mounted, but exclude the inactive one from layout,
+   keyboard focus and the accessibility tree. */
+.tab-panel {
+  display: contents;
+}
+
+.tab-panel[hidden] {
+  display: none;
+}
+
 /* Top bar */
 
 .topbar {

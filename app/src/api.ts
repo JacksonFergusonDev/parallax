@@ -2,6 +2,7 @@
 // mirror the serde output of the Rust types.
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { readCache } from "./readCache";
 
 export interface DeviceInfo {
   kind: "kobo";
@@ -205,55 +206,143 @@ export interface CoverCandidate {
   preview_url: string;
 }
 
-export const listDevices = () => invoke<DeviceInfo[]>("list_devices");
-export const listBooks = () => invoke<Book[]>("library_list");
+const deviceTag = (mount: string) => `device:${mount}`;
+const coverSearchTag = (id: number) => `cover-search:${id}`;
+let connectedDevices = new Map<string, string>();
+
+function read<T>(
+  command: string,
+  args: Record<string, unknown>,
+  tags: string[],
+  maxAge?: number,
+): Promise<T> {
+  return readCache.get(
+    [command, args],
+    () => invoke<T>(command, args),
+    tags,
+    maxAge,
+  );
+}
+
+async function write<T>(
+  command: string,
+  args: Record<string, unknown>,
+  tags: string[],
+): Promise<T> {
+  try {
+    return await invoke<T>(command, args);
+  } finally {
+    // Failed batches can still have made partial changes. Invalidation also
+    // removes pending reads, so an older response cannot refill the cache.
+    readCache.invalidate(...tags);
+  }
+}
+
+/** Detection is always live; cached device data never crosses a USB session. */
+export async function listDevices(): Promise<DeviceInfo[]> {
+  let devices: DeviceInfo[];
+  try {
+    devices = await invoke<DeviceInfo[]>("list_devices");
+  } catch (e) {
+    // Detection failure makes the USB session uncertain, just like disconnect.
+    for (const mount of connectedDevices.keys())
+      readCache.invalidate(deviceTag(mount));
+    connectedDevices.clear();
+    throw e;
+  }
+  const next = new Map(devices.map((d) => [d.mount, d.serial]));
+  for (const mount of new Set([...connectedDevices.keys(), ...next.keys()])) {
+    if (connectedDevices.get(mount) !== next.get(mount)) {
+      readCache.invalidate(deviceTag(mount));
+    }
+  }
+  connectedDevices = next;
+  return devices;
+}
+
+export const listBooks = () => read<Book[]>("library_list", {}, ["library"]);
 export const importBooks = (paths: string[]) =>
-  invoke<ImportResult[]>("library_import", { paths });
+  write<ImportResult[]>("library_import", { paths }, ["library", "plans"]);
 export const updateBook = (id: number, edit: MetadataEdit) =>
-  invoke<Book>("library_update", { id, edit });
+  write<Book>("library_update", { id, edit }, [
+    "library",
+    "plans",
+    coverSearchTag(id),
+  ]);
 export const removeBooks = (ids: number[]) =>
-  invoke<void>("library_remove", { ids });
+  write<void>("library_remove", { ids }, [
+    "library",
+    "plans",
+    ...ids.map(coverSearchTag),
+  ]);
 export const booksOnDevice = (mount: string) =>
-  invoke<OnDevice[]>("books_on_device", { mount });
+  read<OnDevice[]>("books_on_device", { mount }, [deviceTag(mount), "library"]);
 export const deviceBooks = (mount: string) =>
-  invoke<DeviceBook[]>("device_books", { mount });
+  read<DeviceBook[]>("device_books", { mount }, [deviceTag(mount)]);
 export const removeFromDevice = (mount: string, contentIds: string[]) =>
-  invoke<RemoveOutcome[]>("remove_from_device", { mount, contentIds });
+  write<RemoveOutcome[]>("remove_from_device", { mount, contentIds }, [
+    deviceTag(mount),
+  ]);
 export const updateBooks = (mount: string, ids: number[]) =>
-  invoke<SendOutcome[]>("update_books", { mount, ids });
+  write<SendOutcome[]>("update_books", { mount, ids }, [deviceTag(mount)]);
 export const tidyDevice = (mount: string) =>
-  invoke<number>("tidy_device", { mount });
+  write<number>("tidy_device", { mount }, [deviceTag(mount)]);
 export const deviceHistory = (mount: string) =>
-  invoke<DeviceHistory>("device_history", { mount });
+  read<DeviceHistory>("device_history", { mount }, [deviceTag(mount)]);
 export const sendBooks = (
   mount: string,
   ids: number[],
   collection: string | null = null,
-) => invoke<SendOutcome[]>("send_books", { mount, ids, collection });
+) =>
+  write<SendOutcome[]>("send_books", { mount, ids, collection }, [
+    deviceTag(mount),
+  ]);
 export const listCollections = (mount: string) =>
-  invoke<Collection[]>("list_collections", { mount });
+  read<Collection[]>("list_collections", { mount }, [deviceTag(mount)]);
 export const changeCollections = (mount: string, changes: CollectionChange[]) =>
-  invoke<void>("change_collections", { mount, changes });
+  write<void>("change_collections", { mount, changes }, [deviceTag(mount)]);
 export const folderGroups = (mount: string) =>
-  invoke<FolderGroup[]>("folder_groups", { mount });
-export const reconcileDevice = (mount: string) =>
-  invoke<{ series: number; grouped: number }>("reconcile_device", { mount });
-export const rulesList = () => invoke<Rule[]>("rules_list");
-export const rulesSave = (rule: Rule) => invoke<Rule>("rules_save", { rule });
-export const rulesDelete = (id: number) => invoke<void>("rules_delete", { id });
+  read<FolderGroup[]>("folder_groups", { mount }, [deviceTag(mount)]);
+export async function reconcileDevice(mount: string) {
+  try {
+    const result = await invoke<{ series: number; grouped: number }>(
+      "reconcile_device",
+      { mount },
+    );
+    if (result.series || result.grouped) readCache.invalidate(deviceTag(mount));
+    return result;
+  } catch (e) {
+    readCache.invalidate(deviceTag(mount));
+    throw e;
+  }
+}
+export const rulesList = () => read<Rule[]>("rules_list", {}, ["rules"]);
+export const rulesSave = (rule: Rule) =>
+  write<Rule>("rules_save", { rule }, ["rules", "plans"]);
+export const rulesDelete = (id: number) =>
+  write<void>("rules_delete", { id }, ["rules", "plans"]);
 export const rulesPreview = (mount: string) =>
-  invoke<PlannedCollection[]>("rules_preview", { mount });
+  read<PlannedCollection[]>("rules_preview", { mount }, [
+    deviceTag(mount),
+    "plans",
+  ]);
 export const rulesApply = (mount: string) =>
-  invoke<number>("rules_apply", { mount });
+  write<number>("rules_apply", { mount }, [deviceTag(mount)]);
 export const searchCovers = (id: number) =>
-  invoke<CoverCandidate[]>("cover_search", { id });
+  read<CoverCandidate[]>(
+    "cover_search",
+    { id },
+    [coverSearchTag(id)],
+    10 * 60_000,
+  );
 export const setCoverFromUrl = (id: number, url: string) =>
-  invoke<Book>("cover_set_url", { id, url });
+  write<Book>("cover_set_url", { id, url }, ["library"]);
 export const setCoverFromFile = (id: number, path: string) =>
-  invoke<Book>("cover_set_file", { id, path });
-export const resetCover = (id: number) => invoke<Book>("cover_reset", { id });
+  write<Book>("cover_set_file", { id, path }, ["library"]);
+export const resetCover = (id: number) =>
+  write<Book>("cover_reset", { id }, ["library"]);
 export const ejectDevice = (mount: string) =>
-  invoke<void>("eject_device", { mount });
+  write<void>("eject_device", { mount }, [deviceTag(mount)]);
 
 export const onSendProgress = (
   handler: (p: Progress) => void,

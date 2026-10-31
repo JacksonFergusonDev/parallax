@@ -58,6 +58,7 @@ export default function App() {
   const [onDevice, setOnDevice] = useState<Map<number, OnDevice>>(new Map());
   const [view, setView] = useState<"library" | "device">("library");
   const [collections, setCollections] = useState<Collection[]>([]);
+  const [deviceRevision, setDeviceRevision] = useState(0);
   /** Collection to put sent books in: "" none, NEW_COLLECTION, or a name. */
   const [sendCollection, setSendCollection] = useState("");
   const [newCollection, setNewCollection] = useState("");
@@ -151,11 +152,20 @@ export default function App() {
               `filed ${grouped} ${grouped === 1 ? "book" : "books"} into collections`,
             );
           if (alive && parts.length) {
+            setDeviceRevision((revision) => revision + 1);
+            listCollections(device.mount)
+              .then((list) => alive && setCollections(list))
+              .catch(() => {});
             const text = parts.join(" and ");
             setNotice({ kind: "info", text: `On your Kobo: ${text}.` });
           }
         })
-        .catch((e) => alive && setNotice({ kind: "error", text: String(e) }));
+        .catch((e) => {
+          if (alive) {
+            setDeviceRevision((revision) => revision + 1);
+            setNotice({ kind: "error", text: String(e) });
+          }
+        });
     }
     return () => {
       alive = false;
@@ -316,6 +326,7 @@ export default function App() {
   const save = async (id: number, edit: MetadataEdit) => {
     const updated = await updateBook(id, edit);
     setBooks((bs) => bs.map((b) => (b.id === id ? updated : b)));
+    await refreshOnDevice(device);
   };
 
   const transfer = async (kind: "sending" | "updating", ids: number[]) => {
@@ -353,10 +364,15 @@ export default function App() {
                   : "Updated. Eject your Kobo to see the changes.",
             },
       );
-      await refreshOnDevice(device);
     } catch (e) {
       setNotice({ kind: "error", text: String(e) });
     } finally {
+      await refreshOnDevice(device);
+      // Even a partially failed transfer may have changed device metadata.
+      setDeviceRevision((revision) => revision + 1);
+      listCollections(device.mount)
+        .then(setCollections)
+        .catch(() => {});
       setBusy(null);
     }
   };
@@ -446,222 +462,233 @@ export default function App() {
         <DeviceBadge device={device} />
       </header>
 
-      {activeView === "device" && device ? (
-        <DeviceView
-          key={device.mount}
-          device={device}
-          query={query}
-          libraryByContentId={libraryByContentId}
-          onChanged={() => {
-            refreshOnDevice(device);
-            listCollections(device.mount)
-              .then(setCollections)
-              .catch(() => {});
-          }}
-          onEjected={() => {
-            setDevice(null);
-            setStatuses({});
-            setNotice({
-              kind: "info",
-              text: "Ejected. Unplug your Kobo; it will refresh its library.",
-            });
-          }}
-        />
-      ) : (
-        <>
-          <div className="body">
-            <main className="content">
-              {books.length > 0 && (
-                <div className="view-toolbar">
-                  <span className="muted">
-                    {visible.length === books.length
-                      ? `${books.length} ${books.length === 1 ? "book" : "books"}`
-                      : `${visible.length} of ${books.length}`}
-                  </span>
-                  <span className="spacer" />
-                  {selected.size > 0 && (
-                    <span className="muted">{selected.size} selected</span>
-                  )}
-                  <ViewControls
-                    mode={mode}
-                    onMode={setMode}
-                    sort={sort}
-                    onSort={setSort}
-                    columns={columns}
-                  />
+      {/* Retain loaded data, decoded images and scroll positions across tabs.
+          Disconnecting unmounts the device panel, so reconnects read fresh data. */}
+      {device && (
+        <div
+          className="tab-panel"
+          role="tabpanel"
+          aria-label="On Kobo"
+          hidden={activeView !== "device"}
+        >
+          <DeviceView
+            key={JSON.stringify([device.mount, device.serial])}
+            revision={deviceRevision}
+            device={device}
+            query={query}
+            libraryByContentId={libraryByContentId}
+            onChanged={() => {
+              refreshOnDevice(device);
+              listCollections(device.mount)
+                .then(setCollections)
+                .catch(() => {});
+            }}
+            onEjected={() => {
+              setDevice(null);
+              setStatuses({});
+              setNotice({
+                kind: "info",
+                text: "Ejected. Unplug your Kobo; it will refresh its library.",
+              });
+            }}
+          />
+        </div>
+      )}
+      <div
+        className="tab-panel"
+        role="tabpanel"
+        aria-label="Library"
+        hidden={activeView !== "library"}
+      >
+        <div className="body">
+          <main className="content">
+            {books.length > 0 && (
+              <div className="view-toolbar">
+                <span className="muted">
+                  {visible.length === books.length
+                    ? `${books.length} ${books.length === 1 ? "book" : "books"}`
+                    : `${visible.length} of ${books.length}`}
+                </span>
+                <span className="spacer" />
+                {selected.size > 0 && (
+                  <span className="muted">{selected.size} selected</span>
+                )}
+                <ViewControls
+                  mode={mode}
+                  onMode={setMode}
+                  sort={sort}
+                  onSort={setSort}
+                  columns={columns}
+                />
+              </div>
+            )}
+            <div
+              className="scroll"
+              onClick={(e) =>
+                e.target === e.currentTarget && setSelected(new Set())
+              }
+            >
+              {loaded && books.length === 0 ? (
+                <div className="dropzone">
+                  <p className="dropzone-title">Drop EPUB files here</p>
+                  <p className="muted">
+                    They're added to your library, ready to edit and send to
+                    your Kobo.
+                  </p>
+                  <button className="secondary" onClick={chooseFiles}>
+                    Choose files…
+                  </button>
+                </div>
+              ) : visible.length === 0 && loaded ? (
+                <p className="muted empty">No books match “{query}”.</p>
+              ) : mode === "grid" ? (
+                <div className="grid">
+                  {visible.map((b) => (
+                    <BookCard
+                      key={b.id}
+                      book={b}
+                      selected={selected.has(b.id)}
+                      deviceState={deviceState(b)}
+                      status={statuses[b.id]}
+                      onSelect={onSelect}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div
+                  className="book-list"
+                  role="table"
+                  style={
+                    { "--tracks": listTracks(columns) } as React.CSSProperties
+                  }
+                >
+                  <SortHeader columns={columns} sort={sort} onSort={setSort} />
+                  {visible.map((b) => (
+                    <LibraryRow
+                      key={b.id}
+                      book={b}
+                      selected={selected.has(b.id)}
+                      deviceState={deviceState(b)}
+                      status={statuses[b.id]}
+                      onSelect={onSelect}
+                    />
+                  ))}
                 </div>
               )}
-              <div
-                className="scroll"
-                onClick={(e) =>
-                  e.target === e.currentTarget && setSelected(new Set())
-                }
-              >
-                {loaded && books.length === 0 ? (
-                  <div className="dropzone">
-                    <p className="dropzone-title">Drop EPUB files here</p>
-                    <p className="muted">
-                      They're added to your library, ready to edit and send to
-                      your Kobo.
-                    </p>
-                    <button className="secondary" onClick={chooseFiles}>
-                      Choose files…
-                    </button>
-                  </div>
-                ) : visible.length === 0 && loaded ? (
-                  <p className="muted empty">No books match “{query}”.</p>
-                ) : mode === "grid" ? (
-                  <div className="grid">
-                    {visible.map((b) => (
-                      <BookCard
-                        key={b.id}
-                        book={b}
-                        selected={selected.has(b.id)}
-                        deviceState={deviceState(b)}
-                        status={statuses[b.id]}
-                        onSelect={onSelect}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div
-                    className="book-list"
-                    role="table"
-                    style={
-                      { "--tracks": listTracks(columns) } as React.CSSProperties
-                    }
-                  >
-                    <SortHeader
-                      columns={columns}
-                      sort={sort}
-                      onSort={setSort}
-                    />
-                    {visible.map((b) => (
-                      <LibraryRow
-                        key={b.id}
-                        book={b}
-                        selected={selected.has(b.id)}
-                        deviceState={deviceState(b)}
-                        status={statuses[b.id]}
-                        onSelect={onSelect}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </main>
-            {editing && (
-              <EditPanel
-                key={editing.id}
-                book={editing}
-                onSave={save}
-                onChanged={(updated) =>
-                  setBooks((bs) =>
-                    bs.map((b) => (b.id === updated.id ? updated : b)),
-                  )
-                }
-                onClose={() => setSelected(new Set())}
-              />
-            )}
-          </div>
+            </div>
+          </main>
+          {editing && (
+            <EditPanel
+              key={editing.id}
+              book={editing}
+              onSave={save}
+              onChanged={(updated) => {
+                setBooks((bs) =>
+                  bs.map((b) => (b.id === updated.id ? updated : b)),
+                );
+                refreshOnDevice(device);
+              }}
+              onClose={() => setSelected(new Set())}
+            />
+          )}
+        </div>
 
-          <footer className="actions">
+        <footer className="actions">
+          <button
+            className="secondary"
+            onClick={chooseFiles}
+            disabled={busy !== null}
+          >
+            {busy === "importing" ? "Adding…" : "Add books…"}
+          </button>
+          {notice && (
+            <span className={`notice notice-${notice.kind}`}>
+              {notice.text}
+            </span>
+          )}
+          <span className="spacer" />
+          {selected.size > 0 && (
             <button
-              className="secondary"
-              onClick={chooseFiles}
+              className="secondary danger"
+              onClick={remove}
               disabled={busy !== null}
             >
-              {busy === "importing" ? "Adding…" : "Add books…"}
+              Remove
             </button>
-            {notice && (
-              <span className={`notice notice-${notice.kind}`}>
-                {notice.text}
-              </span>
-            )}
-            <span className="spacer" />
-            {selected.size > 0 && (
-              <button
-                className="secondary danger"
-                onClick={remove}
-                disabled={busy !== null}
-              >
-                Remove
-              </button>
-            )}
-            {device && sentThisSession && (
-              <button
-                className="secondary"
-                onClick={eject}
-                disabled={busy !== null}
-              >
-                {busy === "ejecting" ? "Ejecting…" : "Eject Kobo"}
-              </button>
-            )}
-            {toUpdate.length > 0 && (
-              <button
-                className="secondary"
-                onClick={() =>
-                  transfer(
-                    "updating",
-                    toUpdate.map((b) => b.id),
-                  )
-                }
-                disabled={!device || busy !== null}
-                title="Replace the copies on your Kobo with your edits, keeping reading progress"
-              >
-                {busy === "updating"
-                  ? "Updating…"
-                  : `Update ${toUpdate.length} on Kobo`}
-              </button>
-            )}
-            {device && toSend.length > 0 && (
-              <>
-                <select
-                  className="collection-select"
-                  aria-label="Collection for sent books"
-                  value={sendCollection}
-                  onChange={(e) => setSendCollection(e.target.value)}
-                  disabled={busy !== null}
-                >
-                  <option value="">No collection</option>
-                  {collections.map((c) => (
-                    <option key={c.name} value={c.name}>
-                      Into “{c.name}”
-                    </option>
-                  ))}
-                  <option value={NEW_COLLECTION}>New collection…</option>
-                </select>
-                {sendCollection === NEW_COLLECTION && (
-                  <input
-                    className="new-collection"
-                    placeholder="Collection name"
-                    value={newCollection}
-                    onChange={(e) => setNewCollection(e.target.value)}
-                    autoFocus
-                  />
-                )}
-              </>
-            )}
+          )}
+          {device && sentThisSession && (
             <button
-              className="primary"
+              className="secondary"
+              onClick={eject}
+              disabled={busy !== null}
+            >
+              {busy === "ejecting" ? "Ejecting…" : "Eject Kobo"}
+            </button>
+          )}
+          {toUpdate.length > 0 && (
+            <button
+              className="secondary"
               onClick={() =>
                 transfer(
-                  "sending",
-                  toSend.map((b) => b.id),
+                  "updating",
+                  toUpdate.map((b) => b.id),
                 )
               }
-              disabled={!device || toSend.length === 0 || busy !== null}
-              title={device ? undefined : "Connect your Kobo to send books"}
+              disabled={!device || busy !== null}
+              title="Replace the copies on your Kobo with your edits, keeping reading progress"
             >
-              {busy === "sending"
-                ? "Sending…"
-                : toSend.length > 0
-                  ? `Send ${toSend.length} to Kobo`
-                  : "Send to Kobo"}
+              {busy === "updating"
+                ? "Updating…"
+                : `Update ${toUpdate.length} on Kobo`}
             </button>
-          </footer>
-        </>
-      )}
+          )}
+          {device && toSend.length > 0 && (
+            <>
+              <select
+                className="collection-select"
+                aria-label="Collection for sent books"
+                value={sendCollection}
+                onChange={(e) => setSendCollection(e.target.value)}
+                disabled={busy !== null}
+              >
+                <option value="">No collection</option>
+                {collections.map((c) => (
+                  <option key={c.name} value={c.name}>
+                    Into “{c.name}”
+                  </option>
+                ))}
+                <option value={NEW_COLLECTION}>New collection…</option>
+              </select>
+              {sendCollection === NEW_COLLECTION && (
+                <input
+                  className="new-collection"
+                  placeholder="Collection name"
+                  value={newCollection}
+                  onChange={(e) => setNewCollection(e.target.value)}
+                  autoFocus
+                />
+              )}
+            </>
+          )}
+          <button
+            className="primary"
+            onClick={() =>
+              transfer(
+                "sending",
+                toSend.map((b) => b.id),
+              )
+            }
+            disabled={!device || toSend.length === 0 || busy !== null}
+            title={device ? undefined : "Connect your Kobo to send books"}
+          >
+            {busy === "sending"
+              ? "Sending…"
+              : toSend.length > 0
+                ? `Send ${toSend.length} to Kobo`
+                : "Send to Kobo"}
+          </button>
+        </footer>
+      </div>
     </div>
   );
 }

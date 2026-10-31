@@ -40,6 +40,8 @@ const DEVICE_KEYS = deviceColumns.map((c) => c.key);
 
 interface Props {
   device: DeviceInfo;
+  /** Increment after app operations that can change device metadata or covers. */
+  revision: number;
   query: string;
   /** Library books by device ContentID, for covers. */
   libraryByContentId: Map<string, Book>;
@@ -57,6 +59,7 @@ type Dialog =
 
 export function DeviceView({
   device,
+  revision,
   query,
   libraryByContentId,
   onChanged,
@@ -73,26 +76,40 @@ export function DeviceView({
     text: string;
   } | null>(null);
   const anchor = useRef<string | null>(null);
+  const request = useRef({ generation: 0 });
   const { mode, setMode, sort, setSort } = useViewState<DeviceKey>(
     "device",
     DEVICE_KEYS,
     "grid",
   );
 
-  const load = useCallback(
-    () =>
-      Promise.all([deviceBooks(device.mount), listCollections(device.mount)])
-        .then(([b, c]) => {
-          setBooks(b);
-          setCollections(c);
-        })
-        .catch((e) => setNotice({ kind: "error", text: String(e) })),
-    [device.mount],
-  );
+  const load = useCallback(() => {
+    const state = request.current;
+    const current = ++state.generation;
+    return Promise.all([
+      deviceBooks(device.mount),
+      listCollections(device.mount),
+    ])
+      .then(([b, c]) => {
+        if (current !== state.generation) return;
+        setBooks(b);
+        setCollections(c);
+      })
+      .catch((e) => {
+        if (current === state.generation) {
+          setNotice({ kind: "error", text: String(e) });
+        }
+      });
+  }, [device.mount]);
 
   useEffect(() => {
+    const state = request.current;
     load();
-  }, [load]);
+    return () => {
+      // A refresh or disconnect supersedes any outstanding device read.
+      state.generation++;
+    };
+  }, [load, revision]);
 
   const inShelf = useMemo(
     () =>
@@ -136,11 +153,12 @@ export function DeviceView({
     try {
       const text = await action();
       setNotice({ kind: "info", text });
-      await load();
-      onChanged();
     } catch (e) {
       setNotice({ kind: "error", text: String(e) });
     } finally {
+      // A failed batch may still have changed some books.
+      await load();
+      onChanged();
       setBusy(null);
     }
   };

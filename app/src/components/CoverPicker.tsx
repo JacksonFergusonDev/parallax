@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { coverDimensions } from "../readCache";
 import { searchCovers, type Book, type CoverCandidate } from "../api";
 
 /** Covers shorter than this look soft on a Kobo screen (1680 px tall). */
@@ -35,16 +36,15 @@ export function CoverPicker({ book, onPick, onClose }: Props) {
 
   // Measure the full-size image, which is what gets downloaded.
   useEffect(() => {
+    let alive = true;
     for (const c of candidates ?? []) {
-      const img = new Image();
-      img.onload = () =>
-        setSizes((s) => ({
-          ...s,
-          [c.url]: [img.naturalWidth, img.naturalHeight],
-        }));
-      img.onerror = () => setBroken((b) => new Set(b).add(c.url));
-      img.src = c.url;
+      coverDimensions(c.url)
+        .then((size) => alive && setSizes((s) => ({ ...s, [c.url]: size })))
+        .catch(() => alive && setBroken((b) => new Set(b).add(c.url)));
     }
+    return () => {
+      alive = false;
+    };
   }, [candidates]);
 
   const pick = async (url: string) => {
