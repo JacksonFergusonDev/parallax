@@ -4,6 +4,7 @@ mod collections;
 mod db;
 mod error;
 mod ops;
+mod state;
 mod transfer;
 mod version;
 mod writer;
@@ -23,6 +24,10 @@ pub use db::{
 pub use error::{Error, Result};
 pub use ops::{
     DisplayMetadata, image_id_for, qhash, remove_book, replace_book, set_series, tidy_apple_double,
+};
+pub use state::{
+    BookChange, BookCheck, DeviceRecord, ERC_VERSION, ErcState, LOG_KEPT, LogEntry, ManagedBook,
+    Record, STATE_DIR, Stamp,
 };
 pub use transfer::{BOOKS_DIR, SentBook, device_file_name};
 pub use version::{FirmwareVersion, VersionInfo};

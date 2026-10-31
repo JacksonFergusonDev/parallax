@@ -19,12 +19,13 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 - M7: library sort (title ignoring articles, author surname, series reading order, recently added; remembered), shortcuts (⌘F search, ⌘O add, ⌘1/⌘2 tabs, ⌘A, Esc), `aria-pressed`/labels and visible focus, `content-visibility` for large libraries, window size/position remembered (tauri-plugin-window-state), app icon (`app/src-tauri/icons/source/icon.svg`, rendered with Inkscape, `pnpm tauri icon`), `just build` → 14 MB `E-Reader Companion.app` with kepubify bundled (verified: bundled kepubify converts, app launches), README.
 - M8: grouping rules (library schema v3 `rules`: series/tag/author → collection, min books, name prefix, enabled). `erc-core::rules` plans additions only (never removes/deletes), merging Nickel's view (series, author) for all device books with library metadata (tags) for library-sent books, using `ShelfContent` memberships so pre-import rows count as done; `run` opens no write session when there's nothing to add. Rules run automatically after sends and on connect (with series reconcile). CLI `erc library rules ls|add|enable|disable|rm|preview|apply`; app "Automatic collections…" dialog with live preview and Apply. Real-device preview (scratch library, author ≥3): Brandon Sanderson 7, Pierce Brown 5.
 - M9: window overscroll locked (only `.scroll` areas scroll, `overscroll-behavior: contain`); Covers/List toggle on Library and On Kobo; tri-state header sort (`app/src/sort.ts`: desc → asc → default, missing values last, ties keep default order) with column definitions in `library.ts`/`device.ts`; grid view sorts through a column picker + direction button; view and sort remembered per screen. Old `library-sort` storage key is ignored.
+- M10: ERC records on the device in `/.erc/` (`device-kobo::state`; format in docs/device-notes.md). Written by `send_file_for` (sends, with the library book id), by every `DeviceWriter` session at close (replace, remove, collection changes, series; each entry names the backup taken and any failure), by tidy and by `erc kobo restore`. Reading is side-effect free (`KoboDevice::erc_state`, `ErcState::check` flags books changed or gone since ERC wrote them). CLI `erc kobo history [-n N] [--json]`; app On Kobo → "About this Kobo…". Tests on the fixture DB (recording, corrupt files set aside, log cap, change detection) and the FAT32 image (no `._` files in `.erc`).
 
 ## Current
 
 - Kobo MVP roadmap (M0–M8) complete in code. Awaiting batched device checks for M3–M8 + spike S2: docs/hardware-checks.md.
 - Phase 1.5 planned (PLAN §7: plugin port/skip review, M9–M16).
-- Next: M10 (ERC device state in `/.erc/`) before any new device writes.
+- Next: M11 (import sideloaded books from the Kobo into the library).
 
 ## Unresolved
 

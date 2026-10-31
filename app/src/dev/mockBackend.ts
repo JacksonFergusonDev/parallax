@@ -305,6 +305,53 @@ export function installMockBackend() {
         }
         case "tidy_device":
           return 68;
+        case "device_history": {
+          const stamp = (at: string, v: string) => ({
+            at,
+            erc_version: v,
+            firmware: "4.38.23697",
+            db_version: 174,
+          });
+          return {
+            device: {
+              device_id: "6f1c2b9e-3a1d-4c52-9a8e-2d1f0c7b5e44",
+              serial: "N418xxxxxxxx",
+              first_write: stamp("2026-10-31T09:12:00Z", "0.1.0"),
+              last_write: stamp("2026-10-31T14:02:00Z", "0.1.0"),
+            },
+            books: [
+              { content_id: contentId(1), path: "KEpub/Dune.kepub.epub" },
+              { content_id: contentId(5), path: "KEpub/Pride.kepub.epub" },
+            ],
+            log: [
+              {
+                at: "2026-10-31T14:02:00Z",
+                erc_version: "0.1.0",
+                op: "collection",
+                content_ids: [contentId(1)],
+                detail: "add to “Favourites”",
+                backup: "KoboReader-20261031-140200.000.sqlite",
+              },
+              {
+                at: "2026-10-31T13:40:00Z",
+                erc_version: "0.1.0",
+                op: "replace",
+                content_ids: [contentId(5)],
+                detail: "Pride and Prejudice",
+                error: "the Kobo database is busy",
+              },
+              {
+                at: "2026-10-31T09:12:00Z",
+                erc_version: "0.1.0",
+                op: "send",
+                content_ids: [contentId(1)],
+              },
+            ],
+            problems: [],
+            changed: [contentId(5)],
+            missing: [],
+          };
+        }
         case "update_books": {
           const ids = a.ids as number[];
           for (const [i, id] of ids.entries()) {

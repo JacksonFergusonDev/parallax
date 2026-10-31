@@ -20,6 +20,7 @@ use rusqlite::{Connection, OpenFlags, Transaction, TransactionBehavior};
 use crate::KoboDevice;
 use crate::db::{MAX_TESTED_DB_VERSION, MIN_SUPPORTED_DB_VERSION};
 use crate::error::{Error, Result};
+use crate::state::{BookChange, LogEntry, Record};
 
 /// Backups kept per device; older ones are deleted.
 pub const BACKUPS_KEPT: usize = 10;
@@ -30,6 +31,8 @@ pub struct DeviceWriter<'a> {
     device: &'a KoboDevice,
     conn: Option<Connection>,
     backup: PathBuf,
+    /// Written to `/.erc/` when the session ends.
+    record: Record,
 }
 
 impl KoboDevice {
@@ -69,6 +72,7 @@ impl KoboDevice {
             device: self,
             conn: Some(conn),
             backup,
+            record: Record::default(),
         })
     }
 }
@@ -81,6 +85,16 @@ impl<'a> DeviceWriter<'a> {
     /// Where this session's pre-change backup is.
     pub fn backup_path(&self) -> &Path {
         &self.backup
+    }
+
+    /// Adds an operation to this session's entry in `/.erc/log.jsonl`.
+    pub fn log(&mut self, entry: LogEntry) {
+        self.record.entries.push(entry);
+    }
+
+    /// Notes a book file ERC wrote or removed, for `/.erc/books.json`.
+    pub fn track(&mut self, change: BookChange) {
+        self.record.books.push(change);
     }
 
     /// Runs `f` in an immediate transaction, committing only if it succeeds.
@@ -102,6 +116,23 @@ impl<'a> DeviceWriter<'a> {
         let Some(conn) = self.conn.take() else {
             return Ok(());
         };
+        let result = self.verify_and_close(conn);
+        let mut record = std::mem::take(&mut self.record);
+        let backup = self
+            .backup
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned());
+        for entry in &mut record.entries {
+            entry.backup.clone_from(&backup);
+            if let Err(e) = &result {
+                entry.error = Some(e.to_string());
+            }
+        }
+        self.device.record(record);
+        result
+    }
+
+    fn verify_and_close(&self, conn: Connection) -> Result<()> {
         let check: String = conn.query_row("PRAGMA integrity_check", [], |r| r.get(0))?;
         if check != "ok" {
             drop(conn);

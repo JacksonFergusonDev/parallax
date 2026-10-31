@@ -10,7 +10,7 @@ use erc_core::rules::PlannedCollection;
 use erc_core::send::{SendOutcome, send_library_books, update_on_device};
 use erc_covers::{Candidate, CoverQuery};
 use erc_device::{Collection, DeviceBook, DeviceInfo};
-use erc_device_kobo::{KoboDevice, MACOS_VOLUMES, tidy_apple_double};
+use erc_device_kobo::{BookCheck, ErcState, KoboDevice, MACOS_VOLUMES, tidy_apple_double};
 use erc_epub::MetadataEdit;
 use erc_library::{Book, ImportOutcome, Library, Rule};
 use serde::Serialize;
@@ -180,6 +180,44 @@ async fn tidy_device(mount: PathBuf) -> CmdResult<usize> {
         KoboDevice::open(&mount)
             .map(|k| tidy_apple_double(&k))
             .map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Log entries the app shows; the full log stays on the device.
+const HISTORY_SHOWN: usize = 200;
+
+#[derive(Serialize)]
+struct DeviceHistory {
+    #[serde(flatten)]
+    state: ErcState,
+    /// ContentIDs of ERC-written books changed by something else since.
+    changed: Vec<String>,
+    /// ContentIDs of ERC-written books no longer on the device.
+    missing: Vec<String>,
+}
+
+/// What ERC's `/.erc/` records say about the device.
+#[tauri::command]
+async fn device_history(mount: PathBuf) -> CmdResult<DeviceHistory> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        let mut state = kobo.erc_state();
+        let checks = state.check(kobo.mount());
+        let ids = |want: BookCheck| {
+            checks
+                .iter()
+                .filter(|(_, c)| *c == want)
+                .map(|(id, _)| id.clone())
+                .collect()
+        };
+        state.log.truncate(HISTORY_SHOWN);
+        Ok(DeviceHistory {
+            changed: ids(BookCheck::Changed),
+            missing: ids(BookCheck::Missing),
+            state,
+        })
     })
     .await
     .map_err(err)?
@@ -419,6 +457,7 @@ pub fn run() {
             remove_from_device,
             update_books,
             tidy_device,
+            device_history,
             send_books,
             list_collections,
             change_collections,

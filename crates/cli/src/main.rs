@@ -14,7 +14,8 @@ use erc_core::rules;
 use erc_core::send::{Progress, SendOutcome, send_books, send_library_books, update_on_device};
 use erc_device::{DeviceBook, ReadStatus};
 use erc_device_kobo::{
-    KoboDb, KoboDevice, MACOS_VOLUMES, ONBOARD_PREFIX, restore, tidy_apple_double,
+    BookCheck, KoboDb, KoboDevice, LogEntry, MACOS_VOLUMES, ONBOARD_PREFIX, Record, restore,
+    tidy_apple_double,
 };
 use erc_epub::MetadataEdit;
 use erc_library::{ImportOutcome, Library, Rule, RuleKind};
@@ -271,6 +272,14 @@ enum KoboCommand {
         #[arg(long)]
         mount: Option<PathBuf>,
     },
+    /// What ERC has done to the device, from its `/.erc/` records.
+    History {
+        #[arg(long)]
+        mount: Option<PathBuf>,
+        /// How many log entries to show, newest first.
+        #[arg(short = 'n', long, default_value_t = 20)]
+        limit: usize,
+    },
     /// List database backups for the connected device.
     Backups {
         #[arg(long)]
@@ -448,6 +457,54 @@ fn main() -> Result<()> {
             let kobo = find_kobo(mount.as_deref())?;
             println!("removed {} macOS ._ files", tidy_apple_double(&kobo));
         }
+        Command::Kobo(KoboCommand::History { mount, limit }) => {
+            let kobo = find_kobo(mount.as_deref())?;
+            let mut state = kobo.erc_state();
+            if cli.json {
+                state.log.truncate(limit);
+                return print_json(&state);
+            }
+            match &state.device {
+                Some(d) => {
+                    println!("ERC device id   {}", d.device_id);
+                    println!(
+                        "first write     {} (ERC {}, firmware {})",
+                        d.first_write.at, d.first_write.erc_version, d.first_write.firmware
+                    );
+                    println!(
+                        "latest write    {} (ERC {}, firmware {})",
+                        d.last_write.at, d.last_write.erc_version, d.last_write.firmware
+                    );
+                }
+                None => println!("ERC has not changed this Kobo yet."),
+            }
+            let checks = state.check(kobo.mount());
+            let count = |c: BookCheck| checks.iter().filter(|(_, k)| *k == c).count();
+            println!(
+                "books           {} written by ERC ({} changed since, {} gone)",
+                checks.len(),
+                count(BookCheck::Changed),
+                count(BookCheck::Missing)
+            );
+            for problem in &state.problems {
+                println!("problem         {problem}");
+            }
+            for e in state.log.iter().take(limit) {
+                let what = e.detail.clone().unwrap_or_else(|| {
+                    e.content_ids
+                        .iter()
+                        .map(|id| id.trim_start_matches(ONBOARD_PREFIX))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                });
+                let failed = e
+                    .error
+                    .as_deref()
+                    .map(|err| format!("  FAILED: {err}"))
+                    .unwrap_or_default();
+                println!("{}  {:<10} {what}{failed}", e.at, e.op);
+            }
+        }
         Command::Kobo(KoboCommand::Backups { mount }) => {
             for b in device_backups(&find_kobo(mount.as_deref())?)? {
                 println!("{}", b.display());
@@ -462,6 +519,18 @@ fn main() -> Result<()> {
                     .context("no backups for this device")?,
             };
             restore(&kobo.db_path(), &backup)?;
+            kobo.record(Record {
+                entries: vec![
+                    LogEntry::new("restore").detail(
+                        backup
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .into_owned(),
+                    ),
+                ],
+                books: Vec::new(),
+            });
             println!("restored {}", backup.display());
         }
         Command::Kobo(KoboCommand::Collections(source)) => {

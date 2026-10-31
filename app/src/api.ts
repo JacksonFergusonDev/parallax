@@ -163,6 +163,40 @@ export interface PlannedCollection {
   titles: string[];
 }
 
+export interface Stamp {
+  at: string;
+  erc_version: string;
+  firmware: string;
+  db_version: number | null;
+}
+
+export interface LogEntry {
+  at: string;
+  erc_version: string;
+  op: string;
+  content_ids?: string[];
+  detail?: string;
+  backup?: string;
+  /** Present when the operation failed. */
+  error?: string;
+}
+
+/** ERC's own records on the device, from `/.erc/`. */
+export interface DeviceHistory {
+  device: {
+    device_id: string;
+    serial: string;
+    first_write: Stamp;
+    last_write: Stamp;
+  } | null;
+  books: { content_id: string; path: string }[];
+  /** Newest first. */
+  log: LogEntry[];
+  problems: string[];
+  changed: string[];
+  missing: string[];
+}
+
 export interface CoverCandidate {
   source: string;
   url: string;
@@ -187,6 +221,8 @@ export const updateBooks = (mount: string, ids: number[]) =>
   invoke<SendOutcome[]>("update_books", { mount, ids });
 export const tidyDevice = (mount: string) =>
   invoke<number>("tidy_device", { mount });
+export const deviceHistory = (mount: string) =>
+  invoke<DeviceHistory>("device_history", { mount });
 export const sendBooks = (
   mount: string,
   ids: number[],

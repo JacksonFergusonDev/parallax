@@ -8,6 +8,7 @@ use std::process::Command;
 use crate::KoboDevice;
 use crate::db::ONBOARD_PREFIX;
 use crate::error::{Error, Result};
+use crate::state::{BookChange, LogEntry, Record};
 
 /// Folder sideloaded books go into, matching calibre's KoboTouch layout.
 pub const BOOKS_DIR: &str = "KEpub";
@@ -27,10 +28,28 @@ impl KoboDevice {
     /// book where Nickel would import it, then removes the `._*` AppleDouble
     /// files macOS creates on FAT32 for every new file and folder.
     pub fn send_file(&self, src: &Path, dest: &str) -> Result<SentBook> {
+        self.send_file_for(src, dest, None)
+    }
+
+    /// [`KoboDevice::send_file`] for a desktop library book, so `/.erc/`
+    /// records which library book the copy came from.
+    pub fn send_file_for(
+        &self,
+        src: &Path,
+        dest: &str,
+        library_book: Option<i64>,
+    ) -> Result<SentBook> {
         if self.mount().join(dest).exists() {
             return Err(Error::AlreadyOnDevice(dest.to_owned()));
         }
-        self.write_file(src, dest)
+        let sent = self.write_file(src, dest)?;
+        self.record(Record {
+            entries: vec![LogEntry::new("send").ids([sent.content_id.clone()])],
+            books: BookChange::written(dest, src, library_book)
+                .into_iter()
+                .collect(),
+        });
+        Ok(sent)
     }
 
     /// Like [`KoboDevice::send_file`] but overwrites an existing book at

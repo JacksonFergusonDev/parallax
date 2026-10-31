@@ -1070,3 +1070,54 @@ select:focus-visible {
   padding: 5px 4px;
   font-size: 13px;
 }
+
+/* About this Kobo */
+
+.modal.about {
+  width: min(640px, calc(100vw - 48px));
+  gap: 12px;
+}
+.modal.about .modal-head {
+  margin-bottom: 0;
+}
+.modal.about .modal-head p {
+  margin: 4px 0 0;
+}
+.about-facts {
+  margin: 0;
+}
+.about-heading {
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+.activity {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  max-height: 280px;
+  border-top: 1px solid var(--border);
+}
+.activity li {
+  display: grid;
+  grid-template-columns: 150px 92px minmax(0, 1fr);
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.activity-op {
+  font-weight: 500;
+}
+.activity-what {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.activity-error {
+  display: block;
+  color: var(--danger);
+}
+.activity li.failed .activity-op {
+  color: var(--danger);
+}

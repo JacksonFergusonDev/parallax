@@ -23,6 +23,7 @@ import {
   type DeviceKey,
 } from "../device";
 import { applySort } from "../sort";
+import { AboutKobo } from "./AboutKobo";
 import { CollectionMenu } from "./CollectionMenu";
 import { DeviceCard } from "./DeviceCard";
 import { FolderImport } from "./FolderImport";
@@ -51,6 +52,7 @@ type Dialog =
   | { kind: "rename"; name: string }
   | { kind: "folders" }
   | { kind: "rules" }
+  | { kind: "about" }
   | null;
 
 export function DeviceView({
@@ -289,6 +291,12 @@ export function DeviceView({
             >
               Remove macOS clutter
             </button>
+            <button
+              className="link"
+              onClick={() => setDialog({ kind: "about" })}
+            >
+              About this Kobo…
+            </button>
           </div>
         </nav>
 
@@ -495,6 +503,13 @@ export function DeviceView({
             load();
             onChanged();
           }}
+        />
+      )}
+      {dialog?.kind === "about" && (
+        <AboutKobo
+          device={device}
+          titles={new Map((books ?? []).map((b) => [b.id, b.title]))}
+          onClose={() => setDialog(null)}
         />
       )}
       {dialog?.kind === "folders" && (

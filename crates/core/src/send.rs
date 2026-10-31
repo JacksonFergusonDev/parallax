@@ -103,7 +103,9 @@ pub fn send_books(
         };
         let dest = device_path_for(source);
         let is_kepub = source.to_string_lossy().to_lowercase().ends_with(KEPUB_EXT);
-        outcome(deliver(device, converter, source, !is_kepub, &dest, stage))
+        outcome(deliver(
+            device, converter, source, !is_kepub, &dest, None, stage,
+        ))
     })
 }
 
@@ -146,7 +148,7 @@ pub fn send_library_books(
             let workdir = tempfile::tempdir().map_err(|e| e.to_string())?;
             let exported = workdir.path().join("book.epub");
             library.export(id, &exported).map_err(|e| e.to_string())?;
-            let sent = deliver(device, converter, &exported, true, &dest, stage)?;
+            let sent = deliver(device, converter, &exported, true, &dest, Some(id), stage)?;
             library
                 .record_device_copy(id, &serial, &sent.device_path, &sent.content_id)
                 .map_err(|e| e.to_string())?;
@@ -266,6 +268,7 @@ fn deliver(
     epub: &Path,
     convert: bool,
     dest: &str,
+    library_book: Option<i64>,
     stage: &mut dyn FnMut(Stage),
 ) -> Result<SentInfo, String> {
     if device.mount().join(dest).exists() {
@@ -281,7 +284,9 @@ fn deliver(
         epub.to_path_buf()
     };
     stage(|index, total, file| Progress::Copying { index, total, file });
-    let sent = device.send_file(&upload, dest).map_err(|e| e.to_string())?;
+    let sent = device
+        .send_file_for(&upload, dest, library_book)
+        .map_err(|e| e.to_string())?;
     Ok(SentInfo {
         device_path: sent.path,
         content_id: sent.content_id,

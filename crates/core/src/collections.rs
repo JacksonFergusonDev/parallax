@@ -7,7 +7,7 @@ use std::path::Path;
 
 use erc_device::DeviceBook;
 use erc_device_kobo::{
-    BOOKS_DIR, KoboDevice, add_to_collection, create_collection, delete_collection,
+    BOOKS_DIR, KoboDevice, LogEntry, add_to_collection, create_collection, delete_collection,
     remove_from_collection, rename_collection, set_series,
 };
 use erc_library::Library;
@@ -60,8 +60,30 @@ pub fn apply(
         }
         Ok(())
     });
+    if result.is_ok() {
+        for change in changes {
+            writer.log(change.log_entry());
+        }
+    }
     writer.close()?;
     result
+}
+
+impl CollectionChange {
+    fn log_entry(&self) -> LogEntry {
+        let entry = LogEntry::new("collection");
+        match self {
+            Self::Create { name } => entry.detail(format!("create “{name}”")),
+            Self::Rename { from, to } => entry.detail(format!("rename “{from}” to “{to}”")),
+            Self::Delete { name } => entry.detail(format!("delete “{name}”")),
+            Self::Add { name, content_ids } => entry
+                .ids(content_ids.clone())
+                .detail(format!("add to “{name}”")),
+            Self::Remove { name, content_ids } => entry
+                .ids(content_ids.clone())
+                .detail(format!("remove from “{name}”")),
+        }
+    }
 }
 
 /// Books grouped by the folder they sit in on the device
@@ -173,6 +195,13 @@ pub fn reconcile_series(
         }
         Ok(n)
     });
+    if updated.is_ok() {
+        writer.log(
+            LogEntry::new("series")
+                .ids(pending.iter().map(|p| p.content_id.clone()))
+                .detail("applied series to imported books"),
+        );
+    }
     writer.close()?;
     updated
 }

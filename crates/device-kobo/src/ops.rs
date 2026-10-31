@@ -10,6 +10,7 @@ use rusqlite::{OptionalExtension, params};
 use crate::KoboDevice;
 use crate::db::ONBOARD_PREFIX;
 use crate::error::{Error, Result};
+use crate::state::{BookChange, LogEntry, Record};
 use crate::writer::DeviceWriter;
 
 /// Metadata Nickel shows for a book, written straight into `content` when a
@@ -136,6 +137,10 @@ pub fn remove_book(writer: &mut DeviceWriter, content_id: &str) -> Result<()> {
     crate::transfer::remove_apple_double(&path);
     device.clear_cover_cache(&image_id.unwrap_or_else(|| image_id_for(content_id)));
     remove_empty_parents(device.mount(), &path);
+    writer.track(BookChange::Removed {
+        content_id: content_id.to_owned(),
+    });
+    writer.log(LogEntry::new("remove").ids([content_id]));
     Ok(())
 }
 
@@ -164,6 +169,14 @@ pub fn replace_book(
     writer
         .device()
         .clear_cover_cache(&image_id.unwrap_or_else(|| image_id_for(&content_id)));
+    if let Some(change) = BookChange::written(device_path, src, None) {
+        writer.track(change);
+    }
+    writer.log(
+        LogEntry::new("replace")
+            .ids([content_id])
+            .detail(&meta.title),
+    );
     Ok(())
 }
 
@@ -229,6 +242,12 @@ pub fn tidy_apple_double(device: &KoboDevice) -> usize {
     }
     let mut removed = 0;
     walk(device.mount(), &mut removed);
+    if removed > 0 {
+        device.record(Record {
+            entries: vec![LogEntry::new("tidy").detail(format!("removed {removed} ._ files"))],
+            books: Vec::new(),
+        });
+    }
     removed
 }
 

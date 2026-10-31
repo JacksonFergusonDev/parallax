@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use erc_device_kobo::{
-    BACKUPS_KEPT, DisplayMetadata, Error, KoboDevice, image_id_for, qhash, remove_book,
-    replace_book, restore, tidy_apple_double,
+    BACKUPS_KEPT, BookCheck, DisplayMetadata, ERC_VERSION, Error, KoboDevice, LOG_KEPT, LogEntry,
+    Record, image_id_for, qhash, remove_book, replace_book, restore, tidy_apple_double,
 };
 use rusqlite::Connection;
 
@@ -451,4 +451,167 @@ fn writes_cleanly_on_fat32() {
     run("hdiutil", &["detach", mnt_s]);
     let leftovers = result.unwrap();
     assert!(leftovers.is_empty(), "left behind: {leftovers:?}");
+}
+
+fn meta(title: &str) -> DisplayMetadata {
+    DisplayMetadata {
+        title: title.into(),
+        author: None,
+        series: None,
+        series_number: None,
+    }
+}
+
+#[test]
+fn records_what_erc_did_in_dot_erc() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, _db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    assert!(kobo.erc_state().device.is_none(), "nothing recorded yet");
+
+    let src = dir.path().join("new.kepub.epub");
+    fs::write(&src, b"new book bytes").unwrap();
+    let new = "KEpub/New - Author.kepub.epub";
+    kobo.send_file_for(&src, new, Some(42)).unwrap();
+
+    // Replacing keeps the library link and counts the write.
+    fs::write(&src, b"edited book bytes!").unwrap();
+    let mut writer = kobo.open_writer(&backups).unwrap();
+    let backup_name = writer
+        .backup_path()
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    replace_book(&mut writer, &src, new, &meta("New")).unwrap();
+    remove_book(&mut writer, &cid(BOOK)).unwrap();
+    writer.close().unwrap();
+
+    let state = kobo.erc_state();
+    assert!(state.problems.is_empty(), "{:?}", state.problems);
+    let device = state.device.unwrap();
+    assert_eq!(device.serial, "N000000000001");
+    assert_eq!(device.first_write.erc_version, ERC_VERSION);
+    assert_eq!(device.last_write.db_version, Some(174));
+    assert_eq!(device.last_write.firmware, "4.38.23697");
+
+    assert_eq!(state.books.len(), 1, "the removed book is forgotten");
+    let book = &state.books[0];
+    assert_eq!(book.content_id, cid(new));
+    assert_eq!(book.library_book, Some(42));
+    assert_eq!(book.writes, 2);
+    assert_eq!(book.size, 18);
+    assert_eq!(book.sha256.len(), 64);
+
+    let ops: Vec<&str> = state.log.iter().map(|e| e.op.as_str()).collect();
+    assert_eq!(ops, ["remove", "replace", "send"], "newest first");
+    assert_eq!(state.log[0].backup.as_deref(), Some(backup_name.as_str()));
+    assert!(state.log.iter().all(|e| e.error.is_none()));
+
+    // Only dot files under /.erc, and no temporary files left.
+    let mut names: Vec<String> = fs::read_dir(kobo.mount().join(".erc"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    assert_eq!(names, ["books.json", "device.json", "log.jsonl"]);
+
+    // A second session keeps the device id and first-write stamp.
+    kobo.record(Record {
+        entries: vec![LogEntry::new("tidy")],
+        books: Vec::new(),
+    });
+    let again = kobo.erc_state().device.unwrap();
+    assert_eq!(again.device_id, device.device_id);
+    assert_eq!(again.first_write, device.first_write);
+}
+
+#[test]
+fn spots_books_changed_or_removed_outside_erc() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, _db) = fake_kobo(dir.path());
+    let src = dir.path().join("a.kepub.epub");
+    fs::write(&src, b"abc").unwrap();
+    kobo.send_file(&src, "KEpub/A.kepub.epub").unwrap();
+    kobo.send_file(&src, "KEpub/B.kepub.epub").unwrap();
+    kobo.send_file(&src, "KEpub/C.kepub.epub").unwrap();
+    fs::write(kobo.mount().join("KEpub/B.kepub.epub"), b"changed").unwrap();
+    fs::remove_file(kobo.mount().join("KEpub/C.kepub.epub")).unwrap();
+
+    let checks = kobo.erc_state().check(kobo.mount());
+    let by_name: Vec<(&str, BookCheck)> = checks
+        .iter()
+        .map(|(id, c)| (id.rsplit('/').next().unwrap(), *c))
+        .collect();
+    assert_eq!(
+        by_name,
+        [
+            ("A.kepub.epub", BookCheck::Unchanged),
+            ("B.kepub.epub", BookCheck::Changed),
+            ("C.kepub.epub", BookCheck::Missing),
+        ]
+    );
+}
+
+#[test]
+fn unreadable_records_never_block_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, _db) = fake_kobo(dir.path());
+    let erc = kobo.mount().join(".erc");
+    fs::create_dir_all(&erc).unwrap();
+    fs::write(erc.join("device.json"), b"{not json").unwrap();
+    fs::write(erc.join("books.json"), b"[]").unwrap();
+    fs::write(erc.join("log.jsonl"), b"garbage\n").unwrap();
+
+    let state = kobo.erc_state();
+    assert_eq!(state.problems.len(), 3, "{:?}", state.problems);
+
+    let src = dir.path().join("a.kepub.epub");
+    fs::write(&src, b"abc").unwrap();
+    kobo.send_file(&src, "KEpub/A.kepub.epub").unwrap();
+
+    let state = kobo.erc_state();
+    assert!(state.device.is_some());
+    assert_eq!(state.books.len(), 1);
+    assert_eq!(state.log.len(), 1, "the bad log line is dropped on rewrite");
+    // The unreadable files are kept beside the new ones for debugging.
+    let aside = fs::read_dir(&erc)
+        .unwrap()
+        .filter(|e| {
+            e.as_ref()
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .contains(".unreadable-")
+        })
+        .count();
+    assert_eq!(aside, 2);
+}
+
+#[test]
+fn log_is_capped() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, _db) = fake_kobo(dir.path());
+    let entries = (0..LOG_KEPT + 5)
+        .map(|i| LogEntry::new("test").detail(i.to_string()))
+        .collect();
+    kobo.record(Record {
+        entries,
+        books: Vec::new(),
+    });
+    let log = kobo.erc_state().log;
+    assert_eq!(log.len(), LOG_KEPT);
+    assert_eq!(log[0].detail.as_deref(), Some(&*(LOG_KEPT + 4).to_string()));
+}
+
+#[test]
+fn refused_changes_are_not_logged() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, _db) = fake_kobo(dir.path());
+    // remove_book refuses store books before touching anything, so the
+    // session has nothing to record.
+    let mut writer = kobo.open_writer(&dir.path().join("backups")).unwrap();
+    assert!(remove_book(&mut writer, "store-book-id").is_err());
+    writer.close().unwrap();
+    assert!(kobo.erc_state().log.is_empty());
 }
