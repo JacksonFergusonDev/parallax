@@ -991,12 +991,6 @@ button.link.danger {
   padding: 5px 8px;
 }
 
-/* Large lists: skip layout and paint for off-screen rows. */
-.list-row:not(.header) {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 62px;
-}
-
 /* Visible keyboard focus everywhere. */
 button:focus-visible,
 select:focus-visible {

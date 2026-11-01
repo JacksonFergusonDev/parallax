@@ -4,6 +4,7 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 ## Completed
 
+- Fast-scroll list fix: user confirmed the cover-grid fix and reported the same flicker in list view. Removed the remaining row-level `content-visibility: auto` and estimated intrinsic height from Library/On Kobo lists; native lazy thumbnails and caching remain. Desktop list-scroll confirmation remains manual.
 - Fast-scroll grid fix: removed card-level `content-visibility: auto` and estimated intrinsic sizes from Library/On Kobo grids so WKWebView does not defer whole card subtrees during scrolling. Native lazy image loading and cover caching remain. `just check` passes; WebKit mock-grid smoke check (186 cards, nine rapid scroll jumps, 162 visible-card samples) found no skipped card styles or missing title geometry. Desktop fast-scroll confirmation with real covers remains manual.
 - Planning: research + Kobo MVP plan; decisions recorded (PLAN §6).
 - Read-only inspection of the reference Kobo (Libra 2, fw 4.38, DbVersion 174).

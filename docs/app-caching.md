@@ -15,6 +15,6 @@ Invalidating a pending read removes its entry; completing it later cannot put ol
 
 Local library cover URLs include the book's modification timestamp. Kobo cover files use content hashes in the host disk cache, so changed image bytes get a new URL. Online covers retain their provider URLs and use the webview's HTTP cache; the app separately caches dimensions so reopening the cover picker does not download every full-size image just to measure it again.
 
-Cover grids keep every card in layout and use native lazy image loading. Do not apply `content-visibility: auto` or estimated intrinsic sizes to cards: deferring their entire subtree can expose blank rows during fast scrolling in WKWebView, and estimated heights do not match the responsive cover aspect ratio. List rows retain their separate content-visibility optimization.
+Cover grids and book lists keep every card and row in layout and use native lazy image loading. Do not apply `content-visibility: auto` or estimated intrinsic sizes to cards or list rows: deferring their entire subtree can expose blank rows during fast scrolling in WKWebView, and estimated heights do not match the responsive cover aspect ratio.
 
 Regression coverage includes request deduplication, expiry, retries, eviction, mutation invalidation, device isolation and reconnects, invalidation during an outstanding read, image measurements, repeated tab switching without reads or image-node replacement, transfer refreshes and out-of-order device responses.
