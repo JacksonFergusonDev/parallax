@@ -223,6 +223,8 @@ input:disabled {
 }
 
 .card {
+  /* Keep cards laid out: skipped subtrees can flash blank during fast scrolling
+     in WKWebView. Images still load lazily without hiding titles or whole rows. */
   all: unset;
   display: flex;
   flex-direction: column;
@@ -989,12 +991,7 @@ button.link.danger {
   padding: 5px 8px;
 }
 
-/* Large libraries: skip layout and paint for off-screen cards and rows. */
-.card {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 132px auto 260px;
-}
-
+/* Large lists: skip layout and paint for off-screen rows. */
 .list-row:not(.header) {
   content-visibility: auto;
   contain-intrinsic-size: auto 62px;
