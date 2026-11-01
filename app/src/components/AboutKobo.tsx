@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { save } from "@tauri-apps/plugin-dialog";
 import {
   deviceHistory,
+  saveDeviceReport,
   type DeviceHistory,
   type DeviceInfo,
   type LogEntry,
@@ -63,6 +65,25 @@ export function AboutKobo({ device, titles, onClose }: Props) {
     };
   }, [device.mount]);
 
+  const [report, setReport] = useState<{
+    error: boolean;
+    text: string;
+  } | null>(null);
+  const saveReport = async () => {
+    const model = device.model.replace(/[^\w ]+/g, "").trim();
+    const path = await save({
+      defaultPath: `${model} device report.json`,
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (!path) return;
+    try {
+      await saveDeviceReport(device.mount, path);
+      setReport({ error: false, text: `Saved to ${path}` });
+    } catch (e) {
+      setReport({ error: true, text: String(e) });
+    }
+  };
+
   const d = history?.device;
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -83,6 +104,12 @@ export function AboutKobo({ device, titles, onClose }: Props) {
           <dd>{device.firmware}</dd>
           <dt>Serial</dt>
           <dd>{device.serial}</dd>
+          <dt>Changes</dt>
+          <dd className="wrap">
+            {device.read_only
+              ? `Read-only: ${device.read_only}`
+              : "Allowed, with a backup first"}
+          </dd>
           {d && (
             <>
               <dt>First change</dt>
@@ -149,7 +176,22 @@ export function AboutKobo({ device, titles, onClose }: Props) {
             </ul>
           </>
         )}
+        <h3 className="about-heading">Device report</h3>
+        <p className="muted">
+          A file describing this Kobo's model, firmware and database layout, for
+          adding support for Kobos E-Reader Companion doesn't know yet. It has
+          no book titles, serial number, reading data or highlights, and saving
+          it only reads the Kobo.
+        </p>
+        {report && (
+          <p className={`notice notice-${report.error ? "error" : "info"}`}>
+            {report.text}
+          </p>
+        )}
         <div className="form-actions">
+          <button className="secondary" onClick={saveReport}>
+            Save device report…
+          </button>
           <button className="primary" onClick={onClose} autoFocus>
             Done
           </button>

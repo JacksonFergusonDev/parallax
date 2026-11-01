@@ -107,6 +107,7 @@ Batched so you can do several in one sitting when Claude asks:
 - M14: On Kobo → "Check this Kobo…" (expect few or no problems; leftover covers are likely). Delete leftover covers and eject: covers still show for every book. Mark a book you've finished as Finished, and one as "Unread (start over)", eject: the Kobo shows both. Reconnect: the Library tab's Progress column matches the Kobo.
 - M15: no device needed. Library → "Check library…" lists low-resolution covers and broken links; click one to open the book. In the edit panel, add a translator to a book, send it, and check in calibre or Apple Books that the translator is listed.
 - M16: highlight a passage and add a note in a sideloaded book on the Kobo, then reconnect. In the Library tab, select that book: the edit panel shows "Highlights and notes (2)…" with the chapter named as in the Kobo's contents; export Markdown and open it.
+- Device support: with the Kobo connected, About this Kobo shows "Changes: Allowed, with a backup first"; Save device report… writes a JSON file, and the Kobo shows no change afterwards (no new books, no import screen).
 
 ## Spike S2 — collections and Kobo cloud sync (with M6)
 

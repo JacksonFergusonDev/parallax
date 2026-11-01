@@ -16,12 +16,23 @@ fn fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
+/// A Kobo database with no books; ERC only writes to a Kobo it can read.
+fn empty_database(mount: &Path) {
+    rusqlite::Connection::open(mount.join(".kobo/KoboReader.sqlite"))
+        .unwrap()
+        .execute_batch(include_str!(
+            "../../../tests/fixtures/kobo/schema-db174.sql"
+        ))
+        .unwrap();
+}
+
 #[test]
 fn converts_and_sends_each_book_independently() {
     let dir = tempfile::tempdir().unwrap();
     let mount = dir.path().join("KOBOeReader");
     fs::create_dir_all(mount.join(".kobo")).unwrap();
     fs::write(mount.join(".kobo/version"), VERSION).unwrap();
+    empty_database(&mount);
     let kobo = KoboDevice::open(&mount).unwrap();
 
     let broken = dir.path().join("Broken.epub");
@@ -67,6 +78,7 @@ fn sends_library_books_with_edited_metadata() {
     let mount = dir.path().join("KOBOeReader");
     fs::create_dir_all(mount.join(".kobo")).unwrap();
     fs::write(mount.join(".kobo/version"), VERSION).unwrap();
+    empty_database(&mount);
     let kobo = KoboDevice::open(&mount).unwrap();
     let mut library = Library::open(dir.path().join("lib")).unwrap();
     let ImportOutcome::Added { book, .. } = library.import(&fixture("minimal.epub")).unwrap()

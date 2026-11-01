@@ -7,7 +7,9 @@ mod db;
 mod error;
 mod maintenance;
 mod ops;
+mod report;
 mod state;
+mod support;
 mod transfer;
 mod version;
 mod writer;
@@ -34,10 +36,12 @@ pub use maintenance::{
 pub use ops::{
     DisplayMetadata, image_id_for, qhash, remove_book, replace_book, set_series, tidy_apple_double,
 };
+pub use report::{CoverFiles, DeviceReport, REPORT_FORMAT};
 pub use state::{
     BookChange, BookCheck, DeviceRecord, ERC_VERSION, ErcState, LOG_KEPT, LogEntry, ManagedBook,
     Record, STATE_DIR, Stamp,
 };
+pub use support::{MAX_WRITE_FIRMWARE_MAJOR, Support};
 pub use transfer::{BOOKS_DIR, SentBook, device_file_name};
 pub use version::{FirmwareVersion, VersionInfo};
 pub use writer::{BACKUPS_KEPT, DeviceWriter, restore};
@@ -99,7 +103,10 @@ impl KoboDevice {
         KoboDb::open_read_only(&self.db_path())
     }
 
+    /// Identity and capabilities. Reads the database to decide what this
+    /// Kobo supports ([`KoboDevice::support`]).
     pub fn info(&self) -> DeviceInfo {
+        let support = self.support();
         DeviceInfo {
             kind: DeviceKind::Kobo,
             model: self.version.model_name().to_owned(),
@@ -108,10 +115,11 @@ impl KoboDevice {
             mount: self.mount.clone(),
             capabilities: Capabilities {
                 native_collections: true,
-                series: true,
+                series: support.series,
                 reading_progress: true,
-                reading_time: true,
+                reading_time: support.reading_time,
             },
+            read_only: support.read_only,
         }
     }
 }

@@ -39,6 +39,7 @@ impl KoboDevice {
         dest: &str,
         library_book: Option<i64>,
     ) -> Result<SentBook> {
+        self.check_writable()?;
         if self.mount().join(dest).exists() {
             return Err(Error::AlreadyOnDevice(dest.to_owned()));
         }
@@ -55,7 +56,9 @@ impl KoboDevice {
     /// Like [`KoboDevice::send_file`] but overwrites an existing book at
     /// `dest` in one rename, so the path (and Nickel's `ContentID`, which
     /// carries reading progress) stays the same.
-    pub fn replace_file(&self, src: &Path, dest: &str) -> Result<SentBook> {
+    /// Only called inside a [`crate::DeviceWriter`] session, which has
+    /// already checked the Kobo may be changed.
+    pub(crate) fn replace_file(&self, src: &Path, dest: &str) -> Result<SentBook> {
         let target = self.mount().join(dest);
         if !target.is_file() {
             return Err(Error::Io {

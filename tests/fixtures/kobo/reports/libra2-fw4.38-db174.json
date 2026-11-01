@@ -1,0 +1,182 @@
+{
+  "format": 1,
+  "erc_version": "0.1.0",
+  "created": "2026-11-01T23:21:11Z",
+  "model_id": "00000000-0000-0000-0000-000000000388",
+  "model_name": "Kobo Libra 2",
+  "firmware": "4.38.23697",
+  "db_version": 174,
+  "read_only": null,
+  "schema": [
+    "CREATE TABLE AbTest( \n\tId TEXT, \n\tExpiration TEXT, \n\tName TEXT, \n\tGroupId INT, \n\tVariables TEXT, \n\tStatus INT, \n\tDescription TEXT, \n\tChecksum TEXT, TestKey TEXT, \n\tPRIMARY KEY(Id))",
+    "CREATE TABLE Achievement( \n\tAcknowledged BOOL,\n\tCompleteDescription TEXT,\n\tDateCreated TEXT,\n\tDifficulty INTEGER,\n\tEventLogDescription TEXT,\n\tHidden BOOL,\n\tId TEXT NOT NULL,\n\tImageId TEXT NOT NULL,\n\tIncompleteDescription TEXT, \n\tName TEXT NOT NULL,\n\tOrdinal INTEGER,\n\tPercentComplete INTEGER,\n\tPresented BOOL,\n\tSynchronized BOOL,\n\tUserId TEXT, Checksum TEXT, FacebookImageId TEXT,\n\tPRIMARY KEY (Id) )",
+    "CREATE TABLE Activity (\n\tId\t\tTEXT,\n\tEnabled\tBIT default TRUE,\n\tType\tTEXT,\n\tAction\tINTEGER,\n\tDate\tTEXT,\n\tData\tBLOB,\n\tPRIMARY KEY(Id, Type)\n)",
+    "CREATE TABLE AnalyticsEvents( \n\tId TEXT, \n\tType TEXT, \n\tTimestamp TEXT, \n\tAttributes TEXT, \n\tMetrics TEXT, \n\tTestGroups TEXT, ClientApplicationVersion TEXT, Mandatory BIT DEFAULT FALSE, \n\tPRIMARY KEY(Id))",
+    "CREATE TABLE Authors( \n\tUserId  TEXT, \n\tAvatar TEXT, \n\tName TEXT, \n\tFacebookId TEXT, \n\tPRIMARY KEY(UserID))",
+    "CREATE TABLE BookAuthors( \n\tAuthorId  TEXT, \n\tBookId TEXT, \n\tPRIMARY KEY(AuthorId, BookId))",
+    "CREATE TABLE Bookmark ( BookmarkID TEXT NOT NULL, VolumeID TEXT NOT NULL, ContentID TEXT NOT NULL, StartContainerPath TEXT NOT NULL, StartContainerChildIndex INTEGER NOT NULL, StartOffset INTEGER NOT NULL, EndContainerPath TEXT NOT NULL, EndContainerChildIndex INTEGER NOT NULL, EndOffset INTEGER NOT NULL, Text TEXT, Annotation TEXT, ExtraAnnotationData BLOB, DateCreated TEXT, ChapterProgress REAL NOT NULL DEFAULT 0, Hidden BOOL NOT NULL DEFAULT 0, Version TEXT, DateModified TEXT, Creator TEXT, UUID TEXT, UserID TEXT, SyncTime TEXT, Published BIT default false, ContextString TEXT, Type TEXT, PRIMARY KEY (BookmarkID) )",
+    "CREATE TABLE DbVersion( version INTEGER NOT NULL, PRIMARY KEY(version))",
+    "CREATE TABLE DropboxItem ( Id TEXT NOT NULL,Json TEXT,PRIMARY KEY (Id) )",
+    "CREATE TABLE Event ( \n\tEventType INTEGER NOT NULL,\n\tFirstOccurrence TEXT,\n\tLastOccurrence TEXT,\n\tEventCount INTEGER DEFAULT 0,\n\tContentID TEXT,\n\tExtraData BLOB, Checksum TEXT,\n\tPRIMARY KEY (EventType, ContentID) )",
+    "CREATE TABLE GDriveItem ( Id TEXT NOT NULL,Json TEXT, Path TEXT,PRIMARY KEY (Id) )",
+    "CREATE TABLE KoboPlusAssetGroup ( Id TEXT NOT NULL,AssetGroup TEXT,Timestamp TEXT,Name TEXT,Url TEXT,Etag TEXT, TimestampTo TEXT, Shown BOOL DEFAULT FALSE,PRIMARY KEY (Id) )",
+    "CREATE TABLE KoboPlusAssets (AssetGroupId TEXT NOT NULL,Key TEXT NOT NULL,Language TEXT NOT NULL,Type TEXT,Value TEXT,FOREIGN KEY (AssetGroupId) REFERENCES KoboPlusAssetGroup(Id),PRIMARY KEY (AssetGroupId, Key, Language) )",
+    "CREATE TABLE OverDriveCards (CardId INTEGER NOT NULL, LibraryKey TEXT NOT NULL, BestLibraryKey TEXT NOT NULL, WebsiteId INTEGER NOT NULL, Name TEXT, LastModified TEXT, PRIMARY KEY(CardId))",
+    "CREATE TABLE OverDriveCheckoutBook (\nid TEXT,\ntitle TEXT,\nlibraryKey TEXT,\ncardId TEXT, isAvailable TEXT, suspensionFlag BIT, placedDate TEXT, expireDate TEXT, estimatedAvailableDate TEXT,\nPRIMARY KEY(id))",
+    "CREATE TABLE OverDriveLibrary (\nSelected BIT NOT NULL DEFAULT false,\nWebsiteId INTEGER NOT NULL,\nLibraryKey TEXT,\nName TEXT,\nPRIMARY KEY(WebsiteId))",
+    "CREATE TABLE Reviews (\nId TEXT NOT NULL,\nHeader TEXT,\nContent TEXT,\nCreationDate TEXT,\nVolumeId TEXT NOT NULL,\nAuthorDisplayName TEXT,\nSentiment TEXT,\nUserId TEXT,\nLikes INTEGER,\nDislikes INTEGER,\nRating INTEGER,\nSyncDate TEXT,\nStatus TEXT,\nPRIMARY KEY(Id))",
+    "CREATE TABLE Rules( \n\tAchievementId\t TEXT, \n\tEventProperty\t TEXT, \n\tEventType\t TEXT, \n\tGoalValue\t TEXT NOT NULL, \n\tId\t\t TEXT NOT NULL, \n\tOperation\t INT  NOT NULL, \n\tParentRuleId\t TEXT, \n\tConjunctionType\tINT, \n\tIsConjunction\t BOOL, Checksum TEXT, \n\tPRIMARY KEY(Id))",
+    "CREATE TABLE Shelf (\n\tCreationDate\tTEXT,\n\tId\t\tTEXT,\n\tInternalName\tTEXT,\n\tLastModified\tTEXT,\n\tName\t\tTEXT,\n\tType\t\tTEXT,\n\t_IsDeleted\tBOOL,\n\t_IsVisible\tBOOL,\n\t_IsSynced\tBOOL, _SyncTime TEXT, LastAccessed TEXT,\n\tPRIMARY KEY(Id)\n)",
+    "CREATE TABLE ShelfContent (\n\tShelfName\tTEXT,\n\tContentId\tTEXT,\n\tDateModified\tTEXT,\n\t_IsDeleted\tBOOL,\n\t_IsSynced\tBOOL,\n\tPRIMARY KEY(ShelfName, ContentId)\n)",
+    "CREATE TABLE SubscriptionProducts ( CrossRevisionId TEXT NOT NULL,Id TEXT NOT NULL,Name TEXT,IsPreOrder BOOL,Tiers TEXT,ActivationDate TEXT,DeactivationDate TEXT,PRIMARY KEY (CrossRevisionId) )",
+    "CREATE TABLE SyncQueue (\n\tDate\t\tTEXT,\n\tVolumeId\tTEXT,\n\tState\t\tINT,\n\tPRIMARY KEY(VolumeId)\n)",
+    "CREATE TABLE Tab (\ntabId TEXT NOT NULL,\ntabType TEXT,\nbrowseTabType TEXT,\ndisplayTitle TEXT,\nparentTabId TEXT,\nisDefault BOOL,\nmaxSize INTEGER,\ntotalResults INTEGER,\nupdateFrequencyMin INTEGER,\nimageID TEXT,\nisLeaf BOOL,\nhasFeaturedLists BOOL, etag TEXT, language TEXT,\nPRIMARY KEY(tabID))",
+    "CREATE TABLE Wishlist( \n\tCrossRevisionId TEXT, \n\tDateModified TEXT NOT NULL, \n\tIsAdded BOOL, \n\tIsSynced BOOL, \n\tPRIMARY KEY(CrossRevisionId))",
+    "CREATE TABLE WordList( \n\tText  TEXT, \n\tVolumeId TEXT, \n\tDictSuffix TEXT, DateCreated TEXT, \n\tPRIMARY KEY(Text))",
+    "CREATE TABLE content( \t\tContentID TEXT NOT NULL, \t\tContentType TEXT NOT NULL, \t\tMimeType TEXT NOT NULL,\t\tBookID TEXT,\t\tBookTitle TEXT,\t\tImageId TEXT,\t\tTitle TEXT COLLATE NOCASE,\t\tAttribution TEXT COLLATE NOCASE,\t\tDescription TEXT,\t\tDateCreated TEXT,\t\tShortCoverKey TEXT,\t\tadobe_location TEXT,\t\tPublisher TEXT,\t\tIsEncrypted BOOL,\t\tDateLastRead TEXT,\t\tFirstTimeReading BOOL,\t\tChapterIDBookmarked TEXT,\t\tParagraphBookmarked INTEGER,\t\tBookmarkWordOffset INTEGER,\t\tNumShortcovers INTEGER,\t\tVolumeIndex INTEGER,\t\t___NumPages INTEGER,\t\tReadStatus INTEGER,\t\t___SyncTime TEXT,\t\t___UserID TEXT NOT NULL, PublicationId TEXT, ___FileOffset INTEGER, ___FileSize INTEGER, ___PercentRead INTEGER, ___ExpirationStatus INTEGER, FavouritesIndex NOT NULL DEFAULT -1, Accessibility INTEGER DEFAULT 1, ContentURL TEXT, Language TEXT, BookshelfTags TEXT, IsDownloaded BIT NOT NULL DEFAULT 1, FeedbackType INTEGER DEFAULT 0, AverageRating INTEGER DEFAULT 0, Depth INTEGER, PageProgressDirection TEXT, InWishlist BOOL NOT NULL DEFAULT FALSE, ISBN TEXT, WishlistedDate TEXT DEFAULT \"0000-00-00T00:00:00.000\", FeedbackTypeSynced INTEGER DEFAULT 0, IsSocialEnabled BOOL NOT NULL DEFAULT TRUE, EpubType INT NOT NULL DEFAULT -1, Monetization INTEGER DEFAULT 2, ExternalId TEXT, Series TEXT, SeriesNumber TEXT, Subtitle TEXT, WordCount INTEGER DEFAULT -1, Fallback TEXT, RestOfBookEstimate INTEGER, CurrentChapterEstimate INTEGER, CurrentChapterProgress FLOAT, PocketStatus INTEGER DEFAULT 0, UnsyncedPocketChanges TEXT, ImageUrl TEXT, DateAdded TEXT, WorkId TEXT, Properties TEXT, RenditionSpread TEXT, RatingCount INTEGER DEFAULT 0, ReviewsSyncDate TEXT, MediaOverlay TEXT, MediaOverlayType TEXT, RedirectPreviewUrl TEXT, PreviewFileSize INTEGER, EntitlementId TEXT, CrossRevisionId TEXT, DownloadUrl TEXT, ReadStateSynced BIT NOT NULL DEFAULT false, TimesStartedReading INTEGER, TimeSpentReading INTEGER, LastTimeStartedReading TEXT, LastTimeFinishedReading TEXT, ApplicableSubscriptions TEXT, ExternalIds TEXT, PurchaseRevisionId TEXT, SeriesID TEXT, SeriesNumberFloat REAL, AdobeLoanExpiration TEXT, HideFromHomePage bit, IsInternetArchive BOOL NOT NULL DEFAULT FALSE, titleKana TEXT, subtitleKana TEXT, seriesKana TEXT, attributionKana TEXT, publisherKana TEXT, IsPurchaseable BOOL DEFAULT TRUE, IsSupported BOOL DEFAULT TRUE, AnnotationsSyncToken TEXT, DateModified TEXT DEFAULT \"0000-00-00T00:00:00.000\", StorePages INTEGER DEFAULT 0, StoreWordCount INTEGER DEFAULT 0, StoreTimeToReadLowerEstimate INTEGER DEFAULT 0, StoreTimeToReadUpperEstimate INTEGER DEFAULT 0, Duration INTEGER DEFAULT 0, IsAbridged BOOL DEFAULT NULL, SyncConflictType INTEGER DEFAULT 0,\t\tPRIMARY KEY (ContentID)\t\t)",
+    "CREATE TABLE content_keys ( volumeId TEXT NOT NULL, elementId TEXT NOT NULL, elementKey TEXT, PRIMARY KEY (volumeId, elementId))",
+    "CREATE TABLE content_settings (ContentID TEXT NOT NULL, ContentType INTEGER NOT NULL, DateModified TEXT NOT NULL, ReadingFontFamily TEXT, ReadingFontSize INTEGER, ReadingAlignment TEXT, ReadingLineHeight REAL, ReadingLeftMargin INTEGER, ReadingRightMargin INTEGER, ReadingPublisherMode INTEGER, ActivityFacebookShare BIT default TRUE, RecentBookSearches TEXT, AuthorNotesShown BIT default false, LastAuthorNotesSyncTime TEXT, ZoomFactor INTEGER default 1, BTBFooterSection TEXT, SelectedDictionary TEXT, StillReading BIT DEFAULT FALSE, SeriesShown BIT DEFAULT FALSE, PRIMARY KEY (ContentID, ContentType))",
+    "CREATE TABLE ratings (ContentID TEXT NOT NULL, Rating INTEGER, Review TEXT, DateModified TEXT NOT NULL, PRIMARY KEY(ContentID))",
+    "CREATE TABLE shortcover_page ( \t\tshortcoverId TEXT not null, \t\tPageNumber INTEGER, \t\tFormattedPage TEXT, \t\tPRIMARY KEY (shortcoverId, PageNumber))",
+    "CREATE TABLE user(UserID TEXT NOT NULL,UserKey TEXT NOT NULL,UserDisplayName TEXT,UserEmail TEXT,___DeviceID TEXT,FacebookAuthToken TEXT,HasMadePurchase BIT DEFAULT FALSE, IsOneStoreAccount BIT DEFAULT FALSE, IsChildAccount BIT DEFAULT FALSE, RefreshToken TEXT, AuthToken TEXT, AuthType TEXT, Loyalty BLOB, IsLibraryMigrated BIT NOT NULL DEFAULT true, SyncContinuationToken TEXT, Subscription INT NOT NULL DEFAULT 0, LibrarySyncType TEXT, LibrarySyncTime TEXT, SyncTokenAppVersion TEXT, Storefront TEXT, NewUserPromoCurrency TEXT, NewUserPromoValue REAL NOT NULL DEFAULT -1.0, KoboAccessToken TEXT, KoboAccessTokenExpiry TEXT, AnnotationsSyncToken TEXT, PrivacyPermissions BLOB, AnnotationsMigrated BIT NOT NULL DEFAULT false, NotebookSyncTime TEXT, NotebookSyncToken TEXT,PRIMARY KEY (UserID))",
+    "CREATE TABLE volume_shortcovers(\t\tvolumeId TEXT NOT NULL,\t\tshortcoverId TEXT NOT NULL,\t\tVolumeIndex INTEGER,\t\tPRIMARY KEY (volumeId, shortcoverId))",
+    "CREATE TABLE volume_tabs (volumeId TEXT NOT NULL,tabId TEXT NOT NULL DEFAULT 'abcdefff-ffff-ffff-ffff-fffffffffffd',PRIMARY KEY (volumeId, tabId))",
+    "CREATE INDEX OverDriveCards_LibraryKey_index ON OverDriveCards (LibraryKey)",
+    "CREATE INDEX activity_id_index ON Activity (Id)",
+    "CREATE INDEX analytics_events_timestamp ON AnalyticsEvents (Timestamp)",
+    "CREATE INDEX bookmark_content ON bookmark (ContentID)",
+    "CREATE INDEX bookmark_volume ON bookmark (VolumeID)",
+    "CREATE INDEX content_bookid_index ON content (BookID)",
+    "CREATE INDEX content_keys_volume ON content_keys (volumeid)",
+    "CREATE INDEX content_settings_index ON content_settings (ContentID, ContentType)",
+    "CREATE INDEX kobo_plus_asset_group_index ON KoboPlusAssetGroup(AssetGroup)",
+    "CREATE INDEX shelf_creationdate_index ON shelf (CreationDate)",
+    "CREATE INDEX shelf_id_index ON shelf (Id)",
+    "CREATE INDEX shelf_name_index ON shelf (Name)",
+    "CREATE INDEX shelfcontent_datemodified_index ON ShelfContent (DateModified)",
+    "CREATE INDEX volume_shortcovers_shortcoverId ON volume_shortcovers (shortcoverId)",
+    "CREATE INDEX volume_tabs_tabId ON volume_tabs (tabId)",
+    "CREATE INDEX volume_tabs_volumeId ON volume_tabs (volumeId)",
+    "CREATE TRIGGER kobo_plus_asset_cleanup BEFORE DELETE ON KoboPlusAssetGroup FOR EACH ROW BEGIN DELETE FROM KoboPlusAssets WHERE AssetGroupId = OLD.Id; END"
+  ],
+  "rows": {
+    "AbTest": 0,
+    "Achievement": 27,
+    "Activity": 184,
+    "AnalyticsEvents": 2,
+    "Authors": 0,
+    "BookAuthors": 0,
+    "Bookmark": 0,
+    "DbVersion": 1,
+    "DropboxItem": 0,
+    "Event": 1526,
+    "GDriveItem": 0,
+    "KoboPlusAssetGroup": 1,
+    "KoboPlusAssets": 306,
+    "OverDriveCards": 0,
+    "OverDriveCheckoutBook": 0,
+    "OverDriveLibrary": 0,
+    "Reviews": 0,
+    "Rules": 33,
+    "Shelf": 0,
+    "ShelfContent": 0,
+    "SubscriptionProducts": 5,
+    "SyncQueue": 0,
+    "Tab": 1,
+    "Wishlist": 0,
+    "WordList": 110,
+    "content": 11542,
+    "content_keys": 0,
+    "content_settings": 3,
+    "ratings": 0,
+    "shortcover_page": 0,
+    "user": 1,
+    "volume_shortcovers": 6603,
+    "volume_tabs": 18
+  },
+  "value_types": {
+    "Bookmark.Hidden": {},
+    "Shelf._IsDeleted": {},
+    "ShelfContent._IsDeleted": {},
+    "content.FirstTimeReading": {
+      "text": 11542
+    },
+    "content.IsDownloaded": {
+      "integer": 11431,
+      "text": 111
+    },
+    "content.IsEncrypted": {
+      "text": 11542
+    }
+  },
+  "content_types": {
+    "6": 111,
+    "899": 4828,
+    "9": 6603
+  },
+  "annotation_types": {},
+  "cover_files": {
+    "N3_FULL": {
+      "files": 93,
+      "sizes": [
+        [
+          1118,
+          1680
+        ],
+        [
+          1103,
+          1680
+        ],
+        [
+          1176,
+          1680
+        ]
+      ]
+    },
+    "N3_LIBRARY_FULL": {
+      "files": 111,
+      "sizes": [
+        [
+          355,
+          355
+        ],
+        [
+          344,
+          530
+        ],
+        [
+          351,
+          530
+        ]
+      ]
+    },
+    "N3_LIBRARY_GRID": {
+      "files": 111,
+      "sizes": [
+        [
+          149,
+          149
+        ],
+        [
+          145,
+          223
+        ],
+        [
+          147,
+          223
+        ]
+      ]
+    }
+  },
+  "system_folders": [
+    ".Spotlight-V100",
+    ".Trash-1000",
+    ".Trashes",
+    ".adobe-digital-editions",
+    ".erc",
+    ".fseventsd",
+    ".kobo",
+    ".kobo-images"
+  ],
+  "problems": []
+}

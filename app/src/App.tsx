@@ -739,8 +739,17 @@ export default function App() {
                 toSend.map((b) => b.id),
               )
             }
-            disabled={!device || toSend.length === 0 || busy !== null}
-            title={device ? undefined : "Connect your Kobo to send books"}
+            disabled={
+              !device ||
+              device.read_only !== null ||
+              toSend.length === 0 ||
+              busy !== null
+            }
+            title={
+              !device
+                ? "Connect your Kobo to send books"
+                : (device.read_only ?? undefined)
+            }
           >
             {busy === "sending"
               ? "Sending…"

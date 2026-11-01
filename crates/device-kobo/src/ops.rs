@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use rusqlite::{OptionalExtension, params};
 
 use crate::KoboDevice;
-use crate::db::ONBOARD_PREFIX;
+use crate::db::{ONBOARD_PREFIX, columns};
 use crate::error::{Error, Result};
 use crate::state::{BookChange, LogEntry, Record};
 use crate::writer::DeviceWriter;
@@ -183,21 +183,33 @@ pub fn replace_book(
 /// Sets (or clears) the series Nickel shows for an imported book. SeriesID
 /// reuses a store book's id for the same series if there is one, else the
 /// series name, as kepubify's seriesmeta does for sideloads (otherwise one
-/// series shows up twice).
+/// series shows up twice). Schemas before 65 have no series (nothing is
+/// written) and before 136 no SeriesID or SeriesNumberFloat (calibre
+/// `min_dbversion_series`, `min_dbversion_seriesid`).
 pub fn set_series(
     tx: &rusqlite::Transaction,
     content_id: &str,
     series: Option<&str>,
     number: Option<&str>,
 ) -> Result<bool> {
+    let cols = columns(tx, "content")?;
+    if !(cols.contains("series") && cols.contains("seriesnumber")) {
+        return Ok(false);
+    }
     let number = series.and(number);
-    let changed = tx.execute(
-        "UPDATE content SET Series = ?2, SeriesNumber = ?3,
-             SeriesNumberFloat = CAST(?3 AS REAL),
-             SeriesID = CASE WHEN ?2 IS NULL THEN NULL ELSE coalesce(
+    let mut set = String::from("Series = ?2, SeriesNumber = ?3");
+    if cols.contains("seriesnumberfloat") {
+        set.push_str(", SeriesNumberFloat = CAST(?3 AS REAL)");
+    }
+    if cols.contains("seriesid") && cols.contains("workid") {
+        set.push_str(
+            ", SeriesID = CASE WHEN ?2 IS NULL THEN NULL ELSE coalesce(
                  (SELECT c2.SeriesID FROM content c2 WHERE c2.Series = ?2 AND c2.WorkId IS NOT NULL
-                  AND c2.WorkId != '' AND c2.SeriesID IS NOT NULL AND c2.SeriesID != '' LIMIT 1), ?2) END
-         WHERE ContentID = ?1 AND BookID IS NULL",
+                  AND c2.WorkId != '' AND c2.SeriesID IS NOT NULL AND c2.SeriesID != '' LIMIT 1), ?2) END",
+        );
+    }
+    let changed = tx.execute(
+        &format!("UPDATE content SET {set} WHERE ContentID = ?1 AND BookID IS NULL"),
         params![content_id, series, number],
     )?;
     Ok(changed > 0)

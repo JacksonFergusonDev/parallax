@@ -4,7 +4,7 @@
 //! (src/calibre/devices/kobo/driver.py, GPLv3), which has tracked Nickel's
 //! schema across a decade of firmware.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -33,13 +33,7 @@ impl KoboDb {
     /// locks, which is safe while the device is in USB mode (Nickel is not
     /// writing). Never use this connection after writing through another.
     pub fn open_read_only(path: &Path) -> Result<Self> {
-        let uri = format!("file:{}?immutable=1", uri_escape(&path.to_string_lossy()));
-        let conn = Connection::open_with_flags(
-            uri,
-            OpenFlags::SQLITE_OPEN_READ_ONLY
-                | OpenFlags::SQLITE_OPEN_URI
-                | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-        )?;
+        let conn = open_immutable(path)?;
         let version: u32 = conn.query_row("SELECT version FROM DbVersion", [], |r| r.get(0))?;
         if version < MIN_SUPPORTED_DB_VERSION {
             return Err(Error::UnsupportedDbVersion(version));
@@ -159,6 +153,25 @@ impl KoboDb {
             .collect::<rusqlite::Result<_>>()?;
         Ok(cols)
     }
+}
+
+/// Opens a database read-only with no locks or side files, for any schema.
+pub(crate) fn open_immutable(path: &Path) -> rusqlite::Result<Connection> {
+    let uri = format!("file:{}?immutable=1", uri_escape(&path.to_string_lossy()));
+    Connection::open_with_flags(
+        uri,
+        OpenFlags::SQLITE_OPEN_READ_ONLY
+            | OpenFlags::SQLITE_OPEN_URI
+            | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+}
+
+/// A table's columns, lowercased (SQLite names are case-insensitive); empty
+/// if the table doesn't exist. Nickel adds columns over the years, so writes
+/// check for the ones older schemas lack.
+pub(crate) fn columns(conn: &Connection, table: &str) -> rusqlite::Result<HashSet<String>> {
+    let mut stmt = conn.prepare("SELECT lower(name) FROM pragma_table_info(?1)")?;
+    stmt.query_map([table], |r| r.get(0))?.collect()
 }
 
 fn book_from_row(

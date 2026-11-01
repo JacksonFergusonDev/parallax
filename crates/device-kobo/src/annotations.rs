@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use serde::Serialize;
 
 use crate::KoboDevice;
-use crate::db::KoboDb;
+use crate::db::{KoboDb, columns};
 use crate::error::Result;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -67,13 +67,32 @@ impl KoboDb {
     /// order.
     pub fn annotations(&self, book: Option<&str>) -> Result<Vec<Annotation>> {
         let conn = self.connection();
-        let mut stmt = conn.prepare(
-            "SELECT BookmarkID, VolumeID, ContentID, Text, Annotation, ChapterProgress,
-                    DateCreated, DateModified, coalesce(Type, '')
+        // Older schemas lack some of these columns; read NULL instead.
+        let present = columns(conn, "Bookmark")?;
+        if present.is_empty() {
+            return Ok(Vec::new());
+        }
+        let col = |name: &str| {
+            if present.contains(&name.to_ascii_lowercase()) {
+                name.to_owned()
+            } else {
+                "NULL".to_owned()
+            }
+        };
+        let mut stmt = conn.prepare(&format!(
+            "SELECT BookmarkID, VolumeID, ContentID, {text}, {note}, {progress},
+                    {created}, {modified}, coalesce({kind}, '')
              FROM Bookmark
-             WHERE coalesce(Hidden, 'false') NOT IN ('true', 1)
+             WHERE coalesce({hidden}, 'false') NOT IN ('true', 1)
                AND (?1 IS NULL OR VolumeID = ?1)",
-        )?;
+            text = col("Text"),
+            note = col("Annotation"),
+            progress = col("ChapterProgress"),
+            created = col("DateCreated"),
+            modified = col("DateModified"),
+            kind = col("Type"),
+            hidden = col("Hidden"),
+        ))?;
         type Row = (
             String,
             String,

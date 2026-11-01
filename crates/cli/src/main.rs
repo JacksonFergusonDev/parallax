@@ -378,6 +378,16 @@ enum KoboCommand {
         #[arg(short = 'n', long, default_value_t = 20)]
         limit: usize,
     },
+    /// Save a device report: model, firmware and database layout, without
+    /// book titles, serial number or reading data. Send it to whoever adds
+    /// support for new Kobos. Only reads the device.
+    Report {
+        #[arg(long)]
+        mount: Option<PathBuf>,
+        /// Where to save it (default: print it).
+        #[arg(long, short)]
+        out: Option<PathBuf>,
+    },
     /// List database backups for the connected device.
     Backups {
         #[arg(long)]
@@ -442,9 +452,13 @@ fn main() -> Result<()> {
                 println!("No devices found.");
             }
             if !infos.is_empty() {
-                let mut rows = table(&["Model", "Firmware", "Mount"]);
+                let mut rows = table(&["Model", "Firmware", "Mount", "Changes"]);
                 for i in infos {
-                    rows.add_row([i.model, i.firmware, i.mount.display().to_string()]);
+                    let changes = match &i.read_only {
+                        None => "allowed".to_owned(),
+                        Some(why) => format!("read-only: {why}"),
+                    };
+                    rows.add_row([i.model, i.firmware, i.mount.display().to_string(), changes]);
                 }
                 println!("{rows}");
             }
@@ -682,6 +696,25 @@ fn main() -> Result<()> {
                 }
             }
             println!("{} groups", groups.len());
+        }
+        Command::Kobo(KoboCommand::Report { mount, out }) => {
+            let report = find_kobo(mount.as_deref())?.report();
+            let json = serde_json::to_string_pretty(&report)?;
+            match out {
+                Some(path) => {
+                    std::fs::write(&path, json + "\n")
+                        .with_context(|| format!("could not write {}", path.display()))?;
+                    eprintln!(
+                        "{}",
+                        success(&format!(
+                            "Saved the report for this {} to {}",
+                            report.model_name,
+                            path.display()
+                        ))
+                    );
+                }
+                None => println!("{json}"),
+            }
         }
         Command::Kobo(KoboCommand::History { mount, limit }) => {
             let kobo = find_kobo(mount.as_deref())?;

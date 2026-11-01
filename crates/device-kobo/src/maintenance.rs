@@ -12,7 +12,7 @@ use rusqlite::{Transaction, params};
 use serde::Serialize;
 
 use crate::KoboDevice;
-use crate::db::ONBOARD_PREFIX;
+use crate::db::{ONBOARD_PREFIX, columns};
 use crate::error::Result;
 use crate::state::{LogEntry, Record};
 use crate::writer::DeviceWriter;
@@ -34,26 +34,41 @@ pub fn set_read_status(
         ReadStatus::Finished => 2,
     };
     let changed = writer.transaction(|tx| {
+        // Older schemas lack some of these; reset what this one has.
+        let cols = columns(tx, "content")?;
+        let present = |wanted: &[(&'static str, &'static str)]| -> Vec<String> {
+            wanted
+                .iter()
+                .filter(|(c, _)| cols.contains(&c.to_ascii_lowercase()))
+                .map(|(c, v)| format!("{c} = {v}"))
+                .collect()
+        };
+        let position = present(&[
+            ("DateLastRead", "NULL"),
+            ("ChapterIDBookmarked", "NULL"),
+            ("___PercentRead", "0"),
+            (
+                "FirstTimeReading",
+                if code < 2 { "'true'" } else { "'false'" },
+            ),
+        ]);
+        let time = present(&[("TimeSpentReading", "0"), ("RestOfBookEstimate", "0")]);
         let mut n = 0;
         for id in content_ids {
             n += tx.execute(
                 "UPDATE content SET ReadStatus = ?2 WHERE ContentID = ?1 AND BookID IS NULL",
                 params![id, code],
             )?;
-            if reset_position {
-                tx.execute(
-                    "UPDATE content SET DateLastRead = NULL, ChapterIDBookmarked = NULL,
-                         ___PercentRead = 0, FirstTimeReading = ?2
-                     WHERE ContentID = ?1 AND BookID IS NULL",
-                    params![id, if code < 2 { "true" } else { "false" }],
-                )?;
-            }
-            if reset_time {
-                tx.execute(
-                    "UPDATE content SET TimeSpentReading = 0, RestOfBookEstimate = 0
-                     WHERE ContentID = ?1 AND BookID IS NULL",
-                    [id],
-                )?;
+            for (wanted, set) in [(reset_position, &position), (reset_time, &time)] {
+                if wanted && !set.is_empty() {
+                    tx.execute(
+                        &format!(
+                            "UPDATE content SET {} WHERE ContentID = ?1 AND BookID IS NULL",
+                            set.join(", ")
+                        ),
+                        [id],
+                    )?;
+                }
             }
         }
         Ok(n)
@@ -171,6 +186,7 @@ pub fn orphaned_images(device: &KoboDevice) -> Result<Vec<PathBuf>> {
 /// stale list can't delete a cover still in use) and the folders they leave
 /// empty. Returns (files removed, bytes freed).
 pub fn remove_orphaned_images(device: &KoboDevice) -> Result<(usize, u64)> {
+    device.check_writable()?;
     let images = device.mount().join(IMAGES_DIR);
     let (mut files, mut bytes) = (0, 0);
     for path in orphaned_images(device)? {

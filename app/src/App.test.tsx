@@ -19,7 +19,20 @@ vi.mock("@tauri-apps/api/webview", () => ({
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn(), open: vi.fn() }));
 
-const device = { mount: "/kobo", serial: "test", model: "Kobo" } as DeviceInfo;
+const device: DeviceInfo = {
+  kind: "kobo",
+  mount: "/kobo",
+  serial: "test",
+  model: "Kobo",
+  firmware: "4.38.23697",
+  capabilities: {
+    native_collections: true,
+    series: true,
+    reading_progress: true,
+    reading_time: true,
+  },
+  read_only: null,
+};
 const localBook: Book = {
   id: 1,
   title: "Local book",
@@ -123,6 +136,26 @@ afterEach(async () => {
   container.remove();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe("read-only Kobos", () => {
+  it("explains why and offers no changes", async () => {
+    connected = [{ ...device, read_only: "firmware 5.1.0 is too new" }];
+    await render();
+    await click(panel("Library").querySelector("button.card")!);
+    expect(button("Send 1 to Kobo").disabled).toBe(true);
+    await click(button("On Kobo"));
+    expect(panel("On Kobo").textContent).toContain(
+      "only reads this Kobo: firmware 5.1.0 is too new",
+    );
+    await click(panel("On Kobo").querySelector("button.card")!);
+    expect(button("Remove 1 from Kobo").disabled).toBe(true);
+    const menus = [...panel("On Kobo").querySelectorAll("button")].filter((b) =>
+      /^(Add to collection|Mark as)/.test(b.textContent ?? ""),
+    );
+    expect(menus.map((b) => b.disabled)).toEqual([true, true]);
+    expect(button("Add 1 to library").disabled).toBe(false);
+  });
 });
 
 describe("retained app screens", () => {

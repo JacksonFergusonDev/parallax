@@ -10,6 +10,7 @@
 use chrono::Utc;
 use rusqlite::{OptionalExtension, Transaction, params};
 
+use crate::db::columns;
 use crate::error::{Error, Result};
 
 /// Shelves Nickel manages itself; never renamed, emptied or deleted.
@@ -48,9 +49,20 @@ pub fn create_collection(tx: &Transaction, name: &str) -> Result<()> {
     match existing.as_deref() {
         None => {
             let ts = now();
+            // Id and Type arrived in later schemas.
+            let cols = columns(tx, "Shelf")?;
+            let (mut names, mut values) = (String::new(), String::new());
+            for (column, value) in [("Id", "?2"), ("Type", "'UserTag'")] {
+                if cols.contains(&column.to_ascii_lowercase()) {
+                    names.push_str(&format!(", {column}"));
+                    values.push_str(&format!(", {value}"));
+                }
+            }
             tx.execute(
-                "INSERT INTO Shelf (CreationDate, InternalName, LastModified, Name, _IsDeleted, _IsVisible, _IsSynced, Id, Type)
-                 VALUES (?1, ?2, ?1, ?2, 'false', 'true', 'false', ?2, 'UserTag')",
+                &format!(
+                    "INSERT INTO Shelf (CreationDate, InternalName, LastModified, Name, _IsDeleted, _IsVisible, _IsSynced{names})
+                     VALUES (?1, ?2, ?1, ?2, 'false', 'true', 'false'{values})"
+                ),
                 params![ts, name],
             )?;
         }

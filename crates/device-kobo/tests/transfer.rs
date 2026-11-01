@@ -4,6 +4,7 @@ use std::process::Command;
 
 use erc_device_kobo::{Error, KoboDevice};
 
+const SCHEMA: &str = include_str!("../../../tests/fixtures/kobo/schema-db174.sql");
 const VERSION: &str =
     "N000000000001,4.1.15,4.38.23697,4.1.15,4.1.15,00000000-0000-0000-0000-000000000388";
 
@@ -11,6 +12,10 @@ fn fake_kobo(dir: &Path) -> KoboDevice {
     let mount = dir.join("KOBOeReader");
     fs::create_dir_all(mount.join(".kobo")).unwrap();
     fs::write(mount.join(".kobo/version"), VERSION).unwrap();
+    rusqlite::Connection::open(mount.join(".kobo/KoboReader.sqlite"))
+        .unwrap()
+        .execute_batch(SCHEMA)
+        .unwrap();
     KoboDevice::open(mount).unwrap()
 }
 

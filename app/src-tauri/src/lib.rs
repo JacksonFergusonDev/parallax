@@ -253,6 +253,19 @@ struct DeviceHistory {
     missing: Vec<String>,
 }
 
+/// Saves a device report (model, firmware, database layout; no titles,
+/// serial or reading data) to `path`. Only reads the device.
+#[tauri::command]
+async fn device_report(mount: PathBuf, path: PathBuf) -> CmdResult<()> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let report = KoboDevice::open(&mount).map_err(err)?.report();
+        let json = serde_json::to_string_pretty(&report).map_err(err)?;
+        std::fs::write(&path, json + "\n").map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
 /// What ERC's `/.erc/` records say about the device.
 #[tauri::command]
 async fn device_history(mount: PathBuf) -> CmdResult<DeviceHistory> {
@@ -805,6 +818,7 @@ pub fn run() {
             library_check,
             annotations_list,
             annotations_export,
+            device_report,
             clean_images,
             merge_collections,
             set_reading_status,

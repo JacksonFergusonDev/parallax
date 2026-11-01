@@ -94,6 +94,9 @@ export function DeviceView({
     kind: "error" | "info";
     text: string;
   } | null>(null);
+  /** Why changes are off for this Kobo; null when they're allowed. */
+  const readOnly = device.read_only;
+  const locked = busy !== null || readOnly !== null;
   const anchor = useRef<string | null>(null);
   const request = useRef({ generation: 0 });
   const { mode, setMode, sort, setSort } = useViewState<DeviceKey>(
@@ -351,6 +354,7 @@ export function DeviceView({
             <button
               className="icon"
               title="New collection"
+              disabled={readOnly !== null}
               onClick={() => setDialog({ kind: "new", addSelected: false })}
             >
               +
@@ -376,7 +380,7 @@ export function DeviceView({
             <button
               className="link"
               onClick={organise}
-              disabled={busy !== null}
+              disabled={locked}
               title="Add this Kobo's books to your library, fill in series and genres, then make collections from them"
             >
               Enhance and organise…
@@ -384,13 +388,14 @@ export function DeviceView({
             <button
               className="link"
               onClick={() => setDialog({ kind: "rules" })}
+              disabled={readOnly !== null}
             >
               Automatic collections…
             </button>
             <button
               className="link"
               onClick={() => setDialog({ kind: "folders" })}
-              disabled={busy !== null}
+              disabled={locked}
             >
               Folders → collections…
             </button>
@@ -444,6 +449,13 @@ export function DeviceView({
         </nav>
 
         <main className="content">
+          {readOnly && (
+            <p className="notice notice-info read-only-banner">
+              E-Reader Companion only reads this Kobo: {readOnly}. You can
+              browse it and add its books to your library. To help add support,
+              save a device report from About this Kobo.
+            </p>
+          )}
           <div className="device-toolbar">
             {shelf ? (
               <>
@@ -451,12 +463,14 @@ export function DeviceView({
                 <button
                   className="link"
                   onClick={() => setDialog({ kind: "rename", name: shelf })}
+                  disabled={locked}
                 >
                   Rename
                 </button>
                 <button
                   className="link danger"
                   onClick={() => deleteShelf(shelf)}
+                  disabled={locked}
                 >
                   Delete
                 </button>
@@ -574,14 +588,14 @@ export function DeviceView({
           <button
             className="secondary"
             onClick={removeFromShelf}
-            disabled={chosen.length === 0 || busy !== null}
+            disabled={chosen.length === 0 || locked}
           >
             Remove from collection
           </button>
         )}
         <ActionMenu
           label="Mark as"
-          disabled={chosen.length === 0 || busy !== null}
+          disabled={chosen.length === 0 || locked}
           items={[
             {
               label: "Finished",
@@ -603,16 +617,20 @@ export function DeviceView({
                   `Marked ${plural(chosen.length, "book")} unread.`,
                 ),
             },
-            {
-              label: "Unread, and clear reading time",
-              onPick: () =>
-                markAs(
-                  "unread",
-                  true,
-                  true,
-                  `Marked ${plural(chosen.length, "book")} unread and cleared reading time.`,
-                ),
-            },
+            ...(device.capabilities.reading_time
+              ? [
+                  {
+                    label: "Unread, and clear reading time",
+                    onPick: () =>
+                      markAs(
+                        "unread",
+                        true,
+                        true,
+                        `Marked ${plural(chosen.length, "book")} unread and cleared reading time.`,
+                      ),
+                  },
+                ]
+              : []),
           ]}
         />
         {importable.length > 0 && (
@@ -628,14 +646,14 @@ export function DeviceView({
         <CollectionMenu
           label="Add to collection"
           collections={collections.filter((c) => c.name !== shelf)}
-          disabled={chosen.length === 0 || busy !== null}
+          disabled={chosen.length === 0 || locked}
           onPick={addTo}
           onNew={() => setDialog({ kind: "new", addSelected: true })}
         />
         <button
           className="primary danger-fill"
           onClick={removeBooks}
-          disabled={removable.length === 0 || busy !== null}
+          disabled={removable.length === 0 || locked}
         >
           {removable.length
             ? `Remove ${removable.length} from Kobo`

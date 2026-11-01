@@ -37,6 +37,9 @@ pub struct DeviceInfo {
     /// Where the device's storage is mounted on this computer.
     pub mount: PathBuf,
     pub capabilities: Capabilities,
+    /// Why the app won't change this device (an untested model, firmware or
+    /// database); `None` when it will. Reading still works.
+    pub read_only: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

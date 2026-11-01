@@ -2,7 +2,8 @@
 //!
 //! Every write session:
 //! 1. refuses if Nickel left `-wal`/`-shm`/`-journal` files (not cleanly
-//!    handed over) or the schema is outside the range calibre has validated;
+//!    handed over) or ERC doesn't support changing this Kobo
+//!    ([`crate::support`]);
 //! 2. runs `PRAGMA quick_check` and backs the database up with SQLite's online
 //!    backup API, keeping the newest [`BACKUPS_KEPT`] per device;
 //! 3. applies changes in immediate transactions;
@@ -18,7 +19,6 @@ use rusqlite::backup::Backup;
 use rusqlite::{Connection, OpenFlags, Transaction, TransactionBehavior};
 
 use crate::KoboDevice;
-use crate::db::{MAX_TESTED_DB_VERSION, MIN_SUPPORTED_DB_VERSION};
 use crate::error::{Error, Result};
 use crate::state::{BookChange, LogEntry, Record};
 
@@ -56,12 +56,8 @@ impl KoboDevice {
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
         )?;
         conn.busy_timeout(std::time::Duration::from_secs(2))?;
-        let version: u32 = conn.query_row("SELECT version FROM DbVersion", [], |r| r.get(0))?;
-        if version < MIN_SUPPORTED_DB_VERSION {
-            return Err(Error::UnsupportedDbVersion(version));
-        }
-        if version > MAX_TESTED_DB_VERSION {
-            return Err(Error::UntestedDbVersion(version));
+        if let Some(blocker) = crate::support::write_blocker(self.version(), &conn)? {
+            return Err(blocker);
         }
         let check: String = conn.query_row("PRAGMA quick_check", [], |r| r.get(0))?;
         if check != "ok" {

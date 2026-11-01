@@ -119,6 +119,10 @@ const device: DeviceInfo = {
     reading_progress: true,
     reading_time: true,
   },
+  // `?readonly` previews a Kobo the app won't change.
+  read_only: new URLSearchParams(location.search).has("readonly")
+    ? "the Tolino Shine Color runs Tolino's version of Kobo's software, which stores data differently"
+    : null,
 };
 const dismissed = new Set<string>();
 const settings = new Map<string, string>();
@@ -596,6 +600,9 @@ export function installMockBackend() {
             : [];
         case "annotations_export":
           return 4;
+        case "device_report":
+          await sleep(300);
+          return null;
         case "plugin:dialog|save":
           return "/Users/you/Documents/Dune highlights.md";
         case "kobo_health":

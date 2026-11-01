@@ -29,18 +29,34 @@ impl VersionInfo {
         })
     }
 
-    /// Model name for the known model ids. Only ids confirmed on real
-    /// hardware are listed; others fall back to a generic name.
+    /// The model id's significant digits (`388`); so far only the last three
+    /// have ever been used.
+    fn short_model_id(&self) -> &str {
+        let id = self.model_id.rsplit('-').next().unwrap_or_default();
+        id.trim_start_matches('0')
+    }
+
+    /// Model name for the known model ids: confirmed on real hardware (388)
+    /// or by calibre's driver, which reads the same file. Others fall back to
+    /// a generic name; a device report (`erc kobo report`) is how new ones
+    /// get added.
     pub fn model_name(&self) -> &'static str {
-        match self
-            .model_id
-            .rsplit('-')
-            .next()
-            .map(|id| id.trim_start_matches('0'))
-        {
-            Some("388") => "Kobo Libra 2",
+        match self.short_model_id() {
+            "388" => "Kobo Libra 2",
+            "390" => "Kobo Libra Colour",
+            "391" => "Kobo Clara BW",
+            "393" => "Kobo Clara Colour",
+            "690" => "Tolino Vision Color",
+            "691" => "Tolino Shine (5th generation)",
+            "693" => "Tolino Shine Color",
             _ => "Kobo eReader",
         }
+    }
+
+    /// Tolino readers run Kobo's software but store data differently
+    /// (calibre `KOBOTOUCH.isTolinoDevice`).
+    pub fn is_tolino(&self) -> bool {
+        matches!(self.short_model_id(), "690" | "691" | "693")
     }
 }
 
@@ -91,6 +107,14 @@ mod tests {
     fn unknown_model_falls_back() {
         let v = VersionInfo::parse("N1,x,4.1.0,x,x,00000000-0000-0000-0000-000000000999").unwrap();
         assert_eq!(v.model_name(), "Kobo eReader");
+    }
+
+    #[test]
+    fn recognises_tolino_readers() {
+        let v = VersionInfo::parse("N1,x,5.6.0,x,x,00000000-0000-0000-0000-000000000693").unwrap();
+        assert_eq!(v.model_name(), "Tolino Shine Color");
+        assert!(v.is_tolino());
+        assert!(!VersionInfo::parse(LIBRA2).unwrap().is_tolino());
     }
 
     #[test]

@@ -16,6 +16,8 @@ export interface DeviceInfo {
     reading_progress: boolean;
     reading_time: boolean;
   };
+  /** Why the app won't change this device; null when it will. */
+  read_only: string | null;
 }
 
 export interface Identifier {
@@ -482,6 +484,9 @@ export const annotationsExport = (
   format: "markdown" | "json",
   path: string,
 ) => invoke<number>("annotations_export", { id, format, path });
+/** Saves a device report for adding support for new Kobos. Only reads. */
+export const saveDeviceReport = (mount: string, path: string) =>
+  invoke<void>("device_report", { mount, path });
 export const koboHealth = (mount: string) =>
   read<KoboHealth>("kobo_health", { mount }, [deviceTag(mount)]);
 /** Deletes leftover cover images; returns [files, bytes]. */
