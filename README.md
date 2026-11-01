@@ -25,6 +25,8 @@ just test-fat # extra tests that mount FAT32 disk images
 just build    # macOS .app bundle
 ```
 
+`just dev` prompts before stopping processes that occupy Vite’s port (1420). Accepting retries app startup without repeating setup; declining or closing input leaves those processes running.
+
 `erc` is a command-line companion for development and scripting: `cargo run -p erc-cli -- --help`.
 
 Project plan and progress: [docs/PLAN.md](docs/PLAN.md), [PROGRESS.md](PROGRESS.md). Device findings: [docs/device-notes.md](docs/device-notes.md). Manual device checks: [docs/hardware-checks.md](docs/hardware-checks.md). App caching and invalidation: [docs/app-caching.md](docs/app-caching.md).

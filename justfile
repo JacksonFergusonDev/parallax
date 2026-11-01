@@ -24,12 +24,13 @@ lint:
     cd app && pnpm typecheck && pnpm lint
 
 test:
+    node --test scripts/dev.test.mjs
     cargo test --workspace
     cd app && pnpm test
 
 # Run the desktop app with hot reload.
 dev: setup
-    cd app && pnpm tauri dev
+    scripts/dev.sh
 
 # Opt-in tests that mount FAT32 disk images to check the device write path.
 test-fat:
