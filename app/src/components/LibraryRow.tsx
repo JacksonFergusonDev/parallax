@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { coverSrc, type Book } from "../api";
 import { shortDate } from "../device";
-import type { DeviceState, SendStatus } from "../library";
+import { progressLabel, type DeviceState, type SendStatus } from "../library";
 import { STATUS_LABEL } from "./BookCard";
 
 interface Props {
@@ -40,6 +40,16 @@ export const LibraryRow = memo(function LibraryRow({
           : ""}
       </span>
       <span className="cell muted">{book.tags.join(", ")}</span>
+      <span
+        className={`cell end status-${book.reading?.status ?? "none"}`}
+        title={
+          book.reading?.last_read
+            ? `Last read ${shortDate(book.reading.last_read)}`
+            : undefined
+        }
+      >
+        {progressLabel(book)}
+      </span>
       {status ? (
         <span className={`cell end send-${status.stage}`}>
           {STATUS_LABEL[status.stage]}

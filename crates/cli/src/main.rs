@@ -13,7 +13,9 @@ use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use erc_convert::Kepubify;
 use erc_core::collections::{self, CollectionChange, folder_groups, reconcile_series};
-use erc_core::device::remove_from_device;
+use erc_core::device::{
+    change_reading_status, health, merge_collections, remove_from_device, sync_reading,
+};
 use erc_core::duplicates::{Reason, device_duplicates, library_duplicates};
 use erc_core::enhance;
 use erc_core::import::{DeviceImport, import_from_device};
@@ -21,8 +23,8 @@ use erc_core::rules;
 use erc_core::send::{SendOutcome, send_books, send_library_books, update_on_device};
 use erc_device::{DeviceBook, ReadStatus};
 use erc_device_kobo::{
-    BookCheck, KoboDb, KoboDevice, LogEntry, MACOS_VOLUMES, ONBOARD_PREFIX, Record, restore,
-    tidy_apple_double,
+    BookCheck, KoboDb, KoboDevice, LogEntry, MACOS_VOLUMES, ONBOARD_PREFIX, Record,
+    remove_orphaned_images, restore, tidy_apple_double,
 };
 use erc_epub::MetadataEdit;
 use erc_library::{ImportOutcome, Library, Rule, RuleKind};
@@ -226,7 +228,8 @@ enum LibraryCommand {
         #[arg(long)]
         mount: Option<PathBuf>,
     },
-    /// Apply series to books the Kobo has imported since they were sent. Writes, with a backup.
+    /// Apply series to books the Kobo has imported since they were sent (writes,
+    /// with a backup), and copy reading progress into the library.
     Reconcile {
         #[arg(long)]
         mount: Option<PathBuf>,
@@ -303,6 +306,38 @@ enum KoboCommand {
     },
     /// Delete macOS `._*` clutter from the device.
     Tidy {
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
+    /// Report entries whose file is gone, files not imported, duplicate
+    /// collections and leftover cover images. Only reads the device.
+    Check {
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
+    /// Delete cached covers of books no longer on the device.
+    CleanImages {
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
+    /// Merge collections that exist more than once. Writes, with a backup.
+    MergeCollections {
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
+    /// Set books' reading status. Writes, with a backup.
+    Status {
+        #[arg(value_enum)]
+        status: StatusArg,
+        /// Device paths (`KEpub/…`) or ContentIDs.
+        #[arg(required = true)]
+        books: Vec<String>,
+        /// Also clear where the book was open (start over).
+        #[arg(long)]
+        reset_position: bool,
+        /// Also clear the reading time.
+        #[arg(long)]
+        reset_time: bool,
         #[arg(long)]
         mount: Option<PathBuf>,
     },
@@ -514,6 +549,88 @@ fn main() -> Result<()> {
         Command::Kobo(KoboCommand::Tidy { mount }) => {
             let kobo = find_kobo(mount.as_deref())?;
             println!("removed {} macOS ._ files", tidy_apple_double(&kobo));
+        }
+        Command::Kobo(KoboCommand::Check { mount }) => {
+            let kobo = find_kobo(mount.as_deref())?;
+            let h = health(&kobo)?;
+            if cli.json {
+                return print_json(&h);
+            }
+            // Green when there's nothing to do, yellow when there is.
+            let count = |n: usize, what: &str| {
+                let text = format!("{n} {what}");
+                if n == 0 {
+                    success(&text)
+                } else {
+                    warning(&text)
+                }
+            };
+            println!(
+                "{}",
+                count(h.missing_files.len(), "entries whose file is gone")
+            );
+            for m in &h.missing_files {
+                println!("  {}  ({})", m.title, m.path);
+            }
+            println!(
+                "{}",
+                count(h.not_imported.len(), "files not in the Kobo's library")
+            );
+            for m in &h.not_imported {
+                println!("  {}", m.path);
+            }
+            println!(
+                "{}",
+                count(h.duplicate_collections.len(), "duplicated collections")
+            );
+            for d in &h.duplicate_collections {
+                println!("  {} ×{}", d.name, d.copies);
+            }
+            println!(
+                "{} ({} KB)",
+                count(h.orphaned_images, "leftover cover images"),
+                h.orphaned_image_bytes / 1024
+            );
+        }
+        Command::Kobo(KoboCommand::CleanImages { mount }) => {
+            let (files, bytes) = remove_orphaned_images(&find_kobo(mount.as_deref())?)?;
+            println!(
+                "removed {files} leftover cover images ({} KB)",
+                bytes / 1024
+            );
+        }
+        Command::Kobo(KoboCommand::MergeCollections { mount }) => {
+            let kobo = find_kobo(mount.as_deref())?;
+            println!(
+                "removed {} duplicate collection copies",
+                merge_collections(&kobo, &backup_root()?)?
+            );
+        }
+        Command::Kobo(KoboCommand::Status {
+            status,
+            books,
+            reset_position,
+            reset_time,
+            mount,
+        }) => {
+            let kobo = find_kobo(mount.as_deref())?;
+            let ids: Vec<String> = books.iter().map(|b| content_id_for(b)).collect();
+            let library = Library::open(default_library_root()?).ok();
+            let status = match status {
+                StatusArg::Unread => ReadStatus::Unread,
+                StatusArg::Reading => ReadStatus::Reading,
+                StatusArg::Finished => ReadStatus::Finished,
+            };
+            let n = change_reading_status(
+                library.as_ref(),
+                &kobo,
+                &backup_root()?,
+                &ids,
+                status,
+                reset_position,
+                reset_time,
+            )?;
+            println!("updated {n} books; eject to see the change");
         }
         Command::Kobo(KoboCommand::Duplicates { mount, library }) => {
             let kobo = find_kobo(mount.as_deref())?;
@@ -933,6 +1050,10 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                 "applied series to {} books",
                 reconcile_series(lib, &kobo, &backup_root()?)?
             );
+            println!(
+                "updated reading progress for {} books",
+                sync_reading(lib, &kobo)?
+            );
         }
         LibraryCommand::Send {
             ids,
@@ -1059,6 +1180,13 @@ fn rules_command(lib: &Library, command: RulesCommand, json: bool) -> Result<()>
 }
 
 /// Accepts a device path (`KEpub/x.kepub.epub`) or a full ContentID.
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum StatusArg {
+    Unread,
+    Reading,
+    Finished,
+}
+
 fn reasons_label(reasons: &[Reason]) -> String {
     reasons
         .iter()

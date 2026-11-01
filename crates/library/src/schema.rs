@@ -55,6 +55,17 @@ const MIGRATIONS: &[&str] = &[
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
     );",
+    // 6: reading progress last seen on each device.
+    "CREATE TABLE reading (
+        book_id       INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+        device_serial TEXT NOT NULL,
+        status        TEXT NOT NULL,
+        percent       INTEGER NOT NULL,
+        last_read     TEXT,
+        time_spent    INTEGER,
+        seen_at       TEXT NOT NULL,
+        PRIMARY KEY (book_id, device_serial)
+    );",
 ];
 
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {

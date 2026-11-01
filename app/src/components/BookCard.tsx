@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { coverSrc, type Book } from "../api";
-import type { DeviceState, SendStatus } from "../library";
+import { progressLabel, type DeviceState, type SendStatus } from "../library";
 
 export const STATUS_LABEL: Record<SendStatus["stage"], string> = {
   queued: "Waiting…",
@@ -47,6 +47,11 @@ export const BookCard = memo(function BookCard({
         {status && (
           <span className={`overlay overlay-${status.stage}`}>
             {STATUS_LABEL[status.stage]}
+          </span>
+        )}
+        {book.reading && book.reading.status !== "unread" && (
+          <span className={`read-badge ${book.reading.status}`}>
+            {progressLabel(book)}
           </span>
         )}
         {!status && deviceState && (

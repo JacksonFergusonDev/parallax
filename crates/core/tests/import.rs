@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use erc_convert::{Converter, Kepubify};
-use erc_core::device::books_on_device;
+use erc_core::device::{books_on_device, sync_reading};
 use erc_core::import::{DeviceImport, import_from_device};
 use erc_device_kobo::KoboDevice;
 use erc_library::Library;
@@ -221,4 +221,39 @@ fn links_books_the_library_already_has() {
         books_on_device(&library, &kobo).unwrap()[0].book_id,
         book.id
     );
+}
+
+#[test]
+fn reading_progress_reaches_the_library() {
+    let dir = tempfile::tempdir().unwrap();
+    let kobo = fake_kobo(dir.path());
+    let mut library = Library::open(dir.path().join("lib")).unwrap();
+    let outcomes =
+        import_from_device(&mut library, &kobo, Some(&[cid(KEPUB)]), |_, _, _| {}).unwrap();
+    let DeviceImport::Added { book_id } = *outcome_for(&outcomes, &cid(KEPUB)) else {
+        panic!();
+    };
+    assert_eq!(library.reading(book_id).unwrap(), None);
+
+    Connection::open(kobo.db_path())
+        .unwrap()
+        .execute(
+            "UPDATE content SET ReadStatus = 1, ___PercentRead = 40, DateLastRead = '2026-10-30T20:00:00Z', TimeSpentReading = 3600 WHERE ContentID = ?1",
+            [cid(KEPUB)],
+        )
+        .unwrap();
+    assert_eq!(sync_reading(&library, &kobo).unwrap(), 1);
+    let r = library.reading(book_id).unwrap().unwrap();
+    assert_eq!(
+        (
+            r.status.as_str(),
+            r.percent,
+            r.time_spent_secs,
+            r.device_serial.as_str()
+        ),
+        ("reading", 40, Some(3600), "N000000000001")
+    );
+    assert!(r.last_read.unwrap().starts_with("2026-10-30T20:00:00"));
+    // Nothing changed since: nothing written.
+    assert_eq!(sync_reading(&library, &kobo).unwrap(), 0);
 }

@@ -47,6 +47,11 @@ impl KoboDb {
         Ok(Self { conn, version })
     }
 
+    /// The read-only connection, for queries beyond the ones here.
+    pub fn connection(&self) -> &Connection {
+        &self.conn
+    }
+
     pub fn db_version(&self) -> u32 {
         self.version
     }

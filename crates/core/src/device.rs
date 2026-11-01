@@ -2,7 +2,11 @@
 
 use std::path::Path;
 
-use erc_device_kobo::{KoboDevice, remove_book};
+use erc_device::ReadStatus;
+use erc_device_kobo::{
+    DuplicateCollection, KoboDevice, Mismatch, duplicate_collections, files_not_in_database,
+    merge_duplicate_collections, missing_files, orphaned_images, remove_book, set_read_status,
+};
 use erc_library::Library;
 use serde::Serialize;
 
@@ -76,4 +80,123 @@ pub fn remove_from_device(
         .collect();
     writer.close()?;
     Ok(outcomes)
+}
+
+/// Copies the reading progress Nickel shows for library books on `device`
+/// into the library, so it's visible with the Kobo unplugged. Only reads the
+/// device. Returns how many books were updated.
+pub fn sync_reading(library: &Library, device: &KoboDevice) -> erc_device_kobo::Result<usize> {
+    let serial = device.version().serial.clone();
+    let copies = library.device_copies(&serial).unwrap_or_default();
+    if copies.is_empty() {
+        return Ok(0);
+    }
+    let mut n = 0;
+    for book in device.open_db()?.books()? {
+        let Some(copy) = copies.iter().find(|c| c.content_id == book.id) else {
+            continue;
+        };
+        let status = match book.read_status {
+            ReadStatus::Unread => "unread",
+            ReadStatus::Reading => "reading",
+            ReadStatus::Finished => "finished",
+        };
+        let last_read = book.last_read.map(|d| d.to_rfc3339());
+        let unchanged = library
+            .reading(copy.book_id)
+            .ok()
+            .flatten()
+            .is_some_and(|r| {
+                r.device_serial == serial
+                    && r.status == status
+                    && r.percent == book.percent_read
+                    && r.last_read == last_read
+                    && r.time_spent_secs == book.reading_time_secs
+            });
+        if !unchanged
+            && library
+                .record_reading(
+                    copy.book_id,
+                    &serial,
+                    status,
+                    book.percent_read,
+                    last_read.as_deref(),
+                    book.reading_time_secs,
+                )
+                .is_ok()
+        {
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
+/// What "Check this Kobo" found. Only reads the device.
+#[derive(Debug, Clone, Serialize)]
+pub struct Health {
+    /// Entries whose file is gone: they show as books that won't open.
+    pub missing_files: Vec<Mismatch>,
+    /// Files not in the database: sent since the last eject, or files Nickel
+    /// couldn't import.
+    pub not_imported: Vec<Mismatch>,
+    pub duplicate_collections: Vec<DuplicateCollection>,
+    /// Cached covers of books no longer on the Kobo.
+    pub orphaned_images: usize,
+    pub orphaned_image_bytes: u64,
+}
+
+pub fn health(device: &KoboDevice) -> erc_device_kobo::Result<Health> {
+    let images = orphaned_images(device)?;
+    Ok(Health {
+        missing_files: missing_files(device)?,
+        not_imported: files_not_in_database(device)?,
+        duplicate_collections: duplicate_collections(device.open_db()?.connection())?,
+        orphaned_image_bytes: images
+            .iter()
+            .filter_map(|p| std::fs::metadata(p).ok())
+            .map(|m| m.len())
+            .sum(),
+        orphaned_images: images.len(),
+    })
+}
+
+/// Merges same-named collections in one backed-up write session. Returns
+/// how many copies were removed.
+pub fn merge_collections(
+    device: &KoboDevice,
+    backup_root: &Path,
+) -> erc_device_kobo::Result<usize> {
+    if duplicate_collections(device.open_db()?.connection())?.is_empty() {
+        return Ok(0);
+    }
+    let mut writer = device.open_writer(backup_root)?;
+    let removed = writer.transaction(merge_duplicate_collections);
+    if let Ok(n) = removed {
+        writer.log(
+            erc_device_kobo::LogEntry::new("collection")
+                .detail(format!("merged duplicate collections ({n} copies removed)")),
+        );
+    }
+    writer.close()?;
+    removed
+}
+
+/// Changes reading status in one backed-up write session, then refreshes the
+/// library's copy of the progress.
+pub fn change_reading_status(
+    library: Option<&Library>,
+    device: &KoboDevice,
+    backup_root: &Path,
+    content_ids: &[String],
+    status: ReadStatus,
+    reset_position: bool,
+    reset_time: bool,
+) -> erc_device_kobo::Result<usize> {
+    let mut writer = device.open_writer(backup_root)?;
+    let changed = set_read_status(&mut writer, content_ids, status, reset_position, reset_time);
+    writer.close()?;
+    if let Some(library) = library {
+        sync_reading(library, device)?;
+    }
+    changed
 }

@@ -91,7 +91,7 @@ export const fromForm = (f: EditForm): MetadataEdit => ({
 export const isBookFile = (path: string) => /\.(epub|kepub)$/i.test(path);
 
 export type LibraryKey =
-  "title" | "author" | "series" | "tags" | "kobo" | "added";
+  "title" | "author" | "series" | "tags" | "progress" | "kobo" | "added";
 
 /** "The Hobbit" sorts under H. */
 export const titleKey = (t: string) => t.replace(/^(the|a|an)\s+/i, "");
@@ -150,6 +150,21 @@ export const libraryColumns = (
     value: (b) => (b.tags.length ? b.tags.join(", ") : null),
   },
   {
+    key: "progress",
+    label: "Progress",
+    width: "80px",
+    align: "end",
+    // Descending: finished, then most read, then unread; never seen last.
+    value: (b) =>
+      !b.reading
+        ? null
+        : b.reading.status === "finished"
+          ? 101
+          : b.reading.status === "reading"
+            ? b.reading.percent
+            : -1,
+  },
+  {
     key: "kobo",
     label: "On Kobo",
     width: "92px",
@@ -165,3 +180,17 @@ export const libraryColumns = (
     value: (b) => b.added_at,
   },
 ];
+
+/** "Finished", "63%", "Unread", or "" when no Kobo has reported it. */
+export function progressLabel(b: Book): string {
+  switch (b.reading?.status) {
+    case "finished":
+      return "Finished";
+    case "reading":
+      return `${b.reading.percent}%`;
+    case "unread":
+      return "Unread";
+    default:
+      return "";
+  }
+}

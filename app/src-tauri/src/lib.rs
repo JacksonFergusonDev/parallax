@@ -15,7 +15,7 @@ use erc_covers::{Candidate, CoverQuery};
 use erc_device::{Collection, DeviceBook, DeviceInfo};
 use erc_device_kobo::{BookCheck, ErcState, KoboDevice, MACOS_VOLUMES, tidy_apple_double};
 use erc_epub::MetadataEdit;
-use erc_library::{Book, ImportOutcome, Library, Rule};
+use erc_library::{Book, ImportOutcome, Library, Reading, Rule};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -53,11 +53,14 @@ struct LibraryBook {
     #[serde(flatten)]
     book: Book,
     cover: Option<PathBuf>,
+    /// Progress last seen on a device.
+    reading: Option<Reading>,
 }
 
 fn with_cover(lib: &Library, book: Book) -> LibraryBook {
     LibraryBook {
         cover: lib.cover_file(book.id),
+        reading: lib.reading(book.id).ok().flatten(),
         book,
     }
 }
@@ -310,6 +313,68 @@ async fn send_books(
     .map_err(err)?
 }
 
+/// "Check this Kobo": mismatches, duplicate collections, leftover covers.
+#[tauri::command]
+async fn kobo_health(mount: PathBuf) -> CmdResult<erc_core::device::Health> {
+    tauri::async_runtime::spawn_blocking(move || {
+        erc_core::device::health(&KoboDevice::open(&mount).map_err(err)?).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Deletes cached covers of books no longer on the device; returns
+/// (files, bytes).
+#[tauri::command]
+async fn clean_images(mount: PathBuf) -> CmdResult<(usize, u64)> {
+    tauri::async_runtime::spawn_blocking(move || {
+        erc_device_kobo::remove_orphaned_images(&KoboDevice::open(&mount).map_err(err)?)
+            .map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
+async fn merge_collections(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<usize> {
+    let backups = state.backup_root.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        erc_core::device::merge_collections(&kobo, &backups).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
+async fn set_reading_status(
+    state: State<'_, AppState>,
+    mount: PathBuf,
+    content_ids: Vec<String>,
+    status: erc_device::ReadStatus,
+    reset_position: bool,
+    reset_time: bool,
+) -> CmdResult<usize> {
+    let library = state.library.clone();
+    let backups = state.backup_root.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        erc_core::device::change_reading_status(
+            Some(&lib),
+            &kobo,
+            &backups,
+            &content_ids,
+            status,
+            reset_position,
+            reset_time,
+        )
+        .map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
 /// Series and genre proposals for `ids`, using a connected Kobo's series and
 /// folders too when `mount` is given. Holds the library only to read the
 /// books, not during lookups.
@@ -521,6 +586,8 @@ struct Reconciled {
     series: usize,
     /// Books added to collections by grouping rules.
     grouped: usize,
+    /// Library books whose reading progress changed.
+    reading: usize,
 }
 
 /// On connect: applies series to books Nickel has imported since they were
@@ -536,6 +603,7 @@ async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResu
         Ok(Reconciled {
             series: erc_core::collections::reconcile_series(&lib, &kobo, &backups).map_err(err)?,
             grouped: erc_core::rules::run(&lib, &kobo, &backups).map_err(err)?,
+            reading: erc_core::device::sync_reading(&lib, &kobo).map_err(err)?,
         })
     })
     .await
@@ -674,6 +742,10 @@ pub fn run() {
             import_from_device,
             library_duplicates,
             enhance_propose,
+            kobo_health,
+            clean_images,
+            merge_collections,
+            set_reading_status,
             enhance_apply,
             setting_get,
             setting_set,

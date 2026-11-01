@@ -43,6 +43,32 @@ export interface Book {
   modified_at: string;
   /** Absolute path of the cover thumbnail. */
   cover: string | null;
+  /** Progress last seen on a Kobo. */
+  reading?: Reading | null;
+}
+
+export interface Reading {
+  device_serial: string;
+  status: "unread" | "reading" | "finished";
+  percent: number;
+  last_read: string | null;
+  time_spent_secs: number | null;
+  seen_at: string;
+}
+
+export interface Mismatch {
+  path: string;
+  content_id: string;
+  title: string;
+}
+
+/** What "Check this Kobo" found. */
+export interface KoboHealth {
+  missing_files: Mismatch[];
+  not_imported: Mismatch[];
+  duplicate_collections: { name: string; copies: number }[];
+  orphaned_images: number;
+  orphaned_image_bytes: number;
 }
 
 export interface MetadataEdit {
@@ -395,6 +421,25 @@ export const onEnhanceProgress = (
   handler: (p: ImportProgress) => void,
 ): Promise<UnlistenFn> =>
   listen<ImportProgress>("enhance-progress", (e) => handler(e.payload));
+export const koboHealth = (mount: string) =>
+  read<KoboHealth>("kobo_health", { mount }, [deviceTag(mount)]);
+/** Deletes leftover cover images; returns [files, bytes]. */
+export const cleanImages = (mount: string) =>
+  write<[number, number]>("clean_images", { mount }, [deviceTag(mount)]);
+export const mergeCollections = (mount: string) =>
+  write<number>("merge_collections", { mount }, [deviceTag(mount)]);
+export const setReadingStatus = (
+  mount: string,
+  contentIds: string[],
+  status: DeviceBook["read_status"],
+  resetPosition: boolean,
+  resetTime: boolean,
+) =>
+  write<number>(
+    "set_reading_status",
+    { mount, contentIds, status, resetPosition, resetTime },
+    [deviceTag(mount), "library"],
+  );
 export const libraryDuplicates = () =>
   read<LibraryDuplicateGroup[]>("library_duplicates", {}, ["library"]);
 export const deviceDuplicates = (mount: string) =>
@@ -415,11 +460,13 @@ export const folderGroups = (mount: string) =>
   read<FolderGroup[]>("folder_groups", { mount }, [deviceTag(mount)]);
 export async function reconcileDevice(mount: string) {
   try {
-    const result = await invoke<{ series: number; grouped: number }>(
-      "reconcile_device",
-      { mount },
-    );
+    const result = await invoke<{
+      series: number;
+      grouped: number;
+      reading: number;
+    }>("reconcile_device", { mount });
     if (result.series || result.grouped) readCache.invalidate(deviceTag(mount));
+    if (result.reading) readCache.invalidate("library");
     return result;
   } catch (e) {
     readCache.invalidate(deviceTag(mount));

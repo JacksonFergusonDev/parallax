@@ -69,6 +69,26 @@ let books: Book[] = SAMPLE.map(([title, author, series, index, tags], i) => ({
   added_at: "2026-10-31T00:00:00Z",
   modified_at: "2026-10-31T00:00:00Z",
   cover: i < SAMPLE.length - 1 ? coverSvg(title, author, i) : null,
+  reading:
+    i === 2
+      ? {
+          device_serial: "N000000000001",
+          status: "reading" as const,
+          percent: 42,
+          last_read: "2026-10-29T20:00:00Z",
+          time_spent_secs: 7200,
+          seen_at: "2026-10-31T00:00:00Z",
+        }
+      : i === 4
+        ? {
+            device_serial: "N000000000001",
+            status: "finished" as const,
+            percent: 100,
+            last_read: "2026-09-01T20:00:00Z",
+            time_spent_secs: 30000,
+            seen_at: "2026-10-31T00:00:00Z",
+          }
+        : null,
 }));
 
 // A second copy of Dune, for duplicate review.
@@ -100,6 +120,7 @@ const device: DeviceInfo = {
 };
 const dismissed = new Set<string>();
 const settings = new Map<string, string>();
+const health = { missing: true, duplicates: true, images: 23 };
 const onDevice = new Map<number, string>([
   [3, "2026-10-01T00:00:00Z"],
   [5, "2026-10-01T00:00:00Z"],
@@ -250,6 +271,7 @@ export function installMockBackend() {
             .sort((x, y) => x.title.localeCompare(y.title));
         case "remove_from_device": {
           const ids = a.contentIds as string[];
+          if (ids.some((id) => id.includes("Old Book"))) health.missing = false;
           storeBooks = storeBooks.filter((b) => !ids.includes(b.id));
           for (const id of [...onDevice.keys()])
             if (ids.includes(contentId(id))) onDevice.delete(id);
@@ -481,6 +503,58 @@ export function installMockBackend() {
             });
           }
           return outcomes;
+        }
+        case "kobo_health":
+          await sleep(300);
+          return {
+            missing_files: health.missing
+              ? [
+                  {
+                    path: "KEpub/Old Book.kepub.epub",
+                    content_id: "file:///mnt/onboard/KEpub/Old Book.kepub.epub",
+                    title: "Old Book",
+                  },
+                ]
+              : [],
+            not_imported: [
+              {
+                path: "KEpub/Sent Today.kepub.epub",
+                content_id: "file:///mnt/onboard/KEpub/Sent Today.kepub.epub",
+                title: "Sent Today.kepub.epub",
+              },
+            ],
+            duplicate_collections: health.duplicates
+              ? [{ name: "Favourites", copies: 2 }]
+              : [],
+            orphaned_images: health.images,
+            orphaned_image_bytes: health.images * 41_000,
+          };
+        case "clean_images": {
+          const n = health.images;
+          health.images = 0;
+          return [n, n * 41_000];
+        }
+        case "merge_collections":
+          health.duplicates = false;
+          return 1;
+        case "set_reading_status": {
+          const ids = a.contentIds as string[];
+          const status = a.status as DeviceBook["read_status"];
+          storeBooks = storeBooks.map((b) =>
+            ids.includes(b.id)
+              ? {
+                  ...b,
+                  read_status: status,
+                  percent_read:
+                    status === "finished"
+                      ? 100
+                      : a.resetPosition
+                        ? 0
+                        : b.percent_read,
+                }
+              : b,
+          );
+          return ids.length;
         }
         case "enhance_propose": {
           const ids = a.ids as number[];

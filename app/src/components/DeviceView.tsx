@@ -11,6 +11,7 @@ import {
   listCollections,
   onImportProgress,
   removeFromDevice,
+  setReadingStatus,
   tidyDevice,
   updateBooks,
   type Book,
@@ -31,6 +32,8 @@ import {
 import { applySort } from "../sort";
 import { deviceReviewGroups } from "../duplicates";
 import { AboutKobo } from "./AboutKobo";
+import { ActionMenu } from "./ActionMenu";
+import { KoboCheck } from "./KoboCheck";
 import { DuplicateReview, type ReviewGroup } from "./DuplicateReview";
 import { EnhanceReview } from "./EnhanceReview";
 import { CollectionMenu } from "./CollectionMenu";
@@ -66,6 +69,7 @@ type Dialog =
   | { kind: "folders" }
   | { kind: "rules" }
   | { kind: "about" }
+  | { kind: "check" }
   | { kind: "duplicates"; groups: Promise<ReviewGroup[]> }
   /** Library ids of this Kobo's books, being enhanced. */
   | { kind: "enhance"; ids: number[] }
@@ -294,6 +298,24 @@ export function DeviceView({
       }
     });
 
+  const markAs = (
+    status: DeviceBook["read_status"],
+    resetPosition: boolean,
+    resetTime: boolean,
+    done: string,
+  ) =>
+    run(async () => {
+      await setReadingStatus(
+        device.mount,
+        ids(chosen),
+        status,
+        resetPosition,
+        resetTime,
+      );
+      setSelected(new Set());
+      return `${done} Eject to see the change on your Kobo.`;
+    });
+
   const tidy = () =>
     run(async () => {
       const n = await tidyDevice(device.mount);
@@ -404,6 +426,13 @@ export function DeviceView({
               title="Delete hidden ._ files macOS leaves on the Kobo"
             >
               Remove macOS clutter
+            </button>
+            <button
+              className="link"
+              onClick={() => setDialog({ kind: "check" })}
+              disabled={busy !== null}
+            >
+              Check this Kobo…
             </button>
             <button
               className="link"
@@ -550,6 +579,42 @@ export function DeviceView({
             Remove from collection
           </button>
         )}
+        <ActionMenu
+          label="Mark as"
+          disabled={chosen.length === 0 || busy !== null}
+          items={[
+            {
+              label: "Finished",
+              onPick: () =>
+                markAs(
+                  "finished",
+                  false,
+                  false,
+                  `Marked ${plural(chosen.length, "book")} finished.`,
+                ),
+            },
+            {
+              label: "Unread (start over)",
+              onPick: () =>
+                markAs(
+                  "unread",
+                  true,
+                  false,
+                  `Marked ${plural(chosen.length, "book")} unread.`,
+                ),
+            },
+            {
+              label: "Unread, and clear reading time",
+              onPick: () =>
+                markAs(
+                  "unread",
+                  true,
+                  true,
+                  `Marked ${plural(chosen.length, "book")} unread and cleared reading time.`,
+                ),
+            },
+          ]}
+        />
         {importable.length > 0 && (
           <button
             className="secondary"
@@ -661,6 +726,16 @@ export function DeviceView({
               throw new Error(failed.result.Err);
           }}
           dismiss={(key) => dismissDuplicates(key, device.mount)}
+          onChanged={() => {
+            load();
+            onChanged();
+          }}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === "check" && (
+        <KoboCheck
+          mount={device.mount}
           onChanged={() => {
             load();
             onChanged();
