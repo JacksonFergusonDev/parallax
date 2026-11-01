@@ -3,7 +3,11 @@
 //! write; database writes go through the backed-up write session.
 //! `library` commands share the desktop app's library and backups.
 
+mod output;
+
 use std::path::{Path, PathBuf};
+
+use output::{Reporter, failure, success, table, warning};
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
@@ -14,7 +18,7 @@ use erc_core::duplicates::{Reason, device_duplicates, library_duplicates};
 use erc_core::enhance;
 use erc_core::import::{DeviceImport, import_from_device};
 use erc_core::rules;
-use erc_core::send::{Progress, SendOutcome, send_books, send_library_books, update_on_device};
+use erc_core::send::{SendOutcome, send_books, send_library_books, update_on_device};
 use erc_device::{DeviceBook, ReadStatus};
 use erc_device_kobo::{
     BookCheck, KoboDb, KoboDevice, LogEntry, MACOS_VOLUMES, ONBOARD_PREFIX, Record, restore,
@@ -365,6 +369,10 @@ fn find_kobo(mount: Option<&Path>) -> Result<KoboDevice> {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    if cli.json {
+        console::set_colors_enabled(false);
+        console::set_colors_enabled_stderr(false);
+    }
     match cli.command {
         Command::Devices { volumes } => {
             let infos: Vec<_> = KoboDevice::detect(&volumes)
@@ -377,13 +385,12 @@ fn main() -> Result<()> {
             if infos.is_empty() {
                 println!("No devices found.");
             }
-            for i in infos {
-                println!(
-                    "{}  firmware {}  at {}",
-                    i.model,
-                    i.firmware,
-                    i.mount.display()
-                );
+            if !infos.is_empty() {
+                let mut rows = table(&["Model", "Firmware", "Mount"]);
+                for i in infos {
+                    rows.add_row([i.model, i.firmware, i.mount.display().to_string()]);
+                }
+                println!("{rows}");
             }
         }
         Command::Kobo(KoboCommand::Ls(source)) => {
@@ -391,8 +398,19 @@ fn main() -> Result<()> {
             if cli.json {
                 return print_json(&books);
             }
-            for b in &books {
-                println!("{}", book_line(b));
+            if !books.is_empty() {
+                let mut rows = table(&["Status", "Last read", "Title", "Author"]);
+                for b in &books {
+                    rows.add_row([
+                        status_of(b),
+                        b.last_read
+                            .map(|d| d.format("%Y-%m-%d").to_string())
+                            .unwrap_or_default(),
+                        b.title.clone(),
+                        b.author.clone().unwrap_or_else(|| "Unknown".into()),
+                    ]);
+                }
+                println!("{rows}");
             }
             println!("{} books", books.len());
         }
@@ -414,7 +432,9 @@ fn main() -> Result<()> {
             no_eject,
         } => {
             let kobo = find_kobo(mount.as_deref())?;
-            let outcomes = send_books(&kobo, &Kepubify::locate()?, &files, print_progress);
+            let progress = Reporter::new(cli.json);
+            let outcomes = send_books(&kobo, &Kepubify::locate()?, &files, |p| progress.send(p));
+            drop(progress);
             finish_send(&kobo, &outcomes, no_eject, cli.json)?;
         }
         Command::Library { library, command } => {
@@ -433,7 +453,7 @@ fn main() -> Result<()> {
                     Ok(()) => println!("removed {}", o.content_id),
                     Err(e) => {
                         failed += 1;
-                        eprintln!("FAILED {}: {e}", o.content_id)
+                        eprintln!("{} {}: {e}", failure("FAILED"), o.content_id)
                     }
                 }
             }
@@ -469,7 +489,7 @@ fn main() -> Result<()> {
             };
             let kobo = find_kobo(mount.as_deref())?;
             collections::apply(&kobo, &backup_root()?, &[change])?;
-            println!("done");
+            println!("{}", success("done"));
         }
         Command::Kobo(KoboCommand::Folders { apply, mount }) => {
             let kobo = find_kobo(mount.as_deref())?;
@@ -609,8 +629,12 @@ fn main() -> Result<()> {
             if collections.is_empty() {
                 println!("No collections.");
             }
-            for c in collections {
-                println!("{:<40} {:>4} books", c.name, c.book_count);
+            if !collections.is_empty() {
+                let mut rows = table(&["Collection", "Books"]);
+                for c in collections {
+                    rows.add_row([c.name, c.book_count.to_string()]);
+                }
+                println!("{rows}");
             }
         }
     }
@@ -629,12 +653,12 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                         let dup = possible_duplicate_of
                             .map(|id| format!(" (possible duplicate of #{id})"))
                             .unwrap_or_default();
-                        println!("added #{} {}{dup}", book.id, book.title);
+                        println!("{} #{} {}{dup}", success("added"), book.id, book.title);
                     }
                     Ok(ImportOutcome::AlreadyInLibrary { book }) => {
                         println!("already in library as #{} {}", book.id, book.title)
                     }
-                    Err(e) => eprintln!("FAILED {}: {e}", file.display()),
+                    Err(e) => eprintln!("{} {}: {e}", failure("FAILED"), file.display()),
                 }
             }
         }
@@ -643,18 +667,18 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             if json {
                 return print_json(&books);
             }
-            for b in &books {
-                let series = b
-                    .series
-                    .as_ref()
-                    .map(|s| format!("  [{s} {}]", b.series_index.as_deref().unwrap_or("")))
-                    .unwrap_or_default();
-                println!(
-                    "#{:<4} {}  —  {}{series}",
-                    b.id,
-                    truncate(&b.title, 50),
-                    b.authors.join(", ")
-                );
+            if !books.is_empty() {
+                let mut rows = table(&["ID", "Title", "Authors", "Series", "Number"]);
+                for b in &books {
+                    rows.add_row([
+                        b.id.to_string(),
+                        b.title.clone(),
+                        b.authors.join(", "),
+                        b.series.clone().unwrap_or_default(),
+                        b.series_index.clone().unwrap_or_default(),
+                    ]);
+                }
+                println!("{rows}");
             }
             println!("{} books", books.len());
         }
@@ -679,7 +703,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                 tags: if tags.is_empty() { current.tags } else { tags },
             };
             let book = lib.update(id, &edit)?;
-            println!("updated #{} {}", book.id, book.title);
+            println!("{} #{} {}", success("updated"), book.id, book.title);
         }
         LibraryCommand::Covers { id } => {
             let book = lib.book(id)?;
@@ -695,8 +719,12 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             if json {
                 return print_json(&found);
             }
-            for c in &found {
-                println!("{:<13} {}", c.source, c.url);
+            if !found.is_empty() {
+                let mut rows = table(&["Source", "URL"]);
+                for c in &found {
+                    rows.add_row([c.source, c.url.as_str()]);
+                }
+                println!("{rows}");
             }
         }
         LibraryCommand::Cover {
@@ -722,7 +750,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
         }
         LibraryCommand::Rm { id } => {
             lib.remove(id)?;
-            println!("removed #{id}");
+            println!("{} #{id}", success("removed"));
         }
         LibraryCommand::Update {
             ids,
@@ -730,14 +758,16 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             no_eject,
         } => {
             let kobo = find_kobo(mount.as_deref())?;
+            let progress = Reporter::new(json);
             let outcomes = update_on_device(
                 lib,
                 &kobo,
                 &Kepubify::locate()?,
                 &backup_root()?,
                 &ids,
-                print_progress,
+                |p| progress.send(p),
             )?;
+            drop(progress);
             finish_send(&kobo, &outcomes, no_eject, json)?;
         }
         LibraryCommand::Rules(command) => rules_command(lib, command, json)?,
@@ -756,13 +786,15 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                 .iter()
                 .map(|&id| lib.book(id))
                 .collect::<erc_library::Result<Vec<_>>>()?;
+            let progress = Reporter::new(json);
             let proposals = enhance::propose(
                 &books,
                 &enhance::options(lib),
                 &fetch,
                 &clues,
-                |n, total, title| eprintln!("[{n}/{total}] {title}"),
+                |n, total, title| progress.update(n, total, title),
             );
+            drop(progress);
             if json {
                 return print_json(&proposals);
             }
@@ -856,12 +888,16 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
         LibraryCommand::FromKobo { books, mount } => {
             let kobo = find_kobo(mount.as_deref())?;
             let ids: Vec<String> = books.iter().map(|b| content_id_for(b)).collect();
+            let progress = Reporter::new(json);
             let outcomes = import_from_device(
                 lib,
                 &kobo,
                 (!ids.is_empty()).then_some(&ids[..]),
-                |i, n, title| eprintln!("[{i}/{n}] {title}"),
+                |i, n, title| {
+                    progress.update(i.saturating_sub(1), n, &format!("importing {title}"))
+                },
             )?;
+            drop(progress);
             if json {
                 return print_json(&outcomes);
             }
@@ -870,19 +906,19 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                 match &o.result {
                     Ok(DeviceImport::Added { book_id }) => {
                         added += 1;
-                        println!("added    #{book_id} {}", o.title);
+                        println!("{}    #{book_id} {}", success("added"), o.title);
                     }
                     Ok(DeviceImport::Linked { book_id }) => {
                         linked += 1;
-                        println!("linked   #{book_id} {}", o.title);
+                        println!("{}   #{book_id} {}", success("linked"), o.title);
                     }
                     Ok(DeviceImport::Skipped { reason }) => {
                         skipped += 1;
-                        println!("skipped  {} ({reason})", o.title);
+                        println!("{}  {} ({reason})", warning("skipped"), o.title);
                     }
                     Err(e) => {
                         failed += 1;
-                        eprintln!("FAILED   {}: {e}", o.title);
+                        eprintln!("{}   {}: {e}", failure("FAILED"), o.title);
                     }
                 }
             }
@@ -905,8 +941,10 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             no_eject,
         } => {
             let kobo = find_kobo(mount.as_deref())?;
+            let progress = Reporter::new(json);
             let outcomes =
-                send_library_books(lib, &kobo, &Kepubify::locate()?, &ids, print_progress);
+                send_library_books(lib, &kobo, &Kepubify::locate()?, &ids, |p| progress.send(p));
+            drop(progress);
             if let Some(name) = collection {
                 let content_ids: Vec<String> = outcomes
                     .iter()
@@ -949,15 +987,22 @@ fn rules_command(lib: &Library, command: RulesCommand, json: bool) -> Result<()>
             if rules.is_empty() {
                 println!("No rules.");
             }
-            for r in rules {
-                println!(
-                    "#{:<3} {:<7} min {:<3} prefix {:?} {}",
-                    r.id,
-                    format!("{:?}", r.kind).to_lowercase(),
-                    r.min_books,
-                    r.prefix,
-                    if r.enabled { "" } else { "(disabled)" }
-                );
+            if !rules.is_empty() {
+                let mut rows = table(&["ID", "Kind", "Minimum books", "Prefix", "Status"]);
+                for r in rules {
+                    rows.add_row([
+                        r.id.to_string(),
+                        format!("{:?}", r.kind).to_lowercase(),
+                        r.min_books.to_string(),
+                        r.prefix,
+                        if r.enabled {
+                            success("enabled")
+                        } else {
+                            warning("disabled")
+                        },
+                    ]);
+                }
+                println!("{rows}");
             }
         }
         RulesCommand::Add { kind, min, prefix } => {
@@ -1042,30 +1087,6 @@ fn content_id_for(book: &str) -> String {
     }
 }
 
-fn print_progress(p: Progress) {
-    match p {
-        Progress::Preparing { index, total, file } => {
-            eprintln!("[{index}/{total}] preparing {file}")
-        }
-        Progress::Converting { index, total, file } => {
-            eprintln!("[{index}/{total}] converting {file}")
-        }
-        Progress::Copying { index, total, file } => eprintln!("[{index}/{total}] copying {file}"),
-        Progress::Done {
-            index,
-            total,
-            device_path,
-            ..
-        } => eprintln!("[{index}/{total}] sent to {device_path}"),
-        Progress::Failed {
-            index,
-            total,
-            file,
-            error,
-        } => eprintln!("[{index}/{total}] FAILED {file}: {error}"),
-    }
-}
-
 fn finish_send(
     kobo: &KoboDevice,
     outcomes: &[SendOutcome],
@@ -1075,6 +1096,16 @@ fn finish_send(
     let failed = outcomes.iter().filter(|o| o.result.is_err()).count();
     if json {
         print_json(&outcomes)?;
+    } else if !outcomes.is_empty() {
+        let mut rows = table(&["Status", "Book", "Destination / error"]);
+        for outcome in outcomes {
+            let (status, detail) = match &outcome.result {
+                Ok(sent) => (success("sent"), sent.device_path.clone()),
+                Err(error) => (warning("failed"), error.clone()),
+            };
+            rows.add_row([status, outcome.source.clone(), detail]);
+        }
+        println!("{rows}");
     }
     if !no_eject && failed < outcomes.len() {
         kobo.eject()?;
@@ -1084,31 +1115,6 @@ fn finish_send(
         bail!("{failed} of {} books failed", outcomes.len());
     }
     Ok(())
-}
-
-fn book_line(b: &DeviceBook) -> String {
-    let status = match b.read_status {
-        ReadStatus::Unread => "unread".to_owned(),
-        ReadStatus::Reading => format!("{:>3}%", b.percent_read),
-        ReadStatus::Finished => "done".to_owned(),
-    };
-    let last = b
-        .last_read
-        .map(|d| d.format("%Y-%m-%d").to_string())
-        .unwrap_or_default();
-    format!(
-        "{status:>6}  {last:<10}  {}  —  {}",
-        truncate(&b.title, 50),
-        truncate(b.author.as_deref().unwrap_or("Unknown"), 30)
-    )
-}
-
-fn truncate(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        s.to_owned()
-    } else {
-        s.chars().take(max - 1).chain(['…']).collect()
-    }
 }
 
 fn print_json<T: Serialize>(value: &T) -> Result<()> {

@@ -27,6 +27,14 @@ just build    # macOS .app bundle
 
 `just dev` prompts before stopping processes that occupy Vite’s port (1420). Accepting retries app startup without repeating setup; declining or closing input leaves those processes running.
 
-`erc` is a command-line companion for development and scripting: `cargo run -p erc-cli -- --help`.
+`erc` is a command-line companion for development and scripting: `cargo run -p erc-cli -- --help`. It shares the desktop app’s library and core operations.
+
+The CLI uses `comfy-table` for device, book, collection, cover, rule and transfer-result tables; `console` for coloured status labels; and `indicatif` for transfer, Kobo-import and metadata-lookup progress bars on stderr. Redirected output uses plain tables and progress logs. Set `NO_COLOR=1` to disable colours; `--json` keeps existing JSON responses free of styling and suppresses progress.
+
+```bash
+cargo run -p erc-cli -- library ls
+cargo run -p erc-cli -- library ls --json
+cargo run -p erc-cli -- library enhance  # preview metadata proposals
+```
 
 Project plan and progress: [docs/PLAN.md](docs/PLAN.md), [PROGRESS.md](PROGRESS.md). Device findings: [docs/device-notes.md](docs/device-notes.md). Manual device checks: [docs/hardware-checks.md](docs/hardware-checks.md). App caching and invalidation: [docs/app-caching.md](docs/app-caching.md).

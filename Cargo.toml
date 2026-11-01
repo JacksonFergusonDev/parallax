@@ -32,6 +32,9 @@ strip = true
 anyhow = "1"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 clap = { version = "4", features = ["derive"] }
+comfy-table = "8"
+console = "0.16"
+indicatif = "0.18"
 reqwest = { version = "0.13", features = ["blocking", "json", "query"] }
 roxmltree = "0.21"
 rusqlite = { version = "0.41", features = ["bundled", "backup"] }
