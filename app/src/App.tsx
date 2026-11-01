@@ -37,6 +37,7 @@ import {
 import { BookCard } from "./components/BookCard";
 import { DeviceBadge } from "./components/DeviceBadge";
 import { DeviceView } from "./components/DeviceView";
+import { EnhanceReview } from "./components/EnhanceReview";
 import {
   DuplicateReview,
   type ReviewGroup,
@@ -86,6 +87,10 @@ export default function App() {
   const [duplicates, setDuplicates] = useState<Promise<ReviewGroup[]> | null>(
     null,
   );
+  /** Books being looked up for series and genres. */
+  const [enhancing, setEnhancing] = useState<number[] | null>(null);
+  /** Bumped when an enhance saves, so an open edit form reloads. */
+  const [enhanced, setEnhanced] = useState(0);
   const [notice, setNotice] = useState<Notice | null>(null);
   const batch = useRef<number[]>([]);
   const anchor = useRef<number | null>(null);
@@ -546,6 +551,19 @@ export default function App() {
                 >
                   Find duplicates…
                 </button>
+                <button
+                  className="link"
+                  onClick={() =>
+                    setEnhancing(
+                      selected.size ? [...selected] : visible.map((b) => b.id),
+                    )
+                  }
+                  title="Look up series and genres for the selected books, or all books shown"
+                >
+                  {selected.size
+                    ? `Find series & genres for ${selected.size}…`
+                    : "Find series & genres…"}
+                </button>
                 <span className="spacer" />
                 {selected.size > 0 && (
                   <span className="muted">{selected.size} selected</span>
@@ -616,9 +634,10 @@ export default function App() {
           </main>
           {editing && (
             <EditPanel
-              key={editing.id}
+              key={`${editing.id}-${enhanced}`}
               book={editing}
               onSave={save}
+              onEnhance={(id) => setEnhancing([id])}
               onChanged={(updated) => {
                 setBooks((bs) =>
                   bs.map((b) => (b.id === updated.id ? updated : b)),
@@ -726,6 +745,32 @@ export default function App() {
           </button>
         </footer>
       </div>
+      {enhancing && (
+        <EnhanceReview
+          ids={enhancing}
+          mount={device?.mount ?? null}
+          onApplied={(updated) => {
+            const byId = new Map(updated.map((b) => [b.id, b]));
+            setBooks((bs) => bs.map((b) => byId.get(b.id) ?? b));
+            setEnhanced((n) => n + 1);
+          }}
+          kobo={
+            device
+              ? {
+                  isOnKobo: (id) => onDevice.has(id),
+                  update: async (ids) => {
+                    const outcomes = await updateBooks(device.mount, ids);
+                    await refreshOnDevice(device);
+                    const failed = outcomes.find((o) => "Err" in o.result);
+                    if (failed && "Err" in failed.result)
+                      throw new Error(failed.result.Err);
+                  },
+                }
+              : undefined
+          }
+          onClose={() => setEnhancing(null)}
+        />
+      )}
       {duplicates && (
         <DuplicateReview
           place="library"

@@ -49,4 +49,5 @@ erc-covers = { path = "crates/covers" }
 erc-device = { path = "crates/device" }
 erc-epub = { path = "crates/epub" }
 erc-library = { path = "crates/library" }
+erc-metadata = { path = "crates/metadata" }
 erc-device-kobo = { path = "crates/device-kobo" }

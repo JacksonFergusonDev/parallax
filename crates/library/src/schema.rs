@@ -50,6 +50,11 @@ const MIGRATIONS: &[&str] = &[
         members TEXT NOT NULL,
         PRIMARY KEY (scope, members)
     );",
+    // 5: app settings, e.g. an optional Google Books API key.
+    "CREATE TABLE settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );",
 ];
 
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {

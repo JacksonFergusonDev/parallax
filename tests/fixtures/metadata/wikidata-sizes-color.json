@@ -1,0 +1,38 @@
+{
+  "head" : {
+    "vars" : [ "series", "seriesLabel", "size" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "series" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q3257270"
+      },
+      "seriesLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Discworld"
+      },
+      "size" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "63"
+      }
+    }, {
+      "series" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q54875383"
+      },
+      "seriesLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Rincewind"
+      },
+      "size" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "8"
+      }
+    } ]
+  }
+}

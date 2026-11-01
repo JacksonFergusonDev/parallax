@@ -1,9 +1,9 @@
-//! Storage behind duplicate review: which books are on a device, and which
-//! groups the user dismissed. Finding duplicates lives in `erc-core`.
+//! Small stores used by `erc-core` workflows: which books are on a device,
+//! duplicate groups the user dismissed, and app settings.
 
 use std::collections::HashSet;
 
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 
 use crate::{Library, Result};
 
@@ -37,5 +37,28 @@ impl Library {
             .query_map([scope], |r| r.get(0))?
             .collect::<rusqlite::Result<_>>()?;
         Ok(keys)
+    }
+
+    pub fn setting(&self, key: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| {
+                r.get(0)
+            })
+            .optional()?)
+    }
+
+    /// Sets, or with `None` clears, a setting.
+    pub fn set_setting(&self, key: &str, value: Option<&str>) -> Result<()> {
+        match value {
+            Some(v) => self.conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+                params![key, v],
+            )?,
+            None => self
+                .conn
+                .execute("DELETE FROM settings WHERE key = ?1", [key])?,
+        };
+        Ok(())
     }
 }

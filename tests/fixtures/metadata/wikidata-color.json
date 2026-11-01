@@ -1,0 +1,140 @@
+{
+  "head" : {
+    "vars" : [ "item", "itemLabel", "authorLabel", "series", "seriesLabel", "ordinal", "genreLabel" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q32136"
+      },
+      "series" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q54875383"
+      },
+      "ordinal" : {
+        "type" : "literal",
+        "value" : "1"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Colour of Magic"
+      },
+      "authorLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Terry Pratchett"
+      },
+      "seriesLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Rincewind"
+      },
+      "genreLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "fantasy"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q32136"
+      },
+      "series" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q3257270"
+      },
+      "ordinal" : {
+        "type" : "literal",
+        "value" : "1"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Colour of Magic"
+      },
+      "authorLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Terry Pratchett"
+      },
+      "seriesLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Discworld"
+      },
+      "genreLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "fantasy"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q32136"
+      },
+      "series" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q54875383"
+      },
+      "ordinal" : {
+        "type" : "literal",
+        "value" : "1"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Colour of Magic"
+      },
+      "authorLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Terry Pratchett"
+      },
+      "seriesLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Rincewind"
+      },
+      "genreLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "speculative fiction comedy"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q32136"
+      },
+      "series" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q3257270"
+      },
+      "ordinal" : {
+        "type" : "literal",
+        "value" : "1"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Colour of Magic"
+      },
+      "authorLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Terry Pratchett"
+      },
+      "seriesLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Discworld"
+      },
+      "genreLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "speculative fiction comedy"
+      }
+    } ]
+  }
+}

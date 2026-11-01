@@ -11,6 +11,7 @@ use erc_convert::Kepubify;
 use erc_core::collections::{self, CollectionChange, folder_groups, reconcile_series};
 use erc_core::device::remove_from_device;
 use erc_core::duplicates::{Reason, device_duplicates, library_duplicates};
+use erc_core::enhance;
 use erc_core::import::{DeviceImport, import_from_device};
 use erc_core::rules;
 use erc_core::send::{Progress, SendOutcome, send_books, send_library_books, update_on_device};
@@ -195,6 +196,24 @@ enum LibraryCommand {
     Rules(RulesCommand),
     /// List probable duplicate books in the library.
     Duplicates,
+    /// Look up series and genres online (and on a connected Kobo) for books
+    /// that lack them. Shows proposals; --apply saves the confident ones.
+    Enhance {
+        /// Library book ids; all books if none.
+        ids: Vec<i64>,
+        /// Also use the Kobo's series and folders.
+        #[arg(long)]
+        mount: Option<PathBuf>,
+        #[arg(long)]
+        apply: bool,
+    },
+    /// Show or change a setting (google_books_key).
+    Setting {
+        key: String,
+        value: Option<String>,
+        #[arg(long)]
+        clear: bool,
+    },
     /// Add books from the Kobo to the library (all sideloaded EPUBs, or the
     /// given device paths). Only reads the Kobo.
     FromKobo {
@@ -722,6 +741,98 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             finish_send(&kobo, &outcomes, no_eject, json)?;
         }
         LibraryCommand::Rules(command) => rules_command(lib, command, json)?,
+        LibraryCommand::Enhance { ids, mount, apply } => {
+            let ids = if ids.is_empty() {
+                lib.books()?.iter().map(|b| b.id).collect()
+            } else {
+                ids
+            };
+            let clues = match mount {
+                Some(m) => enhance::DeviceClues::read(lib, &KoboDevice::open(m)?)?,
+                None => enhance::DeviceClues::default(),
+            };
+            let fetch = enhance::fetcher(lib).map_err(anyhow::Error::msg)?;
+            let books = ids
+                .iter()
+                .map(|&id| lib.book(id))
+                .collect::<erc_library::Result<Vec<_>>>()?;
+            let proposals = enhance::propose(
+                &books,
+                &enhance::options(lib),
+                &fetch,
+                &clues,
+                |n, total, title| eprintln!("[{n}/{total}] {title}"),
+            );
+            if json {
+                return print_json(&proposals);
+            }
+            let mark = |confident: bool| if confident { "+" } else { "?" };
+            let mut accepted = Vec::new();
+            for p in proposals
+                .iter()
+                .filter(|p| !p.is_empty() || !p.problems.is_empty())
+            {
+                println!("#{} {}", p.book_id, lib.book(p.book_id)?.title);
+                if let Some(s) = &p.series {
+                    let index = s
+                        .index
+                        .as_deref()
+                        .map(|i| format!(" #{i}"))
+                        .unwrap_or_default();
+                    println!(
+                        "  {} series  {}{index}  ({})",
+                        mark(s.confident),
+                        s.name,
+                        s.source
+                    );
+                }
+                for g in &p.genres {
+                    println!(
+                        "  {} genre   {}  ({})",
+                        mark(g.confident),
+                        g.name,
+                        g.sources.join(", ")
+                    );
+                }
+                for problem in &p.problems {
+                    println!("  ! {problem}");
+                }
+                accepted.push(enhance::Accepted {
+                    book_id: p.book_id,
+                    series: p
+                        .series
+                        .as_ref()
+                        .filter(|s| s.confident)
+                        .map(|s| (s.name.clone(), s.index.clone())),
+                    genres: p
+                        .genres
+                        .iter()
+                        .filter(|g| g.confident)
+                        .map(|g| g.name.clone())
+                        .collect(),
+                });
+            }
+            let with = proposals.iter().filter(|p| !p.is_empty()).count();
+            println!(
+                "{with} of {} books have proposals (+ selected, ? low confidence)",
+                proposals.len()
+            );
+            if apply {
+                let updated = enhance::apply(lib, &accepted)?;
+                println!("updated {} books", updated.len());
+            } else {
+                println!("(dry run; pass --apply to save the + changes)");
+            }
+        }
+        LibraryCommand::Setting { key, value, clear } => {
+            if clear {
+                lib.set_setting(&key, None)?;
+            } else if let Some(v) = value {
+                lib.set_setting(&key, Some(&v))?;
+            } else {
+                println!("{}", lib.setting(&key)?.unwrap_or_default());
+            }
+        }
         LibraryCommand::Duplicates => {
             let groups = library_duplicates(lib)?;
             if json {

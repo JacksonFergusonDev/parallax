@@ -11,9 +11,9 @@
 //! ```
 
 mod authors;
-mod duplicates;
 mod rules;
 mod schema;
+mod stores;
 
 use std::fs;
 use std::io::{self, Read};

@@ -1,0 +1,36 @@
+{
+  "head" : {
+    "vars" : [ "item", "itemLabel", "authorLabel", "series", "seriesLabel", "ordinal", "genreLabel" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7305012"
+      },
+      "series" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q3235300"
+      },
+      "ordinal" : {
+        "type" : "literal",
+        "value" : "2"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Red Seas Under Red Skies"
+      },
+      "authorLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Scott Lynch"
+      },
+      "seriesLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Gentleman Bastard Sequence"
+      }
+    } ]
+  }
+}

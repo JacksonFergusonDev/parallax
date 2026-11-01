@@ -12,6 +12,7 @@ import {
   onImportProgress,
   removeFromDevice,
   tidyDevice,
+  updateBooks,
   type Book,
   type Collection,
   type CollectionChange,
@@ -31,6 +32,7 @@ import { applySort } from "../sort";
 import { deviceReviewGroups } from "../duplicates";
 import { AboutKobo } from "./AboutKobo";
 import { DuplicateReview, type ReviewGroup } from "./DuplicateReview";
+import { EnhanceReview } from "./EnhanceReview";
 import { CollectionMenu } from "./CollectionMenu";
 import { DeviceCard } from "./DeviceCard";
 import { FolderImport } from "./FolderImport";
@@ -65,6 +67,8 @@ type Dialog =
   | { kind: "rules" }
   | { kind: "about" }
   | { kind: "duplicates"; groups: Promise<ReviewGroup[]> }
+  /** Library ids of this Kobo's books, being enhanced. */
+  | { kind: "enhance"; ids: number[] }
   | null;
 
 export function DeviceView({
@@ -264,6 +268,32 @@ export function DeviceView({
       }
     });
 
+  /** Brings every book into the library, then looks up series and genres. */
+  const organise = () =>
+    run(async () => {
+      const unlisten = await onImportProgress((p) =>
+        setNotice({
+          kind: "info",
+          text: `Adding ${p.index} of ${p.total} to your library: ${p.title}…`,
+        }),
+      );
+      try {
+        const outcomes = await importFromDevice(device.mount, null);
+        onLibraryChanged();
+        const ids = new Set([...libraryByContentId.values()].map((b) => b.id));
+        for (const o of outcomes) {
+          if ("Ok" in o.result && o.result.Ok.kind !== "skipped")
+            ids.add(o.result.Ok.book_id);
+        }
+        if (ids.size) setDialog({ kind: "enhance", ids: [...ids] });
+        return ids.size
+          ? summarizeDeviceImport(outcomes)
+          : "None of the books on this Kobo can be added to your library.";
+      } finally {
+        unlisten();
+      }
+    });
+
   const tidy = () =>
     run(async () => {
       const n = await tidyDevice(device.mount);
@@ -321,6 +351,14 @@ export function DeviceView({
             </button>
           ))}
           <div className="sidebar-foot">
+            <button
+              className="link"
+              onClick={organise}
+              disabled={busy !== null}
+              title="Add this Kobo's books to your library, fill in series and genres, then make collections from them"
+            >
+              Enhance and organise…
+            </button>
             <button
               className="link"
               onClick={() => setDialog({ kind: "rules" })}
@@ -575,6 +613,26 @@ export function DeviceView({
             await load();
             onChanged();
           }}
+        />
+      )}
+      {dialog?.kind === "enhance" && (
+        <EnhanceReview
+          ids={dialog.ids}
+          mount={device.mount}
+          onApplied={() => onLibraryChanged()}
+          kobo={{
+            isOnKobo: () => true,
+            update: async (ids) => {
+              const outcomes = await updateBooks(device.mount, ids);
+              load();
+              onChanged();
+              const failed = outcomes.find((o) => "Err" in o.result);
+              if (failed && "Err" in failed.result)
+                throw new Error(failed.result.Err);
+            },
+            collections: () => setDialog({ kind: "rules" }),
+          }}
+          onClose={() => setDialog(null)}
         />
       )}
       {dialog?.kind === "rules" && (

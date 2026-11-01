@@ -1192,3 +1192,85 @@ select:focus-visible {
   font-size: 12px;
   margin: auto 0 0;
 }
+
+/* Series and genre lookup */
+
+.modal.enhance {
+  width: min(760px, calc(100vw - 48px));
+  gap: 12px;
+}
+.modal.enhance .modal-head {
+  margin-bottom: 0;
+}
+.modal.enhance .modal-head p {
+  margin: 4px 0 0;
+}
+.enhance-progress {
+  width: 100%;
+}
+.enhance-bulk {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+}
+.enhance-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--border);
+}
+.enhance-list > li {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.enhance-book {
+  min-width: 0;
+}
+.enhance-change {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 13px;
+}
+.enhance-change input {
+  align-self: center;
+}
+.enhance-field {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 46px;
+}
+.enhance-change .muted {
+  font-size: 12px;
+}
+.unsure {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--warn);
+  color: var(--warn);
+}
+.enhance-problems,
+.enhance-key {
+  font-size: 12px;
+  margin: 0;
+}
+form.enhance-key {
+  display: flex;
+  gap: 8px;
+}
+form.enhance-key input {
+  flex: 1;
+}
+.find-online {
+  align-self: flex-start;
+  font-size: 12px;
+}

@@ -99,6 +99,7 @@ const device: DeviceInfo = {
   },
 };
 const dismissed = new Set<string>();
+const settings = new Map<string, string>();
 const onDevice = new Map<number, string>([
   [3, "2026-10-01T00:00:00Z"],
   [5, "2026-10-01T00:00:00Z"],
@@ -481,6 +482,88 @@ export function installMockBackend() {
           }
           return outcomes;
         }
+        case "enhance_propose": {
+          const ids = a.ids as number[];
+          const out = [];
+          for (const [i, id] of ids.entries()) {
+            const b = books.find((x) => x.id === id);
+            if (!b) continue;
+            await emit("enhance-progress", {
+              index: i + 1,
+              total: ids.length,
+              title: b.title,
+            });
+            await sleep(120);
+            const genres = b.tags.length
+              ? []
+              : [
+                  {
+                    name: "Nonfiction",
+                    sources: ["Kobo folder"],
+                    confident: true,
+                  },
+                  {
+                    name: "Travel & Exploration",
+                    sources: ["Open Library"],
+                    confident: true,
+                  },
+                  {
+                    name: "History",
+                    sources: ["Apple Books"],
+                    confident: false,
+                  },
+                ];
+            out.push({
+              book_id: id,
+              series: b.series
+                ? null
+                : id % 3 === 0
+                  ? {
+                      name: "Dover Thrift Editions",
+                      index: null,
+                      source: "Wikidata",
+                      confident: false,
+                    }
+                  : {
+                      name: `${b.title.split(" ")[0]} Saga`,
+                      index: "1",
+                      source: "Wikidata",
+                      confident: true,
+                    },
+              genres,
+              problems: id === ids[0] ? ["Google Books: not set up"] : [],
+            });
+          }
+          return out;
+        }
+        case "enhance_apply": {
+          const accepted = a.accepted as {
+            book_id: number;
+            series: [string, string | null] | null;
+            genres: string[];
+          }[];
+          const now = new Date().toISOString();
+          const updated = [];
+          for (const acc of accepted) {
+            const b = books.find((x) => x.id === acc.book_id)!;
+            const next = {
+              ...b,
+              series: acc.series ? acc.series[0] : b.series,
+              series_index: acc.series ? acc.series[1] : b.series_index,
+              tags: [...b.tags, ...acc.genres],
+              modified_at: now,
+            };
+            books = books.map((x) => (x.id === b.id ? next : x));
+            updated.push(next);
+          }
+          return updated;
+        }
+        case "setting_get":
+          return settings.get(a.key as string) ?? null;
+        case "setting_set":
+          if (a.value) settings.set(a.key as string, a.value as string);
+          else settings.delete(a.key as string);
+          return null;
         case "library_duplicates": {
           const key = (b: Book) => b.title.split(":")[0].toLowerCase();
           const byKey = new Map<string, Book[]>();

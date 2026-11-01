@@ -16,11 +16,19 @@ interface Props {
   onSave: (id: number, edit: MetadataEdit) => Promise<void>;
   /** Called with the updated book after a cover change. */
   onChanged: (book: Book) => void;
+  /** Look up this book's series and genres online. */
+  onEnhance: (id: number) => void;
   onClose: () => void;
 }
 
 /** Keyed by book id in the parent, so selecting another book starts a fresh form. */
-export function EditPanel({ book, onSave, onChanged, onClose }: Props) {
+export function EditPanel({
+  book,
+  onSave,
+  onChanged,
+  onEnhance,
+  onClose,
+}: Props) {
   const [form, setForm] = useState<EditForm>(() => toForm(book));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +152,13 @@ export function EditPanel({ book, onSave, onChanged, onClose }: Props) {
           </span>
           <input {...field("tags")} />
         </label>
+        <button
+          type="button"
+          className="link find-online"
+          onClick={() => onEnhance(book.id)}
+        >
+          Find series and genres online…
+        </button>
         {error && <p className="notice notice-error">{error}</p>}
         <p className="hint">
           Changes apply to the copy sent to your Kobo. Your original file is

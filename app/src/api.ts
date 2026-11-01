@@ -225,6 +225,35 @@ export interface DeviceDuplicateGroup {
   }[];
 }
 
+export interface ProposedSeries {
+  name: string;
+  index: string | null;
+  /** "Kobo", "Wikidata"… */
+  source: string;
+  /** Selected by default. */
+  confident: boolean;
+}
+
+export interface ProposedGenre {
+  name: string;
+  sources: string[];
+  confident: boolean;
+}
+
+export interface Proposal {
+  book_id: number;
+  series: ProposedSeries | null;
+  genres: ProposedGenre[];
+  /** Sources that couldn't be asked. */
+  problems: string[];
+}
+
+export interface Accepted {
+  book_id: number;
+  series: [string, string | null] | null;
+  genres: string[];
+}
+
 export type DeviceImport =
   | { kind: "added"; book_id: number }
   | { kind: "linked"; book_id: number }
@@ -353,6 +382,19 @@ export const importFromDevice = (mount: string, contentIds: string[] | null) =>
     "plans",
     deviceTag(mount),
   ]);
+/** Looks up series and genres; `mount` adds a connected Kobo's clues. */
+export const enhancePropose = (ids: number[], mount: string | null) =>
+  invoke<Proposal[]>("enhance_propose", { ids, mount });
+export const enhanceApply = (accepted: Accepted[]) =>
+  write<Book[]>("enhance_apply", { accepted }, ["library", "plans"]);
+export const getSetting = (key: "google_books_key") =>
+  invoke<string | null>("setting_get", { key });
+export const setSetting = (key: "google_books_key", value: string | null) =>
+  invoke<void>("setting_set", { key, value });
+export const onEnhanceProgress = (
+  handler: (p: ImportProgress) => void,
+): Promise<UnlistenFn> =>
+  listen<ImportProgress>("enhance-progress", (e) => handler(e.payload));
 export const libraryDuplicates = () =>
   read<LibraryDuplicateGroup[]>("library_duplicates", {}, ["library"]);
 export const deviceDuplicates = (mount: string) =>

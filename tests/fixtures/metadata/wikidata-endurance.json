@@ -1,0 +1,58 @@
+{
+  "head" : {
+    "vars" : [ "item", "itemLabel", "authorLabel", "series", "seriesLabel", "ordinal", "genreLabel" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q135094503"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Endurance"
+      },
+      "authorLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Stephen Baxter"
+      },
+      "genreLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "science fiction"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q140027152"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Endurance"
+      },
+      "authorLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Ann Aguirre"
+      }
+    }, {
+      "item" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q140179855"
+      },
+      "itemLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Endurance"
+      },
+      "authorLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jay Lake"
+      }
+    } ]
+  }
+}

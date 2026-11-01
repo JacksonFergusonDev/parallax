@@ -7,6 +7,7 @@ use erc_convert::Kepubify;
 use erc_core::collections::{CollectionChange, FolderGroup};
 use erc_core::device::{OnDevice, RemoveOutcome};
 use erc_core::duplicates::{DeviceGroup, LibraryGroup};
+use erc_core::enhance::{Accepted, DeviceClues, Proposal};
 use erc_core::import::DeviceImportOutcome;
 use erc_core::rules::PlannedCollection;
 use erc_core::send::{SendOutcome, send_library_books, update_on_device};
@@ -22,6 +23,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 const SEND_PROGRESS: &str = "send-progress";
 /// Event carrying [`ImportProgress`] while books come in from a device.
 const IMPORT_PROGRESS: &str = "import-progress";
+/// Event carrying [`ImportProgress`] while series and genres are looked up.
+const ENHANCE_PROGRESS: &str = "enhance-progress";
 
 #[derive(Clone, Serialize)]
 struct ImportProgress {
@@ -307,6 +310,86 @@ async fn send_books(
     .map_err(err)?
 }
 
+/// Series and genre proposals for `ids`, using a connected Kobo's series and
+/// folders too when `mount` is given. Holds the library only to read the
+/// books, not during lookups.
+#[tauri::command]
+async fn enhance_propose(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+    mount: Option<PathBuf>,
+) -> CmdResult<Vec<Proposal>> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let (books, options, clues, fetch) = {
+            let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+            let books = ids
+                .iter()
+                .map(|&id| lib.book(id))
+                .collect::<erc_library::Result<Vec<_>>>()
+                .map_err(err)?;
+            let clues = match mount {
+                Some(mount) => {
+                    DeviceClues::read(&lib, &KoboDevice::open(&mount).map_err(err)?).map_err(err)?
+                }
+                None => DeviceClues::default(),
+            };
+            let fetch = erc_core::enhance::fetcher(&lib)?;
+            (books, erc_core::enhance::options(&lib), clues, fetch)
+        };
+        Ok(erc_core::enhance::propose(
+            &books,
+            &options,
+            &fetch,
+            &clues,
+            |index, total, title| {
+                let _ = app.emit(
+                    ENHANCE_PROGRESS,
+                    ImportProgress {
+                        index,
+                        total,
+                        title: title.to_owned(),
+                    },
+                );
+            },
+        ))
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Saves accepted series and genres; returns the updated books.
+#[tauri::command]
+fn enhance_apply(state: State<AppState>, accepted: Vec<Accepted>) -> CmdResult<Vec<LibraryBook>> {
+    let mut lib = state.library();
+    let books = erc_core::enhance::apply(&mut lib, &accepted).map_err(err)?;
+    Ok(books.into_iter().map(|b| with_cover(&lib, b)).collect())
+}
+
+/// Settings the app may read and change.
+const SETTINGS: [&str; 1] = [erc_core::enhance::GOOGLE_BOOKS_KEY];
+
+#[tauri::command]
+fn setting_get(state: State<AppState>, key: String) -> CmdResult<Option<String>> {
+    if !SETTINGS.contains(&key.as_str()) {
+        return Err(format!("unknown setting {key}"));
+    }
+    state.library().setting(&key).map_err(err)
+}
+
+#[tauri::command]
+fn setting_set(state: State<AppState>, key: String, value: Option<String>) -> CmdResult<()> {
+    if !SETTINGS.contains(&key.as_str()) {
+        return Err(format!("unknown setting {key}"));
+    }
+    let value = value.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty());
+    state
+        .library()
+        .set_setting(&key, value.as_deref())
+        .map_err(err)
+}
+
 /// Probable duplicates in the library.
 #[tauri::command]
 async fn library_duplicates(state: State<'_, AppState>) -> CmdResult<Vec<LibraryGroup>> {
@@ -590,6 +673,10 @@ pub fn run() {
             send_books,
             import_from_device,
             library_duplicates,
+            enhance_propose,
+            enhance_apply,
+            setting_get,
+            setting_set,
             device_duplicates,
             dismiss_duplicates,
             list_collections,
