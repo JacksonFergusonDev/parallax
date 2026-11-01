@@ -71,6 +71,20 @@ let books: Book[] = SAMPLE.map(([title, author, series, index, tags], i) => ({
   cover: i < SAMPLE.length - 1 ? coverSvg(title, author, i) : null,
 }));
 
+// A second copy of Dune, for duplicate review.
+books.push({
+  ...books.find((b) => b.title === "Dune")!,
+  id: books.length + 1,
+  title: "Dune: Deluxe Edition",
+  series: null,
+  series_index: null,
+  tags: [],
+  original_name: "Dune Deluxe.epub",
+  file_size: 3_400_000,
+  added_at: "2026-09-01T00:00:00Z",
+  modified_at: "2026-09-01T00:00:00Z",
+});
+
 const device: DeviceInfo = {
   kind: "kobo",
   model: "Kobo Libra 2",
@@ -84,6 +98,7 @@ const device: DeviceInfo = {
     reading_time: true,
   },
 };
+const dismissed = new Set<string>();
 const onDevice = new Map<number, string>([
   [3, "2026-10-01T00:00:00Z"],
   [5, "2026-10-01T00:00:00Z"],
@@ -466,6 +481,28 @@ export function installMockBackend() {
           }
           return outcomes;
         }
+        case "library_duplicates": {
+          const key = (b: Book) => b.title.split(":")[0].toLowerCase();
+          const byKey = new Map<string, Book[]>();
+          for (const b of books)
+            byKey.set(key(b), [...(byKey.get(key(b)) ?? []), b]);
+          return [...byKey.values()]
+            .filter((g) => g.length > 1)
+            .map((g) => ({
+              key: g.map((b) => b.id).join("\n"),
+              reasons: ["same_title_and_author"],
+              members: g.map((b, i) => ({
+                book_id: b.id,
+                remove: i > 0 && !onDevice.has(b.id),
+              })),
+            }))
+            .filter((g) => !dismissed.has(g.key));
+        }
+        case "device_duplicates":
+          return [];
+        case "dismiss_duplicates":
+          dismissed.add(a.key as string);
+          return null;
         case "eject_device":
           return null;
         case "cover_search":

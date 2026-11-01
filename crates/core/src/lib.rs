@@ -2,6 +2,7 @@
 
 pub mod collections;
 pub mod device;
+pub mod duplicates;
 pub mod import;
 pub mod rules;
 pub mod send;

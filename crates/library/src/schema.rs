@@ -42,6 +42,14 @@ const MIGRATIONS: &[&str] = &[
         min_books INTEGER NOT NULL DEFAULT 2,
         prefix    TEXT NOT NULL DEFAULT ''
     );",
+    // 4: duplicate groups the user said aren't duplicates. `members` is the
+    // sorted member ids joined with newlines; scope is "library" or
+    // "device:<serial>".
+    "CREATE TABLE dismissed_duplicates (
+        scope   TEXT NOT NULL,
+        members TEXT NOT NULL,
+        PRIMARY KEY (scope, members)
+    );",
 ];
 
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {

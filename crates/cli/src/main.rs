@@ -10,6 +10,7 @@ use clap::{Args, Parser, Subcommand};
 use erc_convert::Kepubify;
 use erc_core::collections::{self, CollectionChange, folder_groups, reconcile_series};
 use erc_core::device::remove_from_device;
+use erc_core::duplicates::{Reason, device_duplicates, library_duplicates};
 use erc_core::import::{DeviceImport, import_from_device};
 use erc_core::rules;
 use erc_core::send::{Progress, SendOutcome, send_books, send_library_books, update_on_device};
@@ -192,6 +193,8 @@ enum LibraryCommand {
     /// Automatic grouping rules (series/tag/author → collection).
     #[command(subcommand)]
     Rules(RulesCommand),
+    /// List probable duplicate books in the library.
+    Duplicates,
     /// Add books from the Kobo to the library (all sideloaded EPUBs, or the
     /// given device paths). Only reads the Kobo.
     FromKobo {
@@ -279,6 +282,14 @@ enum KoboCommand {
     Tidy {
         #[arg(long)]
         mount: Option<PathBuf>,
+    },
+    /// List probable duplicate books on the device. Only reads it.
+    Duplicates {
+        #[arg(long)]
+        mount: Option<PathBuf>,
+        /// Library holding dismissed groups (default: the app's).
+        #[arg(long)]
+        library: Option<PathBuf>,
     },
     /// What ERC has done to the device, from its `/.erc/` records.
     History {
@@ -464,6 +475,36 @@ fn main() -> Result<()> {
         Command::Kobo(KoboCommand::Tidy { mount }) => {
             let kobo = find_kobo(mount.as_deref())?;
             println!("removed {} macOS ._ files", tidy_apple_double(&kobo));
+        }
+        Command::Kobo(KoboCommand::Duplicates { mount, library }) => {
+            let kobo = find_kobo(mount.as_deref())?;
+            let lib = Library::open(library.map_or_else(default_library_root, Ok)?)?;
+            let groups = device_duplicates(&lib, &kobo)?;
+            if cli.json {
+                return print_json(&groups);
+            }
+            let titles: std::collections::HashMap<String, DeviceBook> = kobo
+                .open_db()?
+                .books()?
+                .into_iter()
+                .map(|b| (b.id.clone(), b))
+                .collect();
+            for g in &groups {
+                println!("{}", reasons_label(&g.reasons));
+                for m in &g.members {
+                    let b = &titles[&m.content_id];
+                    println!(
+                        "  {} {:<10} {:>5}  {} — {}  ({})",
+                        if m.remove { "remove?" } else { "keep   " },
+                        m.format,
+                        status_of(b),
+                        b.title,
+                        b.author.as_deref().unwrap_or("?"),
+                        b.path.as_deref().unwrap_or(&b.id),
+                    );
+                }
+            }
+            println!("{} groups", groups.len());
         }
         Command::Kobo(KoboCommand::History { mount, limit }) => {
             let kobo = find_kobo(mount.as_deref())?;
@@ -681,6 +722,26 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             finish_send(&kobo, &outcomes, no_eject, json)?;
         }
         LibraryCommand::Rules(command) => rules_command(lib, command, json)?,
+        LibraryCommand::Duplicates => {
+            let groups = library_duplicates(lib)?;
+            if json {
+                return print_json(&groups);
+            }
+            for g in &groups {
+                println!("{}", reasons_label(&g.reasons));
+                for m in &g.members {
+                    let b = lib.book(m.book_id)?;
+                    println!(
+                        "  {} #{:<5} {} — {}",
+                        if m.remove { "remove?" } else { "keep   " },
+                        b.id,
+                        b.title,
+                        b.authors.join(", "),
+                    );
+                }
+            }
+            println!("{} groups", groups.len());
+        }
         LibraryCommand::FromKobo { books, mount } => {
             let kobo = find_kobo(mount.as_deref())?;
             let ids: Vec<String> = books.iter().map(|b| content_id_for(b)).collect();
@@ -842,6 +903,26 @@ fn rules_command(lib: &Library, command: RulesCommand, json: bool) -> Result<()>
 }
 
 /// Accepts a device path (`KEpub/x.kepub.epub`) or a full ContentID.
+fn reasons_label(reasons: &[Reason]) -> String {
+    reasons
+        .iter()
+        .map(|r| match r {
+            Reason::SameFile => "identical file",
+            Reason::SameIsbn => "same ISBN",
+            Reason::SameTitleAndAuthor => "same title and author",
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn status_of(b: &DeviceBook) -> String {
+    match b.read_status {
+        ReadStatus::Unread => "-".into(),
+        ReadStatus::Reading => format!("{}%", b.percent_read),
+        ReadStatus::Finished => "done".into(),
+    }
+}
+
 fn content_id_for(book: &str) -> String {
     if book.starts_with("file://") {
         book.to_owned()

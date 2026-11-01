@@ -11,6 +11,7 @@
 //! ```
 
 mod authors;
+mod duplicates;
 mod rules;
 mod schema;
 
@@ -82,7 +83,7 @@ impl Book {
         }
     }
 
-    fn isbn(&self) -> Option<&str> {
+    pub fn isbn(&self) -> Option<&str> {
         self.identifiers
             .iter()
             .find(|i| i.scheme.as_deref() == Some("isbn"))

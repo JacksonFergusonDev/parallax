@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use erc_convert::Kepubify;
 use erc_core::collections::{CollectionChange, FolderGroup};
 use erc_core::device::{OnDevice, RemoveOutcome};
+use erc_core::duplicates::{DeviceGroup, LibraryGroup};
 use erc_core::import::DeviceImportOutcome;
 use erc_core::rules::PlannedCollection;
 use erc_core::send::{SendOutcome, send_library_books, update_on_device};
@@ -306,6 +307,57 @@ async fn send_books(
     .map_err(err)?
 }
 
+/// Probable duplicates in the library.
+#[tauri::command]
+async fn library_duplicates(state: State<'_, AppState>) -> CmdResult<Vec<LibraryGroup>> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        erc_core::duplicates::library_duplicates(&lib).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Probable duplicates on the device. Only reads it.
+#[tauri::command]
+async fn device_duplicates(
+    state: State<'_, AppState>,
+    mount: PathBuf,
+) -> CmdResult<Vec<DeviceGroup>> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        erc_core::duplicates::device_duplicates(&lib, &kobo).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Remembers that a group isn't duplicates: in the library, or on the
+/// device at `mount`.
+#[tauri::command]
+async fn dismiss_duplicates(
+    state: State<'_, AppState>,
+    key: String,
+    mount: Option<PathBuf>,
+) -> CmdResult<()> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let scope = match mount {
+            Some(mount) => erc_core::duplicates::device_scope(
+                &KoboDevice::open(&mount).map_err(err)?.version().serial,
+            ),
+            None => erc_core::duplicates::LIBRARY_SCOPE.to_owned(),
+        };
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        lib.dismiss_duplicates(&scope, &key).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
 /// Adds books from the device to the library (all when `content_ids` is
 /// `None`). Only reads the device.
 #[tauri::command]
@@ -537,6 +589,9 @@ pub fn run() {
             device_history,
             send_books,
             import_from_device,
+            library_duplicates,
+            device_duplicates,
+            dismiss_duplicates,
             list_collections,
             change_collections,
             folder_groups,

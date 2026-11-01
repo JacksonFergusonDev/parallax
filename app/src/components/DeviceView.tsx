@@ -4,6 +4,8 @@ import {
   changeCollections,
   deviceCoverSrc,
   deviceBooks,
+  deviceDuplicates,
+  dismissDuplicates,
   ejectDevice,
   importFromDevice,
   listCollections,
@@ -26,7 +28,9 @@ import {
   type DeviceKey,
 } from "../device";
 import { applySort } from "../sort";
+import { deviceReviewGroups } from "../duplicates";
 import { AboutKobo } from "./AboutKobo";
+import { DuplicateReview, type ReviewGroup } from "./DuplicateReview";
 import { CollectionMenu } from "./CollectionMenu";
 import { DeviceCard } from "./DeviceCard";
 import { FolderImport } from "./FolderImport";
@@ -60,6 +64,7 @@ type Dialog =
   | { kind: "folders" }
   | { kind: "rules" }
   | { kind: "about" }
+  | { kind: "duplicates"; groups: Promise<ReviewGroup[]> }
   | null;
 
 export function DeviceView({
@@ -331,6 +336,23 @@ export function DeviceView({
             </button>
             <button
               className="link"
+              onClick={() => {
+                const byId = new Map((books ?? []).map((b) => [b.id, b]));
+                setDialog({
+                  kind: "duplicates",
+                  groups: deviceDuplicates(device.mount).then((groups) =>
+                    deviceReviewGroups(groups, byId, (b) =>
+                      deviceCoverSrc(b, libraryByContentId.get(b.id)),
+                    ),
+                  ),
+                });
+              }}
+              disabled={busy !== null}
+            >
+              Find duplicates…
+            </button>
+            <button
+              className="link"
               onClick={() => addToLibrary(null)}
               disabled={busy !== null}
               title="Copy every book you added yourself into your library, as plain EPUBs. Store books are skipped."
@@ -567,6 +589,25 @@ export function DeviceView({
             load();
             onChanged();
           }}
+        />
+      )}
+      {dialog?.kind === "duplicates" && (
+        <DuplicateReview
+          place="Kobo"
+          groups={dialog.groups}
+          removeWarning="Their reading progress and highlights are deleted too. A backup of the Kobo's database is made first."
+          remove={async (contentIds) => {
+            const outcomes = await removeFromDevice(device.mount, contentIds);
+            const failed = outcomes.find((o) => "Err" in o.result);
+            if (failed && "Err" in failed.result)
+              throw new Error(failed.result.Err);
+          }}
+          dismiss={(key) => dismissDuplicates(key, device.mount)}
+          onChanged={() => {
+            load();
+            onChanged();
+          }}
+          onClose={() => setDialog(null)}
         />
       )}
       {dialog?.kind === "about" && (

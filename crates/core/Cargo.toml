@@ -13,6 +13,7 @@ erc-device-kobo.workspace = true
 erc-epub.workspace = true
 erc-library.workspace = true
 serde.workspace = true
+sha2.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 

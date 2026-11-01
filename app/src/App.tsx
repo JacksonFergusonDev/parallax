@@ -3,7 +3,10 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import {
   booksOnDevice,
+  coverSrc,
+  dismissDuplicates,
   ejectDevice,
+  libraryDuplicates,
   importBooks,
   listBooks,
   listDevices,
@@ -34,6 +37,10 @@ import {
 import { BookCard } from "./components/BookCard";
 import { DeviceBadge } from "./components/DeviceBadge";
 import { DeviceView } from "./components/DeviceView";
+import {
+  DuplicateReview,
+  type ReviewGroup,
+} from "./components/DuplicateReview";
 import { EditPanel } from "./components/EditPanel";
 import { LibraryRow } from "./components/LibraryRow";
 import {
@@ -43,6 +50,7 @@ import {
   useViewState,
 } from "./components/ViewControls";
 import { applySort } from "./sort";
+import { libraryReviewGroups } from "./duplicates";
 import "./styles.css";
 
 const DEVICE_POLL_MS = 2000;
@@ -75,6 +83,9 @@ export default function App() {
     "importing" | "sending" | "updating" | "ejecting" | null
   >(null);
   const [dragging, setDragging] = useState(false);
+  const [duplicates, setDuplicates] = useState<Promise<ReviewGroup[]> | null>(
+    null,
+  );
   const [notice, setNotice] = useState<Notice | null>(null);
   const batch = useRef<number[]>([]);
   const anchor = useRef<number | null>(null);
@@ -517,6 +528,24 @@ export default function App() {
                     ? `${books.length} ${books.length === 1 ? "book" : "books"}`
                     : `${visible.length} of ${books.length}`}
                 </span>
+                <button
+                  className="link"
+                  onClick={() => {
+                    const byId = new Map(books.map((b) => [b.id, b]));
+                    setDuplicates(
+                      libraryDuplicates().then((groups) =>
+                        libraryReviewGroups(
+                          groups,
+                          byId,
+                          (id) => onDevice.has(id),
+                          coverSrc,
+                        ),
+                      ),
+                    );
+                  }}
+                >
+                  Find duplicates…
+                </button>
                 <span className="spacer" />
                 {selected.size > 0 && (
                   <span className="muted">{selected.size} selected</span>
@@ -697,6 +726,20 @@ export default function App() {
           </button>
         </footer>
       </div>
+      {duplicates && (
+        <DuplicateReview
+          place="library"
+          groups={duplicates}
+          removeWarning="They're removed from your library; copies on your Kobo stay."
+          remove={async (ids) => {
+            await removeBooks(ids.map(Number));
+            setSelected(new Set());
+          }}
+          dismiss={(key) => dismissDuplicates(key, null)}
+          onChanged={refresh}
+          onClose={() => setDuplicates(null)}
+        />
+      )}
     </div>
   );
 }

@@ -200,6 +200,31 @@ export interface DeviceHistory {
   missing: string[];
 }
 
+export type DuplicateReason =
+  "same_file" | "same_isbn" | "same_title_and_author";
+
+export interface LibraryDuplicateGroup {
+  /** Identifies the group for "not duplicates". */
+  key: string;
+  reasons: DuplicateReason[];
+  /** `remove`: suggested for removal. */
+  members: { book_id: number; remove: boolean }[];
+}
+
+export interface DeviceDuplicateGroup {
+  key: string;
+  reasons: DuplicateReason[];
+  members: {
+    content_id: string;
+    /** "KEPUB", "EPUB", "PDF"… or "Kobo store". */
+    format: string;
+    size: number | null;
+    /** Sideloaded, so the app can remove it. */
+    removable: boolean;
+    remove: boolean;
+  }[];
+}
+
 export type DeviceImport =
   | { kind: "added"; book_id: number }
   | { kind: "linked"; book_id: number }
@@ -327,6 +352,18 @@ export const importFromDevice = (mount: string, contentIds: string[] | null) =>
     "library",
     "plans",
     deviceTag(mount),
+  ]);
+export const libraryDuplicates = () =>
+  read<LibraryDuplicateGroup[]>("library_duplicates", {}, ["library"]);
+export const deviceDuplicates = (mount: string) =>
+  read<DeviceDuplicateGroup[]>("device_duplicates", { mount }, [
+    deviceTag(mount),
+  ]);
+/** Hides a group from review; `mount` for groups on a device. */
+export const dismissDuplicates = (key: string, mount: string | null) =>
+  write<void>("dismiss_duplicates", { key, mount }, [
+    "library",
+    ...(mount ? [deviceTag(mount)] : []),
   ]);
 export const listCollections = (mount: string) =>
   read<Collection[]>("list_collections", { mount }, [deviceTag(mount)]);
