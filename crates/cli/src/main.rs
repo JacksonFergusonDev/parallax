@@ -10,6 +10,7 @@ use clap::{Args, Parser, Subcommand};
 use erc_convert::Kepubify;
 use erc_core::collections::{self, CollectionChange, folder_groups, reconcile_series};
 use erc_core::device::remove_from_device;
+use erc_core::import::{DeviceImport, import_from_device};
 use erc_core::rules;
 use erc_core::send::{Progress, SendOutcome, send_books, send_library_books, update_on_device};
 use erc_device::{DeviceBook, ReadStatus};
@@ -191,6 +192,14 @@ enum LibraryCommand {
     /// Automatic grouping rules (series/tag/author → collection).
     #[command(subcommand)]
     Rules(RulesCommand),
+    /// Add books from the Kobo to the library (all sideloaded EPUBs, or the
+    /// given device paths). Only reads the Kobo.
+    FromKobo {
+        /// Device paths (`KEpub/…`) or ContentIDs; all books if none.
+        books: Vec<String>,
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
     /// Apply series to books the Kobo has imported since they were sent. Writes, with a backup.
     Reconcile {
         #[arg(long)]
@@ -210,7 +219,6 @@ enum LibraryCommand {
     },
 }
 
-/// Same folder the desktop app uses (Tauri's app data dir on macOS).
 /// The desktop app's data folder (Tauri's app data dir on macOS).
 fn app_data_dir() -> Result<PathBuf> {
     let home = std::env::var_os("HOME").context("HOME is not set")?;
@@ -673,6 +681,44 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             finish_send(&kobo, &outcomes, no_eject, json)?;
         }
         LibraryCommand::Rules(command) => rules_command(lib, command, json)?,
+        LibraryCommand::FromKobo { books, mount } => {
+            let kobo = find_kobo(mount.as_deref())?;
+            let ids: Vec<String> = books.iter().map(|b| content_id_for(b)).collect();
+            let outcomes = import_from_device(
+                lib,
+                &kobo,
+                (!ids.is_empty()).then_some(&ids[..]),
+                |i, n, title| eprintln!("[{i}/{n}] {title}"),
+            )?;
+            if json {
+                return print_json(&outcomes);
+            }
+            let (mut added, mut linked, mut skipped, mut failed) = (0, 0, 0, 0);
+            for o in &outcomes {
+                match &o.result {
+                    Ok(DeviceImport::Added { book_id }) => {
+                        added += 1;
+                        println!("added    #{book_id} {}", o.title);
+                    }
+                    Ok(DeviceImport::Linked { book_id }) => {
+                        linked += 1;
+                        println!("linked   #{book_id} {}", o.title);
+                    }
+                    Ok(DeviceImport::Skipped { reason }) => {
+                        skipped += 1;
+                        println!("skipped  {} ({reason})", o.title);
+                    }
+                    Err(e) => {
+                        failed += 1;
+                        eprintln!("FAILED   {}: {e}", o.title);
+                    }
+                }
+            }
+            println!("{added} added, {linked} linked, {skipped} skipped, {failed} failed");
+            if failed > 0 {
+                bail!("{failed} books could not be imported");
+            }
+        }
         LibraryCommand::Reconcile { mount } => {
             let kobo = find_kobo(mount.as_deref())?;
             println!(

@@ -10,14 +10,15 @@ license.workspace = true
 erc-convert.workspace = true
 erc-device.workspace = true
 erc-device-kobo.workspace = true
+erc-epub.workspace = true
 erc-library.workspace = true
 serde.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-erc-epub.workspace = true
 rusqlite.workspace = true
+zip.workspace = true
 
 [lints]
 workspace = true

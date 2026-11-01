@@ -5,7 +5,9 @@ import {
   deviceCoverSrc,
   deviceBooks,
   ejectDevice,
+  importFromDevice,
   listCollections,
+  onImportProgress,
   removeFromDevice,
   tidyDevice,
   type Book,
@@ -20,6 +22,7 @@ import {
   shortDate,
   statusLabel,
   summarize,
+  summarizeDeviceImport,
   type DeviceKey,
 } from "../device";
 import { applySort } from "../sort";
@@ -46,6 +49,8 @@ interface Props {
   /** Library books by device ContentID, for covers. */
   libraryByContentId: Map<string, Book>;
   onChanged: () => void;
+  /** Books were added to the library. */
+  onLibraryChanged: () => void;
   onEjected: () => void;
 }
 
@@ -63,6 +68,7 @@ export function DeviceView({
   query,
   libraryByContentId,
   onChanged,
+  onLibraryChanged,
   onEjected,
 }: Props) {
   const [books, setBooks] = useState<DeviceBook[] | null>(null);
@@ -124,6 +130,9 @@ export function DeviceView({
   );
   const chosen = visible.filter((b) => selected.has(b.id));
   const removable = chosen.filter((b) => b.sideloaded);
+  const importable = chosen.filter(
+    (b) => b.sideloaded && !libraryByContentId.has(b.id),
+  );
 
   const toggle = useCallback(
     (id: string, e: React.MouseEvent) => {
@@ -231,6 +240,25 @@ export function DeviceView({
     });
   };
 
+  /** Adds books to the library: the given ones, or every book when null. */
+  const addToLibrary = (contentIds: string[] | null) =>
+    run(async () => {
+      const unlisten = await onImportProgress((p) =>
+        setNotice({
+          kind: "info",
+          text: `Adding ${p.index} of ${p.total}: ${p.title}…`,
+        }),
+      );
+      try {
+        const outcomes = await importFromDevice(device.mount, contentIds);
+        setSelected(new Set());
+        onLibraryChanged();
+        return summarizeDeviceImport(outcomes);
+      } finally {
+        unlisten();
+      }
+    });
+
   const tidy = () =>
     run(async () => {
       const n = await tidyDevice(device.mount);
@@ -300,6 +328,14 @@ export function DeviceView({
               disabled={busy !== null}
             >
               Folders → collections…
+            </button>
+            <button
+              className="link"
+              onClick={() => addToLibrary(null)}
+              disabled={busy !== null}
+              title="Copy every book you added yourself into your library, as plain EPUBs. Store books are skipped."
+            >
+              Add all to library
             </button>
             <button
               className="link"
@@ -452,6 +488,16 @@ export function DeviceView({
             disabled={chosen.length === 0 || busy !== null}
           >
             Remove from collection
+          </button>
+        )}
+        {importable.length > 0 && (
+          <button
+            className="secondary"
+            onClick={() => addToLibrary(ids(importable))}
+            disabled={busy !== null}
+            title="Copy these books into your library as plain EPUBs"
+          >
+            {`Add ${importable.length} to library`}
           </button>
         )}
         <CollectionMenu

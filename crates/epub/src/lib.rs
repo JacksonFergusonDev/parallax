@@ -5,6 +5,7 @@
 //! everything else in the package document survives byte for byte. Every
 //! other zip entry is copied without recompression.
 
+mod kepub;
 mod opf;
 
 use std::fs::File;
@@ -15,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
+pub use kepub::{StripReport, has_drm, strip_kobo_markup};
 pub use opf::Identifier;
 
 #[derive(Debug, thiserror::Error)]

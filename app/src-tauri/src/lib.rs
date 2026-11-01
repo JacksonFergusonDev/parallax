@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use erc_convert::Kepubify;
 use erc_core::collections::{CollectionChange, FolderGroup};
 use erc_core::device::{OnDevice, RemoveOutcome};
+use erc_core::import::DeviceImportOutcome;
 use erc_core::rules::PlannedCollection;
 use erc_core::send::{SendOutcome, send_library_books, update_on_device};
 use erc_covers::{Candidate, CoverQuery};
@@ -18,6 +19,15 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Event carrying [`erc_core::send::Progress`] while books are sent.
 const SEND_PROGRESS: &str = "send-progress";
+/// Event carrying [`ImportProgress`] while books come in from a device.
+const IMPORT_PROGRESS: &str = "import-progress";
+
+#[derive(Clone, Serialize)]
+struct ImportProgress {
+    index: usize,
+    total: usize,
+    title: String,
+}
 
 struct AppState {
     library: Arc<Mutex<Library>>,
@@ -296,6 +306,40 @@ async fn send_books(
     .map_err(err)?
 }
 
+/// Adds books from the device to the library (all when `content_ids` is
+/// `None`). Only reads the device.
+#[tauri::command]
+async fn import_from_device(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    mount: PathBuf,
+    content_ids: Option<Vec<String>>,
+) -> CmdResult<Vec<DeviceImportOutcome>> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        let mut lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        erc_core::import::import_from_device(
+            &mut lib,
+            &kobo,
+            content_ids.as_deref(),
+            |index, total, title| {
+                let _ = app.emit(
+                    IMPORT_PROGRESS,
+                    ImportProgress {
+                        index,
+                        total,
+                        title: title.to_owned(),
+                    },
+                );
+            },
+        )
+        .map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
 #[tauri::command]
 async fn list_collections(mount: PathBuf) -> CmdResult<Vec<Collection>> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -492,6 +536,7 @@ pub fn run() {
             tidy_device,
             device_history,
             send_books,
+            import_from_device,
             list_collections,
             change_collections,
             folder_groups,

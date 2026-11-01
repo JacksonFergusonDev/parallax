@@ -200,6 +200,23 @@ export interface DeviceHistory {
   missing: string[];
 }
 
+export type DeviceImport =
+  | { kind: "added"; book_id: number }
+  | { kind: "linked"; book_id: number }
+  | { kind: "skipped"; reason: string };
+
+export interface DeviceImportOutcome {
+  content_id: string;
+  title: string;
+  result: { Ok: DeviceImport } | { Err: string };
+}
+
+export interface ImportProgress {
+  index: number;
+  total: number;
+  title: string;
+}
+
 export interface CoverCandidate {
   source: string;
   url: string;
@@ -303,6 +320,14 @@ export const sendBooks = (
   write<SendOutcome[]>("send_books", { mount, ids, collection }, [
     deviceTag(mount),
   ]);
+/** Adds books from the device to the library; all of them when `contentIds` is null. */
+export const importFromDevice = (mount: string, contentIds: string[] | null) =>
+  // Reads the device only, but adds library books and device-copy links.
+  write<DeviceImportOutcome[]>("import_from_device", { mount, contentIds }, [
+    "library",
+    "plans",
+    deviceTag(mount),
+  ]);
 export const listCollections = (mount: string) =>
   read<Collection[]>("list_collections", { mount }, [deviceTag(mount)]);
 export const changeCollections = (mount: string, changes: CollectionChange[]) =>
@@ -354,6 +379,11 @@ export const onSendProgress = (
   handler: (p: Progress) => void,
 ): Promise<UnlistenFn> =>
   listen<Progress>("send-progress", (e) => handler(e.payload));
+
+export const onImportProgress = (
+  handler: (p: ImportProgress) => void,
+): Promise<UnlistenFn> =>
+  listen<ImportProgress>("import-progress", (e) => handler(e.payload));
 
 /** URL for a cover thumbnail; `version` busts the webview cache after edits. */
 export function coverSrc(book: Book): string | null {

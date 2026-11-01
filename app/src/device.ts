@@ -1,5 +1,5 @@
 // Pure helpers for the Kobo view.
-import type { DeviceBook } from "./api";
+import type { DeviceBook, DeviceImportOutcome } from "./api";
 import { seriesValue, surnameKey, titleKey } from "./library";
 import type { Column } from "./sort";
 
@@ -15,6 +15,32 @@ export function filterDeviceBooks(
       .toLowerCase();
     return terms.every((t) => haystack.includes(t));
   });
+}
+
+const books = (n: number) => `${n} ${n === 1 ? "book" : "books"}`;
+
+/** One line describing an import from the device. */
+export function summarizeDeviceImport(outcomes: DeviceImportOutcome[]): string {
+  let added = 0;
+  let linked = 0;
+  let failed = 0;
+  const skipped = new Map<string, number>();
+  for (const o of outcomes) {
+    if ("Err" in o.result) failed++;
+    else if (o.result.Ok.kind === "added") added++;
+    else if (o.result.Ok.kind === "linked") linked++;
+    else {
+      const reason = o.result.Ok.reason;
+      skipped.set(reason, (skipped.get(reason) ?? 0) + 1);
+    }
+  }
+  const parts = [];
+  if (added) parts.push(`Added ${books(added)} to your library`);
+  if (linked) parts.push(`matched ${books(linked)} you already had`);
+  for (const [reason, n] of skipped)
+    parts.push(`${books(n)} skipped: ${reason}`);
+  if (failed) parts.push(`${books(failed)} couldn't be read`);
+  return parts.join(" · ") || "Nothing to add";
 }
 
 export function statusLabel(b: DeviceBook): string {

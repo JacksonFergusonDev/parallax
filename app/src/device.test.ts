@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { DeviceBook } from "./api";
+import type { DeviceBook, DeviceImportOutcome } from "./api";
 import {
   deviceColumns,
   filterDeviceBooks,
   shortDate,
   statusLabel,
   summarize,
+  summarizeDeviceImport,
 } from "./device";
 import { applySort } from "./sort";
 
@@ -92,5 +93,28 @@ describe("device sorting", () => {
       );
     expect(titles("desc")).toEqual(["C", "B", "A"]);
     expect(titles("asc")).toEqual(["B", "C", "A"]);
+  });
+});
+
+describe("summarizeDeviceImport", () => {
+  const o = (result: DeviceImportOutcome["result"]): DeviceImportOutcome => ({
+    content_id: "x",
+    title: "x",
+    result,
+  });
+  it("counts each outcome and groups skip reasons", () => {
+    expect(
+      summarizeDeviceImport([
+        o({ Ok: { kind: "added", book_id: 1 } }),
+        o({ Ok: { kind: "added", book_id: 2 } }),
+        o({ Ok: { kind: "linked", book_id: 3 } }),
+        o({ Ok: { kind: "skipped", reason: "DRM-protected" } }),
+        o({ Ok: { kind: "skipped", reason: "DRM-protected" } }),
+        o({ Err: "bad zip" }),
+      ]),
+    ).toBe(
+      "Added 2 books to your library · matched 1 book you already had · 2 books skipped: DRM-protected · 1 book couldn't be read",
+    );
+    expect(summarizeDeviceImport([])).toBe("Nothing to add");
   });
 });

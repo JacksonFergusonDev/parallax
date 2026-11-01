@@ -19,7 +19,7 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
-use erc_epub::{Cover, Epub, Identifier, MetadataEdit};
+use erc_epub::{Cover, Epub, Identifier, Metadata, MetadataEdit};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -406,14 +406,36 @@ impl Library {
     /// A different book that is probably the same work: same ISBN, or same
     /// title and first author ignoring case and punctuation.
     fn find_similar(&self, book: &Book) -> Result<Option<i64>> {
-        let key = similarity_key(book);
+        self.find_matching(&book.title, &book.authors, book.isbn(), Some(book.id))
+    }
+
+    /// A library book with the same ISBN, or the same title and first
+    /// author, as an EPUB's metadata.
+    pub fn find_similar_to(&self, meta: &Metadata) -> Result<Option<i64>> {
+        let isbn = meta
+            .identifiers
+            .iter()
+            .find(|i| i.scheme.as_deref() == Some("isbn"))
+            .map(|i| i.value.as_str());
+        let title = meta.title.as_deref().unwrap_or_default();
+        self.find_matching(title, &normalize_authors(&meta.authors), isbn, None)
+    }
+
+    fn find_matching(
+        &self,
+        title: &str,
+        authors: &[String],
+        isbn: Option<&str>,
+        exclude: Option<i64>,
+    ) -> Result<Option<i64>> {
+        let key = similarity_key(title, authors);
         Ok(self
             .books()?
             .into_iter()
-            .filter(|other| other.id != book.id)
+            .filter(|other| Some(other.id) != exclude)
             .find(|other| {
-                (book.isbn().is_some() && book.isbn() == other.isbn())
-                    || similarity_key(other) == key
+                (isbn.is_some() && isbn == other.isbn())
+                    || similarity_key(&other.title, &other.authors) == key
             })
             .map(|other| other.id))
     }
@@ -423,7 +445,7 @@ fn book_dir(root: &Path, id: i64) -> PathBuf {
     root.join("books").join(id.to_string())
 }
 
-fn similarity_key(book: &Book) -> String {
+fn similarity_key(title: &str, authors: &[String]) -> String {
     let norm = |s: &str| {
         s.chars()
             .filter(|c| c.is_alphanumeric())
@@ -432,8 +454,8 @@ fn similarity_key(book: &Book) -> String {
     };
     format!(
         "{}|{}",
-        norm(&book.title),
-        norm(book.authors.first().map_or("", String::as_str))
+        norm(title),
+        norm(authors.first().map_or("", String::as_str))
     )
 }
 

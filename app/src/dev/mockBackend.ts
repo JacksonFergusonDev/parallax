@@ -410,6 +410,62 @@ export function installMockBackend() {
             result: { Ok: {} },
           }));
         }
+        case "import_from_device": {
+          const wanted = a.contentIds as string[] | null;
+          const all = [
+            ...books
+              .filter((b) => onDevice.has(b.id))
+              .map((b) => ({ id: contentId(b.id), title: b.title })),
+            ...storeBooks,
+          ].filter((b) => !wanted || wanted.includes(b.id));
+          const outcomes = [];
+          for (const [i, b] of all.entries()) {
+            await emit("import-progress", {
+              index: i + 1,
+              total: all.length,
+              title: b.title,
+            });
+            await sleep(250);
+            const sideload = storeBooks.find((s) => s.id === b.id);
+            if (!sideload) {
+              outcomes.push({
+                content_id: b.id,
+                title: b.title,
+                result: {
+                  Ok: { kind: "skipped", reason: "already in your library" },
+                },
+              });
+              continue;
+            }
+            const id = Math.max(...books.map((x) => x.id)) + 1;
+            const now = new Date().toISOString();
+            books = [
+              ...books,
+              {
+                ...books[0],
+                id,
+                title: sideload.title,
+                authors: [sideload.author ?? "Unknown"],
+                series: sideload.series,
+                series_index: sideload.series_number,
+                tags: [],
+                original_name: `${sideload.title}.epub`,
+                has_cover: false,
+                cover: null,
+                added_at: now,
+                modified_at: now,
+              },
+            ];
+            onDevice.set(id, now);
+            storeBooks = storeBooks.filter((s) => s.id !== b.id);
+            outcomes.push({
+              content_id: b.id,
+              title: b.title,
+              result: { Ok: { kind: "added", book_id: id } },
+            });
+          }
+          return outcomes;
+        }
         case "eject_device":
           return null;
         case "cover_search":

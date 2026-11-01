@@ -101,6 +101,7 @@ Batched so you can do several in one sitting when Claude asks:
 - M8, On Kobo tab → "Automatic collections…": add "A collection for each author" with at least 3 books. The preview should list collections such as Brandon Sanderson (7) and Pierce Brown (5). Apply, eject, and check them on the Kobo. Sending a new book by one of those authors should file it automatically.
 - M9: Library and On Kobo each switch between Covers and List; clicking a list header sorts descending, then ascending, then back to the default. Scrolling past the end of a list doesn't move the rest of the window.
 - M10: after any change from the app (send, update, remove, collections), On Kobo → "About this Kobo…" lists it under Activity. After ejecting, the Kobo's library shows no new or blank books (the records live in a hidden `.erc` folder, which Nickel should ignore). `erc kobo history` shows the same.
+- M11: On Kobo → "Add all to library": every book you sideloaded appears in the Library tab with its cover, marked On Kobo, and none needs updating. Open one in another reader (Apple Books) to confirm it reads normally.
 
 ## Spike S2 — collections and Kobo cloud sync (with M6)
 

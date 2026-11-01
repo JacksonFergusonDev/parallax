@@ -484,6 +484,7 @@ export default function App() {
             device={device}
             query={query}
             libraryByContentId={libraryByContentId}
+            onLibraryChanged={refresh}
             onChanged={() => {
               refreshOnDevice(device);
               listCollections(device.mount)
