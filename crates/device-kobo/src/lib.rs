@@ -1,5 +1,6 @@
 //! Kobo e-reader backend.
 
+mod annotations;
 mod collections;
 mod covers;
 mod db;
@@ -16,6 +17,7 @@ use std::path::{Path, PathBuf};
 
 use erc_device::{Capabilities, DeviceInfo, DeviceKind};
 
+pub use annotations::{Annotation, AnnotationKind};
 pub use collections::{
     add_to_collection, create_collection, delete_collection, remove_from_collection,
     rename_collection,

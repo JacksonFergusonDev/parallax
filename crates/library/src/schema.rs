@@ -69,6 +69,22 @@ const MIGRATIONS: &[&str] = &[
     // 7: translators, illustrators… as JSON; NULL until read from the EPUB
     // (books imported earlier are filled in when the library opens).
     "ALTER TABLE books ADD COLUMN contributors TEXT;",
+    // 8: highlights, notes and bookmarks copied from devices. Kept when
+    // removed on the device (on_device = 0), so this is also a backup.
+    "CREATE TABLE annotations (
+        device_serial TEXT NOT NULL,
+        bookmark_id   TEXT NOT NULL,
+        book_id       INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+        kind          TEXT NOT NULL,
+        text          TEXT,
+        note          TEXT,
+        chapter       TEXT,
+        position      REAL NOT NULL,
+        created       TEXT,
+        modified      TEXT,
+        on_device     INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (device_serial, bookmark_id)
+    );",
 ];
 
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {

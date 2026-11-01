@@ -70,6 +70,7 @@ let books: Book[] = SAMPLE.map(([title, author, series, index, tags], i) => ({
   modified_at: "2026-10-31T00:00:00Z",
   cover: i < SAMPLE.length - 1 ? coverSvg(title, author, i) : null,
   contributors: i === 5 ? [{ name: "Some Translator", role: "trl" }] : [],
+  annotations: i === 2 ? 3 : 0,
   reading:
     i === 2
       ? {
@@ -540,6 +541,63 @@ export function installMockBackend() {
             },
           ];
         }
+        case "annotations_list":
+          return a.id === 3
+            ? [
+                {
+                  id: "a1",
+                  device_serial: "N000000000001",
+                  kind: "highlight",
+                  text: "I must not fear. Fear is the mind-killer.",
+                  note: null,
+                  chapter: "Book One: Dune",
+                  position: 3.4,
+                  created: "2026-10-20T20:00:00Z",
+                  modified: null,
+                  on_device: true,
+                },
+                {
+                  id: "a2",
+                  device_serial: "N000000000001",
+                  kind: "note",
+                  text: "The spice must flow.",
+                  note: "Compare with the film.",
+                  chapter: "Book One: Dune",
+                  position: 3.9,
+                  created: "2026-10-21T20:00:00Z",
+                  modified: null,
+                  on_device: true,
+                },
+                {
+                  id: "a3",
+                  device_serial: "N000000000001",
+                  kind: "highlight",
+                  text: "He who controls the spice controls the universe.",
+                  note: null,
+                  chapter: "Book Two: Muad'Dib",
+                  position: 9.2,
+                  created: "2026-10-22T20:00:00Z",
+                  modified: null,
+                  on_device: false,
+                },
+                {
+                  id: "a4",
+                  device_serial: "N000000000001",
+                  kind: "bookmark",
+                  text: null,
+                  note: null,
+                  chapter: "Book Two: Muad'Dib",
+                  position: 10.1,
+                  created: null,
+                  modified: null,
+                  on_device: true,
+                },
+              ]
+            : [];
+        case "annotations_export":
+          return 4;
+        case "plugin:dialog|save":
+          return "/Users/you/Documents/Dune highlights.md";
         case "kobo_health":
           await sleep(300);
           return {

@@ -1,5 +1,6 @@
 //! Workflows shared by the CLI and the desktop app.
 
+pub mod annotations;
 pub mod collections;
 pub mod device;
 pub mod duplicates;

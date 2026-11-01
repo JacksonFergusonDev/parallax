@@ -106,6 +106,7 @@ Batched so you can do several in one sitting when Claude asks:
 - M13: On Kobo → "Enhance and organise…": books are added to the library, then series and genres are proposed (genres use your folder names, e.g. Sci-Fi). Save, click "Update N on Kobo", then "Make collections from series and genres…", add series and tag rules, Apply, eject: series show on book details and the genre collections appear, with reading progress intact.
 - M14: On Kobo → "Check this Kobo…" (expect few or no problems; leftover covers are likely). Delete leftover covers and eject: covers still show for every book. Mark a book you've finished as Finished, and one as "Unread (start over)", eject: the Kobo shows both. Reconnect: the Library tab's Progress column matches the Kobo.
 - M15: no device needed. Library → "Check library…" lists low-resolution covers and broken links; click one to open the book. In the edit panel, add a translator to a book, send it, and check in calibre or Apple Books that the translator is listed.
+- M16: highlight a passage and add a note in a sideloaded book on the Kobo, then reconnect. In the Library tab, select that book: the edit panel shows "Highlights and notes (2)…" with the chapter named as in the Kobo's contents; export Markdown and open it.
 
 ## Spike S2 — collections and Kobo cloud sync (with M6)
 

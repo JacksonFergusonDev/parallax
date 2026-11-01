@@ -4,8 +4,9 @@ use std::path::Path;
 
 use erc_device::ReadStatus;
 use erc_device_kobo::{
-    DuplicateCollection, KoboDevice, Mismatch, duplicate_collections, files_not_in_database,
-    merge_duplicate_collections, missing_files, orphaned_images, remove_book, set_read_status,
+    AnnotationKind, DuplicateCollection, KoboDevice, Mismatch, duplicate_collections,
+    files_not_in_database, merge_duplicate_collections, missing_files, orphaned_images,
+    remove_book, set_read_status,
 };
 use erc_library::Library;
 use serde::Serialize;
@@ -199,4 +200,63 @@ pub fn change_reading_status(
         sync_reading(library, device)?;
     }
     changed
+}
+
+/// Copies highlights, notes and bookmarks for library books on `device` into
+/// the library, and backs up Adobe `.annot` files to
+/// `<library>/annotation-files/<serial>/`. Only reads the device. Returns how
+/// many annotations were new, changed or removed on the device.
+pub fn sync_annotations(
+    library: &mut Library,
+    device: &KoboDevice,
+) -> erc_device_kobo::Result<usize> {
+    let serial = device.version().serial.clone();
+    let copies = library.device_copies(&serial).unwrap_or_default();
+    if copies.is_empty() {
+        return Ok(0);
+    }
+    let all = device.open_db()?.annotations(None)?;
+    let mut changed = 0;
+    for copy in &copies {
+        let items: Vec<erc_library::Annotation> = all
+            .iter()
+            .filter(|a| a.book == copy.content_id)
+            .map(|a| erc_library::Annotation {
+                id: a.id.clone(),
+                device_serial: serial.clone(),
+                kind: match a.kind {
+                    AnnotationKind::Highlight => "highlight",
+                    AnnotationKind::Note => "note",
+                    AnnotationKind::Bookmark => "bookmark",
+                    AnnotationKind::Markup => "markup",
+                }
+                .to_owned(),
+                text: a.text.clone(),
+                note: a.note.clone(),
+                chapter: a.chapter.clone(),
+                position: a.position,
+                created: a.created.clone(),
+                modified: a.modified.clone(),
+                on_device: true,
+            })
+            .collect();
+        changed += library
+            .sync_annotations(copy.book_id, &serial, &items)
+            .unwrap_or(0);
+    }
+    let backup = library
+        .root()
+        .join("annotation-files")
+        .join(serial.replace(|c: char| !c.is_ascii_alphanumeric(), "_"));
+    for (rel, path) in device.annotation_files() {
+        let dest = backup.join(&rel);
+        let same = std::fs::read(&dest).ok() == std::fs::read(&path).ok();
+        if !same {
+            if let Some(parent) = dest.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let _ = std::fs::copy(&path, &dest);
+        }
+    }
+    Ok(changed)
 }

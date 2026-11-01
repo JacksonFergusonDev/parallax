@@ -1382,3 +1382,48 @@ form.enhance-key input {
 .check-groups li .muted {
   font-size: 12px;
 }
+
+/* Highlights and notes */
+
+.modal.annotations {
+  width: min(640px, calc(100vw - 48px));
+  gap: 12px;
+}
+.modal.annotations .modal-head {
+  margin-bottom: 0;
+}
+.modal.annotations .modal-head p {
+  margin: 4px 0 0;
+}
+.annotation-list {
+  overflow: auto;
+  overscroll-behavior: contain;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.annotation-list h3 {
+  font-size: 13px;
+  margin: 14px 0 4px;
+}
+.annotation-list figure {
+  margin: 0 0 12px;
+}
+.annotation-list blockquote {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--accent);
+  font-family: Georgia, "Iowan Old Style", serif;
+  line-height: 1.45;
+}
+.annotation-list figcaption {
+  margin: 4px 0 0 15px;
+  font-size: 13px;
+}
+.annotation-list figure.removed blockquote {
+  border-left-color: var(--border);
+  color: var(--muted);
+}
+.annotation-list figure p {
+  margin: 4px 0 0 15px;
+  font-size: 12px;
+}

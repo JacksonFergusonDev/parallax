@@ -27,7 +27,7 @@ use sha2::{Digest, Sha256};
 
 pub use authors::normalize_authors;
 pub use rules::{Rule, RuleKind};
-pub use stores::Reading;
+pub use stores::{Annotation, Reading};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

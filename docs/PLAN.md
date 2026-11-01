@@ -1,6 +1,6 @@
 # Kobo MVP — Implementation Plan
 
-Status: **M0–M15 implemented** (decisions in §6; phase 1.5 in §7). Device checks for M3–M15 and spike S2 outstanding; see PROGRESS.md. Source brief: `ereader-companion-project.md`.
+Status: **M0–M16 implemented** (Kobo MVP and phase 1.5) (decisions in §6; phase 1.5 in §7). Device checks for M3–M16 and spike S2 outstanding; see PROGRESS.md. Source brief: `ereader-companion-project.md`.
 
 ## 1. Research findings that shape the design
 

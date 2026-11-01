@@ -57,12 +57,15 @@ struct LibraryBook {
     cover: Option<PathBuf>,
     /// Progress last seen on a device.
     reading: Option<Reading>,
+    /// Highlights and notes copied from devices.
+    annotations: usize,
 }
 
 fn with_cover(lib: &Library, book: Book) -> LibraryBook {
     LibraryBook {
         cover: lib.cover_file(book.id),
         reading: lib.reading(book.id).ok().flatten(),
+        annotations: lib.annotation_count(book.id).unwrap_or(0),
         book,
     }
 }
@@ -313,6 +316,32 @@ async fn send_books(
     })
     .await
     .map_err(err)?
+}
+
+/// A book's highlights, notes and bookmarks, in reading order.
+#[tauri::command]
+fn annotations_list(state: State<AppState>, id: i64) -> CmdResult<Vec<erc_library::Annotation>> {
+    state.library().annotations(id).map_err(err)
+}
+
+/// Saves a book's annotations as Markdown or JSON at `path` (chosen by the
+/// user in a save dialog).
+#[tauri::command]
+fn annotations_export(
+    state: State<AppState>,
+    id: i64,
+    format: String,
+    path: PathBuf,
+) -> CmdResult<usize> {
+    let lib = state.library();
+    let book = lib.book(id).map_err(err)?;
+    let items = lib.annotations(id).map_err(err)?;
+    let text = match format.as_str() {
+        "json" => erc_core::annotations::json(&book, &items),
+        _ => erc_core::annotations::markdown(&book, &items),
+    };
+    std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(items.len())
 }
 
 /// "Check library": every book's cover, metadata and EPUB structure.
@@ -615,6 +644,8 @@ struct Reconciled {
     grouped: usize,
     /// Library books whose reading progress changed.
     reading: usize,
+    /// Highlights, notes and bookmarks new, changed or removed on the device.
+    annotations: usize,
 }
 
 /// On connect: applies series to books Nickel has imported since they were
@@ -626,11 +657,12 @@ async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResu
     let backups = state.backup_root.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let mut lib = library.lock().unwrap_or_else(|e| e.into_inner());
         Ok(Reconciled {
             series: erc_core::collections::reconcile_series(&lib, &kobo, &backups).map_err(err)?,
             grouped: erc_core::rules::run(&lib, &kobo, &backups).map_err(err)?,
             reading: erc_core::device::sync_reading(&lib, &kobo).map_err(err)?,
+            annotations: erc_core::device::sync_annotations(&mut lib, &kobo).map_err(err)?,
         })
     })
     .await
@@ -771,6 +803,8 @@ pub fn run() {
             enhance_propose,
             kobo_health,
             library_check,
+            annotations_list,
+            annotations_export,
             clean_images,
             merge_collections,
             set_reading_status,

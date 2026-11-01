@@ -14,7 +14,8 @@ use clap::{Args, Parser, Subcommand};
 use erc_convert::Kepubify;
 use erc_core::collections::{self, CollectionChange, folder_groups, reconcile_series};
 use erc_core::device::{
-    change_reading_status, health, merge_collections, remove_from_device, sync_reading,
+    change_reading_status, health, merge_collections, remove_from_device, sync_annotations,
+    sync_reading,
 };
 use erc_core::duplicates::{Reason, device_duplicates, library_duplicates};
 use erc_core::enhance;
@@ -208,6 +209,17 @@ enum LibraryCommand {
     Rules(RulesCommand),
     /// List probable duplicate books in the library.
     Duplicates,
+    /// Print or save a book's highlights and notes (copied from the Kobo by
+    /// `reconcile` or when the app sees it).
+    Annotations {
+        id: i64,
+        /// Markdown (default) or JSON.
+        #[arg(long, value_enum, default_value_t = AnnotationFormat::Markdown)]
+        format: AnnotationFormat,
+        /// Write to this file instead of printing.
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
     /// Check every book: covers, authors, series numbers and gaps, and EPUB
     /// structure (missing files, broken links, clutter, DRM).
     Check,
@@ -1028,6 +1040,26 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             println!("{rows}");
             println!("{} findings", findings.len());
         }
+        LibraryCommand::Annotations { id, format, out } => {
+            let book = lib.book(id)?;
+            let items = lib.annotations(id)?;
+            let text = match format {
+                AnnotationFormat::Markdown => erc_core::annotations::markdown(&book, &items),
+                AnnotationFormat::Json => erc_core::annotations::json(&book, &items),
+            };
+            match out {
+                Some(path) => {
+                    std::fs::write(&path, text).with_context(|| path.display().to_string())?;
+                    println!(
+                        "{} {} annotations to {}",
+                        success("saved"),
+                        items.len(),
+                        path.display()
+                    );
+                }
+                None => print!("{text}"),
+            }
+        }
         LibraryCommand::Duplicates => {
             let groups = library_duplicates(lib)?;
             if json {
@@ -1099,6 +1131,10 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             println!(
                 "updated reading progress for {} books",
                 sync_reading(lib, &kobo)?
+            );
+            println!(
+                "copied {} new or changed highlights, notes and bookmarks",
+                sync_annotations(lib, &kobo)?
             );
         }
         LibraryCommand::Send {
@@ -1226,6 +1262,12 @@ fn rules_command(lib: &Library, command: RulesCommand, json: bool) -> Result<()>
 }
 
 /// Accepts a device path (`KEpub/x.kepub.epub`) or a full ContentID.
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum AnnotationFormat {
+    Markdown,
+    Json,
+}
+
 #[derive(Clone, Copy, clap::ValueEnum)]
 enum StatusArg {
     Unread,

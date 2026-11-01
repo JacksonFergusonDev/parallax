@@ -9,6 +9,7 @@ import {
   type MetadataEdit,
 } from "../api";
 import { ROLES, fromForm, toForm, type EditForm } from "../library";
+import { AnnotationsDialog } from "./AnnotationsDialog";
 import { CoverPicker } from "./CoverPicker";
 
 interface Props {
@@ -33,6 +34,7 @@ export function EditPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [picker, setPicker] = useState(false);
+  const [highlights, setHighlights] = useState(false);
   const [coverBusy, setCoverBusy] = useState(false);
 
   const changeCover = async (action: () => Promise<Book>) => {
@@ -127,6 +129,9 @@ export function EditPanel({
           ×
         </button>
       </div>
+      {highlights && (
+        <AnnotationsDialog book={book} onClose={() => setHighlights(false)} />
+      )}
       {picker && (
         <CoverPicker
           book={book}
@@ -224,6 +229,15 @@ export function EditPanel({
         >
           Find series and genres online…
         </button>
+        {(book.annotations ?? 0) > 0 && (
+          <button
+            type="button"
+            className="link find-online"
+            onClick={() => setHighlights(true)}
+          >
+            {`Highlights and notes (${book.annotations})…`}
+          </button>
+        )}
         {error && <p className="notice notice-error">{error}</p>}
         <p className="hint">
           Changes apply to the copy sent to your Kobo. Your original file is

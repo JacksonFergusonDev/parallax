@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use erc_convert::{Converter, Kepubify};
-use erc_core::device::{books_on_device, sync_reading};
+use erc_core::device::{books_on_device, sync_annotations, sync_reading};
 use erc_core::import::{DeviceImport, import_from_device};
 use erc_device_kobo::KoboDevice;
 use erc_library::Library;
@@ -256,4 +256,53 @@ fn reading_progress_reaches_the_library() {
     assert!(r.last_read.unwrap().starts_with("2026-10-30T20:00:00"));
     // Nothing changed since: nothing written.
     assert_eq!(sync_reading(&library, &kobo).unwrap(), 0);
+}
+
+#[test]
+fn annotations_are_copied_and_kept_after_deletion() {
+    let dir = tempfile::tempdir().unwrap();
+    let kobo = fake_kobo(dir.path());
+    let mut library = Library::open(dir.path().join("lib")).unwrap();
+    let outcomes =
+        import_from_device(&mut library, &kobo, Some(&[cid(KEPUB)]), |_, _, _| {}).unwrap();
+    let DeviceImport::Added { book_id } = *outcome_for(&outcomes, &cid(KEPUB)) else {
+        panic!();
+    };
+    let conn = Connection::open(kobo.db_path()).unwrap();
+    for (id, text, note) in [("h1", "A line.", None), ("h2", "Another.", Some("Mine"))] {
+        conn.execute(
+            "INSERT INTO Bookmark (BookmarkID, VolumeID, ContentID, StartContainerPath, StartContainerChildIndex, StartOffset,
+                 EndContainerPath, EndContainerChildIndex, EndOffset, Text, Annotation, ChapterProgress, Hidden, Type)
+             VALUES (?1, ?2, ?3, 'p', 0, 0, 'p', 0, 1, ?4, ?5, 0.5, 'false', 'highlight')",
+            rusqlite::params![id, cid(KEPUB), format!("/mnt/onboard/{KEPUB}!!c1.xhtml"), text, note],
+        )
+        .unwrap();
+    }
+    let annots = kobo.mount().join("Digital Editions/Annotations/KEpub");
+    fs::create_dir_all(&annots).unwrap();
+    fs::write(annots.join("Plain.epub.annot"), b"<annotationSet/>").unwrap();
+
+    assert_eq!(sync_annotations(&mut library, &kobo).unwrap(), 2);
+    assert_eq!(
+        sync_annotations(&mut library, &kobo).unwrap(),
+        0,
+        "nothing new"
+    );
+    let stored = library.annotations(book_id).unwrap();
+    assert_eq!(stored.len(), 2);
+    assert_eq!(stored[1].kind, "note");
+    assert_eq!(library.annotation_counts().unwrap()[&book_id], 2);
+    assert!(
+        dir.path()
+            .join("lib/annotation-files/N000000000001/KEpub/Plain.epub.annot")
+            .is_file()
+    );
+
+    // Deleted on the Kobo: kept in the library, marked as removed there.
+    conn.execute("DELETE FROM Bookmark WHERE BookmarkID = 'h1'", [])
+        .unwrap();
+    assert_eq!(sync_annotations(&mut library, &kobo).unwrap(), 1);
+    let stored = library.annotations(book_id).unwrap();
+    assert_eq!(stored.len(), 2);
+    assert!(!stored.iter().find(|a| a.id == "h1").unwrap().on_device);
 }

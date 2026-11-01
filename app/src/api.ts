@@ -53,6 +53,23 @@ export interface Book {
   cover: string | null;
   /** Progress last seen on a Kobo. */
   reading?: Reading | null;
+  /** Highlights and notes copied from a Kobo. */
+  annotations?: number;
+}
+
+/** A highlight, note or bookmark copied from a Kobo. */
+export interface Annotation {
+  id: string;
+  device_serial: string;
+  kind: "highlight" | "note" | "bookmark" | "markup";
+  text: string | null;
+  note: string | null;
+  chapter: string | null;
+  position: number;
+  created: string | null;
+  modified: string | null;
+  /** False once deleted on the Kobo; the library keeps it. */
+  on_device: boolean;
 }
 
 export interface Reading {
@@ -457,6 +474,14 @@ export const onCheckProgress = (
   handler: (p: ImportProgress) => void,
 ): Promise<UnlistenFn> =>
   listen<ImportProgress>("check-progress", (e) => handler(e.payload));
+export const annotationsList = (id: number) =>
+  read<Annotation[]>("annotations_list", { id }, ["library"]);
+/** Writes Markdown or JSON to `path`; returns how many annotations. */
+export const annotationsExport = (
+  id: number,
+  format: "markdown" | "json",
+  path: string,
+) => invoke<number>("annotations_export", { id, format, path });
 export const koboHealth = (mount: string) =>
   read<KoboHealth>("kobo_health", { mount }, [deviceTag(mount)]);
 /** Deletes leftover cover images; returns [files, bytes]. */
@@ -500,9 +525,10 @@ export async function reconcileDevice(mount: string) {
       series: number;
       grouped: number;
       reading: number;
+      annotations: number;
     }>("reconcile_device", { mount });
     if (result.series || result.grouped) readCache.invalidate(deviceTag(mount));
-    if (result.reading) readCache.invalidate("library");
+    if (result.reading || result.annotations) readCache.invalidate("library");
     return result;
   } catch (e) {
     readCache.invalidate(deviceTag(mount));
