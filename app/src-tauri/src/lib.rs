@@ -25,6 +25,8 @@ const SEND_PROGRESS: &str = "send-progress";
 const IMPORT_PROGRESS: &str = "import-progress";
 /// Event carrying [`ImportProgress`] while series and genres are looked up.
 const ENHANCE_PROGRESS: &str = "enhance-progress";
+/// Event carrying [`ImportProgress`] while the library is checked.
+const CHECK_PROGRESS: &str = "check-progress";
 
 #[derive(Clone, Serialize)]
 struct ImportProgress {
@@ -308,6 +310,31 @@ async fn send_books(
         // Enabled grouping rules file the new books too (no-op otherwise).
         erc_core::rules::run(&lib, &kobo, &backups).map_err(err)?;
         Ok(outcomes)
+    })
+    .await
+    .map_err(err)?
+}
+
+/// "Check library": every book's cover, metadata and EPUB structure.
+#[tauri::command]
+async fn library_check(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CmdResult<Vec<erc_core::health::Finding>> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        erc_core::health::check_library(&lib, |index, total| {
+            let _ = app.emit(
+                CHECK_PROGRESS,
+                ImportProgress {
+                    index,
+                    total,
+                    title: String::new(),
+                },
+            );
+        })
+        .map_err(err)
     })
     .await
     .map_err(err)?
@@ -743,6 +770,7 @@ pub fn run() {
             library_duplicates,
             enhance_propose,
             kobo_health,
+            library_check,
             clean_images,
             merge_collections,
             set_reading_status,

@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-use erc_epub::{Epub, MetadataEdit};
+use erc_epub::{Contributor, Epub, MetadataEdit};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
@@ -137,6 +137,7 @@ fn edit() -> MetadataEdit {
         series: Some("My Series".into()),
         series_index: Some("3".into()),
         tags: vec!["Sci-Fi".into(), "Favourites".into()],
+        contributors: None,
     }
 }
 
@@ -332,4 +333,117 @@ fn adds_cover_to_book_without_one() {
         Epub::open(&out).unwrap().cover().unwrap().unwrap().data,
         b"NEWJPEG"
     );
+}
+
+fn people() -> Vec<Contributor> {
+    vec![
+        Contributor {
+            name: "Ann Translator".into(),
+            role: "trl".into(),
+        },
+        Contributor {
+            name: "Bo & Illustrator".into(),
+            role: "ILL".into(),
+        },
+    ]
+}
+
+#[test]
+fn reads_contributors_with_roles() {
+    let dir = tempfile::tempdir().unwrap();
+    let epub2 = make_epub(dir.path(), "2.epub", EPUB2_OPF, &[]);
+    let epub3 = make_epub(dir.path(), "3.epub", EPUB3_OPF, &[]);
+    assert_eq!(
+        Epub::open(&epub2).unwrap().metadata().contributors,
+        [Contributor {
+            name: "Some Illustrator".into(),
+            role: "ill".into()
+        }]
+    );
+    assert_eq!(
+        Epub::open(&epub3).unwrap().metadata().contributors,
+        [Contributor {
+            name: "An Editor".into(),
+            role: "edt".into()
+        }]
+    );
+}
+
+#[test]
+fn writes_contributors_epub2_keeping_the_book_producer() {
+    let dir = tempfile::tempdir().unwrap();
+    let opf = EPUB2_OPF.replace(
+        "<dc:language>en</dc:language>",
+        "<dc:contributor opf:role=\"bkp\">calibre (7.0) [https://calibre-ebook.com]</dc:contributor>\n    <dc:language>en</dc:language>",
+    );
+    let path = make_epub(dir.path(), "b.epub", &opf, &[]);
+    let out = dir.path().join("out.epub");
+    let edit = MetadataEdit {
+        contributors: Some(people()),
+        ..edit()
+    };
+    Epub::open(&path)
+        .unwrap()
+        .write_with_metadata(&edit, &out)
+        .unwrap();
+
+    let m = Epub::open(&out).unwrap().metadata();
+    assert_eq!(
+        m.contributors,
+        [
+            Contributor {
+                name: "Ann Translator".into(),
+                role: "trl".into()
+            },
+            Contributor {
+                name: "Bo & Illustrator".into(),
+                role: "ill".into()
+            },
+        ]
+    );
+    let opf = read_opf(&out);
+    assert!(!opf.contains("Some Illustrator"));
+    assert!(opf.contains(r#"<dc:contributor opf:role="trl">Ann Translator</dc:contributor>"#));
+    assert!(opf.contains(r#"<dc:contributor opf:role="bkp">calibre (7.0)"#));
+    assert!(!opf.contains("\n\n"), "removal left blank lines:\n{opf}");
+}
+
+#[test]
+fn writes_contributors_epub3_and_none_leaves_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = make_epub(dir.path(), "b.epub", EPUB3_OPF, &[]);
+
+    // None: the editor and its refinements are untouched.
+    let kept = dir.path().join("kept.epub");
+    Epub::open(&path)
+        .unwrap()
+        .write_with_metadata(&edit(), &kept)
+        .unwrap();
+    let opf = read_opf(&kept);
+    assert!(
+        opf.contains(r##"<meta refines="#c2" property="role" scheme="marc:relators">edt</meta>"##)
+    );
+
+    let out = dir.path().join("out.epub");
+    let edit = MetadataEdit {
+        contributors: Some(people()),
+        ..edit()
+    };
+    Epub::open(&path)
+        .unwrap()
+        .write_with_metadata(&edit, &out)
+        .unwrap();
+    let opf = read_opf(&out);
+    assert!(!opf.contains("An Editor") && !opf.contains("#c2"));
+    assert!(
+        opf.contains(r#"<dc:contributor id="erc-contributor-1">Ann Translator</dc:contributor>"#)
+    );
+    assert!(opf.contains(
+        r##"<meta refines="#erc-contributor-2" property="role" scheme="marc:relators">ill</meta>"##
+    ));
+    assert_eq!(Epub::open(&out).unwrap().metadata().contributors, {
+        let mut p = people();
+        p[1].role = "ill".into();
+        p
+    });
 }

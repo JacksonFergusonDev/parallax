@@ -301,6 +301,7 @@ mod tests {
             id,
             title: "T".into(),
             authors: vec!["A".into()],
+            contributors: None,
             series: series.map(Into::into),
             series_index: index.map(Into::into),
             tags: tags.iter().map(|t| t.to_string()).collect(),

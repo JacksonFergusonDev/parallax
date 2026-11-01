@@ -82,6 +82,7 @@ fn sends_library_books_with_edited_metadata() {
                 series: Some("Saga".into()),
                 series_index: Some("1".into()),
                 tags: vec![],
+                contributors: None,
             },
         )
         .unwrap();

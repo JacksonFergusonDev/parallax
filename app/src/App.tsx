@@ -38,6 +38,7 @@ import { BookCard } from "./components/BookCard";
 import { DeviceBadge } from "./components/DeviceBadge";
 import { DeviceView } from "./components/DeviceView";
 import { EnhanceReview } from "./components/EnhanceReview";
+import { LibraryCheck } from "./components/LibraryCheck";
 import {
   DuplicateReview,
   type ReviewGroup,
@@ -89,6 +90,7 @@ export default function App() {
   );
   /** Books being looked up for series and genres. */
   const [enhancing, setEnhancing] = useState<number[] | null>(null);
+  const [checking, setChecking] = useState(false);
   /** Bumped when an enhance saves, so an open edit form reloads. */
   const [enhanced, setEnhanced] = useState(0);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -551,6 +553,9 @@ export default function App() {
                 >
                   Find duplicates…
                 </button>
+                <button className="link" onClick={() => setChecking(true)}>
+                  Check library…
+                </button>
                 <button
                   className="link"
                   onClick={() =>
@@ -745,6 +750,17 @@ export default function App() {
           </button>
         </footer>
       </div>
+      {checking && (
+        <LibraryCheck
+          books={new Map(books.map((b) => [b.id, b]))}
+          onShow={(id) => {
+            setChecking(false);
+            setView("library");
+            setSelected(new Set([id]));
+          }}
+          onClose={() => setChecking(false)}
+        />
+      )}
       {enhancing && (
         <EnhanceReview
           ids={enhancing}

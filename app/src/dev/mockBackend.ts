@@ -69,6 +69,7 @@ let books: Book[] = SAMPLE.map(([title, author, series, index, tags], i) => ({
   added_at: "2026-10-31T00:00:00Z",
   modified_at: "2026-10-31T00:00:00Z",
   cover: i < SAMPLE.length - 1 ? coverSvg(title, author, i) : null,
+  contributors: i === 5 ? [{ name: "Some Translator", role: "trl" }] : [],
   reading:
     i === 2
       ? {
@@ -503,6 +504,41 @@ export function installMockBackend() {
             });
           }
           return outcomes;
+        }
+        case "library_check": {
+          for (const [i] of books.entries()) {
+            await emit("check-progress", {
+              index: i + 1,
+              total: books.length,
+              title: "",
+            });
+            await sleep(40);
+          }
+          return [
+            { check: "small_cover", book_ids: [2], detail: "521×850" },
+            { check: "small_cover", book_ids: [4], detail: "655×1000" },
+            { check: "no_cover", book_ids: [books.at(-2)!.id], detail: "" },
+            {
+              check: "broken_links",
+              book_ids: [3],
+              detail: "xhtml/titlepage.xhtml, xhtml/contents.xhtml",
+            },
+            {
+              check: "series_gap",
+              book_ids: [6, 7],
+              detail: "Gentleman Bastard: #3 missing",
+            },
+            {
+              check: "embedded_fonts",
+              book_ids: [1],
+              detail: "OEBPS/Fonts/Serif.otf",
+            },
+            {
+              check: "clutter",
+              book_ids: [5],
+              detail: "__MACOSX/OEBPS/._c1.xhtml",
+            },
+          ];
         }
         case "kobo_health":
           await sleep(300);

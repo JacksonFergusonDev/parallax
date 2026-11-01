@@ -18,6 +18,7 @@ use erc_core::device::{
 };
 use erc_core::duplicates::{Reason, device_duplicates, library_duplicates};
 use erc_core::enhance;
+use erc_core::health::check_library;
 use erc_core::import::{DeviceImport, import_from_device};
 use erc_core::rules;
 use erc_core::send::{SendOutcome, send_books, send_library_books, update_on_device};
@@ -26,7 +27,7 @@ use erc_device_kobo::{
     BookCheck, KoboDb, KoboDevice, LogEntry, MACOS_VOLUMES, ONBOARD_PREFIX, Record,
     remove_orphaned_images, restore, tidy_apple_double,
 };
-use erc_epub::MetadataEdit;
+use erc_epub::{Contributor, MetadataEdit};
 use erc_library::{ImportOutcome, Library, Rule, RuleKind};
 use serde::Serialize;
 
@@ -169,6 +170,11 @@ enum LibraryCommand {
         /// Repeat for several tags; replaces existing tags.
         #[arg(long = "tag")]
         tags: Vec<String>,
+        /// `Name=role` with a MARC relator code (trl translator, ill
+        /// illustrator, edt editor, nrt narrator); repeat for several;
+        /// replaces existing contributors. `--contributor ""` clears them.
+        #[arg(long = "contributor")]
+        contributors: Vec<String>,
     },
     /// Remove a book from the library (not from devices).
     Rm { id: i64 },
@@ -202,6 +208,9 @@ enum LibraryCommand {
     Rules(RulesCommand),
     /// List probable duplicate books in the library.
     Duplicates,
+    /// Check every book: covers, authors, series numbers and gaps, and EPUB
+    /// structure (missing files, broken links, clutter, DRM).
+    Check,
     /// Look up series and genres online (and on a connected Kobo) for books
     /// that lack them. Shows proposals; --apply saves the confident ones.
     Enhance {
@@ -806,8 +815,26 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             series,
             index,
             tags,
+            contributors,
         } => {
             let current = lib.book(id)?.edit();
+            let contributors = if contributors.is_empty() {
+                current.contributors
+            } else {
+                Some(
+                    contributors
+                        .iter()
+                        .filter(|c| !c.trim().is_empty())
+                        .map(|c| match c.rsplit_once('=') {
+                            Some((name, role)) => Ok(Contributor {
+                                name: name.trim().to_owned(),
+                                role: role.trim().to_lowercase(),
+                            }),
+                            None => Err(anyhow::anyhow!("expected Name=role, got {c:?}")),
+                        })
+                        .collect::<Result<Vec<_>>>()?,
+                )
+            };
             let edit = MetadataEdit {
                 title: title.unwrap_or(current.title),
                 authors: if authors.is_empty() {
@@ -818,6 +845,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                 series_index: index.or(current.series_index),
                 series: series.or(current.series),
                 tags: if tags.is_empty() { current.tags } else { tags },
+                contributors,
             };
             let book = lib.update(id, &edit)?;
             println!("{} #{} {}", success("updated"), book.id, book.title);
@@ -981,6 +1009,24 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             } else {
                 println!("{}", lib.setting(&key)?.unwrap_or_default());
             }
+        }
+        LibraryCommand::Check => {
+            let findings = check_library(lib, |_, _| {})?;
+            if json {
+                return print_json(&findings);
+            }
+            let mut rows = table(&["Check", "Book", "Detail"]);
+            for f in &findings {
+                let titles: Vec<String> = f
+                    .book_ids
+                    .iter()
+                    .filter_map(|&id| lib.book(id).ok().map(|b| b.title))
+                    .collect();
+                let label = format!("{:?}", f.check);
+                rows.add_row(vec![label, titles.join("; "), f.detail.clone()]);
+            }
+            println!("{rows}");
+            println!("{} findings", findings.len());
         }
         LibraryCommand::Duplicates => {
             let groups = library_duplicates(lib)?;

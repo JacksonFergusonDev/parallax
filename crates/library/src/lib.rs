@@ -20,7 +20,7 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
-use erc_epub::{Cover, Epub, Identifier, Metadata, MetadataEdit};
+use erc_epub::{Contributor, Cover, Epub, Identifier, Metadata, MetadataEdit};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -57,6 +57,9 @@ pub struct Book {
     pub id: i64,
     pub title: String,
     pub authors: Vec<String>,
+    /// `None` when not read from the EPUB yet; exports then leave the EPUB's
+    /// contributors as they are.
+    pub contributors: Option<Vec<Contributor>>,
     pub series: Option<String>,
     pub series_index: Option<String>,
     pub tags: Vec<String>,
@@ -81,6 +84,7 @@ impl Book {
             series: self.series.clone(),
             series_index: self.series_index.clone(),
             tags: self.tags.clone(),
+            contributors: self.contributors.clone(),
         }
     }
 
@@ -125,7 +129,32 @@ impl Library {
         fs::create_dir_all(root.join("books")).map_err(|e| io_err(&root, e))?;
         let conn = Connection::open(root.join("library.sqlite"))?;
         schema::migrate(&conn)?;
-        Ok(Self { root, conn })
+        let library = Self { root, conn };
+        library.backfill_contributors();
+        Ok(library)
+    }
+
+    /// Reads contributors for books imported before they were tracked. Best
+    /// effort: a book whose EPUB can't be read stays unknown (and untouched).
+    fn backfill_contributors(&self) {
+        let Ok(mut stmt) = self
+            .conn
+            .prepare("SELECT id FROM books WHERE contributors IS NULL")
+        else {
+            return;
+        };
+        let ids: Vec<i64> = stmt
+            .query_map([], |r| r.get(0))
+            .map(|rows| rows.flatten().collect())
+            .unwrap_or_default();
+        for id in ids {
+            if let Ok(epub) = Epub::open(self.book_file(id)) {
+                let _ = self.conn.execute(
+                    "UPDATE books SET contributors = ?1 WHERE id = ?2",
+                    params![json(&epub.metadata().contributors), id],
+                );
+            }
+        }
     }
 
     pub fn root(&self) -> &Path {
@@ -154,8 +183,9 @@ impl Library {
         let tx = self.conn.transaction()?;
         tx.execute(
             "INSERT INTO books (title, authors, series, series_index, tags, language, publisher, description,
-                                identifiers, file_hash, file_size, original_name, has_cover, added_at, modified_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 0, ?13, ?13)",
+                                identifiers, file_hash, file_size, original_name, has_cover, added_at, modified_at,
+                                contributors)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 0, ?13, ?13, ?14)",
             params![
                 title,
                 json(&authors),
@@ -170,6 +200,7 @@ impl Library {
                 size as i64,
                 original_name,
                 now,
+                json(&meta.contributors),
             ],
         )?;
         let id = tx.last_insert_rowid();
@@ -255,6 +286,23 @@ impl Library {
         if changed == 0 {
             return Err(Error::NotFound(id));
         }
+        if let Some(contributors) = &edit.contributors {
+            let clean: Vec<Contributor> = contributors
+                .iter()
+                .filter(|c| !c.name.trim().is_empty())
+                .map(|c| Contributor {
+                    name: c.name.trim().to_owned(),
+                    role: match c.role.trim() {
+                        "" => "ctb".to_owned(),
+                        r => r.to_lowercase(),
+                    },
+                })
+                .collect();
+            self.conn.execute(
+                "UPDATE books SET contributors = ?1 WHERE id = ?2",
+                params![json(&clean), id],
+            )?;
+        }
         self.book(id)
     }
 
@@ -269,6 +317,21 @@ impl Library {
     /// The unmodified original.
     pub fn book_file(&self, id: i64) -> PathBuf {
         self.book_dir(id).join("book.epub")
+    }
+
+    /// Width and height of the cover sent to devices: the custom one if set,
+    /// else the EPUB's own.
+    pub fn cover_size(&self, id: i64) -> Option<(u32, u32)> {
+        let custom = self.custom_cover_file(id);
+        if custom.is_file() {
+            return image::image_dimensions(&custom).ok();
+        }
+        let cover = Epub::open(self.book_file(id)).ok()?.cover().ok()??;
+        image::ImageReader::new(std::io::Cursor::new(cover.data))
+            .with_guessed_format()
+            .ok()?
+            .into_dimensions()
+            .ok()
     }
 
     pub fn cover_file(&self, id: i64) -> Option<PathBuf> {
@@ -472,6 +535,9 @@ fn book_from_row(row: &Row) -> rusqlite::Result<Book> {
         series: row.get("series")?,
         series_index: row.get("series_index")?,
         tags: list("tags")?,
+        contributors: row
+            .get::<_, Option<String>>("contributors")?
+            .and_then(|s| serde_json::from_str(&s).ok()),
         language: row.get("language")?,
         publisher: row.get("publisher")?,
         description: row.get("description")?,

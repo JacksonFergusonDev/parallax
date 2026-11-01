@@ -19,6 +19,35 @@ pub struct Identifier {
     pub value: String,
 }
 
+/// Someone other than an author, with their MARC relator role ("trl"
+/// translator, "ill" illustrator, "edt" editor, "nrt" narrator…), as the ePub
+/// Extended Metadata calibre plugin (un-pogaz) reads and writes them.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Contributor {
+    pub name: String,
+    pub role: String,
+}
+
+/// calibre records itself as the "book producer"; that's left alone.
+const PRODUCER_ROLE: &str = "bkp";
+
+/// A creator or contributor's role, lowercased, from EPUB2 `opf:role` or an
+/// EPUB3 `refines` meta.
+fn role_of(meta: &Node, n: &Node) -> Option<String> {
+    n.attribute((OPF_NS, "role"))
+        .map(str::to_owned)
+        .or_else(|| refinement(meta, n.attribute("id"), "role"))
+        .map(|r| r.trim().to_lowercase())
+}
+
+/// Contributors this crate manages: `dc:contributor`s and non-author
+/// `dc:creator`s, except the book producer.
+fn is_contributor(meta: &Node, n: &Node) -> bool {
+    let role = role_of(meta, n);
+    (is_dc(n, "contributor") || is_dc(n, "creator") && role.as_deref().is_some_and(|r| r != "aut"))
+        && role.as_deref() != Some(PRODUCER_ROLE)
+}
+
 pub fn rootfile_path(container_xml: &str) -> Result<String> {
     let doc = Document::parse(container_xml)
         .map_err(|e| Error::Invalid(format!("container.xml: {e}")))?;
@@ -124,8 +153,20 @@ pub fn read_metadata(doc: &Document) -> Metadata {
         })
         .collect();
 
+    let contributors = children
+        .iter()
+        .filter(|n| is_contributor(&meta, n))
+        .filter_map(|n| {
+            Some(Contributor {
+                name: text(n)?,
+                role: role_of(&meta, n).unwrap_or_else(|| "ctb".to_owned()),
+            })
+        })
+        .collect();
+
     let first_dc = |name: &str| children.iter().find(|n| is_dc(n, name)).and_then(text);
     Metadata {
+        contributors,
         title: first_dc("title"),
         authors,
         series,
@@ -295,6 +336,7 @@ pub fn apply_edit(opf: &str, edit: &MetadataEdit) -> Result<String> {
         .filter(|n| {
             is_dc(n, "title")
                 || is_dc(n, "creator") && is_author(&meta, n)
+                || edit.contributors.is_some() && is_contributor(&meta, n)
                 || is_dc(n, "subject")
                 || is_meta(n)
                     && (matches!(
@@ -423,6 +465,26 @@ fn render_managed(
             lines.push(format!(
                 "<{d}:creator{dd}{od} {o}:role=\"aut\">{}</{d}:creator>",
                 esc(author)
+            ));
+        }
+    }
+    for (i, c) in edit.contributors.iter().flatten().enumerate() {
+        let role = esc(&c.role.trim().to_lowercase());
+        if epub3 {
+            let id = format!("erc-contributor-{}", i + 1);
+            lines.push(format!(
+                "<{d}:contributor{dd} id=\"{id}\">{}</{d}:contributor>",
+                esc(&c.name)
+            ));
+            lines.push(format!(
+                r##"<meta refines="#{id}" property="role" scheme="marc:relators">{role}</meta>"##
+            ));
+        } else {
+            let o = &opf.name;
+            let od = opf.declare.as_deref().unwrap_or("");
+            lines.push(format!(
+                "<{d}:contributor{dd}{od} {o}:role=\"{role}\">{}</{d}:contributor>",
+                esc(&c.name)
             ));
         }
     }

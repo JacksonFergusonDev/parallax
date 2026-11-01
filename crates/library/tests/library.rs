@@ -2,7 +2,7 @@ use std::fs::{self, File};
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 
-use erc_epub::{Epub, MetadataEdit};
+use erc_epub::{Contributor, Epub, MetadataEdit};
 use erc_library::{Error, ImportOutcome, Library};
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
@@ -144,6 +144,7 @@ fn edits_are_exported_but_originals_untouched() {
                 series: Some("Saga".into()),
                 series_index: Some("2".into()),
                 tags: vec!["Sci-Fi".into()],
+                contributors: None,
             },
         )
         .unwrap();
@@ -303,4 +304,57 @@ fn stores_rules() {
     assert!(!lib.rules().unwrap()[0].enabled);
     lib.delete_rule(saved.id).unwrap();
     assert!(lib.rules().unwrap().is_empty());
+}
+
+#[test]
+fn contributors_are_stored_edited_exported_and_backfilled() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("lib");
+    let mut lib = Library::open(&root).unwrap();
+    let src = epub(dir.path(), "a.epub", "Title", "Ann Author", None, "c1");
+    let (book, _) = added(lib.import(&src).unwrap());
+    assert_eq!(book.contributors, Some(vec![]));
+
+    let tom = Contributor {
+        name: "Tom Translator".into(),
+        role: "trl".into(),
+    };
+    let mut edit = book.edit();
+    edit.contributors = Some(vec![
+        Contributor {
+            name: " Tom Translator ".into(),
+            role: "TRL".into(),
+        },
+        Contributor {
+            name: "  ".into(),
+            role: "ill".into(),
+        },
+    ]);
+    let updated = lib.update(book.id, &edit).unwrap();
+    assert_eq!(updated.contributors, Some(vec![tom.clone()]));
+    // An edit without contributors (e.g. from an older client) keeps them.
+    let mut edit = updated.edit();
+    edit.contributors = None;
+    edit.title = "Retitled".into();
+    assert_eq!(
+        lib.update(book.id, &edit).unwrap().contributors,
+        Some(vec![tom.clone()])
+    );
+
+    let out = dir.path().join("out.epub");
+    lib.export(book.id, &out).unwrap();
+    assert_eq!(
+        Epub::open(&out).unwrap().metadata().contributors,
+        std::slice::from_ref(&tom)
+    );
+
+    // A library from before contributors were tracked reads them on open.
+    fs::copy(&out, lib.book_file(book.id)).unwrap();
+    drop(lib);
+    rusqlite::Connection::open(root.join("library.sqlite"))
+        .unwrap()
+        .execute("UPDATE books SET contributors = NULL", [])
+        .unwrap();
+    let lib = Library::open(&root).unwrap();
+    assert_eq!(lib.book(book.id).unwrap().contributors, Some(vec![tom]));
 }

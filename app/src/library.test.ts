@@ -112,6 +112,7 @@ describe("edit form", () => {
       series: "Dune",
       series_index: "1",
       tags: ["SF"],
+      contributors: [{ name: "Ann", role: "trl" }],
     });
     expect(fromForm(toForm(b))).toEqual({
       title: "Dune",
@@ -119,6 +120,7 @@ describe("edit form", () => {
       series: "Dune",
       series_index: "1",
       tags: ["SF"],
+      contributors: [{ name: "Ann", role: "trl" }],
     });
     expect(
       fromForm({
@@ -127,6 +129,11 @@ describe("edit form", () => {
         series: " ",
         seriesIndex: "3",
         tags: "",
+        contributors: [
+          { name: " Bo ", role: "" },
+          { name: " ", role: "ill" },
+        ],
+        contributorsKnown: true,
       }),
     ).toEqual({
       title: "T",
@@ -134,7 +141,16 @@ describe("edit form", () => {
       series: null,
       series_index: null,
       tags: [],
+      contributors: [{ name: "Bo", role: "ctb" }],
     });
+  });
+
+  it("leaves unknown contributors alone", () => {
+    const f = toForm(book(1, "T", ["A"], { contributors: null }));
+    expect(fromForm(f).contributors).toBeNull();
+    // Clearing known contributors is sent as an empty list.
+    const known = toForm(book(1, "T", ["A"], { contributors: [] }));
+    expect(fromForm(known).contributors).toEqual([]);
   });
 });
 

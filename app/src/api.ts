@@ -23,10 +23,18 @@ export interface Identifier {
   value: string;
 }
 
+/** Someone other than an author, with a MARC relator role code. */
+export interface Contributor {
+  name: string;
+  role: string;
+}
+
 export interface Book {
   id: number;
   title: string;
   authors: string[];
+  /** Translators, illustrators…; null when not read from the EPUB yet. */
+  contributors?: Contributor[] | null;
   series: string | null;
   series_index: string | null;
   tags: string[];
@@ -74,6 +82,8 @@ export interface KoboHealth {
 export interface MetadataEdit {
   title: string;
   authors: string[];
+  /** null leaves the book's contributors as they are. */
+  contributors: Contributor[] | null;
   series: string | null;
   series_index: string | null;
   tags: string[];
@@ -421,6 +431,32 @@ export const onEnhanceProgress = (
   handler: (p: ImportProgress) => void,
 ): Promise<UnlistenFn> =>
   listen<ImportProgress>("enhance-progress", (e) => handler(e.payload));
+export type CheckKind =
+  | "unreadable"
+  | "drm"
+  | "missing_files"
+  | "broken_links"
+  | "no_cover"
+  | "small_cover"
+  | "no_author"
+  | "series_without_number"
+  | "series_gap"
+  | "unmanifested"
+  | "clutter"
+  | "embedded_fonts";
+
+export interface Finding {
+  check: CheckKind;
+  book_ids: number[];
+  detail: string;
+}
+
+export const libraryCheck = () =>
+  read<Finding[]>("library_check", {}, ["library"]);
+export const onCheckProgress = (
+  handler: (p: ImportProgress) => void,
+): Promise<UnlistenFn> =>
+  listen<ImportProgress>("check-progress", (e) => handler(e.payload));
 export const koboHealth = (mount: string) =>
   read<KoboHealth>("kobo_health", { mount }, [deviceTag(mount)]);
 /** Deletes leftover cover images; returns [files, bytes]. */

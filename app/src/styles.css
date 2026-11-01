@@ -1314,3 +1314,71 @@ form.enhance-key input {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Contributors in the edit panel */
+
+.contributors {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.contributors legend {
+  padding: 0;
+  margin-bottom: 4px;
+}
+.contributor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+  width: 100%;
+  align-items: center;
+}
+.contributors .link {
+  font-size: 12px;
+}
+
+/* Check library */
+
+.modal.library-check {
+  width: min(680px, calc(100vw - 48px));
+  gap: 12px;
+}
+.modal.library-check .modal-head {
+  margin-bottom: 0;
+}
+.modal.library-check .modal-head p {
+  margin: 4px 0 0;
+}
+.check-groups {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.check-groups section {
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.check-groups h3 {
+  font-size: 13px;
+  margin: 0;
+}
+.check-groups section > p {
+  font-size: 12px;
+  margin: 2px 0 6px;
+}
+.check-groups ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+}
+.check-groups li {
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}
+.check-groups li .muted {
+  font-size: 12px;
+}

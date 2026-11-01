@@ -1,5 +1,11 @@
 // Pure helpers for the library view, kept out of components so they're testable.
-import type { Book, ImportResult, MetadataEdit, Progress } from "./api";
+import type {
+  Book,
+  Contributor,
+  ImportResult,
+  MetadataEdit,
+  Progress,
+} from "./api";
 import { collator, type Column, type SortValue } from "./sort";
 
 export type SendStatus =
@@ -69,7 +75,24 @@ export interface EditForm {
   series: string;
   seriesIndex: string;
   tags: string;
+  contributors: Contributor[];
+  /** The book's contributors were read; otherwise an empty list means "unchanged". */
+  contributorsKnown: boolean;
 }
+
+/** MARC relator codes offered in the editor, most common first. */
+export const ROLES: [string, string][] = [
+  ["trl", "Translator"],
+  ["ill", "Illustrator"],
+  ["edt", "Editor"],
+  ["nrt", "Narrator"],
+  ["aui", "Introduction by"],
+  ["aft", "Afterword by"],
+  ["cov", "Cover designer"],
+  ["pht", "Photographer"],
+  ["ann", "Annotator"],
+  ["ctb", "Contributor"],
+];
 
 export const toForm = (b: Book): EditForm => ({
   title: b.title,
@@ -77,6 +100,8 @@ export const toForm = (b: Book): EditForm => ({
   series: b.series ?? "",
   seriesIndex: b.series_index ?? "",
   tags: b.tags.join(", "),
+  contributors: b.contributors ?? [],
+  contributorsKnown: b.contributors != null,
 });
 
 export const fromForm = (f: EditForm): MetadataEdit => ({
@@ -86,6 +111,15 @@ export const fromForm = (f: EditForm): MetadataEdit => ({
   series_index:
     f.series.trim() && f.seriesIndex.trim() ? f.seriesIndex.trim() : null,
   tags: splitList(f.tags),
+  contributors:
+    f.contributorsKnown || f.contributors.length
+      ? f.contributors
+          .map((c) => ({
+            name: c.name.trim(),
+            role: c.role.trim().toLowerCase() || "ctb",
+          }))
+          .filter((c) => c.name)
+      : null,
 });
 
 export const isBookFile = (path: string) => /\.(epub|kepub)$/i.test(path);

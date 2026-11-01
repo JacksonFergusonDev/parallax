@@ -66,6 +66,9 @@ const MIGRATIONS: &[&str] = &[
         seen_at       TEXT NOT NULL,
         PRIMARY KEY (book_id, device_serial)
     );",
+    // 7: translators, illustrators… as JSON; NULL until read from the EPUB
+    // (books imported earlier are filled in when the library opens).
+    "ALTER TABLE books ADD COLUMN contributors TEXT;",
 ];
 
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {

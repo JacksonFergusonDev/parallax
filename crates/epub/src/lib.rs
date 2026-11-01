@@ -5,6 +5,7 @@
 //! everything else in the package document survives byte for byte. Every
 //! other zip entry is copied without recompression.
 
+mod inspect;
 mod kepub;
 mod opf;
 
@@ -16,8 +17,9 @@ use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
+pub use inspect::{Inspection, inspect, is_clutter};
 pub use kepub::{StripReport, has_drm, strip_kobo_markup};
-pub use opf::Identifier;
+pub use opf::{Contributor, Identifier};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -39,6 +41,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct Metadata {
     pub title: Option<String>,
     pub authors: Vec<String>,
+    /// Translators, illustrators, editors… (not the book producer).
+    pub contributors: Vec<Contributor>,
     pub series: Option<String>,
     /// Kept as text: "1", "2.5".
     pub series_index: Option<String>,
@@ -49,11 +53,14 @@ pub struct Metadata {
     pub identifiers: Vec<Identifier>,
 }
 
-/// The editable subset of [`Metadata`]. Writing replaces all of these fields.
+/// The editable subset of [`Metadata`]. Writing replaces all of these fields,
+/// except `contributors`, which is left as it is when `None`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct MetadataEdit {
     pub title: String,
     pub authors: Vec<String>,
+    #[serde(default)]
+    pub contributors: Option<Vec<Contributor>>,
     pub series: Option<String>,
     pub series_index: Option<String>,
     pub tags: Vec<String>,
@@ -146,6 +153,13 @@ impl Epub {
             }
         }
 
+        let manifest_names: Vec<String> = self
+            .doc()
+            .descendants()
+            .filter(|n| n.tag_name().name() == "item")
+            .filter_map(|n| n.attribute("href"))
+            .map(|href| resolve_href(&self.opf_path, href))
+            .collect();
         let mut src = open_zip(&self.path)?;
         let file = File::create(out).map_err(|e| io_err(out, e))?;
         let mut dst = ZipWriter::new(BufWriter::new(file));
@@ -162,7 +176,12 @@ impl Epub {
         for i in 0..src.len() {
             let entry = src.by_index_raw(i)?;
             let name = entry.name()?.into_owned();
-            if name == "mimetype" || cover_entry.as_ref().is_some_and(|(n, _)| *n == name) {
+            // Operating-system clutter isn't part of the book; it's left out of
+            // every copy written (the stored original keeps it).
+            if name == "mimetype"
+                || cover_entry.as_ref().is_some_and(|(n, _)| *n == name)
+                || is_clutter(&name) && !manifest_names.contains(&name)
+            {
                 continue;
             }
             if name == self.opf_path {

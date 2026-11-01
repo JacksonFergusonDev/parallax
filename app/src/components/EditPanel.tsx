@@ -8,7 +8,7 @@ import {
   type Book,
   type MetadataEdit,
 } from "../api";
-import { fromForm, toForm, type EditForm } from "../library";
+import { ROLES, fromForm, toForm, type EditForm } from "../library";
 import { CoverPicker } from "./CoverPicker";
 
 interface Props {
@@ -59,11 +59,24 @@ export function EditPanel({
 
   const dirty =
     JSON.stringify(fromForm(form)) !== JSON.stringify(fromForm(toForm(book)));
-  const field = (key: keyof EditForm) => ({
+  const field = (
+    key: "title" | "authors" | "series" | "seriesIndex" | "tags",
+  ) => ({
     value: form[key],
     onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-      setForm({ ...form, [key]: e.target.value }),
+      setForm((form) => ({ ...form, [key]: e.target.value })),
   });
+
+  const setContributor = (
+    i: number,
+    change: Partial<EditForm["contributors"][0]>,
+  ) =>
+    setForm((form) => ({
+      ...form,
+      contributors: form.contributors.map((c, j) =>
+        j === i ? { ...c, ...change } : c,
+      ),
+    }));
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,6 +145,58 @@ export function EditPanel({
           </span>
           <input {...field("authors")} />
         </label>
+        <fieldset className="contributors">
+          <legend>Contributors</legend>
+          {form.contributors.map((c, i) => (
+            <div key={i} className="contributor">
+              <input
+                aria-label="Name"
+                placeholder="Name"
+                value={c.name}
+                onChange={(e) => setContributor(i, { name: e.target.value })}
+              />
+              <select
+                aria-label="Role"
+                value={c.role}
+                onChange={(e) => setContributor(i, { role: e.target.value })}
+              >
+                {!ROLES.some(([code]) => code === c.role) && (
+                  <option value={c.role}>{c.role || "Role"}</option>
+                )}
+                {ROLES.map(([code, label]) => (
+                  <option key={code} value={code}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="icon"
+                aria-label={`Remove ${c.name || "contributor"}`}
+                onClick={() =>
+                  setForm((form) => ({
+                    ...form,
+                    contributors: form.contributors.filter((_, j) => j !== i),
+                  }))
+                }
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="link"
+            onClick={() =>
+              setForm((form) => ({
+                ...form,
+                contributors: [...form.contributors, { name: "", role: "trl" }],
+              }))
+            }
+          >
+            Add translator, illustrator…
+          </button>
+        </fieldset>
         <div className="row">
           <label className="grow">
             Series
