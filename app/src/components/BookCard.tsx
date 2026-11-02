@@ -38,7 +38,13 @@ export const BookCard = memo(function BookCard({
     >
       <div className="cover">
         {src ? (
-          <img src={src} alt="" loading="lazy" draggable={false} />
+          <img
+            src={src}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+          />
         ) : (
           <div className="cover-placeholder">
             <span>{book.title}</span>

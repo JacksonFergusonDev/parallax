@@ -25,7 +25,13 @@ export const DeviceCard = memo(function DeviceCard({
     >
       <div className="cover">
         {cover ? (
-          <img src={cover} alt="" loading="lazy" draggable={false} />
+          <img
+            src={cover}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+          />
         ) : (
           <div className="cover-placeholder">
             <span>{book.title}</span>

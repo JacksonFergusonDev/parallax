@@ -28,7 +28,15 @@ export const LibraryRow = memo(function LibraryRow({
       title={status?.stage === "failed" ? status.error : undefined}
     >
       <span className="thumb">
-        {src ? <img src={src} alt="" loading="lazy" draggable={false} /> : null}
+        {src ? (
+          <img
+            src={src}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+          />
+        ) : null}
       </span>
       <span className="cell">{book.title}</span>
       <span className="cell muted">

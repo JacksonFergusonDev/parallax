@@ -53,6 +53,7 @@ import {
 } from "./components/ViewControls";
 import { applySort } from "./sort";
 import { libraryReviewGroups } from "./duplicates";
+import { usePresentation } from "./presentation";
 import "./styles.css";
 
 const DEVICE_POLL_MS = 2000;
@@ -64,6 +65,9 @@ type Notice = { kind: "error" | "info"; text: string };
 export default function App() {
   const [books, setBooks] = useState<Book[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const appRef = useRef<HTMLDivElement>(null);
+  const [detected, setDetected] = useState(false);
+  usePresentation(appRef, loaded && detected);
   const [device, setDevice] = useState<DeviceInfo | null>(null);
   const [onDevice, setOnDevice] = useState<Map<number, OnDevice>>(new Map());
   const [view, setView] = useState<"library" | "device">("library");
@@ -134,6 +138,7 @@ export default function App() {
         .catch(() => alive && setDevice(null))
         .finally(() => {
           pending = false;
+          if (alive) setDetected(true);
         });
     };
     poll();
@@ -446,7 +451,7 @@ export default function App() {
   );
 
   return (
-    <div className={`app ${dragging ? "dragging" : ""}`}>
+    <div ref={appRef} className={`app ${dragging ? "dragging" : ""}`}>
       <header className="topbar">
         {device ? (
           <div className="tabs" role="tablist">

@@ -542,7 +542,14 @@ export function DeviceView({
                       onClick={(e) => toggle(b.id, e)}
                     >
                       <span className="thumb">
-                        {src ? <img src={src} alt="" loading="lazy" /> : null}
+                        {src ? (
+                          <img
+                            src={src}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        ) : null}
                       </span>
                       <span className="row-main">
                         <span className="row-title">{b.title}</span>

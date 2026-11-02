@@ -2,13 +2,14 @@
 import { StrictMode, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import App from "./App";
 import { readCache } from "./readCache";
 import type { Book, DeviceBook, DeviceInfo } from "./api";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
+  isTauri: vi.fn(() => false),
   convertFileSrc: (path: string) => `asset:${path}`,
 }));
 vi.mock("@tauri-apps/api/event", () => ({
@@ -105,6 +106,7 @@ async function render() {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.mocked(isTauri).mockReturnValue(false);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear();
   readCache.clear();
@@ -270,4 +272,35 @@ describe("retained app screens", () => {
     expect(panel("On Kobo").textContent).toContain("Fresh metadata");
     expect(panel("On Kobo").textContent).not.toContain("Kobo book");
   });
+});
+
+it("reveals the native window once the initial library has settled and painted", async () => {
+  vi.mocked(isTauri).mockReturnValue(true);
+  Object.defineProperty(document, "fonts", {
+    configurable: true,
+    value: { ready: Promise.resolve() },
+  });
+  let finish!: (books: Book[]) => void;
+  const initial = new Promise<Book[]>((resolve) => {
+    finish = resolve;
+  });
+  const backend = vi.mocked(invoke).getMockImplementation()!;
+  vi.mocked(invoke).mockImplementation((command, args, options) =>
+    command === "library_list"
+      ? (initial as ReturnType<typeof invoke>)
+      : backend(command, args, options),
+  );
+  await render();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(500);
+  });
+  expect(calls("show_main_window")).toHaveLength(0);
+  await act(async () => {
+    finish([localBook]);
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(150);
+  });
+  expect(calls("show_main_window")).toHaveLength(1);
+  expect(panel("Library").textContent).toContain("Local book");
 });

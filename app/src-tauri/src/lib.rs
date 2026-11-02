@@ -783,12 +783,26 @@ fn cover_reset(state: State<AppState>, id: i64) -> CmdResult<LibraryBook> {
     Ok(with_cover(&lib, book))
 }
 
+/// The frontend calls this after its initial layout and covers are ready.
+#[tauri::command]
+fn show_main_window(window: tauri::WebviewWindow) -> tauri::Result<()> {
+    window.show()?;
+    window.set_focus()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         // Reopens the window where and how big it was last time.
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        - tauri_plugin_window_state::StateFlags::VISIBLE,
+                )
+                .build(),
+        )
         .setup(|app| {
             let data = app.path().app_data_dir()?;
             let library = Library::open(data.join("library"))?;
@@ -799,6 +813,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            show_main_window,
             list_devices,
             library_list,
             library_import,
