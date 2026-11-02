@@ -150,3 +150,26 @@ fn responses_are_cached() {
     let second = CachedFetcher::open(Offline, &path).unwrap();
     assert_eq!(lookup(&second, &q, &Options::default()), a);
 }
+
+/// Hits the real services: `cargo test -p erc-metadata -- --ignored`.
+/// Titles with bracketed notes found nothing on Wikidata before they were
+/// searched without them.
+#[test]
+#[ignore]
+fn live_bracketed_titles_find_their_series() {
+    let fetch = erc_metadata::HttpFetcher::new().unwrap();
+    for (title, number) in [
+        ("We Are Legion (We Are Bob)", "1"),
+        ("For We Are Many", "2"),
+        ("All These Worlds (Bobiverse Book 3)", "3"),
+    ] {
+        let found = lookup(
+            &fetch,
+            &query(title, "Dennis E. Taylor"),
+            &Options::default(),
+        );
+        eprintln!("{title}: {:?} {:?}", found.series, genres(&found));
+        let series = found.series.expect(title);
+        assert_eq!(series.index.as_deref(), Some(number), "{title}");
+    }
+}

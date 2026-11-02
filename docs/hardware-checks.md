@@ -88,14 +88,14 @@ Batched so you can do several in one sitting when Claude asks:
 
 - M1: `erc kobo ls` output matches the library on the device.
 - M2: a book sent by the app opens and shows KEPUB features (pages per chapter, reading stats).
-- M3: edit a library book's title and series, send it, and confirm the Kobo shows the new title and series.
-- M4: a replaced cover shows on the device.
+- M3 (**done 2026-11-01**): edit a library book's title and series, send it, and confirm the Kobo shows the new title and series.
+- M4 (**done 2026-11-01**): a replaced cover shows on the device. Re-check: "Find cover online…" and "Find series and genres online…" for We Are Legion (We Are Bob) now offer only that book's covers and find Bobiverse #1.
 - M5, in the On Kobo tab:
   - Remove a book you don't need: after ejecting, it's gone from the Kobo's library with no blank entry.
   - Click "Remove macOS clutter": it should report about 68 files, and the Kobo still works normally afterwards.
   - Send a library book, read a few pages on the Kobo, reconnect, edit its title and cover in the app, click "Update 1 on Kobo", eject: the new title and cover show, and your reading position is kept.
 - M6, in the app:
-  - Library tab: select two books, choose "New collection…" next to Send, name it, send and eject. Both books appear in that collection on the Kobo straight away. Reconnect: if they have a series, the app says it added series details; eject again and the series shows on the Kobo.
+  - (**done 2026-11-01**) Library tab: select two books (⌘-click), choose "New collection…" next to Send, name it, send and eject. Books already on the Kobo instead show "Add N to collection ▾" in the same place. Both books appear in that collection on the Kobo straight away. Reconnect: if they have a series, the app says it added series details; eject again and the series shows on the Kobo.
   - On Kobo tab: "Folders → collections…" (dry run on your device: Fantasy 20, Fiction 8, Horror 1, Nonfiction 40, Sci-Fi 24). Create them, eject, and check My Books → Collections.
   - Rename one collection and delete another; eject and confirm.
 - M8, On Kobo tab → "Automatic collections…": add "A collection for each author" with at least 3 books. The preview should list collections such as Brandon Sanderson (7) and Pierce Brown (5). Apply, eject, and check them on the Kobo. Sending a new book by one of those authors should file it automatically.

@@ -160,6 +160,70 @@ describe("read-only Kobos", () => {
   });
 });
 
+describe("selection and collections", () => {
+  it("selects one book per click and more with ⌘ in both views", async () => {
+    currentBooks = [
+      koboBook,
+      { ...koboBook, id: "file:///mnt/onboard/b.epub" },
+    ];
+    await render();
+    const pressed = (name: string) =>
+      [...panel(name).querySelectorAll("button.card")].filter(
+        (c) => c.getAttribute("aria-pressed") === "true",
+      ).length;
+    const cards = () =>
+      panel("On Kobo").querySelectorAll<HTMLButtonElement>("button.card");
+    await click(button("On Kobo"));
+    await click(cards()[0]);
+    await click(cards()[1]);
+    expect(pressed("On Kobo")).toBe(1);
+    await act(async () =>
+      cards()[0].dispatchEvent(
+        new MouseEvent("click", { bubbles: true, metaKey: true }),
+      ),
+    );
+    expect(pressed("On Kobo")).toBe(2);
+    expect(panel("On Kobo").textContent).toContain("⌘-click to select several");
+  });
+
+  it("adds Library books already on the Kobo to a collection", async () => {
+    const normal = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === "books_on_device")
+        return [
+          {
+            book_id: 1,
+            device_path: "book.epub",
+            content_id: "file:///mnt/onboard/book.epub",
+            sent_at: "2026-11-01",
+            stale: false,
+          },
+        ];
+      if (command === "list_collections")
+        return [{ name: "Favourites", book_count: 0 }];
+      return normal(command, args);
+    });
+    await render();
+    await click(panel("Library").querySelector("button.card")!);
+    await click(button("Add 1 to collection ▾"));
+    await click(
+      panel("Library").querySelector<HTMLButtonElement>(
+        '.menu [role="menuitem"]',
+      )!,
+    );
+    expect(calls("change_collections").at(-1)?.[1]).toEqual({
+      mount: "/kobo",
+      changes: [
+        {
+          kind: "add",
+          name: "Favourites",
+          content_ids: ["file:///mnt/onboard/book.epub"],
+        },
+      ],
+    });
+  });
+});
+
 describe("retained app screens", () => {
   it("preloads once and preserves both screens, images and scroll positions across tabs", async () => {
     await render();

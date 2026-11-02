@@ -1090,6 +1090,7 @@ dependencies = [
 name = "erc-covers"
 version = "0.1.0"
 dependencies = [
+ "erc-metadata",
  "reqwest",
  "serde",
  "serde_json",

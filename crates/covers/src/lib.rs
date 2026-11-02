@@ -1,6 +1,9 @@
 //! Finding better covers online. Providers are queried in parallel and any
 //! that fail are skipped, so one slow or broken service never blocks the rest.
 //! Response parsing is kept in pure functions so it can be tested offline.
+//! Results from a title search are kept only when they are this book (same
+//! title and first author's surname), so a store that lacks it can't fill the
+//! picker with whatever else matched a word.
 
 use std::io::Read;
 use std::time::Duration;
@@ -33,6 +36,14 @@ pub struct Candidate {
     pub url: String,
     /// A smaller image for the picker grid.
     pub preview_url: String,
+}
+
+/// A cover with the book the provider says it belongs to.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Listing {
+    pub title: String,
+    pub authors: Vec<String>,
+    pub candidate: Candidate,
 }
 
 /// Images larger than this are refused when downloading.
@@ -105,10 +116,32 @@ fn get_json(client: &Client, url: &str, params: &[(&str, &str)]) -> Result<Value
 }
 
 fn search_terms(q: &CoverQuery) -> String {
+    let title = erc_metadata::search_title(&q.title);
     match &q.author {
-        Some(author) => format!("{} {author}", q.title),
-        None => q.title.clone(),
+        Some(author) => format!("{title} {author}"),
+        None => title,
     }
+}
+
+/// The candidates whose listing is this book.
+pub fn this_book(q: &CoverQuery, listings: Vec<Listing>) -> Vec<Candidate> {
+    let query = erc_metadata::Query {
+        title: q.title.clone(),
+        authors: q.author.iter().cloned().collect(),
+        isbn: None,
+    };
+    listings
+        .into_iter()
+        .filter(|l| {
+            let hit = erc_metadata::Hit {
+                title: l.title.clone(),
+                authors: l.authors.clone(),
+                ..erc_metadata::Hit::default()
+            };
+            erc_metadata::match_confidence(&query, &hit).is_some()
+        })
+        .map(|l| l.candidate)
+        .collect()
 }
 
 fn apple_books(client: &Client, q: &CoverQuery) -> Result<Vec<Candidate>> {
@@ -122,28 +155,37 @@ fn apple_books(client: &Client, q: &CoverQuery) -> Result<Vec<Candidate>> {
             ("limit", "8"),
         ],
     )?;
-    Ok(parse_apple_books(&json))
+    Ok(this_book(q, parse_apple_books(&json)))
 }
 
 /// Apple's artwork URLs end in a size such as `100x100bb.jpg`; asking for a
 /// bigger size returns up to the original resolution.
-pub fn parse_apple_books(json: &Value) -> Vec<Candidate> {
+pub fn parse_apple_books(json: &Value) -> Vec<Listing> {
     results(json, "results")
-        .filter_map(|r| r.get("artworkUrl100")?.as_str())
-        .filter(|u| u.contains("100x100"))
-        .map(|u| Candidate {
-            source: "Apple Books",
-            url: u.replace("100x100", "3000x3000"),
-            preview_url: u.replace("100x100", "400x400"),
+        .filter_map(|r| {
+            let u = r.get("artworkUrl100")?.as_str()?;
+            u.contains("100x100").then(|| Listing {
+                title: text(r, "trackName"),
+                authors: text(r, "artistName")
+                    .split(" & ")
+                    .map(str::to_owned)
+                    .collect(),
+                candidate: Candidate {
+                    source: "Apple Books",
+                    url: u.replace("100x100", "3000x3000"),
+                    preview_url: u.replace("100x100", "400x400"),
+                },
+            })
         })
         .collect()
 }
 
 fn open_library(client: &Client, q: &CoverQuery) -> Result<Vec<Candidate>> {
+    let title = erc_metadata::search_title(&q.title);
     let mut params = vec![
-        ("title", q.title.as_str()),
+        ("title", title.as_str()),
         ("limit", "8"),
-        ("fields", "cover_i"),
+        ("fields", "cover_i,title,author_name"),
     ];
     if let Some(author) = &q.author {
         params.push(("author", author));
@@ -160,23 +202,29 @@ fn open_library(client: &Client, q: &CoverQuery) -> Result<Vec<Candidate>> {
             ),
         });
     }
-    found.extend(parse_open_library(&json));
+    found.extend(this_book(q, parse_open_library(&json)));
     Ok(found)
 }
 
-pub fn parse_open_library(json: &Value) -> Vec<Candidate> {
+pub fn parse_open_library(json: &Value) -> Vec<Listing> {
     results(json, "docs")
-        .filter_map(|d| d.get("cover_i")?.as_i64())
-        .map(|id| Candidate {
-            source: "Open Library",
-            url: format!("https://covers.openlibrary.org/b/id/{id}-L.jpg"),
-            preview_url: format!("https://covers.openlibrary.org/b/id/{id}-M.jpg"),
+        .filter_map(|d| {
+            let id = d.get("cover_i")?.as_i64()?;
+            Some(Listing {
+                title: text(d, "title"),
+                authors: texts(d, "author_name"),
+                candidate: Candidate {
+                    source: "Open Library",
+                    url: format!("https://covers.openlibrary.org/b/id/{id}-L.jpg"),
+                    preview_url: format!("https://covers.openlibrary.org/b/id/{id}-M.jpg"),
+                },
+            })
         })
         .collect()
 }
 
 fn google_books(client: &Client, q: &CoverQuery) -> Result<Vec<Candidate>> {
-    let mut terms = format!("intitle:{}", q.title);
+    let mut terms = format!("intitle:{}", erc_metadata::search_title(&q.title));
     if let Some(author) = &q.author {
         terms.push_str(&format!(" inauthor:{author}"));
     }
@@ -188,29 +236,53 @@ fn google_books(client: &Client, q: &CoverQuery) -> Result<Vec<Candidate>> {
         "https://www.googleapis.com/books/v1/volumes",
         &[("q", &terms), ("maxResults", "8"), ("printType", "books")],
     )?;
-    Ok(parse_google_books(&json))
+    let listings = parse_google_books(&json);
+    // An ISBN search already names the book.
+    Ok(if q.isbn.is_some() {
+        listings.into_iter().map(|l| l.candidate).collect()
+    } else {
+        this_book(q, listings)
+    })
 }
 
 /// Google only exposes small thumbnails through the public API.
-pub fn parse_google_books(json: &Value) -> Vec<Candidate> {
+pub fn parse_google_books(json: &Value) -> Vec<Listing> {
     results(json, "items")
         .filter_map(|i| {
-            let links = i.get("volumeInfo")?.get("imageLinks")?;
-            links
+            let info = i.get("volumeInfo")?;
+            let links = info.get("imageLinks")?;
+            let url = links
                 .get("thumbnail")
                 .or_else(|| links.get("smallThumbnail"))?
-                .as_str()
-        })
-        .map(|u| {
-            let url = u
+                .as_str()?
                 .replacen("http://", "https://", 1)
                 .replace("&edge=curl", "");
-            Candidate {
-                source: "Google Books",
-                preview_url: url.clone(),
-                url,
-            }
+            Some(Listing {
+                title: text(info, "title"),
+                authors: texts(info, "authors"),
+                candidate: Candidate {
+                    source: "Google Books",
+                    preview_url: url.clone(),
+                    url,
+                },
+            })
         })
+        .collect()
+}
+
+fn text(v: &Value, key: &str) -> String {
+    v.get(key)
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned()
+}
+
+fn texts(v: &Value, key: &str) -> Vec<String> {
+    v.get(key)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|s| s.as_str().map(str::to_owned))
         .collect()
 }
 
@@ -232,13 +304,15 @@ mod tests {
             {"artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/a/b/100x100bb.jpg"},
             {"trackName": "no artwork"}
         ]});
+        let found = parse_apple_books(&j);
+        assert_eq!(found.len(), 1);
         assert_eq!(
-            parse_apple_books(&j),
-            [Candidate {
+            found[0].candidate,
+            Candidate {
                 source: "Apple Books",
                 url: "https://is1-ssl.mzstatic.com/image/thumb/a/b/3000x3000bb.jpg".into(),
                 preview_url: "https://is1-ssl.mzstatic.com/image/thumb/a/b/400x400bb.jpg".into(),
-            }]
+            }
         );
     }
 
@@ -247,7 +321,10 @@ mod tests {
         let j = json!({"docs": [{"cover_i": 12345}, {"title": "no cover"}]});
         let c = parse_open_library(&j);
         assert_eq!(c.len(), 1);
-        assert_eq!(c[0].url, "https://covers.openlibrary.org/b/id/12345-L.jpg");
+        assert_eq!(
+            c[0].candidate.url,
+            "https://covers.openlibrary.org/b/id/12345-L.jpg"
+        );
     }
 
     #[test]
@@ -259,9 +336,32 @@ mod tests {
         let c = parse_google_books(&j);
         assert_eq!(c.len(), 1);
         assert_eq!(
-            c[0].url,
+            c[0].candidate.url,
             "https://books.google.com/books/content?id=x&zoom=1&source=gbs_api"
         );
+    }
+
+    /// Apple lacks the English ebook (an Amazon exclusive), so a search
+    /// returns other books that share a word, and a translation.
+    #[test]
+    fn keeps_only_this_book() {
+        let j = json!({"results": [
+            {"trackName": "We are Fat and We are Legion", "artistName": "Benjamin Duffy",
+             "artworkUrl100": "https://x/1/100x100bb.jpg"},
+            {"trackName": "Nous sommes Bob, T1 : Nous sommes Légion (Nous sommes Bob)",
+             "artistName": "Dennis E. Taylor & Sébastien Baert", "artworkUrl100": "https://x/2/100x100bb.jpg"},
+            {"trackName": "We Are Legion (We Are Bob)", "artistName": "Dennis E. Taylor",
+             "artworkUrl100": "https://x/3/100x100bb.jpg"},
+        ]});
+        let q = CoverQuery {
+            title: "We Are Legion (We Are Bob)".into(),
+            author: Some("Dennis E. Taylor".into()),
+            isbn: None,
+        };
+        let kept = this_book(&q, parse_apple_books(&j));
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].url, "https://x/3/3000x3000bb.jpg");
+        assert_eq!(search_terms(&q), "We Are Legion Dennis E. Taylor");
     }
 
     #[test]
@@ -275,6 +375,12 @@ mod tests {
     #[test]
     #[ignore]
     fn live_search_finds_covers() {
+        let bob = search(&CoverQuery {
+            title: "We Are Legion (We Are Bob)".into(),
+            author: Some("Dennis E. Taylor".into()),
+            isbn: None,
+        });
+        assert!(!bob.is_empty());
         let found = search(&CoverQuery {
             title: "Dune".into(),
             author: Some("Frank Herbert".into()),

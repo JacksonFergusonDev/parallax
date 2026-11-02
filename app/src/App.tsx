@@ -3,6 +3,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import {
   booksOnDevice,
+  changeCollections,
   coverSrc,
   dismissDuplicates,
   ejectDevice,
@@ -34,7 +35,10 @@ import {
   summarizeImport,
   type SendStatus,
 } from "./library";
+import { clickSelect, SELECTION_HINT } from "./selection";
 import { BookCard } from "./components/BookCard";
+import { CollectionMenu } from "./components/CollectionMenu";
+import { NameDialog } from "./components/NameDialog";
 import { DeviceBadge } from "./components/DeviceBadge";
 import { DeviceView } from "./components/DeviceView";
 import { EnhanceReview } from "./components/EnhanceReview";
@@ -76,6 +80,8 @@ export default function App() {
   /** Collection to put sent books in: "" none, NEW_COLLECTION, or a name. */
   const [sendCollection, setSendCollection] = useState("");
   const [newCollection, setNewCollection] = useState("");
+  /** Naming a new collection for selected books already on the Kobo. */
+  const [naming, setNaming] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [query, setQuery] = useState("");
   const { mode, setMode, sort, setSort } = useViewState<LibraryKey>(
@@ -272,6 +278,9 @@ export default function App() {
   const toUpdate = visible.filter(
     (b) => selected.has(b.id) && onDevice.get(b.id)?.stale,
   );
+  const alreadyOnKobo = visible.filter(
+    (b) => selected.has(b.id) && onDevice.has(b.id),
+  );
   const libraryByContentId = useMemo(() => {
     const byId = new Map(books.map((b) => [b.id, b]));
     const map = new Map<string, Book>();
@@ -285,25 +294,16 @@ export default function App() {
   const activeView = device ? view : "library";
 
   const onSelect = useCallback(
-    (id: number, e: React.MouseEvent) => {
-      setSelected((prev) => {
-        if (e.shiftKey && anchor.current !== null) {
-          const ids = visible.map((b) => b.id);
-          const [a, b] = [ids.indexOf(anchor.current), ids.indexOf(id)].sort(
-            (x, y) => x - y,
-          );
-          if (a >= 0) return new Set([...prev, ...ids.slice(a, b + 1)]);
-        }
-        anchor.current = id;
-        if (e.metaKey || e.ctrlKey) {
-          const next = new Set(prev);
-          if (next.has(id)) next.delete(id);
-          else next.add(id);
-          return next;
-        }
-        return prev.size === 1 && prev.has(id) ? new Set() : new Set([id]);
-      });
-    },
+    (id: number, e: React.MouseEvent) =>
+      setSelected((prev) =>
+        clickSelect(
+          prev,
+          id,
+          visible.map((b) => b.id),
+          anchor,
+          e,
+        ),
+      ),
     [visible],
   );
 
@@ -374,6 +374,18 @@ export default function App() {
         kind === "sending"
           ? await sendBooks(device.mount, ids, collection)
           : await updateBooks(device.mount, ids);
+      if (kind === "sending" && collection && alreadyOnKobo.length > 0) {
+        // Selected books that were already on the Kobo join the collection too.
+        await changeCollections(device.mount, [
+          {
+            kind: "add",
+            name: collection,
+            content_ids: alreadyOnKobo.map(
+              (b) => onDevice.get(b.id)!.content_id,
+            ),
+          },
+        ]);
+      }
       if (kind === "sending" && collection) {
         setCollections(await listCollections(device.mount).catch(() => []));
         setSendCollection(collection);
@@ -405,6 +417,29 @@ export default function App() {
         .catch(() => {});
       setBusy(null);
     }
+  };
+
+  /** Puts selected books that are already on the Kobo into a collection. */
+  const addToCollection = async (name: string) => {
+    if (!device) return;
+    const n = alreadyOnKobo.length;
+    try {
+      await changeCollections(device.mount, [
+        {
+          kind: "add",
+          name,
+          content_ids: alreadyOnKobo.map((b) => onDevice.get(b.id)!.content_id),
+        },
+      ]);
+      setNotice({
+        kind: "info",
+        text: `Added ${n} ${n === 1 ? "book" : "books"} to “${name}”. Eject your Kobo to see it.`,
+      });
+    } catch (e) {
+      setNotice({ kind: "error", text: String(e) });
+    }
+    setDeviceRevision((revision) => revision + 1);
+    setCollections(await listCollections(device.mount).catch(() => []));
   };
 
   const remove = async () => {
@@ -667,10 +702,12 @@ export default function App() {
           >
             {busy === "importing" ? "Adding…" : "Add books…"}
           </button>
-          {notice && (
+          {notice ? (
             <span className={`notice notice-${notice.kind}`}>
               {notice.text}
             </span>
+          ) : (
+            <span className="notice notice-info">{SELECTION_HINT}</span>
           )}
           <span className="spacer" />
           {selected.size > 0 && (
@@ -736,6 +773,18 @@ export default function App() {
               )}
             </>
           )}
+          {device &&
+            device.read_only === null &&
+            toSend.length === 0 &&
+            alreadyOnKobo.length > 0 && (
+              <CollectionMenu
+                label={`Add ${alreadyOnKobo.length} to collection`}
+                collections={collections}
+                disabled={busy !== null}
+                onPick={addToCollection}
+                onNew={() => setNaming(true)}
+              />
+            )}
           <button
             className="primary"
             onClick={() =>
@@ -764,6 +813,14 @@ export default function App() {
           </button>
         </footer>
       </div>
+      {naming && (
+        <NameDialog
+          title={`New collection with ${alreadyOnKobo.length} ${alreadyOnKobo.length === 1 ? "book" : "books"}`}
+          confirmLabel="Create"
+          onClose={() => setNaming(false)}
+          onSubmit={addToCollection}
+        />
+      )}
       {checking && (
         <LibraryCheck
           books={new Map(books.map((b) => [b.id, b]))}

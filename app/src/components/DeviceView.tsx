@@ -30,6 +30,7 @@ import {
   type DeviceKey,
 } from "../device";
 import { applySort } from "../sort";
+import { clickSelect, SELECTION_HINT } from "../selection";
 import { deviceReviewGroups } from "../duplicates";
 import { AboutKobo } from "./AboutKobo";
 import { ActionMenu } from "./ActionMenu";
@@ -151,23 +152,16 @@ export function DeviceView({
   );
 
   const toggle = useCallback(
-    (id: string, e: React.MouseEvent) => {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        if (e.shiftKey && anchor.current) {
-          const ids = visible.map((b) => b.id);
-          const [a, b] = [ids.indexOf(anchor.current), ids.indexOf(id)].sort(
-            (x, y) => x - y,
-          );
-          if (a >= 0) ids.slice(a, b + 1).forEach((i) => next.add(i));
-          return next;
-        }
-        anchor.current = id;
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return next;
-      });
-    },
+    (id: string, e: React.MouseEvent) =>
+      setSelected((prev) =>
+        clickSelect(
+          prev,
+          id,
+          visible.map((b) => b.id),
+          anchor,
+          e,
+        ),
+      ),
     [visible],
   );
 
@@ -584,8 +578,10 @@ export function DeviceView({
       </div>
 
       <footer className="actions">
-        {notice && (
+        {notice ? (
           <span className={`notice notice-${notice.kind}`}>{notice.text}</span>
+        ) : (
+          <span className="notice notice-info">{SELECTION_HINT}</span>
         )}
         <span className="spacer" />
         <button className="secondary" onClick={eject} disabled={busy !== null}>

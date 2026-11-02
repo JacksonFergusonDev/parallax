@@ -218,7 +218,10 @@ input:disabled {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  /* Fixed-width columns: covers keep their size when the edit panel opens
+     and the grid narrows, instead of every column stretching to fit. */
+  grid-template-columns: repeat(auto-fill, 148px);
+  justify-content: space-between;
   gap: 22px 18px;
 }
 

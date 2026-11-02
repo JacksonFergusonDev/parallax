@@ -315,6 +315,34 @@ pub fn title_keys(title: &str) -> Vec<String> {
         .collect()
 }
 
+/// The title to search for: without bracketed notes such as "(We Are Bob)"
+/// or "(Bobiverse Book 3)", which make searches miss the book.
+pub fn search_title(title: &str) -> String {
+    let mut out = String::new();
+    let mut depth = 0usize;
+    for c in title.chars() {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => out.push(c),
+            _ => {}
+        }
+    }
+    let cleaned = out
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace(" :", ":")
+        .replace(" ;", ";")
+        .replace(" ,", ",");
+    let cleaned = cleaned.trim_end_matches([':', ';', ',', '-', ' ']);
+    if cleaned.is_empty() {
+        title.trim().to_owned()
+    } else {
+        cleaned.to_owned()
+    }
+}
+
 /// Lowercase surname of the first author, after flipping "Last, First".
 pub fn surname(author: &str) -> String {
     let name = match author.split_once(',') {
@@ -405,7 +433,7 @@ fn wikidata(fetch: &dyn Fetch, q: &Query) -> Result<Vec<Hit>, FetchError> {
   OPTIONAL {{ ?item wdt:P136 ?genre }}
   SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
 }} LIMIT 60"#,
-        sparql_string(&q.title)
+        sparql_string(&search_title(&q.title))
     );
     let body = fetch.get(WIKIDATA, &[("query", &query), ("format", "json")])?;
     Ok(parse_wikidata(&json(&body)?))
@@ -465,8 +493,8 @@ pub fn parse_series_sizes(json: &Value) -> BTreeMap<String, u32> {
 
 fn terms(q: &Query) -> String {
     match q.authors.first() {
-        Some(author) => format!("{} {author}", q.title),
-        None => q.title.clone(),
+        Some(author) => format!("{} {author}", search_title(&q.title)),
+        None => search_title(&q.title),
     }
 }
 
@@ -505,8 +533,8 @@ fn google_books(fetch: &dyn Fetch, q: &Query, key: &str) -> Result<Vec<Hit>, Fet
     let search = match &q.isbn {
         Some(isbn) => format!("isbn:{}", isbn_key(isbn)),
         None => match q.authors.first() {
-            Some(a) => format!("intitle:{} inauthor:{}", q.title, surname(a)),
-            None => format!("intitle:{}", q.title),
+            Some(a) => format!("intitle:{} inauthor:{}", search_title(&q.title), surname(a)),
+            None => format!("intitle:{}", search_title(&q.title)),
         },
     };
     let body = fetch.get(
@@ -661,6 +689,23 @@ mod tests {
         let mut by_isbn = hit("Entirely different", "Other Person");
         by_isbn.isbns = vec!["9780061020712".into()];
         assert_eq!(match_confidence(&q, &by_isbn), Some(Confidence::High));
+    }
+
+    #[test]
+    fn search_titles_drop_bracketed_notes() {
+        assert_eq!(search_title("We Are Legion (We Are Bob)"), "We Are Legion");
+        assert_eq!(
+            search_title("All These Worlds (Bobiverse Book 3)"),
+            "All These Worlds"
+        );
+        assert_eq!(search_title("Dune [Illustrated]: Deluxe"), "Dune: Deluxe");
+        assert_eq!(search_title("A Clockwork Orange"), "A Clockwork Orange");
+        assert_eq!(search_title("(Untitled)"), "(Untitled)");
+        let q = query("We Are Legion (We Are Bob)", "Dennis E. Taylor");
+        assert_eq!(
+            match_confidence(&q, &hit("We Are Legion", "Dennis E. Taylor")),
+            Some(Confidence::High)
+        );
     }
 
     #[test]
