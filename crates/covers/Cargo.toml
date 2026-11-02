@@ -1,6 +1,6 @@
 [package]
 name = "erc-covers"
-description = "Online cover search (Open Library, Google Books, Apple Books)"
+description = "Online cover search (Amazon by ASIN/ISBN, Apple Books, Indigo, Open Library, Google Books)"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true

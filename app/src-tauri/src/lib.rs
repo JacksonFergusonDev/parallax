@@ -744,11 +744,8 @@ async fn cover_search(state: State<'_, AppState>, id: i64) -> CmdResult<Vec<Cand
     let query = CoverQuery {
         title: book.title.clone(),
         author: book.authors.first().cloned(),
-        isbn: book
-            .identifiers
-            .iter()
-            .find(|i| i.scheme.as_deref() == Some("isbn"))
-            .map(|i| i.value.clone()),
+        isbn: book.isbn().map(str::to_owned),
+        asin: book.asin().map(str::to_owned),
     };
     tauri::async_runtime::spawn_blocking(move || erc_covers::search(&query))
         .await

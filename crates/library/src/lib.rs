@@ -89,10 +89,33 @@ impl Book {
     }
 
     pub fn isbn(&self) -> Option<&str> {
+        self.identifier(&["isbn"])
+    }
+
+    /// Amazon's id for the book: calibre stores one read from a Kindle file
+    /// as `mobi-asin:` and one found on Amazon as `amazon:`.
+    pub fn asin(&self) -> Option<&str> {
+        self.identifier(&["mobi-asin", "amazon", "asin"])
+    }
+
+    /// The first identifier with one of these schemes, given either as the
+    /// scheme or as a `scheme:` prefix on the value (how calibre writes some).
+    fn identifier(&self, schemes: &[&str]) -> Option<&str> {
         self.identifiers
             .iter()
-            .find(|i| i.scheme.as_deref() == Some("isbn"))
-            .map(|i| i.value.as_str())
+            .find_map(|i| match i.scheme.as_deref() {
+                Some(s) => schemes
+                    .iter()
+                    .any(|w| s.eq_ignore_ascii_case(w))
+                    .then_some(i.value.as_str()),
+                None => {
+                    let (s, value) = i.value.split_once(':')?;
+                    schemes
+                        .iter()
+                        .any(|w| s.eq_ignore_ascii_case(w))
+                        .then_some(value.trim())
+                }
+            })
     }
 }
 
@@ -613,5 +636,52 @@ fn io_err(path: &Path, source: io::Error) -> Error {
     Error::Io {
         path: path.to_path_buf(),
         source,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn with_ids(ids: &[(Option<&str>, &str)]) -> Book {
+        Book {
+            id: 1,
+            title: "T".into(),
+            authors: vec![],
+            contributors: None,
+            series: None,
+            series_index: None,
+            tags: vec![],
+            language: None,
+            publisher: None,
+            description: None,
+            identifiers: ids
+                .iter()
+                .map(|(scheme, value)| Identifier {
+                    scheme: scheme.map(str::to_owned),
+                    value: (*value).to_owned(),
+                })
+                .collect(),
+            original_name: "t.epub".into(),
+            file_size: 1,
+            has_cover: false,
+            custom_cover: false,
+            added_at: String::new(),
+            modified_at: String::new(),
+        }
+    }
+
+    #[test]
+    fn identifiers_read_from_scheme_or_value_prefix() {
+        let calibre = with_ids(&[
+            (None, "calibre:106"),
+            (None, "mobi-asin:B0736185ZL"),
+            (None, "isbn:9780441013593"),
+        ]);
+        assert_eq!(calibre.asin(), Some("B0736185ZL"));
+        assert_eq!(calibre.isbn(), Some("9780441013593"));
+        let schemed = with_ids(&[(Some("uuid"), "x"), (Some("AMAZON"), "B01MZI77C0")]);
+        assert_eq!(schemed.asin(), Some("B01MZI77C0"));
+        assert_eq!(schemed.isbn(), None);
     }
 }

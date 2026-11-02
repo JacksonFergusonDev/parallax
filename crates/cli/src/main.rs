@@ -900,11 +900,8 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             let found = erc_covers::search(&erc_covers::CoverQuery {
                 title: book.title.clone(),
                 author: book.authors.first().cloned(),
-                isbn: book
-                    .identifiers
-                    .iter()
-                    .find(|i| i.scheme.as_deref() == Some("isbn"))
-                    .map(|i| i.value.clone()),
+                isbn: book.isbn().map(str::to_owned),
+                asin: book.asin().map(str::to_owned),
             });
             if json {
                 return print_json(&found);

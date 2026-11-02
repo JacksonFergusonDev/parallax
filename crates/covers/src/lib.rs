@@ -1,4 +1,5 @@
-//! Finding better covers online. Providers are queried in parallel and any
+//! Finding better covers online: Amazon (by ASIN or ISBN-10), Apple Books,
+//! Indigo, Open Library and Google Books. Providers are queried in parallel and any
 //! that fail are skipped, so one slow or broken service never blocks the rest.
 //! Response parsing is kept in pure functions so it can be tested offline.
 //! Results from a title search are kept only when they are this book (same
@@ -27,6 +28,8 @@ pub struct CoverQuery {
     pub title: String,
     pub author: Option<String>,
     pub isbn: Option<String>,
+    /// Amazon's id, e.g. calibre's `mobi-asin` from a Kindle file.
+    pub asin: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -59,13 +62,13 @@ fn client() -> Result<Client> {
 
 type Provider = fn(&Client, &CoverQuery) -> Result<Vec<Candidate>>;
 
-/// Queries every provider in parallel; Apple first, since its images are
-/// usually the largest.
+/// Queries every provider in parallel; Amazon and Apple first, since their
+/// images are usually the largest.
 pub fn search(query: &CoverQuery) -> Vec<Candidate> {
     let Ok(client) = client() else {
         return Vec::new();
     };
-    let providers: [Provider; 3] = [apple_books, open_library, google_books];
+    let providers: [Provider; 5] = [amazon, apple_books, indigo, open_library, google_books];
     let results: Vec<Vec<Candidate>> = std::thread::scope(|s| {
         let handles: Vec<_> = providers
             .iter()
@@ -141,6 +144,128 @@ pub fn this_book(q: &CoverQuery, listings: Vec<Listing>) -> Vec<Candidate> {
             erc_metadata::match_confidence(&query, &hit).is_some()
         })
         .map(|l| l.candidate)
+        .collect()
+}
+
+/// Amazon serves a book's original cover image by its ASIN, which for a
+/// printed book is its ISBN-10. No search: without either there's nothing to
+/// ask. An unknown id returns a 43-byte GIF instead of an error, so each one
+/// is checked first.
+fn amazon(client: &Client, q: &CoverQuery) -> Result<Vec<Candidate>> {
+    let mut found = Vec::new();
+    for id in amazon_ids(q) {
+        let url = format!("https://m.media-amazon.com/images/P/{id}.01._SCRM_.jpg");
+        let response = client.head(&url).send()?;
+        let is_cover = response.status().is_success()
+            && response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .is_some_and(|v| v.as_bytes().starts_with(b"image/jpeg"))
+            && response.content_length().is_none_or(|n| n > 1000);
+        if is_cover {
+            found.push(Candidate {
+                source: "Amazon",
+                preview_url: format!("https://m.media-amazon.com/images/P/{id}.01.LZZZZZZZ.jpg"),
+                url,
+            });
+        }
+    }
+    Ok(found)
+}
+
+/// The ids Amazon might know the book by: its ASIN, then its ISBN as an
+/// ISBN-10.
+pub fn amazon_ids(q: &CoverQuery) -> Vec<String> {
+    let asin = q
+        .asin
+        .as_deref()
+        .map(|a| a.trim().to_ascii_uppercase())
+        .filter(|a| a.len() == 10 && a.chars().all(|c| c.is_ascii_alphanumeric()));
+    let isbn10 = q.isbn.as_deref().and_then(isbn10);
+    let mut ids: Vec<String> = asin.into_iter().chain(isbn10).collect();
+    ids.dedup();
+    ids
+}
+
+/// An ISBN as ISBN-10, or `None` for ISBN-13s outside the 978 range (which
+/// have no ISBN-10) and anything that isn't an ISBN.
+pub fn isbn10(isbn: &str) -> Option<String> {
+    let digits: String = isbn
+        .chars()
+        .filter(|c| c.is_ascii_digit() || *c == 'X' || *c == 'x')
+        .map(|c| c.to_ascii_uppercase())
+        .collect();
+    match digits.len() {
+        10 => Some(digits),
+        13 if digits.starts_with("978") && digits.chars().all(|c| c.is_ascii_digit()) => {
+            let core = &digits[3..12];
+            let sum: u32 = core
+                .chars()
+                .zip((2..=10).rev())
+                .map(|(c, w)| c.to_digit(10).unwrap_or(0) * w)
+                .sum();
+            let check = (11 - sum % 11) % 11;
+            let check = if check == 10 {
+                'X'
+            } else {
+                char::from_digit(check, 10)?
+            };
+            Some(format!("{core}{check}"))
+        }
+        _ => None,
+    }
+}
+
+/// Indigo's Shopify storefront search. Its results have no author field, so
+/// the author goes into the search and results are matched on title.
+fn indigo(client: &Client, q: &CoverQuery) -> Result<Vec<Candidate>> {
+    let terms = match &q.isbn {
+        Some(isbn) => isbn.clone(),
+        None => search_terms(q),
+    };
+    let json = get_json(
+        client,
+        "https://www.indigo.ca/search/suggest.json",
+        &[
+            ("q", terms.as_str()),
+            ("resources[type]", "product"),
+            ("resources[limit]", "6"),
+        ],
+    )?;
+    let listings = parse_indigo(&json);
+    Ok(if q.isbn.is_some() {
+        listings.into_iter().map(|l| l.candidate).collect()
+    } else {
+        let by_title = CoverQuery {
+            author: None,
+            ..q.clone()
+        };
+        this_book(&by_title, listings)
+    })
+}
+
+pub fn parse_indigo(json: &Value) -> Vec<Listing> {
+    json.pointer("/resources/results/products")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|p| {
+            let image = p.get("image")?.as_str()?;
+            let url = match image.strip_prefix("//") {
+                Some(rest) => format!("https://{rest}"),
+                None => image.to_owned(),
+            };
+            let sep = if url.contains('?') { '&' } else { '?' };
+            Some(Listing {
+                title: text(p, "title"),
+                authors: Vec::new(),
+                candidate: Candidate {
+                    source: "Indigo",
+                    preview_url: format!("{url}{sep}width=400"),
+                    url,
+                },
+            })
+        })
         .collect()
 }
 
@@ -356,7 +481,7 @@ mod tests {
         let q = CoverQuery {
             title: "We Are Legion (We Are Bob)".into(),
             author: Some("Dennis E. Taylor".into()),
-            isbn: None,
+            ..CoverQuery::default()
         };
         let kept = this_book(&q, parse_apple_books(&j));
         assert_eq!(kept.len(), 1);
@@ -371,6 +496,53 @@ mod tests {
         assert!(parse_google_books(&json!({"items": [1, 2]})).is_empty());
     }
 
+    #[test]
+    fn amazon_ids_from_asin_and_isbn() {
+        assert_eq!(isbn10("978-0-441-17271-9").as_deref(), Some("0441172717"));
+        assert_eq!(isbn10("9780306406157").as_deref(), Some("0306406152"));
+        assert_eq!(isbn10("9781234567897").as_deref(), Some("123456789X"));
+        assert_eq!(isbn10("979-10-90636-07-1"), None);
+        assert_eq!(isbn10("0-441-17271-7").as_deref(), Some("0441172717"));
+        assert_eq!(isbn10("not an isbn"), None);
+        let q = CoverQuery {
+            asin: Some("b0736185zl".into()),
+            isbn: Some("9780441172719".into()),
+            ..CoverQuery::default()
+        };
+        assert_eq!(amazon_ids(&q), ["B0736185ZL", "0441172717"]);
+        let q = CoverQuery {
+            asin: Some("0441172717".into()),
+            isbn: Some("9780441172719".into()),
+            ..CoverQuery::default()
+        };
+        assert_eq!(amazon_ids(&q), ["0441172717"]);
+        assert!(amazon_ids(&CoverQuery::default()).is_empty());
+    }
+
+    #[test]
+    fn parses_indigo_and_matches_on_title() {
+        let j = json!({"resources": {"results": {"products": [
+            {"title": "We Are Legion (We Are Bob): Bobiverse: Book 1",
+             "image": "https://cdn.shopify.com/s/files/1/a.jpg?v=1"},
+            {"title": "Wij zijn legio – wij zijn Bob", "image": "//cdn.shopify.com/b.jpg"},
+            {"title": "No image"},
+        ]}}});
+        let found = parse_indigo(&j);
+        assert_eq!(found.len(), 2);
+        assert_eq!(found[1].candidate.url, "https://cdn.shopify.com/b.jpg");
+        assert_eq!(
+            found[0].candidate.preview_url,
+            "https://cdn.shopify.com/s/files/1/a.jpg?v=1&width=400"
+        );
+        let q = CoverQuery {
+            title: "We Are Legion (We Are Bob)".into(),
+            ..CoverQuery::default()
+        };
+        let kept = this_book(&q, found);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].url, "https://cdn.shopify.com/s/files/1/a.jpg?v=1");
+    }
+
     /// Hits the real services: `cargo test -p erc-covers -- --ignored`.
     #[test]
     #[ignore]
@@ -378,13 +550,27 @@ mod tests {
         let bob = search(&CoverQuery {
             title: "We Are Legion (We Are Bob)".into(),
             author: Some("Dennis E. Taylor".into()),
-            isbn: None,
+            ..CoverQuery::default()
         });
-        assert!(!bob.is_empty());
+        assert!(bob.iter().any(|c| c.source == "Indigo"));
+        let worlds = search(&CoverQuery {
+            title: "All These Worlds (Bobiverse Book 3)".into(),
+            author: Some("Dennis E. Taylor".into()),
+            asin: Some("B0736185ZL".into()),
+            ..CoverQuery::default()
+        });
+        assert_eq!(worlds[0].source, "Amazon");
+        assert!(download(&worlds[0].url).unwrap().len() > 100_000);
+        let unknown = search(&CoverQuery {
+            title: "zzqx nothing".into(),
+            asin: Some("B000000000".into()),
+            ..CoverQuery::default()
+        });
+        assert!(unknown.iter().all(|c| c.source != "Amazon"));
         let found = search(&CoverQuery {
             title: "Dune".into(),
             author: Some("Frank Herbert".into()),
-            isbn: None,
+            ..CoverQuery::default()
         });
         for c in &found {
             eprintln!("{:<13} {}", c.source, c.url);

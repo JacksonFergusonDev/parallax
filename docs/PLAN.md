@@ -27,7 +27,7 @@ calibre-rewrite/
 │  ├─ epub/          OPF read/edit, cover swap, safe re-zip (zip + quick-xml). No Tauri deps.
 │  ├─ convert/       Converter trait; KepubifySidecar impl (spawns binary, captures errors).
 │  ├─ library/       Local library: SQLite (rusqlite, bundled) + managed book folder, import, dedupe, metadata, covers.
-│  ├─ covers/        Online cover search (Open Library, Google Books, Apple Books search) + image checks (image crate).
+│  ├─ covers/        Online cover search (Amazon by ASIN/ISBN, Apple Books, Indigo, Open Library, Google Books) + image checks (image crate).
 │  ├─ device/        Device trait, Capabilities {collections, series, reading_stats, ...}, detection registry.
 │  ├─ device-kobo/   Detect, version parse, DB read, safe-write layer, transfer, shelves, pre-import collection rows, replug reconcile.
 │  └─ cli/           `erc` dev CLI over all crates — the primary E2E test harness for agents.
