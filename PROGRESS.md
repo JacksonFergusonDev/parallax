@@ -46,7 +46,7 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 ## Unresolved
 
 - Hardcover (optional series source, PLAN §7.4) not implemented: needs your API token to build and verify against the real API.
-- S2 (cloud sync) checklist written; awaiting a device run.
+- S2 (cloud sync) skipped: the user doesn't sync with a Kobo account. Untested whether app-made collections survive a sync and whether deleting a synced one sticks; revisit if a synced user reports problems.
 
 ## Next
 
