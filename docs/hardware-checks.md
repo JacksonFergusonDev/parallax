@@ -111,6 +111,11 @@ Batched so you can do several in one sitting when Claude asks:
 - M16: highlight a passage and add a note in a sideloaded book on the Kobo, then reconnect. In the Library tab, select that book: the edit panel shows "Highlights and notes (2)…" with the chapter named as in the Kobo's contents; export Markdown and open it.
 - Device support: with the Kobo connected, About this Kobo shows "Changes: Allowed, with a backup first"; Save device report… writes a JSON file, and the Kobo shows no change afterwards (no new books, no import screen).
 
+## calibre import and reading stats (2026-11-04)
+
+- calibre: Library → "Import from calibre…" finds your calibre library, shows 3 books to import, and imports them with calibre's series (Commonwealth Universe 1, Hyperion Cantos 1) and covers. Running it again says nothing to import. calibre still opens its library normally afterwards.
+- Reading: with the Kobo connected, the Reading tab (⌘3) shows about 16 h read, 55 books finished (41 in 2023, 10 in 2024, the rest this year) and your books in progress with time left. Check a few finished titles you remember, then unplug: the tab still shows the same stats "as of" when it was last connected.
+
 ## Spike S2 — collections and Kobo cloud sync (with M6) (**done 2026-11-04**: app-made collections sync with their books; deletions of synced collections stick)
 
 **Question:** do collections the app creates survive a Kobo sync, and does deleting one stick?

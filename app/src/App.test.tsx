@@ -224,6 +224,21 @@ describe("selection and collections", () => {
   });
 });
 
+describe("reading stats", () => {
+  it("reads fresh stats from a connected Kobo and saved ones without it", async () => {
+    await render();
+    await click(button("Reading"));
+    expect(calls("reading_stats").at(-1)?.[1]).toEqual({ mount: "/kobo" });
+    expect(panel("Reading").textContent).toContain("No reading stats yet");
+    connected = [];
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(calls("reading_stats").at(-1)?.[1]).toEqual({ mount: null });
+    expect(panel("Reading")).not.toBeNull();
+  });
+});
+
 describe("retained app screens", () => {
   it("preloads once and preserves both screens, images and scroll positions across tabs", async () => {
     await render();

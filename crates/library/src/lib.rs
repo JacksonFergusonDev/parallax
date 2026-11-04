@@ -329,6 +329,47 @@ impl Library {
         self.book(id)
     }
 
+    /// Fills in what the library doesn't know yet: identifiers with a scheme
+    /// it lacks, and an empty publisher, description or language. Nothing it
+    /// already has is replaced.
+    pub fn fill_details(
+        &mut self,
+        id: i64,
+        identifiers: &[Identifier],
+        publisher: Option<&str>,
+        description: Option<&str>,
+        language: Option<&str>,
+    ) -> Result<Book> {
+        let mut book = self.book(id)?;
+        for new in identifiers {
+            let Some(scheme) = new.scheme.as_deref() else {
+                continue;
+            };
+            if book.identifier(&[scheme]).is_none() && !new.value.trim().is_empty() {
+                book.identifiers.push(new.clone());
+            }
+        }
+        let fill = |current: Option<String>, new: Option<&str>| {
+            current.filter(|c| !c.trim().is_empty()).or_else(|| {
+                new.map(str::trim)
+                    .filter(|n| !n.is_empty())
+                    .map(str::to_owned)
+            })
+        };
+        self.conn.execute(
+            "UPDATE books SET identifiers = ?1, publisher = ?2, description = ?3, language = ?4
+             WHERE id = ?5",
+            params![
+                json(&book.identifiers),
+                fill(book.publisher, publisher),
+                fill(book.description, description),
+                fill(book.language, language),
+                id
+            ],
+        )?;
+        self.book(id)
+    }
+
     pub fn remove(&mut self, id: i64) -> Result<()> {
         if self.conn.execute("DELETE FROM books WHERE id = ?1", [id])? == 0 {
             return Err(Error::NotFound(id));

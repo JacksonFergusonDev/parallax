@@ -1071,12 +1071,14 @@ dependencies = [
 name = "erc-core"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "erc-convert",
  "erc-device",
  "erc-device-kobo",
  "erc-epub",
  "erc-library",
  "erc-metadata",
+ "image",
  "rusqlite",
  "serde",
  "serde_json",

@@ -1,6 +1,6 @@
 //! Small stores used by `erc-core` workflows: which books are on a device,
-//! duplicate groups the user dismissed, app settings, and reading progress
-//! and annotations seen on devices.
+//! duplicate groups the user dismissed, app settings, reading progress,
+//! reading statistics and annotations seen on devices, and calibre imports.
 
 use std::collections::{HashMap, HashSet};
 
@@ -253,5 +253,48 @@ impl Library {
             .query_map([], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as usize)))?
             .collect::<rusqlite::Result<_>>()?;
         Ok(counts)
+    }
+
+    /// The library book imported from the calibre book with this uuid.
+    pub fn calibre_link(&self, calibre_uuid: &str) -> Result<Option<i64>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT book_id FROM calibre_links WHERE calibre_uuid = ?1",
+                [calibre_uuid],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
+    pub fn record_calibre_link(&self, calibre_uuid: &str, book_id: i64) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO calibre_links (calibre_uuid, book_id) VALUES (?1, ?2)",
+            params![calibre_uuid, book_id],
+        )?;
+        Ok(())
+    }
+
+    /// Stores the latest reading statistics for a device (any JSON value).
+    pub fn save_reading_stats(&self, device_serial: &str, stats: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO reading_stats (device_serial, taken_at, stats)
+             VALUES (?1, ?2, ?3)",
+            params![device_serial, now(), stats],
+        )?;
+        Ok(())
+    }
+
+    /// The most recently saved reading statistics: (device serial, when, JSON).
+    pub fn latest_reading_stats(&self) -> Result<Option<(String, String, String)>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT device_serial, taken_at, stats FROM reading_stats
+                 ORDER BY taken_at DESC LIMIT 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .optional()?)
     }
 }

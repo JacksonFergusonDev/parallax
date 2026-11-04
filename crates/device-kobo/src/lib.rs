@@ -9,6 +9,7 @@ mod maintenance;
 mod ops;
 mod report;
 mod state;
+mod stats;
 mod support;
 mod transfer;
 mod version;
@@ -41,6 +42,7 @@ pub use state::{
     BookChange, BookCheck, DeviceRecord, ERC_VERSION, ErcState, LOG_KEPT, LogEntry, ManagedBook,
     Record, STATE_DIR, Stamp,
 };
+pub use stats::FinishedEvent;
 pub use support::{MAX_WRITE_FIRMWARE_MAJOR, Support};
 pub use transfer::{BOOKS_DIR, SentBook, device_file_name};
 pub use version::{FirmwareVersion, VersionInfo};

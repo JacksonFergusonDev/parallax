@@ -320,6 +320,53 @@ export interface DeviceImportOutcome {
   result: { Ok: DeviceImport } | { Err: string };
 }
 
+export interface CalibrePreview {
+  total: number;
+  new: number;
+  already: number;
+  /** [formats, count] for books with no EPUB or KEPUB. */
+  no_epub: [string, number][];
+}
+
+export type CalibreImport =
+  | { kind: "added"; book_id: number }
+  | { kind: "matched"; book_id: number }
+  | { kind: "skipped"; reason: string };
+
+export interface CalibreImportOutcome {
+  calibre_id: number;
+  title: string;
+  result: { Ok: CalibreImport } | { Err: string };
+}
+
+export interface StatBook {
+  content_id: string;
+  title: string;
+  author: string | null;
+  percent: number;
+  time_secs: number | null;
+  left_secs: number | null;
+  last_read: string | null;
+  finished_at: string | null;
+  times_finished: number;
+  on_device: boolean;
+}
+
+export interface ReadingStats {
+  device_model: string;
+  total_secs: number;
+  books_on_device: number;
+  reading: StatBook[];
+  finished: StatBook[];
+  most_time: StatBook[];
+}
+
+export interface SavedStats {
+  device_serial: string;
+  taken_at: string;
+  stats: ReadingStats;
+}
+
 export interface ImportProgress {
   index: number;
   total: number;
@@ -436,6 +483,19 @@ export const importFromDevice = (mount: string, contentIds: string[] | null) =>
     "library",
     "plans",
     deviceTag(mount),
+  ]);
+/** Fresh from the Kobo at `mount` (and saved), else the last saved. */
+export const readingStats = (mount: string | null) =>
+  invoke<SavedStats | null>("reading_stats", { mount });
+export const calibreDefaultLibrary = () =>
+  invoke<string | null>("calibre_default_library");
+export const calibrePreview = (path: string) =>
+  invoke<CalibrePreview>("calibre_preview", { path });
+export const calibreImport = (path: string) =>
+  // Reads the calibre library only.
+  write<CalibreImportOutcome[]>("calibre_import", { path }, [
+    "library",
+    "plans",
   ]);
 /** Looks up series and genres; `mount` adds a connected Kobo's clues. */
 export const enhancePropose = (ids: number[], mount: string | null) =>

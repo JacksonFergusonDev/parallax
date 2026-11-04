@@ -205,6 +205,52 @@ input:disabled {
   margin-top: 16px;
 }
 
+.dropzone-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Import from calibre */
+
+.calibre-import {
+  width: min(560px, 100%);
+}
+
+.calibre-path {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 14px;
+}
+
+.calibre-path code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.calibre-preview,
+.calibre-problems {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.calibre-problems {
+  max-height: 200px;
+  overflow: auto;
+  font-size: 13px;
+}
+
+.notice.wrap {
+  white-space: normal;
+}
+
 .muted {
   color: var(--muted);
   margin: 0;
@@ -1459,4 +1505,224 @@ form.enhance-key input {
 }
 .badge.read-only .dot {
   background: var(--warn);
+}
+
+/* Reading stats */
+
+.reading-scroll {
+  padding-top: 16px;
+}
+
+.reading {
+  max-width: 880px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding-bottom: 24px;
+}
+
+.reading-empty {
+  max-width: 420px;
+  margin: 64px auto;
+  text-align: center;
+}
+
+.reading-source,
+.reading-note {
+  font-size: 12px;
+}
+
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-note {
+  font-size: 12px;
+}
+
+.reading-section h3 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+.reading-section h4 {
+  font-size: 12px;
+  margin: 12px 0 4px;
+  color: var(--muted);
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.section-head h3 {
+  margin: 0;
+}
+
+.stat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 40px 56px 72px;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.stat-row.compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.stat-book {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stat-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--sunken);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+/* One-series column chart: thin columns with 4px rounded tops on a hairline
+   baseline, recessive gridlines, a tooltip per column. */
+.column-chart {
+  padding-left: 28px;
+}
+
+.chart-plot {
+  position: relative;
+  height: 160px;
+}
+
+.gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--border);
+}
+
+.tick {
+  position: absolute;
+  left: -28px;
+  width: 22px;
+  transform: translateY(-50%);
+  text-align: right;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.columns,
+.column-labels {
+  display: flex;
+  gap: 2px;
+}
+
+.columns {
+  position: absolute;
+  inset: 0;
+}
+
+.column-slot {
+  position: relative;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.column {
+  width: min(24px, 70%);
+  border-radius: 4px 4px 0 0;
+  background: var(--accent);
+}
+
+.column.hovered {
+  filter: brightness(1.15);
+}
+
+.column-value {
+  position: absolute;
+  transform: translateY(-4px);
+  font-size: 11px;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-tooltip {
+  position: absolute;
+  z-index: 1;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.column-labels span {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  padding-top: 4px;
+}
+
+@media (max-width: 640px) {
+  .stat-row {
+    grid-template-columns: minmax(0, 1fr) 40px 64px;
+  }
+  .stat-row .progress,
+  .stat-row .stat-num:last-child {
+    display: none;
+  }
 }

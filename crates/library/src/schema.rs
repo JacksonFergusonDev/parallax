@@ -85,6 +85,19 @@ const MIGRATIONS: &[&str] = &[
         on_device     INTEGER NOT NULL DEFAULT 1,
         PRIMARY KEY (device_serial, bookmark_id)
     );",
+    // 9: books imported from a calibre library, by calibre's book uuid, so
+    // importing again matches them even after edits.
+    "CREATE TABLE calibre_links (
+        calibre_uuid TEXT PRIMARY KEY,
+        book_id      INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE
+    );",
+    // 10: the latest reading statistics read from each device (JSON), so they
+    // can be shown while it's unplugged.
+    "CREATE TABLE reading_stats (
+        device_serial TEXT PRIMARY KEY,
+        taken_at      TEXT NOT NULL,
+        stats         TEXT NOT NULL
+    );",
 ];
 
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {

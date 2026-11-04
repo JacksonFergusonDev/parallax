@@ -12,6 +12,7 @@ use output::{Reporter, failure, success, table, warning};
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use erc_convert::Kepubify;
+use erc_core::calibre;
 use erc_core::collections::{self, CollectionChange, folder_groups, reconcile_series};
 use erc_core::device::{
     change_reading_status, health, merge_collections, remove_from_device, sync_annotations,
@@ -251,6 +252,16 @@ enum LibraryCommand {
         #[arg(long)]
         mount: Option<PathBuf>,
     },
+    /// Import a calibre library: EPUBs (or KEPUBs) with calibre's metadata and
+    /// covers. Only reads the calibre library; books already here are matched.
+    FromCalibre {
+        /// The calibre library folder (the one with metadata.db); calibre's
+        /// current library if omitted.
+        path: Option<PathBuf>,
+        /// Show what would be imported without importing.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Apply series to books the Kobo has imported since they were sent (writes,
     /// with a backup), and copy reading progress into the library.
     Reconcile {
@@ -389,6 +400,12 @@ enum KoboCommand {
         /// Where to save it (default: print it).
         #[arg(long, short)]
         out: Option<PathBuf>,
+    },
+    /// Reading statistics: time read, books in progress, books finished by
+    /// year. Only reads the device.
+    Stats {
+        #[arg(long)]
+        mount: Option<PathBuf>,
     },
     /// List database backups for the connected device.
     Backups {
@@ -702,6 +719,44 @@ fn main() -> Result<()> {
                 }
             }
             println!("{} groups", groups.len());
+        }
+        Command::Kobo(KoboCommand::Stats { mount }) => {
+            let kobo = find_kobo(mount.as_deref())?;
+            let library = Library::open(default_library_root()?).ok();
+            let stats = erc_core::stats::reading_stats(&kobo, library.as_ref())?;
+            if cli.json {
+                return print_json(&stats);
+            }
+            let hours = |secs: u64| format!("{:.1} h", secs as f64 / 3600.0);
+            println!(
+                "{}: {} read across {} books on the device",
+                stats.device_model,
+                hours(stats.total_secs),
+                stats.books_on_device
+            );
+            let mut by_year: std::collections::BTreeMap<String, usize> = Default::default();
+            for b in &stats.finished {
+                let year = b
+                    .finished_at
+                    .map_or_else(|| "undated".to_owned(), |d| d.format("%Y").to_string());
+                *by_year.entry(year).or_default() += 1;
+            }
+            println!("{} books finished", stats.finished.len());
+            for (year, n) in by_year.iter().rev() {
+                println!("  {year}: {n}");
+            }
+            if !stats.reading.is_empty() {
+                let mut rows = table(&["Reading", "Progress", "Time", "Left"]);
+                for b in &stats.reading {
+                    rows.add_row([
+                        b.title.clone(),
+                        format!("{}%", b.percent),
+                        b.time_secs.map(hours).unwrap_or_default(),
+                        b.left_secs.map(hours).unwrap_or_default(),
+                    ]);
+                }
+                println!("{rows}");
+            }
         }
         Command::Kobo(KoboCommand::Report { mount, out }) => {
             let report = find_kobo(mount.as_deref())?.report();
@@ -1154,6 +1209,59 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                 }
             }
             println!("{added} added, {linked} linked, {skipped} skipped, {failed} failed");
+            if failed > 0 {
+                bail!("{failed} books could not be imported");
+            }
+        }
+        LibraryCommand::FromCalibre { path, dry_run } => {
+            let root = match path {
+                Some(p) => p,
+                None => calibre::default_library()
+                    .context("no calibre library found; pass its folder")?,
+            };
+            let books = calibre::read_library(&root)?;
+            let plan = calibre::preview(lib, &books);
+            if dry_run {
+                if json {
+                    return print_json(&plan);
+                }
+                println!("{}: {} books", root.display(), plan.total);
+                println!("  {} to import", plan.new);
+                println!("  {} already in your library", plan.already);
+                for (formats, n) in &plan.no_epub {
+                    println!("  {n} without an EPUB ({formats})");
+                }
+                return Ok(());
+            }
+            let progress = Reporter::new(json);
+            let outcomes = calibre::import(lib, &books, |i, n, title| {
+                progress.update(i.saturating_sub(1), n, &format!("importing {title}"))
+            });
+            drop(progress);
+            if json {
+                return print_json(&outcomes);
+            }
+            let (mut added, mut matched, mut skipped, mut failed) = (0, 0, 0, 0);
+            for o in &outcomes {
+                match &o.result {
+                    Ok(calibre::CalibreImport::Added { book_id }) => {
+                        added += 1;
+                        println!("{}    #{book_id} {}", success("added"), o.title);
+                    }
+                    Ok(calibre::CalibreImport::Matched { .. }) => matched += 1,
+                    Ok(calibre::CalibreImport::Skipped { reason }) => {
+                        skipped += 1;
+                        println!("{}  {} ({reason})", warning("skipped"), o.title);
+                    }
+                    Err(e) => {
+                        failed += 1;
+                        eprintln!("{}   {}: {e}", failure("FAILED"), o.title);
+                    }
+                }
+            }
+            println!(
+                "{added} added, {matched} already in your library, {skipped} skipped, {failed} failed"
+            );
             if failed > 0 {
                 bail!("{failed} books could not be imported");
             }

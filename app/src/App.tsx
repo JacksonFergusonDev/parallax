@@ -37,6 +37,8 @@ import {
 } from "./library";
 import { clickSelect, SELECTION_HINT } from "./selection";
 import { BookCard } from "./components/BookCard";
+import { CalibreImport } from "./components/CalibreImport";
+import { ReadingView } from "./components/ReadingView";
 import { CollectionMenu } from "./components/CollectionMenu";
 import { NameDialog } from "./components/NameDialog";
 import { DeviceBadge } from "./components/DeviceBadge";
@@ -74,7 +76,7 @@ export default function App() {
   usePresentation(appRef, loaded && detected);
   const [device, setDevice] = useState<DeviceInfo | null>(null);
   const [onDevice, setOnDevice] = useState<Map<number, OnDevice>>(new Map());
-  const [view, setView] = useState<"library" | "device">("library");
+  const [view, setView] = useState<"library" | "device" | "reading">("library");
   const [collections, setCollections] = useState<Collection[]>([]);
   const [deviceRevision, setDeviceRevision] = useState(0);
   /** Collection to put sent books in: "" none, NEW_COLLECTION, or a name. */
@@ -101,6 +103,7 @@ export default function App() {
   /** Books being looked up for series and genres. */
   const [enhancing, setEnhancing] = useState<number[] | null>(null);
   const [checking, setChecking] = useState(false);
+  const [fromCalibre, setFromCalibre] = useState(false);
   /** Bumped when an enhance saves, so an open edit form reloads. */
   const [enhanced, setEnhanced] = useState(0);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -291,7 +294,7 @@ export default function App() {
     return map;
   }, [books, onDevice]);
   // The Kobo tab only exists while one is connected.
-  const activeView = device ? view : "library";
+  const activeView = !device && view === "device" ? "library" : view;
 
   const onSelect = useCallback(
     (id: number, e: React.MouseEvent) =>
@@ -330,10 +333,12 @@ export default function App() {
         chooseFiles();
         return;
       }
-      if (mod && (e.key === "1" || e.key === "2")) {
+      if (mod && (e.key === "1" || e.key === "2" || e.key === "3")) {
         e.preventDefault();
         setSelected(new Set());
-        setView(e.key === "1" ? "library" : "device");
+        setView(
+          e.key === "1" ? "library" : e.key === "2" ? "device" : "reading",
+        );
         return;
       }
       const typing = (e.target as HTMLElement).closest(
@@ -488,17 +493,17 @@ export default function App() {
   return (
     <div ref={appRef} className={`app ${dragging ? "dragging" : ""}`}>
       <header className="topbar">
-        {device ? (
-          <div className="tabs" role="tablist">
-            <button
-              role="tab"
-              aria-selected={activeView === "library"}
-              title="Library (⌘1)"
-              className={activeView === "library" ? "active" : ""}
-              onClick={() => setView("library")}
-            >
-              Library
-            </button>
+        <div className="tabs" role="tablist">
+          <button
+            role="tab"
+            aria-selected={activeView === "library"}
+            title="Library (⌘1)"
+            className={activeView === "library" ? "active" : ""}
+            onClick={() => setView("library")}
+          >
+            Library
+          </button>
+          {device && (
             <button
               role="tab"
               aria-selected={activeView === "device"}
@@ -511,10 +516,20 @@ export default function App() {
             >
               On Kobo
             </button>
-          </div>
-        ) : (
-          <h1>Library</h1>
-        )}
+          )}
+          <button
+            role="tab"
+            aria-selected={activeView === "reading"}
+            title="Reading (⌘3)"
+            className={activeView === "reading" ? "active" : ""}
+            onClick={() => {
+              setSelected(new Set());
+              setView("reading");
+            }}
+          >
+            Reading
+          </button>
+        </div>
         <input
           ref={searchRef}
           className="search"
@@ -529,6 +544,13 @@ export default function App() {
 
       {/* Retain loaded data, decoded images and scroll positions across tabs.
           Disconnecting unmounts the device panel, so reconnects read fresh data. */}
+      {activeView === "reading" && (
+        <div className="tab-panel" role="tabpanel" aria-label="Reading">
+          <div className="scroll reading-scroll">
+            <ReadingView mount={device?.mount ?? null} />
+          </div>
+        </div>
+      )}
       {device && (
         <div
           className="tab-panel"
@@ -596,6 +618,9 @@ export default function App() {
                 <button className="link" onClick={() => setChecking(true)}>
                   Check library…
                 </button>
+                <button className="link" onClick={() => setFromCalibre(true)}>
+                  Import from calibre…
+                </button>
                 <button
                   className="link"
                   onClick={() =>
@@ -635,9 +660,17 @@ export default function App() {
                     They're added to your library, ready to edit and send to
                     your Kobo.
                   </p>
-                  <button className="secondary" onClick={chooseFiles}>
-                    Choose files…
-                  </button>
+                  <div className="dropzone-actions">
+                    <button className="secondary" onClick={chooseFiles}>
+                      Choose files…
+                    </button>
+                    <button
+                      className="secondary"
+                      onClick={() => setFromCalibre(true)}
+                    >
+                      Import from calibre…
+                    </button>
+                  </div>
                 </div>
               ) : visible.length === 0 && loaded ? (
                 <p className="muted empty">No books match “{query}”.</p>
@@ -819,6 +852,12 @@ export default function App() {
           confirmLabel="Create"
           onClose={() => setNaming(false)}
           onSubmit={addToCollection}
+        />
+      )}
+      {fromCalibre && (
+        <CalibreImport
+          onImported={refresh}
+          onClose={() => setFromCalibre(false)}
         />
       )}
       {checking && (

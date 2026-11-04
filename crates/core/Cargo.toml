@@ -7,12 +7,14 @@ publish.workspace = true
 license.workspace = true
 
 [dependencies]
+chrono.workspace = true
 erc-convert.workspace = true
 erc-device.workspace = true
 erc-device-kobo.workspace = true
 erc-epub.workspace = true
 erc-library.workspace = true
 erc-metadata.workspace = true
+rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -20,7 +22,7 @@ tempfile.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-rusqlite.workspace = true
+image.workspace = true
 zip.workspace = true
 
 [lints]

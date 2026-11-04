@@ -466,6 +466,127 @@ export function installMockBackend() {
             result: { Ok: {} },
           }));
         }
+        case "reading_stats": {
+          const b = (
+            title: string,
+            author: string,
+            extra: Record<string, unknown>,
+          ) => ({
+            content_id: title,
+            title,
+            author,
+            percent: 0,
+            time_secs: null,
+            left_secs: null,
+            last_read: null,
+            finished_at: null,
+            times_finished: 0,
+            on_device: true,
+            ...extra,
+          });
+          const finished = [
+            ["We Are Legion (We Are Bob)", "Dennis E. Taylor", "2026-07-13"],
+            ["Dungeon Crawler Carl", "Matt Dinniman", "2026-04-11"],
+            ["A Mage of No Renown", "Kel Kade", "2026-03-16"],
+            ["Red Rising", "Pierce Brown", "2024-10-10"],
+            ["The Will of the Many", "James Islington", "2024-10-08"],
+            ["The Hobbit", "J. R. R. Tolkien", "2024-01-05"],
+            ...Array.from({ length: 14 }, (_, i) => [
+              `Manga Volume ${i + 1}`,
+              "Someone",
+              `2023-12-${String(10 + i).padStart(2, "0")}`,
+            ]),
+            ["The Name of the Wind", "Rothfuss, Patrick", "2023-03-07"],
+          ].map(([title, author, at], i) =>
+            b(title, author, {
+              percent: 100,
+              finished_at: `${at}T20:00:00Z`,
+              times_finished: i === 0 ? 2 : 1,
+              on_device: i > 2 && i < 5,
+            }),
+          );
+          const reading = [
+            b("Iron Gold", "Pierce Brown", {
+              percent: 7,
+              time_secs: 14_400,
+              left_secs: 103_000,
+              last_read: "2026-10-30T20:00:00Z",
+            }),
+            b("I, Robot", "Isaac Asimov", {
+              percent: 38,
+              time_secs: 10_400,
+              left_secs: 9_800,
+              last_read: "2026-09-06T00:12:45Z",
+            }),
+            b("The Time Machine", "H. G. Wells", {
+              percent: 20,
+              time_secs: 2_100,
+              left_secs: 7_900,
+              last_read: "2026-06-19T21:31:50Z",
+            }),
+          ];
+          return {
+            device_serial: "N000",
+            taken_at: "2026-11-04T22:00:00Z",
+            stats: {
+              device_model: "Kobo Libra 2",
+              total_secs: 58_680,
+              books_on_device: 90,
+              reading,
+              finished,
+              most_time: [...reading].sort(
+                (x, y) => (y.time_secs ?? 0) - (x.time_secs ?? 0),
+              ),
+            },
+          };
+        }
+        case "calibre_default_library":
+          return "/Users/you/Calibre Library";
+        case "calibre_preview":
+          return {
+            total: 7,
+            new: 4,
+            already: 1,
+            no_epub: [
+              ["PDF", 1],
+              ["AZW3, MOBI", 1],
+            ],
+          };
+        case "calibre_import": {
+          const titles = [
+            "Hyperion",
+            "The Fall of Hyperion",
+            "Pandora's Star",
+            "The Shadow of the Gods",
+            "Dune",
+            "A Scanned Book",
+            "Kindle Thing",
+          ];
+          for (const [i, title] of titles.entries()) {
+            await emit("import-progress", {
+              index: i + 1,
+              total: titles.length,
+              title,
+            });
+            await sleep(200);
+          }
+          return titles.map((title, i) => ({
+            calibre_id: i + 1,
+            title,
+            result:
+              i < 4
+                ? { Ok: { kind: "added", book_id: 100 + i } }
+                : i === 4
+                  ? { Ok: { kind: "matched", book_id: 1 } }
+                  : {
+                      Ok: {
+                        kind: "skipped",
+                        reason:
+                          i === 5 ? "no EPUB (PDF)" : "no EPUB (AZW3, MOBI)",
+                      },
+                    },
+          }));
+        }
         case "import_from_device": {
           const wanted = a.contentIds as string[] | null;
           const all = [

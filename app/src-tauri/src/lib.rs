@@ -611,6 +611,95 @@ async fn import_from_device(
     .map_err(err)?
 }
 
+#[derive(Serialize)]
+struct SavedStats {
+    device_serial: String,
+    taken_at: String,
+    stats: serde_json::Value,
+}
+
+/// Reading statistics: read fresh from the Kobo at `mount` (and saved), or
+/// the last ones saved when no Kobo is connected. Only reads the device.
+#[tauri::command]
+async fn reading_stats(
+    state: State<'_, AppState>,
+    mount: Option<PathBuf>,
+) -> CmdResult<Option<SavedStats>> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(mount) = mount {
+            let kobo = KoboDevice::open(&mount).map_err(err)?;
+            let stats = erc_core::stats::reading_stats(&kobo, Some(&lib)).map_err(err)?;
+            let json = serde_json::to_string(&stats).map_err(err)?;
+            lib.save_reading_stats(&kobo.version().serial, &json)
+                .map_err(err)?;
+        }
+        let Some((device_serial, taken_at, json)) = lib.latest_reading_stats().map_err(err)? else {
+            return Ok(None);
+        };
+        Ok(Some(SavedStats {
+            device_serial,
+            taken_at,
+            stats: serde_json::from_str(&json).map_err(err)?,
+        }))
+    })
+    .await
+    .map_err(err)?
+}
+
+/// calibre's current library folder, if there is one.
+#[tauri::command]
+fn calibre_default_library() -> Option<PathBuf> {
+    erc_core::calibre::default_library()
+}
+
+/// What importing the calibre library at `path` would do (reads only).
+#[tauri::command]
+async fn calibre_preview(
+    state: State<'_, AppState>,
+    path: PathBuf,
+) -> CmdResult<erc_core::calibre::CalibrePreview> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let books = erc_core::calibre::read_library(&path).map_err(err)?;
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        Ok(erc_core::calibre::preview(&lib, &books))
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Imports the calibre library at `path`; only reads it.
+#[tauri::command]
+async fn calibre_import(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: PathBuf,
+) -> CmdResult<Vec<erc_core::calibre::CalibreImportOutcome>> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let books = erc_core::calibre::read_library(&path).map_err(err)?;
+        let mut lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        Ok(erc_core::calibre::import(
+            &mut lib,
+            &books,
+            |index, total, title| {
+                let _ = app.emit(
+                    IMPORT_PROGRESS,
+                    ImportProgress {
+                        index,
+                        total,
+                        title: title.to_owned(),
+                    },
+                );
+            },
+        ))
+    })
+    .await
+    .map_err(err)?
+}
+
 #[tauri::command]
 async fn list_collections(mount: PathBuf) -> CmdResult<Vec<Collection>> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -827,6 +916,10 @@ pub fn run() {
             device_history,
             send_books,
             import_from_device,
+            calibre_default_library,
+            reading_stats,
+            calibre_preview,
+            calibre_import,
             library_duplicates,
             enhance_propose,
             kobo_health,
