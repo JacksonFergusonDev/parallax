@@ -90,8 +90,10 @@ enum CollectionCommand {
         #[arg(long)]
         mount: Option<PathBuf>,
     },
+    /// Delete collections (all in one backed-up session). Books stay.
     Delete {
-        name: String,
+        #[arg(required = true)]
+        names: Vec<String>,
         #[arg(long)]
         mount: Option<PathBuf>,
     },
@@ -532,33 +534,37 @@ fn main() -> Result<()> {
             }
         }
         Command::Kobo(KoboCommand::Collection(command)) => {
-            let (mount, change) = match command {
+            let (mount, changes) = match command {
                 CollectionCommand::Create { name, mount } => {
-                    (mount, CollectionChange::Create { name })
+                    (mount, vec![CollectionChange::Create { name }])
                 }
                 CollectionCommand::Rename { from, to, mount } => {
-                    (mount, CollectionChange::Rename { from, to })
+                    (mount, vec![CollectionChange::Rename { from, to }])
                 }
-                CollectionCommand::Delete { name, mount } => {
-                    (mount, CollectionChange::Delete { name })
-                }
+                CollectionCommand::Delete { names, mount } => (
+                    mount,
+                    names
+                        .into_iter()
+                        .map(|name| CollectionChange::Delete { name })
+                        .collect(),
+                ),
                 CollectionCommand::Add { name, books, mount } => (
                     mount,
-                    CollectionChange::Add {
+                    vec![CollectionChange::Add {
                         name,
                         content_ids: books.iter().map(|b| content_id_for(b)).collect(),
-                    },
+                    }],
                 ),
                 CollectionCommand::Remove { name, books, mount } => (
                     mount,
-                    CollectionChange::Remove {
+                    vec![CollectionChange::Remove {
                         name,
                         content_ids: books.iter().map(|b| content_id_for(b)).collect(),
-                    },
+                    }],
                 ),
             };
             let kobo = find_kobo(mount.as_deref())?;
-            collections::apply(&kobo, &backup_root()?, &[change])?;
+            collections::apply(&kobo, &backup_root()?, &changes)?;
             println!("{}", success("done"));
         }
         Command::Kobo(KoboCommand::Folders { apply, mount }) => {
