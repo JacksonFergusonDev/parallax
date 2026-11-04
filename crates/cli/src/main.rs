@@ -1284,7 +1284,7 @@ fn rules_command(lib: &Library, command: RulesCommand, json: bool) -> Result<()>
             let kobo = find_kobo(mount.as_deref())?;
             println!(
                 "added {} books to collections",
-                rules::run(lib, &kobo, &backup_root()?)?
+                rules::run(lib, &kobo, &backup_root()?, rules::Trigger::User)?
             );
         }
     }

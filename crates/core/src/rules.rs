@@ -1,7 +1,11 @@
 //! Automatic grouping rules: series, tag or author → collection.
 //!
 //! Rules only ever add books to collections; they never remove books or
-//! delete collections, so they can't undo organising done by hand. Books the
+//! delete collections, so they can't undo organising done by hand. Runs
+//! the app starts by itself (after a send, on connect) only file books into
+//! collections that already exist: new collections are made only when the
+//! user applies the rules after seeing the preview, so a broad rule (a
+//! collection per tag, at least 1 book) can't fill the Kobo unasked. Books the
 //! library knows about use its metadata (which has tags); other books on the
 //! device use what Nickel shows (series and author).
 
@@ -189,15 +193,28 @@ pub fn apply_plan(
     Ok(plan.iter().map(|p| p.content_ids.len()).sum())
 }
 
+/// Who started a run, which decides whether it may create collections.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Trigger {
+    /// The app, after a send or on connect: existing collections only.
+    Automatic,
+    /// The user, after the preview: everything planned.
+    User,
+}
+
 /// Plans and applies enabled rules; opens no write session if there's
 /// nothing to do.
 pub fn run(
     library: &Library,
     device: &KoboDevice,
     backup_root: &Path,
+    trigger: Trigger,
 ) -> erc_device_kobo::Result<usize> {
     let rules = library.rules().unwrap_or_default();
-    let planned = plan(&rules, library, device)?;
+    let mut planned = plan(&rules, library, device)?;
+    if trigger == Trigger::Automatic {
+        planned.retain(|p| !p.new);
+    }
     apply_plan(device, backup_root, &planned)
 }
 

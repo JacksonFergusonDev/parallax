@@ -132,6 +132,18 @@ const onDevice = new Map<number, string>([
   [5, "2026-10-01T00:00:00Z"],
 ]);
 const shelves = new Map<string, Set<string>>([["Favourites", new Set()]]);
+// `?shelves=N` adds N collections, some with long names, to check the sidebar.
+for (
+  let i = 1;
+  i <= Number(new URLSearchParams(location.search).get("shelves"));
+  i++
+)
+  shelves.set(
+    i % 5
+      ? `Collection ${i}`
+      : `27 of 1987 Locus Award for All-Time Best Fantasy Novel ${i}`,
+    new Set(),
+  );
 const shelvesOf = (id: string) =>
   [...shelves].filter(([, ids]) => ids.has(id)).map(([n]) => n);
 let rules: Rule[] = [

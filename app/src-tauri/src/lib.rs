@@ -10,6 +10,7 @@ use erc_core::duplicates::{DeviceGroup, LibraryGroup};
 use erc_core::enhance::{Accepted, DeviceClues, Proposal};
 use erc_core::import::DeviceImportOutcome;
 use erc_core::rules::PlannedCollection;
+use erc_core::rules::Trigger;
 use erc_core::send::{SendOutcome, send_library_books, update_on_device};
 use erc_covers::{Candidate, CoverQuery};
 use erc_device::{Collection, DeviceBook, DeviceInfo};
@@ -323,8 +324,9 @@ async fn send_books(
                 .map_err(err)?;
             }
         }
-        // Enabled grouping rules file the new books too (no-op otherwise).
-        erc_core::rules::run(&lib, &kobo, &backups).map_err(err)?;
+        // Enabled grouping rules file the new books into existing collections
+        // too (no-op otherwise).
+        erc_core::rules::run(&lib, &kobo, &backups, Trigger::Automatic).map_err(err)?;
         Ok(outcomes)
     })
     .await
@@ -673,7 +675,8 @@ async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResu
         let mut lib = library.lock().unwrap_or_else(|e| e.into_inner());
         Ok(Reconciled {
             series: erc_core::collections::reconcile_series(&lib, &kobo, &backups).map_err(err)?,
-            grouped: erc_core::rules::run(&lib, &kobo, &backups).map_err(err)?,
+            grouped: erc_core::rules::run(&lib, &kobo, &backups, Trigger::Automatic)
+                .map_err(err)?,
             reading: erc_core::device::sync_reading(&lib, &kobo).map_err(err)?,
             annotations: erc_core::device::sync_annotations(&mut lib, &kobo).map_err(err)?,
         })
@@ -720,7 +723,7 @@ async fn rules_apply(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<us
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let lib = library.lock().unwrap_or_else(|e| e.into_inner());
-        erc_core::rules::run(&lib, &kobo, &backups).map_err(err)
+        erc_core::rules::run(&lib, &kobo, &backups, Trigger::User).map_err(err)
     })
     .await
     .map_err(err)?

@@ -58,6 +58,7 @@ body {
 .scroll,
 .panel,
 .sidebar,
+.shelf-list,
 .picker-grid,
 .plan-list,
 .check-list,
@@ -841,6 +842,26 @@ button.danger-fill {
   overflow: auto;
 }
 
+/* Rows keep their height; with many collections only the list scrolls,
+   so the actions below stay in view (the whole sidebar scrolls only when
+   the window is too short for even a few rows). */
+.sidebar > * {
+  flex-shrink: 0;
+}
+
+.sidebar > .shelf-list {
+  flex: 0 1 auto;
+  min-height: 120px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shelf-list > .shelf {
+  flex-shrink: 0;
+}
+
 .shelf {
   all: unset;
   display: flex;
@@ -849,9 +870,13 @@ button.danger-fill {
   padding: 6px 10px;
   border-radius: 6px;
   cursor: default;
+  white-space: nowrap;
+}
+
+.shelf-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .shelf:hover {

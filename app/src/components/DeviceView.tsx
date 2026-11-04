@@ -357,19 +357,22 @@ export function DeviceView({
           {collections.length === 0 && (
             <p className="muted sidebar-empty">No collections yet.</p>
           )}
-          {collections.map((c) => (
-            <button
-              key={c.name}
-              className={`shelf ${shelf === c.name ? "active" : ""}`}
-              onClick={() => {
-                setShelf(c.name);
-                setSelected(new Set());
-              }}
-            >
-              {c.name}
-              <span className="muted">{c.book_count}</span>
-            </button>
-          ))}
+          <div className="shelf-list">
+            {collections.map((c) => (
+              <button
+                key={c.name}
+                className={`shelf ${shelf === c.name ? "active" : ""}`}
+                title={c.name}
+                onClick={() => {
+                  setShelf(c.name);
+                  setSelected(new Set());
+                }}
+              >
+                <span className="shelf-name">{c.name}</span>
+                <span className="muted">{c.book_count}</span>
+              </button>
+            ))}
+          </div>
           <div className="sidebar-foot">
             <button
               className="link"

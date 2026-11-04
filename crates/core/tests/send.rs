@@ -310,7 +310,7 @@ fn sends_into_collection_and_applies_series_after_import() {
 
 #[test]
 fn rules_group_sent_books_before_and_after_import() {
-    use erc_core::rules::{plan, run};
+    use erc_core::rules::{Trigger, plan, run};
     use erc_library::{Rule, RuleKind};
     use rusqlite::Connection;
 
@@ -378,11 +378,21 @@ fn rules_group_sent_books_before_and_after_import() {
         .collect();
     assert_eq!(summary, [("Ann Author", 2), ("#Favourites", 1)]);
 
-    assert_eq!(run(&library, &kobo, &backups).unwrap(), 3);
+    // Runs the app starts itself never create collections: nothing exists
+    // yet, so nothing is written.
+    assert_eq!(
+        run(&library, &kobo, &backups, Trigger::Automatic).unwrap(),
+        0
+    );
+    assert!(!backups.exists());
+    assert_eq!(run(&library, &kobo, &backups, Trigger::User).unwrap(), 3);
     // Pre-import rows count as done: nothing more to plan, no new write session.
     assert!(plan(&rules, &library, &kobo).unwrap().is_empty());
     let sessions = fs::read_dir(backups.join("N000000000001")).unwrap().count();
-    assert_eq!(run(&library, &kobo, &backups).unwrap(), 0);
+    assert_eq!(
+        run(&library, &kobo, &backups, Trigger::Automatic).unwrap(),
+        0
+    );
     assert_eq!(
         fs::read_dir(backups.join("N000000000001")).unwrap().count(),
         sessions
@@ -399,5 +409,28 @@ fn rules_group_sent_books_before_and_after_import() {
     assert_eq!(
         collections,
         [("#Favourites".to_owned(), 1), ("Ann Author".to_owned(), 2)]
+    );
+
+    // Once a collection exists, automatic runs file new books into it.
+    Connection::open(&db)
+        .unwrap()
+        .execute(
+            "INSERT INTO content (ContentID, ContentType, MimeType, ___UserID, Title, Attribution, Accessibility, IsDownloaded)
+             VALUES ('file:///mnt/onboard/KEpub/new.kepub.epub', 6, 'application/x-kobo-epub+zip', 'kepub_user', 'New Book', 'Ann Author', -1, 'true')",
+            [],
+        )
+        .unwrap();
+    run(&library, &kobo, &backups, Trigger::Automatic).unwrap();
+    let names: Vec<(String, usize)> = kobo
+        .open_db()
+        .unwrap()
+        .collections()
+        .unwrap()
+        .into_iter()
+        .map(|c| (c.name, c.book_count))
+        .collect();
+    assert_eq!(
+        names,
+        [("#Favourites".to_owned(), 1), ("Ann Author".to_owned(), 3)]
     );
 }

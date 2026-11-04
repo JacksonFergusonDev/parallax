@@ -98,9 +98,9 @@ export function RulesDialog({ mount, onApplied, onClose }: Props) {
           <div>
             <h2>Automatic collections</h2>
             <p className="muted">
-              Enabled rules run when you send books and when your Kobo connects.
-              They only add books to collections; they never remove books or
-              delete collections.
+              New collections are made only when you click Apply. After that,
+              enabled rules file books into them when you send books and when
+              your Kobo connects. They never remove books or delete collections.
             </p>
           </div>
           <button className="icon" aria-label="Close" onClick={onClose}>
