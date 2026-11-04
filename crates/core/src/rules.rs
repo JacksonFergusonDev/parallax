@@ -26,6 +26,8 @@ struct Item {
     series: Option<String>,
     authors: Vec<String>,
     tags: Vec<String>,
+    /// The genre its folder on the device names.
+    folder_genre: Option<&'static str>,
     /// Collections it's already in.
     collections: Vec<String>,
 }
@@ -112,8 +114,25 @@ fn keys(kind: RuleKind, item: &Item) -> Vec<String> {
     };
     match kind {
         RuleKind::Series => item.series.iter().filter_map(clean).collect(),
-        RuleKind::Tag => item.tags.iter().filter_map(clean).collect(),
+        // Genre tags under their standard names, so "sci-fi" and "Sci-Fi"
+        // share one collection.
+        RuleKind::Tag => crate::genres::normalize_tags(&item.tags),
         RuleKind::Author => item.authors.iter().filter_map(clean).collect(),
+        RuleKind::Genre => {
+            let mut genres: Vec<String> = item
+                .tags
+                .iter()
+                .filter_map(|t| erc_metadata::genres::canonical(t))
+                .map(str::to_owned)
+                .collect();
+            // A book without genre tags (most books nobody has tagged) gets
+            // its folder's genre.
+            if genres.is_empty() {
+                genres.extend(item.folder_genre.map(str::to_owned));
+            }
+            genres.dedup();
+            genres
+        }
     }
 }
 
@@ -138,6 +157,7 @@ fn items(
                 // Nickel joins several authors with ", " in Attribution.
                 authors: b.author.map(|a| vec![a]).unwrap_or_default(),
                 tags: Vec::new(),
+                folder_genre: b.path.as_deref().and_then(crate::genres::folder_genre),
                 collections: b.collections,
             };
             (b.id, item)
@@ -158,6 +178,7 @@ fn items(
         by_id.insert(
             copy.content_id.clone(),
             Item {
+                folder_genre: crate::genres::folder_genre(&copy.device_path),
                 content_id: copy.content_id,
                 title: book.title,
                 series: book.series,
@@ -235,6 +256,7 @@ mod tests {
             series: series.map(Into::into),
             authors: authors.iter().map(|s| s.to_string()).collect(),
             tags: tags.iter().map(|s| s.to_string()).collect(),
+            folder_genre: None,
             collections: collections.iter().map(|s| s.to_string()).collect(),
         }
     }
@@ -287,9 +309,44 @@ mod tests {
             summary,
             [
                 ("#Fantasy", true, vec!["lies", "red"]),
-                ("#Sci-Fi", true, vec!["dune"]),
+                // The "Sci-Fi" tag under the genre's standard name.
+                ("#Science Fiction", true, vec!["dune"]),
                 // Dune has 1 book, below min 2; "red" is already in its series.
                 ("Gentleman Bastard", false, vec!["lies"]),
+            ]
+        );
+    }
+
+    #[test]
+    fn genre_rule_uses_standard_names_and_folders() {
+        let mut from_folder = item("folder", None, &["A"], &[], &[]);
+        from_folder.folder_genre = Some("Science Fiction");
+        let mut tagged_in_other_folder =
+            item("tagged", None, &["B"], &["sci-fi", "Space Opera"], &[]);
+        tagged_in_other_folder.folder_genre = Some("Fantasy");
+        let items = [
+            from_folder,
+            tagged_in_other_folder,
+            item("non", None, &["C"], &["Non-Fiction"], &[]),
+            item("plain", None, &["D"], &["Favourites"], &[]),
+        ];
+        let genres = rule(RuleKind::Genre, 1, "");
+        let plan = plan_items(&[&genres], &items, &HashSet::new());
+        let summary: Vec<(&str, Vec<&str>)> = plan
+            .iter()
+            .map(|p| {
+                (
+                    p.name.as_str(),
+                    p.content_ids.iter().map(String::as_str).collect(),
+                )
+            })
+            .collect();
+        // Genre tags win over the folder; non-genre tags make nothing.
+        assert_eq!(
+            summary,
+            [
+                ("Science Fiction", vec!["folder", "tagged"]),
+                ("Nonfiction", vec!["non"]),
             ]
         );
     }

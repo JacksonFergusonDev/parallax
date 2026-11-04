@@ -200,6 +200,100 @@ pub fn from_label(label: &str) -> Option<&'static Genre> {
     by_name(label).or_else(|| classify(label))
 }
 
+/// Other ways people write each genre's name, compared after [`label_key`].
+const VARIANTS: &[(&str, &[&str])] = &[
+    ("Science Fiction", &["scifi", "sf", "sciencefictionnovel"]),
+    (
+        "Mystery & Thriller",
+        &[
+            "mystery",
+            "mysteries",
+            "thriller",
+            "mysterythriller",
+            "mysteryandthrillers",
+            "crime",
+            "crimefiction",
+            "suspense",
+        ],
+    ),
+    ("Humor", &["humour", "comedy", "funny"]),
+    ("Young Adult", &["ya", "teen", "teens", "youngadultfiction"]),
+    ("Classics", &["classic", "classicliterature"]),
+    (
+        "Biography & Memoir",
+        &[
+            "biography",
+            "biographies",
+            "memoir",
+            "memoirs",
+            "autobiography",
+            "autobiographies",
+            "biographiesandmemoirs",
+        ],
+    ),
+    ("Travel & Exploration", &["travel", "exploration"]),
+    (
+        "Politics & Society",
+        &["politics", "society", "politicalscience", "socialscience"],
+    ),
+    ("Science & Nature", &["science", "nature", "popularscience"]),
+    (
+        "Self-Help & Psychology",
+        &[
+            "selfhelp",
+            "psychology",
+            "personaldevelopment",
+            "selfimprovement",
+        ],
+    ),
+    (
+        "Business & Economics",
+        &["business", "economics", "finance"],
+    ),
+    ("Poetry", &["poems"]),
+    ("Fiction", &["generalfiction", "novel", "novels"]),
+];
+
+/// Lowercase letters and digits only, with "&" as "and": "Sci-Fi" →
+/// "scifi", "Non Fiction" → "nonfiction".
+fn label_key(label: &str) -> String {
+    label
+        .replace('&', " and ")
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .flat_map(|c| c.to_lowercase())
+        .collect()
+}
+
+/// The standard name for a tag, folder or collection that *is* a genre,
+/// however it's written: "sci-fi", "SciFi", "Science fiction" → "Science
+/// Fiction"; "Non-Fiction", "non fiction" → "Nonfiction"; "Thrillers" →
+/// "Mystery & Thriller". Unlike [`classify`], a label that merely mentions a
+/// genre ("Space Opera", "read horror") isn't one.
+pub fn canonical(label: &str) -> Option<&'static str> {
+    let key = label_key(label);
+    if key.is_empty() {
+        return None;
+    }
+    let singular = key.strip_suffix('s').unwrap_or(&key);
+    let matches = |k: &str| k == key || k == singular;
+    GENRES
+        .iter()
+        .find(|g| matches(&label_key(g.name)))
+        .map(|g| g.name)
+        .or_else(|| {
+            VARIANTS
+                .iter()
+                .find(|(_, variants)| variants.iter().any(|v| matches(v)))
+                .map(|(name, _)| *name)
+        })
+}
+
+/// Every standard genre name, in the list's order.
+pub fn names() -> impl Iterator<Item = &'static str> {
+    GENRES.iter().map(|g| g.name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -234,6 +328,66 @@ mod tests {
         assert_eq!(name("Popular works of science"), Some("Science & Nature"));
         assert_eq!(name("speculative fiction comedy"), Some("Humor"));
         assert_eq!(name("science fiction novel"), Some("Science Fiction"));
+    }
+
+    #[test]
+    fn canonical_names_for_genre_labels() {
+        for label in [
+            "sci-fi",
+            "Sci-Fi",
+            "SciFi",
+            "scifi",
+            "Science fiction",
+            "SCIENCE FICTION",
+            "SF",
+        ] {
+            assert_eq!(canonical(label), Some("Science Fiction"), "{label}");
+        }
+        for label in [
+            "nonfiction",
+            "Non-Fiction",
+            "NonFiction",
+            "Non Fiction",
+            "non-fiction",
+        ] {
+            assert_eq!(canonical(label), Some("Nonfiction"), "{label}");
+        }
+        assert_eq!(canonical("Thrillers"), Some("Mystery & Thriller"));
+        assert_eq!(
+            canonical("mystery and thriller"),
+            Some("Mystery & Thriller")
+        );
+        assert_eq!(canonical("Self help"), Some("Self-Help & Psychology"));
+        assert_eq!(canonical("Memoirs"), Some("Biography & Memoir"));
+        assert_eq!(canonical("YA"), Some("Young Adult"));
+        assert_eq!(canonical("fantasy"), Some("Fantasy"));
+        assert_eq!(canonical("Fiction"), Some("Fiction"));
+        assert_eq!(canonical("Historical fiction"), Some("Historical Fiction"));
+        // Mentions, not genres.
+        for label in [
+            "Space Opera",
+            "read horror",
+            "Epic",
+            "_isfdb",
+            "Favourites",
+            "",
+        ] {
+            assert_eq!(canonical(label), None, "{label}");
+        }
+        assert_eq!(names().count(), GENRES.len());
+    }
+
+    /// The app shows a Genres field from its own copy of the names.
+    #[test]
+    fn app_genre_list_matches() {
+        let app = include_str!("../../../app/src/genres.ts");
+        let start = app.find("GENRES").unwrap();
+        let end = start + app[start..].find("];").unwrap();
+        let listed: Vec<&str> = app[start..end]
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix('"')?.strip_suffix("\","))
+            .collect();
+        assert_eq!(listed, names().collect::<Vec<_>>());
     }
 
     #[test]

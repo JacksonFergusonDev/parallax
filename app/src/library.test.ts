@@ -128,6 +128,7 @@ describe("edit form", () => {
         authors: "A; B,, ",
         series: " ",
         seriesIndex: "3",
+        genres: [],
         tags: "",
         contributors: [
           { name: " Bo ", role: "" },
@@ -143,6 +144,20 @@ describe("edit form", () => {
       tags: [],
       contributors: [{ name: "Bo", role: "ctb" }],
     });
+  });
+
+  it("keeps genres in their own field and writes them back as tags", () => {
+    const b = book(1, "Dune", ["Frank Herbert"], {
+      tags: ["Favourites", "science fiction", "Classics", "Science Fiction"],
+    });
+    const f = toForm(b);
+    expect(f.genres).toEqual(["Science Fiction", "Classics"]);
+    expect(f.tags).toBe("Favourites");
+    expect(fromForm(f).tags).toEqual([
+      "Science Fiction",
+      "Classics",
+      "Favourites",
+    ]);
   });
 
   it("leaves unknown contributors alone", () => {

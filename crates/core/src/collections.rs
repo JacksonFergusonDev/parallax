@@ -87,7 +87,9 @@ impl CollectionChange {
 }
 
 /// Books grouped by the folder they sit in on the device
-/// (`KEpub/<Folder>/…`, or `<Folder>/…` outside `KEpub`).
+/// (`KEpub/<Folder>/…`, or `<Folder>/…` outside `KEpub`). A folder that is a
+/// genre is named by the genre's standard name ("Sci-Fi" → "Science
+/// Fiction"), so variant folders share one collection.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct FolderGroup {
     pub folder: String,
@@ -104,8 +106,9 @@ pub fn folder_groups(books: &[DeviceBook]) -> Vec<FolderGroup> {
             parts.remove(0);
         }
         if let Some(folder) = parts.first().filter(|f| !f.is_empty()) {
+            let name = erc_metadata::genres::canonical(folder).unwrap_or(folder);
             groups
-                .entry((*folder).to_owned())
+                .entry(name.to_owned())
                 .or_default()
                 .push(book.id.clone());
         }
@@ -238,13 +241,23 @@ mod tests {
             book("KEpub/loose.kepub.epub"),
             book("Comics/d.epub"),
             book("root.epub"),
+            book("KEpub/Sci-Fi/e.kepub.epub"),
+            book("SciFi/f.epub"),
         ];
         let groups = folder_groups(&books);
         let summary: Vec<(&str, usize)> = groups
             .iter()
             .map(|g| (g.folder.as_str(), g.content_ids.len()))
             .collect();
-        assert_eq!(summary, [("Comics", 1), ("Fantasy", 2), ("Horror", 1)]);
+        assert_eq!(
+            summary,
+            [
+                ("Comics", 1),
+                ("Fantasy", 2),
+                ("Horror", 1),
+                ("Science Fiction", 2)
+            ]
+        );
     }
 
     #[test]

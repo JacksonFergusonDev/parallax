@@ -8,6 +8,7 @@ import {
   type Book,
   type MetadataEdit,
 } from "../api";
+import { GENRES, genreOf } from "../genres";
 import { ROLES, fromForm, toForm, type EditForm } from "../library";
 import { AnnotationsDialog } from "./AnnotationsDialog";
 import { CoverPicker } from "./CoverPicker";
@@ -216,11 +217,70 @@ export function EditPanel({
             />
           </label>
         </div>
+        <div className="genre-field">
+          <span>Genres</span>
+          <div className="genre-chips">
+            {form.genres.map((g) => (
+              <span key={g} className="chip">
+                {g}
+                <button
+                  type="button"
+                  className="chip-remove"
+                  aria-label={`Remove ${g}`}
+                  onClick={() =>
+                    setForm((form) => ({
+                      ...form,
+                      genres: form.genres.filter((x) => x !== g),
+                    }))
+                  }
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <select
+              className="genre-add"
+              aria-label="Add a genre"
+              value=""
+              onChange={(e) => {
+                const g = e.target.value;
+                if (g)
+                  setForm((form) => ({ ...form, genres: [...form.genres, g] }));
+              }}
+            >
+              <option value="">
+                {form.genres.length ? "Add…" : "Add a genre…"}
+              </option>
+              {GENRES.filter((g) => !form.genres.includes(g)).map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
         <label>
           <span>
             Tags <span className="hint">· comma-separated</span>
           </span>
-          <input {...field("tags")} />
+          <input
+            {...field("tags")}
+            onBlur={() =>
+              // A genre typed as a tag moves to Genres.
+              setForm((form) => {
+                const typed = form.tags.split(",").map((t) => t.trim());
+                const moved = typed
+                  .map((t) => genreOf(t))
+                  .filter((g): g is string => !!g && !form.genres.includes(g));
+                if (!moved.length) return form;
+                return {
+                  ...form,
+                  genres: [...form.genres, ...new Set(moved)],
+                  tags: typed.filter((t) => t && !genreOf(t)).join(", "),
+                };
+              })
+            }
+          />
         </label>
         <button
           type="button"

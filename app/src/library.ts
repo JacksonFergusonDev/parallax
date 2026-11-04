@@ -1,4 +1,5 @@
 // Pure helpers for the library view, kept out of components so they're testable.
+import { splitGenres } from "./genres";
 import type {
   Book,
   Contributor,
@@ -74,6 +75,9 @@ export interface EditForm {
   authors: string;
   series: string;
   seriesIndex: string;
+  /** Tags that are standard genres, edited in their own field. */
+  genres: string[];
+  /** The other tags, comma-separated. */
   tags: string;
   contributors: Contributor[];
   /** The book's contributors were read; otherwise an empty list means "unchanged". */
@@ -99,7 +103,8 @@ export const toForm = (b: Book): EditForm => ({
   authors: b.authors.join(", "),
   series: b.series ?? "",
   seriesIndex: b.series_index ?? "",
-  tags: b.tags.join(", "),
+  genres: splitGenres(b.tags).genres,
+  tags: splitGenres(b.tags).others.join(", "),
   contributors: b.contributors ?? [],
   contributorsKnown: b.contributors != null,
 });
@@ -110,7 +115,8 @@ export const fromForm = (f: EditForm): MetadataEdit => ({
   series: f.series.trim() || null,
   series_index:
     f.series.trim() && f.seriesIndex.trim() ? f.seriesIndex.trim() : null,
-  tags: splitList(f.tags),
+  // Genres are tags too: EPUB, calibre and the Kobo have no genre field.
+  tags: [...f.genres, ...splitList(f.tags)],
   contributors:
     f.contributorsKnown || f.contributors.length
       ? f.contributors

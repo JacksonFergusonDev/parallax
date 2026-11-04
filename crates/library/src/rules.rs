@@ -15,6 +15,9 @@ pub enum RuleKind {
     Tag,
     /// One collection per author.
     Author,
+    /// One collection per genre (tags that are genres, under their standard
+    /// names, or the genre folder a book sits in on the Kobo).
+    Genre,
 }
 
 impl RuleKind {
@@ -23,6 +26,7 @@ impl RuleKind {
             RuleKind::Series => "series",
             RuleKind::Tag => "tag",
             RuleKind::Author => "author",
+            RuleKind::Genre => "genre",
         }
     }
 
@@ -31,6 +35,7 @@ impl RuleKind {
             "series" => Some(RuleKind::Series),
             "tag" => Some(RuleKind::Tag),
             "author" => Some(RuleKind::Author),
+            "genre" => Some(RuleKind::Genre),
             _ => None,
         }
     }

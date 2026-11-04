@@ -39,6 +39,7 @@ import { clickSelect, SELECTION_HINT } from "./selection";
 import { BookCard } from "./components/BookCard";
 import { CalibreImport } from "./components/CalibreImport";
 import { ReadingView } from "./components/ReadingView";
+import { TidyGenres } from "./components/TidyGenres";
 import { CollectionMenu } from "./components/CollectionMenu";
 import { NameDialog } from "./components/NameDialog";
 import { DeviceBadge } from "./components/DeviceBadge";
@@ -104,6 +105,7 @@ export default function App() {
   const [enhancing, setEnhancing] = useState<number[] | null>(null);
   const [checking, setChecking] = useState(false);
   const [fromCalibre, setFromCalibre] = useState(false);
+  const [tidying, setTidying] = useState(false);
   /** Bumped when an enhance saves, so an open edit form reloads. */
   const [enhanced, setEnhanced] = useState(0);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -623,6 +625,13 @@ export default function App() {
                 </button>
                 <button
                   className="link"
+                  onClick={() => setTidying(true)}
+                  title="Give genres one standard name in your library and on your Kobo"
+                >
+                  Tidy genres…
+                </button>
+                <button
+                  className="link"
                   onClick={() =>
                     setEnhancing(
                       selected.size ? [...selected] : visible.map((b) => b.id),
@@ -852,6 +861,21 @@ export default function App() {
           confirmLabel="Create"
           onClose={() => setNaming(false)}
           onSubmit={addToCollection}
+        />
+      )}
+      {tidying && (
+        <TidyGenres
+          mount={device && device.read_only === null ? device.mount : null}
+          onDone={() => {
+            refresh();
+            if (device) {
+              setDeviceRevision((revision) => revision + 1);
+              listCollections(device.mount)
+                .then(setCollections)
+                .catch(() => {});
+            }
+          }}
+          onClose={() => setTidying(false)}
         />
       )}
       {fromCalibre && (

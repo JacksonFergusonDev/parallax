@@ -648,6 +648,47 @@ async fn reading_stats(
     .map_err(err)?
 }
 
+/// Genre tags and Kobo collections not using standard names (reads only).
+/// `mount` adds the connected Kobo's collections.
+#[tauri::command]
+async fn genres_plan(
+    state: State<'_, AppState>,
+    mount: Option<PathBuf>,
+) -> CmdResult<erc_core::genres::TidyPlan> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = mount
+            .map(|m| KoboDevice::open(&m))
+            .transpose()
+            .map_err(err)?;
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        erc_core::genres::plan(&lib, kobo.as_ref()).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Renames the chosen genre tags and Kobo collections (backed up first).
+#[tauri::command]
+async fn genres_apply(
+    state: State<'_, AppState>,
+    mount: Option<PathBuf>,
+    choice: erc_core::genres::TidyChoice,
+) -> CmdResult<erc_core::genres::TidyResult> {
+    let library = state.library.clone();
+    let backups = state.backup_root.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = mount
+            .map(|m| KoboDevice::open(&m))
+            .transpose()
+            .map_err(err)?;
+        let mut lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        erc_core::genres::apply_tidy(&mut lib, kobo.as_ref(), &backups, &choice).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
 /// calibre's current library folder, if there is one.
 #[tauri::command]
 fn calibre_default_library() -> Option<PathBuf> {
@@ -918,6 +959,8 @@ pub fn run() {
             import_from_device,
             calibre_default_library,
             reading_stats,
+            genres_plan,
+            genres_apply,
             calibre_preview,
             calibre_import,
             library_duplicates,

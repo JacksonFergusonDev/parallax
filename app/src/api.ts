@@ -203,7 +203,7 @@ export interface FolderGroup {
   content_ids: string[];
 }
 
-export type RuleKind = "series" | "tag" | "author";
+export type RuleKind = "series" | "genre" | "tag" | "author";
 
 export interface Rule {
   /** 0 for a rule not saved yet. */
@@ -337,6 +337,26 @@ export interface CalibreImportOutcome {
   calibre_id: number;
   title: string;
   result: { Ok: CalibreImport } | { Err: string };
+}
+
+export interface TagChange {
+  from: string;
+  to: string;
+  book_ids: number[];
+  /** A variant spelling; false when the tag only mentions the genre. */
+  exact: boolean;
+}
+
+export interface CollectionTidy {
+  from: string;
+  to: string;
+  books: number;
+  merge: boolean;
+}
+
+export interface TidyPlan {
+  tags: TagChange[];
+  collections: CollectionTidy[];
 }
 
 export interface StatBook {
@@ -484,6 +504,17 @@ export const importFromDevice = (mount: string, contentIds: string[] | null) =>
     "plans",
     deviceTag(mount),
   ]);
+export const genresPlan = (mount: string | null) =>
+  invoke<TidyPlan>("genres_plan", { mount });
+export const genresApply = (
+  mount: string | null,
+  choice: { tags: [string, string][]; collections: [string, string][] },
+) =>
+  write<{ books: number; collections: number }>(
+    "genres_apply",
+    { mount, choice },
+    ["library", "plans", ...(mount ? [deviceTag(mount)] : [])],
+  );
 /** Fresh from the Kobo at `mount` (and saved), else the last saved. */
 export const readingStats = (mount: string | null) =>
   invoke<SavedStats | null>("reading_stats", { mount });

@@ -6,6 +6,7 @@ pub mod collections;
 pub mod device;
 pub mod duplicates;
 pub mod enhance;
+pub mod genres;
 pub mod health;
 pub mod import;
 pub mod rules;

@@ -252,6 +252,21 @@ enum LibraryCommand {
         #[arg(long)]
         mount: Option<PathBuf>,
     },
+    /// Use standard genre names: rename genre tags written other ways
+    /// ("sci-fi" → "Science Fiction") and, with a Kobo connected, its genre
+    /// collections. Shows the changes; --apply makes them.
+    Genres {
+        #[arg(long)]
+        mount: Option<PathBuf>,
+        /// Leave the Kobo out even if one is connected.
+        #[arg(long)]
+        library_only: bool,
+        /// Also rename tags that only mention a genre ("Space Opera").
+        #[arg(long)]
+        loose: bool,
+        #[arg(long)]
+        apply: bool,
+    },
     /// Import a calibre library: EPUBs (or KEPUBs) with calibre's metadata and
     /// covers. Only reads the calibre library; books already here are matched.
     FromCalibre {
@@ -1212,6 +1227,84 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             if failed > 0 {
                 bail!("{failed} books could not be imported");
             }
+        }
+        LibraryCommand::Genres {
+            mount,
+            library_only,
+            loose,
+            apply,
+        } => {
+            let kobo = if library_only {
+                None
+            } else if mount.is_some() {
+                Some(find_kobo(mount.as_deref())?)
+            } else {
+                find_kobo(None).ok()
+            };
+            let plan = erc_core::genres::plan(lib, kobo.as_ref()).map_err(anyhow::Error::msg)?;
+            if json && !apply {
+                return print_json(&plan);
+            }
+            let tags: Vec<_> = plan.tags.iter().filter(|t| t.exact || loose).collect();
+            for t in &plan.tags {
+                let chosen = t.exact || loose;
+                println!(
+                    "{} tag “{}” → “{}” ({} {}){}",
+                    if chosen { "rename" } else { "  skip" },
+                    t.from,
+                    t.to,
+                    t.book_ids.len(),
+                    if t.book_ids.len() == 1 {
+                        "book"
+                    } else {
+                        "books"
+                    },
+                    if t.exact {
+                        ""
+                    } else {
+                        ", only mentions it: --loose"
+                    }
+                );
+            }
+            for c in &plan.collections {
+                println!(
+                    "{} Kobo collection “{}” → “{}” ({} books)",
+                    if c.merge { " merge" } else { "rename" },
+                    c.from,
+                    c.to,
+                    c.books
+                );
+            }
+            if tags.is_empty() && plan.collections.is_empty() {
+                println!("Genres already use standard names.");
+                return Ok(());
+            }
+            if !apply {
+                println!("Run with --apply to make these changes.");
+                return Ok(());
+            }
+            let choice = erc_core::genres::TidyChoice {
+                tags: tags
+                    .iter()
+                    .map(|t| (t.from.clone(), t.to.clone()))
+                    .collect(),
+                collections: plan
+                    .collections
+                    .iter()
+                    .map(|c| (c.from.clone(), c.to.clone()))
+                    .collect(),
+            };
+            let result = erc_core::genres::apply_tidy(lib, kobo.as_ref(), &backup_root()?, &choice)
+                .map_err(anyhow::Error::msg)?;
+            if json {
+                return print_json(&result);
+            }
+            println!(
+                "{} {} books retagged, {} Kobo collections renamed or merged",
+                success("done"),
+                result.books,
+                result.collections
+            );
         }
         LibraryCommand::FromCalibre { path, dry_run } => {
             let root = match path {

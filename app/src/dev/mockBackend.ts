@@ -466,6 +466,56 @@ export function installMockBackend() {
             result: { Ok: {} },
           }));
         }
+        case "genres_plan":
+          return {
+            tags: [
+              {
+                from: "Sci-Fi",
+                to: "Science Fiction",
+                book_ids: [1, 2, 3],
+                exact: true,
+              },
+              {
+                from: "Non-Fiction",
+                to: "Nonfiction",
+                book_ids: [4],
+                exact: true,
+              },
+              {
+                from: "Space Opera",
+                to: "Science Fiction",
+                book_ids: [2],
+                exact: false,
+              },
+            ],
+            collections: a.mount
+              ? [
+                  {
+                    from: "Sci-Fi",
+                    to: "Science Fiction",
+                    books: 21,
+                    merge: false,
+                  },
+                  {
+                    from: "SciFi",
+                    to: "Science Fiction",
+                    books: 2,
+                    merge: true,
+                  },
+                ]
+              : [],
+          };
+        case "genres_apply": {
+          const choice = a.choice as {
+            tags: unknown[];
+            collections: unknown[];
+          };
+          await sleep(400);
+          return {
+            books: choice.tags.length * 2,
+            collections: choice.collections.length,
+          };
+        }
         case "reading_stats": {
           const b = (
             title: string,

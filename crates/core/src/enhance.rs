@@ -5,9 +5,9 @@
 //! when only that is missing) and genres the book isn't already tagged with.
 //! Local clues come first: the series Nickel shows on a connected Kobo and
 //! the Kobo folder a book sits in ("KEpub/Fantasy/…"). Then the online
-//! sources in `erc-metadata`. Genres use the device's folder spelling when it
-//! has one ("Sci-Fi" rather than "Science Fiction"), so collections made from
-//! them line up with what the user already has.
+//! sources in `erc-metadata`. Genres always use the standard names
+//! ("Science Fiction", never "Sci-Fi"), so every source fills the same tag
+//! and collections made from them don't split.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -16,7 +16,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use erc_device::DeviceBook;
 use erc_device_kobo::KoboDevice;
 use erc_library::{Book, Library};
-use erc_metadata::genres::{self, Genre};
+use erc_metadata::genres;
+
+use crate::genres::folder_genre;
 use erc_metadata::{CachedFetcher, Confidence, Fetch, HttpFetcher, Lookup, Options, Query};
 use serde::{Deserialize, Serialize};
 
@@ -70,10 +72,8 @@ pub struct Accepted {
 pub struct DeviceClues {
     /// (series, number) Nickel shows.
     series: HashMap<i64, (String, Option<String>)>,
-    /// The folder the book sits in, when it names a genre.
-    folder: HashMap<i64, String>,
-    /// Canonical genre → the device's folder spelling.
-    spelling: HashMap<&'static str, String>,
+    /// The genre the book's folder names, by its standard name.
+    folder: HashMap<i64, &'static str>,
 }
 
 impl DeviceClues {
@@ -92,13 +92,7 @@ impl DeviceClues {
     fn from_books(books: &[DeviceBook], library_ids: &HashMap<&str, i64>) -> Self {
         let mut clues = Self::default();
         for book in books {
-            let folder = book.path.as_deref().and_then(genre_folder);
-            if let Some((genre, label)) = folder {
-                clues
-                    .spelling
-                    .entry(genre.name)
-                    .or_insert_with(|| label.to_owned());
-            }
+            let folder = book.path.as_deref().and_then(folder_genre);
             let Some(&id) = library_ids.get(book.id.as_str()) else {
                 continue;
             };
@@ -107,31 +101,15 @@ impl DeviceClues {
                     .series
                     .insert(id, (series.clone(), book.series_number.clone()));
             }
-            if let Some((_, label)) = folder {
-                clues.folder.insert(id, label.to_owned());
+            if let Some(genre) = folder {
+                clues.folder.insert(id, genre);
             }
         }
         clues
     }
-
-    fn label(&self, genre: &str) -> String {
-        genres::by_name(genre)
-            .and_then(|g| self.spelling.get(g.name))
-            .cloned()
-            .unwrap_or_else(|| genre.to_owned())
-    }
 }
 
-/// `KEpub/Fantasy/x.kepub.epub` or `Fantasy/x.epub` → the Fantasy genre and
-/// the folder's own name.
-fn genre_folder(path: &str) -> Option<(&'static Genre, &str)> {
-    let mut parts: Vec<&str> = path.split('/').collect();
-    parts.pop();
-    let folder = *parts.last()?;
-    genres::from_label(folder).map(|g| (g, folder))
-}
-
-/// The canonical genre of a tag, or the tag itself, for comparing.
+/// The standard genre of a tag, or the tag itself, for comparing.
 fn genre_key(tag: &str) -> String {
     genres::from_label(tag).map_or_else(|| tag.to_lowercase(), |g| g.name.to_lowercase())
 }
@@ -192,11 +170,11 @@ pub fn proposal(book: &Book, clues: &DeviceClues, lookup: Option<&Lookup>) -> Pr
         }
     };
     if let Some(folder) = clues.folder.get(&book.id) {
-        add(folder.clone(), vec!["Kobo folder".to_owned()], true);
+        add((*folder).to_owned(), vec!["Kobo folder".to_owned()], true);
     }
     for g in lookup.map(|l| l.genres.as_slice()).unwrap_or_default() {
         add(
-            clues.label(&g.name),
+            g.name.clone(),
             g.sources.iter().map(|s| s.label().to_owned()).collect(),
             g.confidence == Confidence::High,
         );
@@ -358,7 +336,7 @@ mod tests {
     }
 
     #[test]
-    fn local_clues_win_and_folder_spelling_is_kept() {
+    fn local_clues_win_and_genres_use_standard_names() {
         let devices = [
             device_book("a", "KEpub/Sci-Fi/a.kepub.epub", Some("Expanse")),
             device_book("b", "KEpub/Fantasy/b.kepub.epub", None),
@@ -384,13 +362,12 @@ mod tests {
                 confident: true
             })
         );
-        // The folder and the online genre are the same genre, spelled the
-        // way the Kobo's folder is.
+        // The "Sci-Fi" folder and the online genre are one genre, by its
+        // standard name.
         let names: Vec<&str> = p.genres.iter().map(|g| g.name.as_str()).collect();
-        assert_eq!(names, ["Sci-Fi"]);
+        assert_eq!(names, ["Science Fiction"]);
 
-        // Online "Fantasy" uses the "Fantasy" folder's spelling; a non-genre
-        // folder ("To read") isn't proposed.
+        // A non-genre folder ("To read") isn't proposed.
         let p = proposal(
             &book(3, None, None, &[]),
             &clues,

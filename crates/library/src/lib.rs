@@ -329,6 +329,19 @@ impl Library {
         self.book(id)
     }
 
+    /// Replaces a book's tags without marking it edited, for tidying names
+    /// (the Kobo doesn't show tags, so copies sent there stay current).
+    pub fn retag(&mut self, id: i64, tags: &[String]) -> Result<Book> {
+        let changed = self.conn.execute(
+            "UPDATE books SET tags = ?1 WHERE id = ?2",
+            params![json(&tags), id],
+        )?;
+        if changed == 0 {
+            return Err(Error::NotFound(id));
+        }
+        self.book(id)
+    }
+
     /// Fills in what the library doesn't know yet: identifiers with a scheme
     /// it lacks, and an empty publisher, description or language. Nothing it
     /// already has is replaced.

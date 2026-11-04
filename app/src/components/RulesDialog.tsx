@@ -12,11 +12,17 @@ import {
 
 const KIND_LABEL: Record<RuleKind, string> = {
   series: "A collection for each series",
+  genre: "A collection for each genre",
   tag: "A collection for each tag",
   author: "A collection for each author",
 };
 
-const DEFAULT_MIN: Record<RuleKind, number> = { series: 2, tag: 1, author: 3 };
+const DEFAULT_MIN: Record<RuleKind, number> = {
+  series: 2,
+  genre: 1,
+  tag: 1,
+  author: 3,
+};
 
 interface Props {
   mount: string;

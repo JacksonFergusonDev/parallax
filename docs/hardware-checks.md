@@ -116,6 +116,12 @@ Batched so you can do several in one sitting when Claude asks:
 - calibre: Library → "Import from calibre…" finds your calibre library, shows 3 books to import, and imports them with calibre's series (Commonwealth Universe 1, Hyperion Cantos 1) and covers. Running it again says nothing to import. calibre still opens its library normally afterwards.
 - Reading: with the Kobo connected, the Reading tab (⌘3) shows about 16 h read, 55 books finished (41 in 2023, 10 in 2024, the rest this year) and your books in progress with time left. Check a few finished titles you remember, then unplug: the tab still shows the same stats "as of" when it was last connected.
 
+## Genres (2026-11-04)
+
+- Library → "Tidy genres…" with the Kobo connected: expect Sci-Fi → Science Fiction (11 books) and a few others chosen, "Space Opera" and the Locus Award tags unchosen, and your Kobo's Sci-Fi collection renamed to Science Fiction. Apply, eject: the Science Fiction collection holds the same books as Sci-Fi did, and nothing needs "Update on Kobo".
+- Open a book: its genres show in the Genres field, other tags below.
+- Automatic collections → add "A collection for each genre", Apply: genre collections use standard names, and books with no genre tags are filed by their Kobo folder.
+
 ## Spike S2 — collections and Kobo cloud sync (with M6) (**done 2026-11-04**: app-made collections sync with their books; deletions of synced collections stick)
 
 **Question:** do collections the app creates survive a Kobo sync, and does deleting one stick?
