@@ -167,4 +167,4 @@ No single free source has everything, so ERC layers them. Each source fills only
 
 Matching: ISBN first, then normalised title + author with a similarity threshold; low-confidence matches are shown but unticked. Responses are cached in the library DB so re-runs are cheap and work offline. Skipped entirely: Amazon, Goodreads and the Kobo store (scraping only).
 
-Order: M9 is pure UI. M10 comes before every new device write (M11–M14 log through it). Phase 2 (Kindle) follows M16.
+Order: M9 is pure UI. M10 comes before every new device write (M11–M14 log through it). Phase 2 (Kindle) was to follow M16; it is deferred (2026-11-04) while the app focuses on Kobo users.

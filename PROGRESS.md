@@ -42,7 +42,8 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 - Kobo MVP (M0–M8) and phase 1.5 (M9–M16) complete and verified on the real Libra 2: the user confirmed every app feature works (2026-11-04), after the round 1 fixes (search titles, cover matching, Amazon/Indigo covers, selection, collections from Library).
 - Awaiting device reports from other Kobo models (docs/device-support.md); only the Libra 2 is verified.
-- Next: phase 2 (Kindle) research spike.
+- Kindle (phase 2) deferred indefinitely (2026-11-04): the user has no Kindle and wants to keep improving the app for Kobo users. Keep the `Device` trait and capability flags as they are; no Kindle work until asked.
+- Next: Kobo improvements chosen by the user.
 
 ## Unresolved
 
@@ -50,8 +51,8 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 ## Next
 
-- Phase 1.5: M9 → M16 (PLAN §7.3). Skip list: Goodreads, Kobo-Metadata scraping, Kobo settings/firmware-specific writes.
-- Phase 2 kickoff (after M16): research spike on Kindle (2024+ models use MTP; older ones USB mass storage), sideload formats (AZW3/KFX/EPUB via Send to Kindle), what reading data is accessible, and collection limitations. Produce a plan like docs/PLAN.md before coding.
+- Kobo improvements (phase 1.5 skip list still applies: Goodreads, Kobo-Metadata scraping, Kobo settings/firmware-specific writes).
+- Deferred: phase 2 Kindle research spike (2024+ models use MTP; older ones USB mass storage), only if the user asks.
 - Optional: app name decision (working name "E-Reader Companion"); Google Books API key and optional Hardcover token settings arrive with M13 (PLAN §7.4).
 
 ## Notes for agents
