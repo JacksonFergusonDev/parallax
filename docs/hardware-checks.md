@@ -84,6 +84,8 @@ If anything looks wrong at any point, plug in and run `scripts/spike-s1.sh resto
 
 ## Later checkpoints (need app code first)
 
+**All done 2026-11-04**: you confirmed every app feature below works on the Libra 2 (firmware 4.38, schema 174). Spike S2 (cloud sync) is separate and still open.
+
 Batched so you can do several in one sitting when Claude asks:
 
 - M1: `erc kobo ls` output matches the library on the device.

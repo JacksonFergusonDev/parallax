@@ -39,10 +39,9 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 ## Current
 
-- Kobo MVP roadmap (M0–M8) complete in code. Awaiting batched device checks for M3–M8 + spike S2: docs/hardware-checks.md.
-- Phase 1.5 (PLAN §7, M9–M16) complete in code.
-- Awaiting the batched device checks for M3–M16 (docs/hardware-checks.md), and device reports from other Kobo models (docs/device-support.md).
-- Next: phase 2 (Kindle) research spike, unless device checks turn up fixes first.
+- Kobo MVP (M0–M8) and phase 1.5 (M9–M16) complete and verified on the real Libra 2: the user confirmed every app feature works (2026-11-04), after the round 1 fixes (search titles, cover matching, Amazon/Indigo covers, selection, collections from Library).
+- Awaiting device reports from other Kobo models (docs/device-support.md); only the Libra 2 is verified.
+- Next: phase 2 (Kindle) research spike.
 
 ## Unresolved
 
