@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { GeneratedCover } from "./GeneratedCover";
 import type { DeviceBook } from "../api";
 import { statusLabel } from "../device";
 
@@ -33,9 +34,7 @@ export const DeviceCard = memo(function DeviceCard({
             draggable={false}
           />
         ) : (
-          <div className="cover-placeholder">
-            <span>{book.title}</span>
-          </div>
+          <GeneratedCover title={book.title} author={book.author} />
         )}
         {book.read_status !== "unread" && (
           <span className={`read-badge ${book.read_status}`}>

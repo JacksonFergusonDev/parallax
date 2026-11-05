@@ -1,3 +1,5 @@
+import { ShelfArt } from "./ShelfArt";
+import { GeneratedCover } from "./GeneratedCover";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
@@ -491,13 +493,16 @@ export function DeviceView({
           </div>
           <div className="scroll">
             {books && visible.length === 0 ? (
-              <p className="muted empty">
-                {query
-                  ? `No books match “${query}”.`
-                  : shelf
-                    ? "This collection is empty."
-                    : "No books on this Kobo."}
-              </p>
+              <div className="empty">
+                {!query && <ShelfArt />}
+                <p className="muted">
+                  {query
+                    ? `No books match “${query}”.`
+                    : shelf
+                      ? "This collection is empty. Select books and use Add to collection."
+                      : "No books on this Kobo yet. Send some from your library."}
+                </p>
+              </div>
             ) : mode === "grid" ? (
               <div className="grid">
                 {visible.map((b) => {
@@ -546,7 +551,9 @@ export function DeviceView({
                             loading="lazy"
                             decoding="async"
                           />
-                        ) : null}
+                        ) : (
+                          <GeneratedCover title={b.title} size="mini" />
+                        )}
                       </span>
                       <span className="row-main">
                         <span className="row-title">{b.title}</span>

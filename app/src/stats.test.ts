@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { StatBook } from "./api";
-import { finishedByMonth, finishedByYear, hours, ticks } from "./stats";
+import {
+  finishedByMonth,
+  finishedByYear,
+  hours,
+  readingHeadline,
+  spokenTime,
+  ticks,
+  titleKey,
+} from "./stats";
 
 const book = (finished_at: string | null): StatBook => ({
   content_id: finished_at ?? "x",
@@ -61,5 +69,53 @@ describe("reading stats", () => {
     expect(ticks(41)).toEqual([0, 20, 40, 60]);
     expect(ticks(4)).toEqual([0, 2, 4]);
     expect(ticks(0)).toEqual([0, 1]);
+  });
+});
+
+describe("titleKey", () => {
+  it("ignores case and punctuation", () => {
+    expect(titleKey("I, Robot")).toBe(titleKey("i robot"));
+    expect(titleKey("  Dune: Messiah ")).toBe("dune messiah");
+  });
+});
+
+describe("spokenTime", () => {
+  it("speaks minutes and hours", () => {
+    expect(spokenTime(0)).toBeNull();
+    expect(spokenTime(60)).toBe("1 minute");
+    expect(spokenTime(40 * 60)).toBe("40 minutes");
+    expect(spokenTime(3600)).toBe("1 hour");
+    expect(spokenTime(16.2 * 3600)).toBe("16 hours");
+  });
+});
+
+describe("readingHeadline", () => {
+  const now = new Date("2026-06-01T12:00:00Z");
+  it("leads with books finished this year", () => {
+    expect(
+      readingHeadline(
+        {
+          total_secs: 7200,
+          finished: [
+            book("2026-02-01T00:00:00Z"),
+            book("2025-02-01T00:00:00Z"),
+          ],
+          reading: [],
+        },
+        now,
+      ),
+    ).toBe("1 book finished this year, and 2 hours spent reading.");
+  });
+  it("falls back to books in progress, then time", () => {
+    const reading = { ...book(null), percent: 20 };
+    expect(
+      readingHeadline({ total_secs: 0, finished: [], reading: [reading] }, now),
+    ).toBe("1 book on the go.");
+    expect(
+      readingHeadline({ total_secs: 600, finished: [], reading: [] }, now),
+    ).toBe("10 minutes spent reading on your Kobo.");
+    expect(
+      readingHeadline({ total_secs: 0, finished: [], reading: [] }, now),
+    ).toBe("Your reading, at a glance.");
   });
 });

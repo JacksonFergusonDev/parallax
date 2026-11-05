@@ -1,3 +1,4 @@
+import { GeneratedCover } from "./GeneratedCover";
 import { memo } from "react";
 import { coverSrc, type Book } from "../api";
 import { shortDate } from "../device";
@@ -36,7 +37,9 @@ export const LibraryRow = memo(function LibraryRow({
             decoding="async"
             draggable={false}
           />
-        ) : null}
+        ) : (
+          <GeneratedCover title={book.title} size="mini" />
+        )}
       </span>
       <span className="cell">{book.title}</span>
       <span className="cell muted">

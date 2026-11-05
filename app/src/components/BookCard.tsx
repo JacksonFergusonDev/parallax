@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { GeneratedCover } from "./GeneratedCover";
 import { coverSrc, type Book } from "../api";
 import { progressLabel, type DeviceState, type SendStatus } from "../library";
 
@@ -46,9 +47,7 @@ export const BookCard = memo(function BookCard({
             draggable={false}
           />
         ) : (
-          <div className="cover-placeholder">
-            <span>{book.title}</span>
-          </div>
+          <GeneratedCover title={book.title} author={book.authors[0]} />
         )}
         {status && (
           <span className={`overlay overlay-${status.stage}`}>

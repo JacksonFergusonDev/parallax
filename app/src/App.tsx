@@ -39,6 +39,7 @@ import { clickSelect, SELECTION_HINT } from "./selection";
 import { BookCard } from "./components/BookCard";
 import { CalibreImport } from "./components/CalibreImport";
 import { ReadingView } from "./components/ReadingView";
+import { ShelfArt } from "./components/ShelfArt";
 import { TidyGenres } from "./components/TidyGenres";
 import { CollectionMenu } from "./components/CollectionMenu";
 import { NameDialog } from "./components/NameDialog";
@@ -549,7 +550,7 @@ export default function App() {
       {activeView === "reading" && (
         <div className="tab-panel" role="tabpanel" aria-label="Reading">
           <div className="scroll reading-scroll">
-            <ReadingView mount={device?.mount ?? null} />
+            <ReadingView mount={device?.mount ?? null} library={books} />
           </div>
         </div>
       )}
@@ -664,10 +665,11 @@ export default function App() {
             >
               {loaded && books.length === 0 ? (
                 <div className="dropzone">
-                  <p className="dropzone-title">Drop EPUB files here</p>
+                  <ShelfArt />
+                  <p className="dropzone-title">Your shelves are empty</p>
                   <p className="muted">
-                    They're added to your library, ready to edit and send to
-                    your Kobo.
+                    Drop EPUB files here. They're added to your library, ready
+                    to edit and send to your Kobo.
                   </p>
                   <div className="dropzone-actions">
                     <button className="secondary" onClick={chooseFiles}>
@@ -682,7 +684,12 @@ export default function App() {
                   </div>
                 </div>
               ) : visible.length === 0 && loaded ? (
-                <p className="muted empty">No books match “{query}”.</p>
+                <div className="empty">
+                  <p className="dropzone-title">
+                    Nothing on the shelf by that name
+                  </p>
+                  <p className="muted">No books match “{query}”.</p>
+                </div>
               ) : mode === "grid" ? (
                 <div className="grid">
                   {visible.map((b) => (

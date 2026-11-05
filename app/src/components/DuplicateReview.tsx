@@ -1,3 +1,4 @@
+import { GeneratedCover } from "./GeneratedCover";
 import { useEffect, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import type { DuplicateReason } from "../api";
@@ -186,9 +187,7 @@ function GroupReview({
                 {m.cover ? (
                   <img src={m.cover} alt="" draggable={false} />
                 ) : (
-                  <div className="cover-placeholder">
-                    <span>{m.title}</span>
-                  </div>
+                  <GeneratedCover title={m.title} />
                 )}
               </div>
               <div className="card-title" title={m.title}>
