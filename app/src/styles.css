@@ -1305,6 +1305,57 @@ button.link.danger {
   color: var(--danger);
 }
 
+/* Tool buttons in the Library toolbar and the On Kobo sidebar: small boxed
+   buttons rather than bare links. */
+.view-toolbar button.link,
+.sidebar-foot button.link {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 12.5px;
+  font-weight: 500;
+  box-shadow: 0 1px 1px rgb(60 40 20 / 6%);
+}
+
+.view-toolbar button.link:not(:disabled):hover,
+.sidebar-foot button.link:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  color: var(--accent);
+}
+
+.sidebar-foot button.link.danger {
+  color: var(--danger);
+}
+
+.sidebar-foot button.link.danger:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+  color: var(--danger);
+}
+
+.sidebar-foot {
+  align-items: stretch;
+  gap: 6px;
+}
+
+.sidebar-foot button.link {
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.view-toolbar {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.view-toolbar > .muted {
+  white-space: nowrap;
+}
+
 .chips {
   color: var(--accent);
 }
