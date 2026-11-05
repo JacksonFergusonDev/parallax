@@ -19,9 +19,11 @@
     0 1px 1px rgb(60 40 20 / 10%), 0 3px 6px rgb(60 40 20 / 10%),
     0 10px 24px -6px rgb(60 40 20 / 22%);
   --shadow-book-lift:
-    0 2px 2px rgb(60 40 20 / 10%), 0 8px 14px rgb(60 40 20 / 14%),
-    0 22px 36px -10px rgb(60 40 20 / 32%);
+    0 2px 2px rgb(60 40 20 / 8%), 0 12px 18px rgb(60 40 20 / 14%),
+    0 28px 44px -12px rgb(60 40 20 / 34%);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Gentler than --ease-out: covers drift up rather than snap. */
+  --ease-lift: cubic-bezier(0.33, 1, 0.68, 1);
   font-family:
     -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
   font-size: 14px;
@@ -47,8 +49,8 @@
       0 1px 1px rgb(0 0 0 / 30%), 0 4px 8px rgb(0 0 0 / 30%),
       0 12px 26px -6px rgb(0 0 0 / 45%);
     --shadow-book-lift:
-      0 2px 2px rgb(0 0 0 / 30%), 0 10px 16px rgb(0 0 0 / 35%),
-      0 24px 40px -10px rgb(0 0 0 / 55%);
+      0 2px 2px rgb(0 0 0 / 28%), 0 14px 20px rgb(0 0 0 / 35%),
+      0 30px 48px -12px rgb(0 0 0 / 58%);
   }
 }
 
@@ -384,8 +386,8 @@ input:disabled {
   outline-offset: 3px;
   transition:
     outline-color 80ms,
-    transform 220ms var(--ease-out),
-    box-shadow 220ms var(--ease-out);
+    transform 420ms var(--ease-lift),
+    box-shadow 420ms var(--ease-lift);
 }
 
 .cover::after {
@@ -408,13 +410,13 @@ input:disabled {
 
 .card:hover .cover,
 .picker-item:hover img {
-  transform: translateY(-3px);
+  transform: translateY(-7px);
   box-shadow: var(--shadow-book-lift);
 }
 
 .card.selected .cover {
   outline-color: var(--accent);
-  transform: translateY(-3px);
+  transform: translateY(-7px);
   box-shadow: var(--shadow-book-lift);
 }
 
@@ -644,6 +646,20 @@ input:disabled {
   overflow: auto;
   padding: 16px 18px 24px;
   background: var(--surface);
+}
+
+.panel-slot {
+  display: flex;
+  flex-shrink: 0;
+  min-height: 0;
+  animation: panel-in 380ms var(--ease-lift);
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    translate: 24px 0;
+  }
 }
 
 .panel-head {
@@ -1835,8 +1851,11 @@ form.enhance-key input {
   padding-top: 16px;
 }
 
+/* Fills the window up to a comfortable reading width, centred beyond it. */
 .reading-page {
-  max-width: 880px;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 22px;

@@ -52,6 +52,7 @@ import {
   type ReviewGroup,
 } from "./components/DuplicateReview";
 import { EditPanel } from "./components/EditPanel";
+import { useGridReflow } from "./reflow";
 import { LibraryRow } from "./components/LibraryRow";
 import {
   SortHeader,
@@ -278,6 +279,8 @@ export default function App() {
     [books, selected],
   );
   const editing = selectedBooks.length === 1 ? selectedBooks[0] : null;
+  const gridRef = useRef<HTMLDivElement>(null);
+  useGridReflow(gridRef, editing !== null);
   const toSend = visible.filter(
     (b) => selected.has(b.id) && !onDevice.has(b.id),
   );
@@ -691,7 +694,7 @@ export default function App() {
                   <p className="muted">No books match “{query}”.</p>
                 </div>
               ) : mode === "grid" ? (
-                <div className="grid">
+                <div className="grid" ref={gridRef}>
                   {visible.map((b) => (
                     <BookCard
                       key={b.id}
@@ -727,19 +730,22 @@ export default function App() {
             </div>
           </main>
           {editing && (
-            <EditPanel
-              key={`${editing.id}-${enhanced}`}
-              book={editing}
-              onSave={save}
-              onEnhance={(id) => setEnhancing([id])}
-              onChanged={(updated) => {
-                setBooks((bs) =>
-                  bs.map((b) => (b.id === updated.id ? updated : b)),
-                );
-                refreshOnDevice(device);
-              }}
-              onClose={() => setSelected(new Set())}
-            />
+            // Stays mounted while switching books, so it slides in only once.
+            <div className="panel-slot">
+              <EditPanel
+                key={`${editing.id}-${enhanced}`}
+                book={editing}
+                onSave={save}
+                onEnhance={(id) => setEnhancing([id])}
+                onChanged={(updated) => {
+                  setBooks((bs) =>
+                    bs.map((b) => (b.id === updated.id ? updated : b)),
+                  );
+                  refreshOnDevice(device);
+                }}
+                onClose={() => setSelected(new Set())}
+              />
+            </div>
           )}
         </div>
 

@@ -12,6 +12,7 @@ import {
   finishedByYear,
   hours,
   readingHeadline,
+  startedBooks,
   ticks,
   titleKey,
   type Bucket,
@@ -90,6 +91,7 @@ export function ReadingView({ mount, library }: Props) {
       </div>
     );
 
+  const reading = startedBooks(stats.reading);
   const thisYear = stats.finished.filter(
     (b) =>
       b.finished_at &&
@@ -105,7 +107,9 @@ export function ReadingView({ mount, library }: Props) {
 
   return (
     <div className="reading-page">
-      <h2 className="reading-headline">{readingHeadline(stats, now)}</h2>
+      <h2 className="reading-headline">
+        {readingHeadline({ ...stats, reading }, now)}
+      </h2>
       <p className="muted reading-source">
         {stats.device_model}
         {mount
@@ -129,7 +133,7 @@ export function ReadingView({ mount, library }: Props) {
           label={`Finished in ${now.getFullYear()}`}
           value={String(thisYear)}
         />
-        <Tile label="Reading now" value={String(stats.reading.length)} />
+        <Tile label="Reading now" value={String(reading.length)} />
       </div>
 
       <section className="reading-section">
@@ -159,13 +163,13 @@ export function ReadingView({ mount, library }: Props) {
         )}
       </section>
 
-      {stats.reading.length > 0 && (
+      {reading.length > 0 && (
         <section className="reading-section">
           <h3>
-            Reading now <span className="muted">{stats.reading.length}</span>
+            Reading now <span className="muted">{reading.length}</span>
           </h3>
           <ul className="now-reading">
-            {stats.reading.map((b) => {
+            {reading.map((b) => {
               const src = covers.get(titleKey(b.title));
               return (
                 <li key={b.content_id} className="now-card">

@@ -107,3 +107,14 @@ export function spokenTime(secs: number | null | undefined): string | null {
   const h = Math.round(secs / 3600);
   return `${h} ${h === 1 ? "hour" : "hours"}`;
 }
+
+/** Below this much reading time a book was only opened, not started. */
+export const STARTED_SECS = 30 * 60;
+
+/** Books really being read: at least half an hour in. When the Kobo kept no
+ * time for a book, a few percent of progress counts instead. */
+export function startedBooks(reading: StatBook[]): StatBook[] {
+  return reading.filter((b) =>
+    b.time_secs != null ? b.time_secs >= STARTED_SECS : b.percent >= 5,
+  );
+}

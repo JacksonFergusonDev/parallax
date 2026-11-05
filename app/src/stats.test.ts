@@ -6,6 +6,7 @@ import {
   hours,
   readingHeadline,
   spokenTime,
+  startedBooks,
   ticks,
   titleKey,
 } from "./stats";
@@ -117,5 +118,23 @@ describe("readingHeadline", () => {
     expect(
       readingHeadline({ total_secs: 0, finished: [], reading: [] }, now),
     ).toBe("Your reading, at a glance.");
+  });
+});
+
+describe("startedBooks", () => {
+  const b = (time_secs: number | null, percent: number): StatBook => ({
+    ...book(null),
+    content_id: `${time_secs}-${percent}`,
+    time_secs,
+    percent,
+  });
+  it("keeps books with half an hour or more of reading", () => {
+    const kept = startedBooks([b(29 * 60, 40), b(30 * 60, 1), b(5 * 3600, 3)]);
+    expect(kept.map((x) => x.time_secs)).toEqual([30 * 60, 5 * 3600]);
+  });
+  it("falls back to progress when no time was recorded", () => {
+    expect(
+      startedBooks([b(null, 2), b(null, 12)]).map((x) => x.percent),
+    ).toEqual([12]);
   });
 });
