@@ -926,17 +926,17 @@ async fn cover_colors(app: AppHandle, paths: Vec<PathBuf>) -> CmdResult<Vec<Opti
     ]
     .map(|root| root.canonicalize().unwrap_or(root));
     tauri::async_runtime::spawn_blocking(move || {
-        paths
+        // Anything outside those folders becomes a path that reads as nothing.
+        let allowed: Vec<PathBuf> = paths
             .iter()
             .map(|path| {
-                let path = path.canonicalize().ok()?;
-                roots
-                    .iter()
-                    .any(|root| path.starts_with(root))
-                    .then(|| erc_library::dominant_color(&path))
-                    .flatten()
+                path.canonicalize()
+                    .ok()
+                    .filter(|path| roots.iter().any(|root| path.starts_with(root)))
+                    .unwrap_or_default()
             })
-            .collect()
+            .collect();
+        erc_library::dominant_colors(&allowed)
     })
     .await
     .map_err(err)

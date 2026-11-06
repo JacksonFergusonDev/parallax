@@ -51,6 +51,33 @@ pub fn dominant_color(path: &Path) -> Option<[u8; 3]> {
     dominant_rgb(small.pixels().map(|p| p.0))
 }
 
+/// [`dominant_color`] for many files, spread across the CPU's cores. Results
+/// are in the order of `paths`.
+pub fn dominant_colors<P: AsRef<Path> + Sync>(paths: &[P]) -> Vec<Option<[u8; 3]>> {
+    let threads = std::thread::available_parallelism().map_or(1, usize::from);
+    let chunk = paths.len().div_ceil(threads).max(1);
+    std::thread::scope(|scope| {
+        let workers: Vec<_> = paths
+            .chunks(chunk)
+            .map(|part| {
+                scope.spawn(move || {
+                    part.iter()
+                        .map(|path| dominant_color(path.as_ref()))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        workers
+            .into_iter()
+            .flat_map(|worker| {
+                worker
+                    .join()
+                    .unwrap_or_else(|e| std::panic::resume_unwind(e))
+            })
+            .collect()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,6 +120,36 @@ mod tests {
             .unwrap();
         let got = dominant_color(&path).unwrap();
         assert!(close(got, [30, 60, 200]), "{got:?}");
+    }
+
+    #[test]
+    fn many_files_keep_their_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut paths = Vec::new();
+        let mut expected = Vec::new();
+        for i in 0..37u8 {
+            let rgb = [i * 6, 200 - i * 3, 40];
+            let path = dir.path().join(format!("{i}.png"));
+            image::RgbImage::from_pixel(8, 8, image::Rgb(rgb))
+                .save(&path)
+                .unwrap();
+            paths.push(path);
+            expected.push(rgb);
+        }
+        paths.insert(5, dir.path().join("missing.png"));
+        let got = dominant_colors(&paths);
+        assert_eq!(got.len(), paths.len());
+        assert_eq!(got[5], None);
+        let found: Vec<_> = got.into_iter().flatten().collect();
+        assert_eq!(found.len(), expected.len());
+        for (a, b) in found.into_iter().zip(expected) {
+            assert!(close(a, b), "{a:?} vs {b:?}");
+        }
+    }
+
+    #[test]
+    fn no_paths_no_colours() {
+        assert!(dominant_colors::<&Path>(&[]).is_empty());
     }
 
     #[test]
