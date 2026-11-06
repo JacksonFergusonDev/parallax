@@ -75,7 +75,7 @@ fn is_meta(n: &Node) -> bool {
 fn text(n: &Node) -> Option<String> {
     let t: String = n
         .descendants()
-        .filter(|d| d.is_text())
+        .filter(roxmltree::Node::is_text)
         .filter_map(|d| d.text())
         .collect();
     let t = t.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -425,9 +425,9 @@ fn prefix_for(node: &Node, ns: &str, fallback: &str) -> Prefix {
 }
 
 fn child_indent(src: &str, meta: &Node) -> String {
-    meta.children()
-        .find(Node::is_element)
-        .map(|first| {
+    meta.children().find(Node::is_element).map_or_else(
+        || "    ".to_owned(),
+        |first| {
             let before = &src[..first.range().start];
             let line = &before[before.rfind('\n').map_or(0, |i| i + 1)..];
             if line.trim().is_empty() {
@@ -435,8 +435,8 @@ fn child_indent(src: &str, meta: &Node) -> String {
             } else {
                 "    ".to_owned()
             }
-        })
-        .unwrap_or_else(|| "    ".to_owned())
+        },
+    )
 }
 
 fn render_managed(

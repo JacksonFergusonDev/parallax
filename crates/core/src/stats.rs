@@ -294,6 +294,7 @@ fn strip_brackets(s: &str, all: bool) -> String {
 mod tests {
     use super::*;
 
+    #[expect(clippy::unnecessary_wraps, reason = "the fields it fills are optional")]
     fn at(s: &str) -> Option<DateTime<Utc>> {
         Some(s.parse().unwrap())
     }

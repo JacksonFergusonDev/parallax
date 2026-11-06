@@ -109,7 +109,7 @@ pub fn duplicate_collections(tx: &rusqlite::Connection) -> Result<Vec<DuplicateC
         .query_map([], |r| {
             Ok(DuplicateCollection {
                 name: r.get(0)?,
-                copies: r.get::<_, i64>(1)? as usize,
+                copies: r.get(1)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;

@@ -21,7 +21,7 @@ fn fixture(name: &str) -> PathBuf {
 fn added(outcome: ImportOutcome) -> i64 {
     match outcome {
         ImportOutcome::Added { book, .. } => book.id,
-        other => panic!("{other:?}"),
+        other @ ImportOutcome::AlreadyInLibrary { .. } => panic!("{other:?}"),
     }
 }
 
@@ -170,7 +170,7 @@ fn device_groups_formats_and_protect_progress() {
         })
         .collect();
     let mut summary = summary;
-    summary.sort();
+    summary.sort_unstable();
     assert_eq!(
         summary,
         [

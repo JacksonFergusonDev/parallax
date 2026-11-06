@@ -48,7 +48,6 @@ pub struct Group {
 /// Groups candidates that share any key (connected components, so A~B and
 /// B~C put all three together). Groups are ordered by their first member.
 pub fn group(candidates: &[Candidate]) -> Vec<Group> {
-    let mut parent: Vec<usize> = (0..candidates.len()).collect();
     fn find(parent: &mut [usize], i: usize) -> usize {
         let mut root = i;
         while parent[root] != root {
@@ -57,6 +56,7 @@ pub fn group(candidates: &[Candidate]) -> Vec<Group> {
         parent[i] = root;
         root
     }
+    let mut parent: Vec<usize> = (0..candidates.len()).collect();
     // (reason, key) → first candidate with it.
     let mut first: HashMap<(Reason, String), usize> = HashMap::new();
     let mut links: Vec<(usize, usize, Reason)> = Vec::new();
@@ -105,7 +105,7 @@ pub fn group(candidates: &[Candidate]) -> Vec<Group> {
 
 fn normalise_isbn(isbn: &str) -> String {
     isbn.chars()
-        .filter(|c| c.is_ascii_alphanumeric())
+        .filter(char::is_ascii_alphanumeric)
         .flat_map(char::to_uppercase)
         .collect()
 }
@@ -204,7 +204,7 @@ pub fn library_duplicates(library: &Library) -> erc_library::Result<Vec<LibraryG
                         on_device.contains(&b.id),
                         b.custom_cover,
                         b.has_cover,
-                        b.series.is_some() as usize + b.tags.len(),
+                        usize::from(b.series.is_some()) + b.tags.len(),
                         b.modified_at.clone(),
                     )
                 })
@@ -322,6 +322,10 @@ fn progress(b: &DeviceBook) -> u8 {
     }
 }
 
+#[expect(
+    clippy::case_sensitive_file_extension_comparisons,
+    reason = "already lowercased"
+)]
 fn format_of(b: &DeviceBook) -> String {
     let Some(path) = b.path.as_deref().filter(|_| b.sideloaded) else {
         return "Kobo store".into();

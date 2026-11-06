@@ -366,7 +366,7 @@ fn removes_from_reference_db_copy() {
 /// files left, rename-over works. Opt-in (`just test-fat`).
 #[cfg(target_os = "macos")]
 #[test]
-#[ignore]
+#[ignore = "mounts a disk image: just test-fat"]
 fn writes_cleanly_on_fat32() {
     let dir = tempfile::tempdir().unwrap();
     let image = dir.path().join("kobo.dmg");

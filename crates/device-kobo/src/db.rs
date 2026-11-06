@@ -120,7 +120,7 @@ impl KoboDb {
             .query_map([], |row| {
                 Ok(Collection {
                     name: row.get(0)?,
-                    book_count: row.get::<_, i64>(1)? as usize,
+                    book_count: row.get(1)?,
                 })
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -193,17 +193,17 @@ fn book_from_row(
             Some(2) => ReadStatus::Finished,
             _ => ReadStatus::Unread,
         },
-        percent_read: percent.unwrap_or(0).clamp(0, 100) as u8,
+        percent_read: u8::try_from(percent.unwrap_or(0).clamp(0, 100)).unwrap_or(0),
         last_read: parse_kobo_date(row.get("DateLastRead")?),
         reading_time_secs: row
             .get::<_, Option<i64>>("TimeSpentReading")?
             .filter(|&t| t > 0)
-            .map(|t| t as u64),
+            .and_then(|t| u64::try_from(t).ok()),
         added: parse_kobo_date(row.get("DateCreated")?),
         file_size: row
             .get::<_, Option<i64>>("___FileSize")?
             .filter(|&s| s > 0)
-            .map(|s| s as u64),
+            .and_then(|s| u64::try_from(s).ok()),
         collections: shelves.get(&id).cloned().unwrap_or_default(),
         id,
     })
@@ -245,7 +245,7 @@ mod tests {
         let d = parse_kobo_date(Some("2024-10-10T06:36:38.327".into())).unwrap();
         assert_eq!(d.to_rfc3339(), "2024-10-10T06:36:38.327+00:00");
         assert!(parse_kobo_date(Some("2024-10-09T15:27:08Z".into())).is_some());
-        assert!(parse_kobo_date(Some("".into())).is_none());
+        assert!(parse_kobo_date(Some(String::new())).is_none());
         assert!(parse_kobo_date(Some("garbage".into())).is_none());
     }
 

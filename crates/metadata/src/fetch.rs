@@ -60,7 +60,10 @@ impl HttpFetcher {
 
     fn wait_turn(&self, host: &str) {
         let wait = {
-            let mut next = self.next.lock().unwrap_or_else(|e| e.into_inner());
+            let mut next = self
+                .next
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let now = Instant::now();
             let at = next.get(host).copied().unwrap_or(now).max(now);
             next.insert(host.to_owned(), at + min_interval(host));
@@ -91,7 +94,7 @@ impl Fetch for HttpFetcher {
         }
         response
             .error_for_status()
-            .and_then(|r| r.text())
+            .and_then(reqwest::blocking::Response::text)
             .map_err(|e| FetchError::Http(e.to_string()))
     }
 }
@@ -122,7 +125,9 @@ impl<F: Fetch> CachedFetcher<F> {
     }
 
     fn db(&self) -> std::sync::MutexGuard<'_, Connection> {
-        self.db.lock().unwrap_or_else(|e| e.into_inner())
+        self.db
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }
 

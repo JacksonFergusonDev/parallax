@@ -565,7 +565,7 @@ fn main() -> Result<()> {
                     Ok(()) => println!("removed {}", o.content_id),
                     Err(e) => {
                         failed += 1;
-                        eprintln!("{} {}: {e}", failure("FAILED"), o.content_id)
+                        eprintln!("{} {}: {e}", failure("FAILED"), o.content_id);
                     }
                 }
             }
@@ -757,7 +757,7 @@ fn main() -> Result<()> {
                 hours(stats.total_secs),
                 stats.books_on_device
             );
-            let mut by_year: std::collections::BTreeMap<String, usize> = Default::default();
+            let mut by_year = std::collections::BTreeMap::<String, usize>::new();
             for b in &stats.finished {
                 let year = b
                     .finished_at
@@ -911,7 +911,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                         println!("{} #{} {}{dup}", success("added"), book.id, book.title);
                     }
                     Ok(ImportOutcome::AlreadyInLibrary { book }) => {
-                        println!("already in library as #{} {}", book.id, book.title)
+                        println!("already in library as #{} {}", book.id, book.title);
                     }
                     Err(e) => eprintln!("{} {}: {e}", failure("FAILED"), file.display()),
                 }
@@ -1228,7 +1228,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                 &kobo,
                 (!ids.is_empty()).then_some(&ids[..]),
                 |i, n, title| {
-                    progress.update(i.saturating_sub(1), n, &format!("importing {title}"))
+                    progress.update(i.saturating_sub(1), n, &format!("importing {title}"));
                 },
             )?;
             drop(progress);
@@ -1361,7 +1361,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             }
             let progress = Reporter::new(json);
             let outcomes = calibre::import(lib, &books, |i, n, title| {
-                progress.update(i.saturating_sub(1), n, &format!("importing {title}"))
+                progress.update(i.saturating_sub(1), n, &format!("importing {title}"));
             });
             drop(progress);
             if json {

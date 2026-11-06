@@ -42,7 +42,11 @@ mod tests {
     use super::*;
 
     fn n(raw: &[&str]) -> Vec<String> {
-        normalize_authors(&raw.iter().map(|s| s.to_string()).collect::<Vec<_>>())
+        normalize_authors(
+            &raw.iter()
+                .map(std::string::ToString::to_string)
+                .collect::<Vec<_>>(),
+        )
     }
 
     #[test]

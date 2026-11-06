@@ -74,10 +74,10 @@ pub fn import_from_device(
         .collect())
 }
 
-fn skip(reason: &str) -> Result<DeviceImport, String> {
-    Ok(DeviceImport::Skipped {
+fn skip(reason: &str) -> DeviceImport {
+    DeviceImport::Skipped {
         reason: reason.to_owned(),
-    })
+    }
 }
 
 fn import_one(
@@ -89,14 +89,16 @@ fn import_one(
 ) -> Result<DeviceImport, String> {
     let copies = library.device_copies(serial).map_err(|e| e.to_string())?;
     if copies.iter().any(|c| c.content_id == book.id) {
-        return skip("already in your library");
+        return Ok(skip("already in your library"));
     }
     let Some(path) = book.path.as_deref().filter(|_| book.sideloaded) else {
-        return skip("bought from the Kobo store (DRM-protected; it stays in your Kobo account)");
+        return Ok(skip(
+            "bought from the Kobo store (DRM-protected; it stays in your Kobo account)",
+        ));
     };
     if !path.to_lowercase().ends_with(".epub") {
         let ext = path.rsplit('.').next().unwrap_or_default();
-        return skip(&format!("not an EPUB (.{ext})"));
+        return Ok(skip(&format!("not an EPUB (.{ext})")));
     }
     let link = |library: &Library, book_id: i64| {
         library
@@ -112,7 +114,7 @@ fn import_one(
 
     let source = device.mount().join(path);
     if has_drm(&source).map_err(|e| e.to_string())? {
-        return skip("DRM-protected");
+        return Ok(skip("DRM-protected"));
     }
     let workdir = tempfile::tempdir().map_err(|e| e.to_string())?;
     let file = clean_copy(&source, path, workdir.path())?;
@@ -132,7 +134,7 @@ fn import_one(
             {
                 let mut edit = added.edit();
                 edit.series = Some(series.clone());
-                edit.series_index = book.series_number.clone();
+                edit.series_index.clone_from(&book.series_number);
                 library.update(added.id, &edit).map_err(|e| e.to_string())?;
             }
             (added.id, true)

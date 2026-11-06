@@ -68,7 +68,7 @@ fn added(outcome: ImportOutcome) -> (erc_library::Book, Option<i64>) {
             book,
             possible_duplicate_of,
         } => (book, possible_duplicate_of),
-        other => panic!("expected Added, got {other:?}"),
+        other @ ImportOutcome::AlreadyInLibrary { .. } => panic!("expected Added, got {other:?}"),
     }
 }
 
@@ -109,7 +109,7 @@ fn detects_exact_and_likely_duplicates() {
     // Same file again.
     match lib.import(&a).unwrap() {
         ImportOutcome::AlreadyInLibrary { book } => assert_eq!(book.id, first.id),
-        other => panic!("{other:?}"),
+        other @ ImportOutcome::Added { .. } => panic!("{other:?}"),
     }
     // Different file, same work (punctuation/case differences).
     let b = epub(dir.path(), "b.epub", "DUNE.", "Herbert, Frank", None, "b");

@@ -13,6 +13,27 @@ unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Nothing here is published, so API documentation sections and #[must_use]
+# annotations would be ceremony without readers.
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+return_self_not_must_use = "allow"
+# Style judgements with arbitrary thresholds.
+similar_names = "allow"
+struct_excessive_bools = "allow"
+too_many_lines = "allow"
+# Its fix, `assert_eq!(x, [] as [T; 0])`, reads worse than `assert!(x.is_empty())`.
+assert_is_empty = "allow"
+# Flags Kobo vocabulary (ContentID, KEpub), and clap doc comments are --help
+# text, where backticks would show.
+doc_markdown = "allow"
+# Counts and durations are far below 2^53, and the results are only displayed.
+cast_precision_loss = "allow"
+# Saves an allocation on cold paths, at the cost of an ignored `write!` Result.
+format_collect = "allow"
+format_push_string = "allow"
 
 # Keep target/ small: line tables are enough for backtraces, deps need none.
 [profile.dev]
@@ -40,7 +61,7 @@ console = "0.16"
 indicatif = "0.18"
 reqwest = { version = "0.13", features = ["blocking", "json", "query"] }
 roxmltree = "0.21"
-rusqlite = { version = "0.41", features = ["bundled", "backup"] }
+rusqlite = { version = "0.41", features = ["bundled", "backup", "fallible_uint"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"

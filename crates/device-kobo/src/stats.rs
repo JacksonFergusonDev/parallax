@@ -44,7 +44,8 @@ impl KoboDb {
                 Ok(FinishedEvent {
                     content_id: r.get(0)?,
                     at: parse_kobo_date(r.get(1)?),
-                    times: r.get::<_, Option<i64>>(2)?.unwrap_or(1).max(1) as u32,
+                    times: u32::try_from(r.get::<_, Option<i64>>(2)?.unwrap_or(1).max(1))
+                        .unwrap_or(u32::MAX),
                 })
             })?
             .collect::<rusqlite::Result<_>>()?;
@@ -62,7 +63,7 @@ impl KoboDb {
              WHERE BookID IS NULL AND RestOfBookEstimate > 0",
         )?;
         let left = stmt
-            .query_map([], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u64)))?
+            .query_map([], |r| Ok((r.get(0)?, r.get::<_, u64>(1)?)))?
             .collect::<rusqlite::Result<_>>()?;
         Ok(left)
     }

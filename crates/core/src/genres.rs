@@ -234,7 +234,7 @@ mod tests {
             " ",
         ]
         .iter()
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .collect();
         assert_eq!(
             normalize_tags(&tags),

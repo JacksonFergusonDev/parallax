@@ -225,11 +225,7 @@ fn grouped(conn: &Connection, sql: &str) -> rusqlite::Result<HashMap<i64, Vec<St
 
 /// calibre stores series numbers as REAL: 1.0 → "1", 2.5 → "2.5".
 fn format_index(index: f64) -> String {
-    if index.fract() == 0.0 {
-        format!("{}", index as i64)
-    } else {
-        format!("{index}")
-    }
+    index.to_string()
 }
 
 /// What importing the library would do, without changing anything.
@@ -392,13 +388,13 @@ fn import_one(library: &mut Library, book: &CalibreBook) -> Result<CalibreImport
         }
     };
     let mut edit = added.edit();
-    edit.title = book.title.clone();
+    edit.title.clone_from(&book.title);
     if !book.authors.is_empty() {
-        edit.authors = book.authors.clone();
+        edit.authors.clone_from(&book.authors);
     }
-    edit.series = book.series.clone();
-    edit.series_index = book.series_index.clone();
-    edit.tags = book.tags.clone();
+    edit.series.clone_from(&book.series);
+    edit.series_index.clone_from(&book.series_index);
+    edit.tags.clone_from(&book.tags);
     library.update(added.id, &edit).map_err(|e| e.to_string())?;
     library
         .fill_details(

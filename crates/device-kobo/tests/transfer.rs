@@ -103,7 +103,7 @@ fn does_not_copy_extended_attributes() {
 /// files are left. Mounts an image, so it is opt-in: `just test-fat`.
 #[cfg(target_os = "macos")]
 #[test]
-#[ignore]
+#[ignore = "mounts a disk image: just test-fat"]
 fn leaves_no_apple_double_files_on_fat32() {
     let dir = tempfile::tempdir().unwrap();
     let image = dir.path().join("kobo.dmg");

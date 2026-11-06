@@ -230,7 +230,9 @@ pub fn propose(
                         )
                     });
                     let p = proposal(book, clues, lookup.as_ref());
-                    results.lock().unwrap_or_else(|e| e.into_inner())[i] = Some(p);
+                    results
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)[i] = Some(p);
                     let n = done.fetch_add(1, Ordering::SeqCst) + 1;
                     on_progress(n, books.len(), &book.title);
                 }
@@ -239,7 +241,7 @@ pub fn propose(
     });
     results
         .into_inner()
-        .unwrap_or_else(|e| e.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .into_iter()
         .flatten()
         .collect()
@@ -256,7 +258,7 @@ pub fn apply(library: &mut Library, accepted: &[Accepted]) -> erc_library::Resul
         let mut edit = book.edit();
         if let Some((name, index)) = &a.series {
             edit.series = Some(name.clone());
-            edit.series_index = index.clone();
+            edit.series_index.clone_from(index);
         }
         for g in &a.genres {
             if !edit.tags.iter().any(|t| t.eq_ignore_ascii_case(g)) {
@@ -282,7 +284,7 @@ mod tests {
             contributors: None,
             series: series.map(Into::into),
             series_index: index.map(Into::into),
-            tags: tags.iter().map(|t| t.to_string()).collect(),
+            tags: tags.iter().map(ToString::to_string).collect(),
             language: None,
             publisher: None,
             description: None,

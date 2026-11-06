@@ -56,7 +56,7 @@ fn library(dir: &Path) -> (Library, Vec<i64>) {
             epub(&path, &format!("Book {i}"), "An Author");
             match library.import(&path).unwrap() {
                 ImportOutcome::Added { book, .. } => book.id,
-                other => panic!("not imported: {other:?}"),
+                other @ ImportOutcome::AlreadyInLibrary { .. } => panic!("not imported: {other:?}"),
             }
         })
         .collect();

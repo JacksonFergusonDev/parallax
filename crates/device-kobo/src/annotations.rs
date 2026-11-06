@@ -66,6 +66,17 @@ impl KoboDb {
     /// Visible annotations, for one book (by ContentID) or all, in reading
     /// order.
     pub fn annotations(&self, book: Option<&str>) -> Result<Vec<Annotation>> {
+        type Row = (
+            String,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            f64,
+            Option<String>,
+            Option<String>,
+            String,
+        );
         let conn = self.connection();
         // Older schemas lack some of these columns; read NULL instead.
         let present = columns(conn, "Bookmark")?;
@@ -93,17 +104,6 @@ impl KoboDb {
             kind = col("Type"),
             hidden = col("Hidden"),
         ))?;
-        type Row = (
-            String,
-            String,
-            String,
-            Option<String>,
-            Option<String>,
-            f64,
-            Option<String>,
-            Option<String>,
-            String,
-        );
         let rows: Vec<Row> = stmt
             .query_map([book], |r| {
                 Ok((
@@ -226,7 +226,12 @@ impl KoboDevice {
                 }
                 match entry.file_type() {
                     Ok(t) if t.is_dir() => stack.push(path),
-                    Ok(t) if t.is_file() && name.ends_with(".annot") => {
+                    Ok(t)
+                        if t.is_file()
+                            && path
+                                .extension()
+                                .is_some_and(|e| e.eq_ignore_ascii_case("annot")) =>
+                    {
                         let rel = path
                             .strip_prefix(&root)
                             .unwrap_or(&path)

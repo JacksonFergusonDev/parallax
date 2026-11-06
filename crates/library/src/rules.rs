@@ -74,7 +74,7 @@ impl Library {
                     id,
                     kind: RuleKind::parse(&kind)?,
                     enabled,
-                    min_books: min_books.max(1) as usize,
+                    min_books: usize::try_from(min_books).unwrap_or(1).max(1),
                     prefix,
                 })
             })
@@ -84,7 +84,7 @@ impl Library {
 
     /// Inserts (`id == 0`) or updates a rule; returns it with its id.
     pub fn save_rule(&self, rule: &Rule) -> Result<Rule> {
-        let min_books = rule.min_books.max(1) as i64;
+        let min_books = rule.min_books.max(1);
         let id = if rule.id == 0 {
             self.conn.execute(
                 "INSERT INTO rules (kind, enabled, min_books, prefix) VALUES (?1, ?2, ?3, ?4)",
@@ -103,7 +103,7 @@ impl Library {
         };
         Ok(Rule {
             id,
-            min_books: min_books as usize,
+            min_books,
             ..rule.clone()
         })
     }

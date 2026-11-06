@@ -127,7 +127,7 @@ fn lists_books_like_calibre() {
     assert_eq!(lies.reading_time_secs, Some(3600));
     assert_eq!(lies.series.as_deref(), Some("Gentlemen Bastard"));
     assert_eq!(lies.series_number.as_deref(), Some("1"));
-    assert_eq!(lies.file_size, Some(3446429));
+    assert_eq!(lies.file_size, Some(3_446_429));
     assert!(lies.last_read.is_some() && lies.added.is_some());
     assert_eq!(lies.collections, ["Fantasy"]);
 

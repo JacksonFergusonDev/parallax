@@ -49,7 +49,9 @@ fn text(bytes: &[u8]) -> String {
 }
 
 fn is_doc(name: &str) -> bool {
-    name.ends_with(".xhtml") || name.ends_with(".html")
+    std::path::Path::new(name)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("xhtml") || ext.eq_ignore_ascii_case("html"))
 }
 
 #[test]

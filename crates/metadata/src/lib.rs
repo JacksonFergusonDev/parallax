@@ -378,7 +378,7 @@ fn similarity(a: &str, b: &str) -> f64 {
 
 fn isbn_key(s: &str) -> String {
     s.chars()
-        .filter(|c| c.is_ascii_alphanumeric())
+        .filter(char::is_ascii_alphanumeric)
         .flat_map(char::to_uppercase)
         .collect()
 }

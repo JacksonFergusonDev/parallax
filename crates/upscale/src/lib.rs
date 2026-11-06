@@ -150,6 +150,11 @@ fn cut_tile(image: &RgbImage, left: u32, top: u32) -> Vec<f32> {
 }
 
 /// Folds a coordinate back into `0..len`, bouncing off both ends.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "folded into 0..len, and len came from a u32"
+)]
 fn mirror(position: i64, len: u32) -> u32 {
     let len = i64::from(len);
     if len == 1 {
@@ -165,6 +170,11 @@ fn mirror(position: i64, len: u32) -> u32 {
 }
 
 /// Copies a tile's middle into `out`; `middle` is its size in input pixels.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "clamped to 0..=255 first"
+)]
 fn paste_middle(out: &mut RgbImage, tile: &[f32], left: u32, top: u32, middle: (u32, u32)) {
     let side = TILE * SCALE;
     let plane = (side * side) as usize;

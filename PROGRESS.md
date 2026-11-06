@@ -71,3 +71,4 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 - macOS adds an unremovable `com.apple.provenance` xattr to every new file; on FAT32 it becomes `._<name>`. Delete the companion after writing (verified on device).
 - UI work: `preview_start ui-mock` serves the app in the browser pane with fake data (`app/src/dev/mockBackend.ts`). Stop it before `pnpm tauri dev` (same port).
 - Never write to `/Volumes/KOBOeReader` outside the safe-write layer or a user-run script.
+- Clippy runs `pedantic` with a curated allow list in the root `Cargo.toml`; `crates/upscale/Cargo.toml` keeps an identical copy because it overrides `unsafe_code`, so change both. Review `cargo clippy --fix` output: it rewrites `#[expect]`-worthy code and, for `doc_markdown`, would put backticks into clap `--help` text.

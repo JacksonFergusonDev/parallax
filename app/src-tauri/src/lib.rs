@@ -1,5 +1,8 @@
 //! Tauri adapter: thin commands over the core crates. No business logic here.
 
+// Tauri commands must take their arguments by value.
+#![allow(clippy::needless_pass_by_value)]
+
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -122,7 +125,9 @@ impl AppState {
     fn library(&self) -> MutexGuard<'_, Library> {
         // A panic while holding the lock can't leave the library inconsistent
         // (every write is a single SQLite statement or transaction).
-        self.library.lock().unwrap_or_else(|e| e.into_inner())
+        self.library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }
 
@@ -190,7 +195,9 @@ async fn library_import(
 ) -> CmdResult<Vec<ImportResult>> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let mut lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let mut lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         paths
             .into_iter()
             .map(|path| ImportResult {
@@ -224,7 +231,9 @@ async fn books_on_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResul
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         erc_core::device::books_on_device(&lib, &kobo).map_err(err)
     })
     .await
@@ -276,7 +285,9 @@ async fn remove_from_device(
     let backups = state.backup_root.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         erc_core::device::remove_from_device(Some(&lib), &kobo, &backups, &content_ids).map_err(err)
     })
     .await
@@ -295,7 +306,9 @@ async fn update_books(
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let converter = Kepubify::locate().map_err(err)?;
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         update_on_device(&lib, &kobo, &converter, &backups, &ids, |progress| {
             let _ = app.emit(SEND_PROGRESS, progress);
         })
@@ -381,7 +394,9 @@ async fn send_books(
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let converter = Kepubify::locate().map_err(err)?;
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let outcomes = send_library_books(&lib, &kobo, &converter, &ids, |progress| {
             let _ = app.emit(SEND_PROGRESS, progress);
         });
@@ -443,7 +458,9 @@ async fn library_check(
 ) -> CmdResult<Vec<erc_core::health::Finding>> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         erc_core::health::check_library(&lib, |index, total| {
             let _ = app.emit(
                 CHECK_PROGRESS,
@@ -506,7 +523,9 @@ async fn set_reading_status(
     let backups = state.backup_root.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         erc_core::device::change_reading_status(
             Some(&lib),
             &kobo,
@@ -535,7 +554,9 @@ async fn enhance_propose(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let (books, options, clues, fetch) = {
-            let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+            let lib = library
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let books = ids
                 .iter()
                 .map(|&id| lib.book(id))
@@ -607,7 +628,9 @@ fn setting_set(state: State<AppState>, key: String, value: Option<String>) -> Cm
 async fn library_duplicates(state: State<'_, AppState>) -> CmdResult<Vec<LibraryGroup>> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         erc_core::duplicates::library_duplicates(&lib).map_err(err)
     })
     .await
@@ -623,7 +646,9 @@ async fn device_duplicates(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         erc_core::duplicates::device_duplicates(&lib, &kobo).map_err(err)
     })
     .await
@@ -646,7 +671,9 @@ async fn dismiss_duplicates(
             ),
             None => erc_core::duplicates::LIBRARY_SCOPE.to_owned(),
         };
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         lib.dismiss_duplicates(&scope, &key).map_err(err)
     })
     .await
@@ -665,7 +692,9 @@ async fn import_from_device(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        let mut lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let mut lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         erc_core::import::import_from_device(
             &mut lib,
             &kobo,
@@ -703,7 +732,9 @@ async fn reading_stats(
 ) -> CmdResult<Option<SavedStats>> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(mount) = mount {
             let kobo = KoboDevice::open(&mount).map_err(err)?;
             let stats = erc_core::stats::reading_stats(&kobo, Some(&lib)).map_err(err)?;
@@ -737,7 +768,9 @@ async fn genres_plan(
             .map(|m| KoboDevice::open(&m))
             .transpose()
             .map_err(err)?;
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         erc_core::genres::plan(&lib, kobo.as_ref()).map_err(err)
     })
     .await
@@ -758,7 +791,9 @@ async fn genres_apply(
             .map(|m| KoboDevice::open(&m))
             .transpose()
             .map_err(err)?;
-        let mut lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let mut lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         erc_core::genres::apply_tidy(&mut lib, kobo.as_ref(), &backups, &choice).map_err(err)
     })
     .await
@@ -780,7 +815,9 @@ async fn calibre_preview(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let books = erc_core::calibre::read_library(&path).map_err(err)?;
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         Ok(erc_core::calibre::preview(&lib, &books))
     })
     .await
@@ -797,7 +834,9 @@ async fn calibre_import(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let books = erc_core::calibre::read_library(&path).map_err(err)?;
-        let mut lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let mut lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         Ok(erc_core::calibre::import(
             &mut lib,
             &books,
@@ -878,7 +917,9 @@ async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResu
     let backups = state.backup_root.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        let mut lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let mut lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         Ok(Reconciled {
             series: erc_core::collections::reconcile_series(&lib, &kobo, &backups).map_err(err)?,
             grouped: erc_core::rules::run(&lib, &kobo, &backups, Trigger::Automatic)
@@ -915,7 +956,9 @@ async fn rules_preview(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         erc_core::rules::plan(&lib.rules().map_err(err)?, &lib, &kobo).map_err(err)
     })
     .await
@@ -928,7 +971,9 @@ async fn rules_apply(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<us
     let backups = state.backup_root.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         erc_core::rules::run(&lib, &kobo, &backups, Trigger::User).map_err(err)
     })
     .await
@@ -966,7 +1011,9 @@ async fn cover_set_url(state: State<'_, AppState>, id: i64, url: String) -> CmdR
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let image = erc_covers::download(&url).map_err(err)?;
-        let mut lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let mut lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let book = lib.set_cover(id, &image).map_err(err)?;
         Ok(with_cover(&lib, book))
     })
@@ -1001,7 +1048,9 @@ fn cover_upscale_available(state: State<AppState>) -> bool {
 async fn cover_info(state: State<'_, AppState>, id: i64) -> CmdResult<Option<CoverInfo>> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         lib.cover_size(id).map(|(width, height)| CoverInfo {
             width,
             height,
@@ -1018,7 +1067,9 @@ async fn cover_info(state: State<'_, AppState>, id: i64) -> CmdResult<Option<Cov
 async fn cover_upscale_tiles(state: State<'_, AppState>, ids: Vec<i64>) -> CmdResult<usize> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         ids.iter()
             .filter_map(|&id| lib.cover_size(id))
             .filter(|&(_, height)| height < CUSTOM_COVER_MAX_HEIGHT)
@@ -1046,11 +1097,14 @@ async fn cover_upscale_preview(
             .ok_or("cover upscaling isn't available")?;
         let cover = library
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .cover_source(id)
             .map_err(err)?
             .ok_or("this book has no cover")?;
-        let mut engine = upscaler.engine.lock().unwrap_or_else(|e| e.into_inner());
+        let mut engine = upscaler
+            .engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         // Reset only now: a job cancelled just before this one has finished,
         // since it held the lock.
         upscaler.cancelled.store(false, Ordering::Relaxed);

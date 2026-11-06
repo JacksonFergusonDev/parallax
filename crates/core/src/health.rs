@@ -53,7 +53,9 @@ pub fn check_library(
                 inspection: inspect(&file.book).map_err(|e| e.to_string()),
                 cover_size: file.cover_size(),
             };
-            let mut progress = progress.lock().unwrap_or_else(|e| e.into_inner());
+            let mut progress = progress
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             progress.0 += 1;
             let done = progress.0;
             (progress.1)(done, books.len());
@@ -157,6 +159,11 @@ pub fn series_gaps(books: &[Book]) -> Vec<Finding> {
         if n.fract() != 0.0 || !(1.0..=10_000.0).contains(&n) {
             continue;
         }
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a whole number in 1..=10000"
+        )]
         series
             .entry(name.to_lowercase())
             .or_insert_with(|| (name.clone(), Vec::new()))
@@ -166,7 +173,7 @@ pub fn series_gaps(books: &[Book]) -> Vec<Finding> {
     series
         .into_values()
         .filter_map(|(name, mut members)| {
-            members.sort();
+            members.sort_unstable();
             let have: Vec<u32> = members.iter().map(|m| m.0).collect();
             let (first, last) = (*have.first()?, *have.last()?);
             let missing: Vec<String> = (first..=last)

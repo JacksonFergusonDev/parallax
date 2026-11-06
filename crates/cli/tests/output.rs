@@ -38,7 +38,7 @@ fn library() -> (TempDir, i64, String) {
     };
     let title = format!("長い題名 — Café {}", "A long book title ".repeat(10));
     let mut edit = book.edit();
-    edit.title = title.clone();
+    edit.title.clone_from(&title);
     edit.authors = vec!["Zoë 著者".into()];
     let saved = lib.update(book.id, &edit).unwrap();
     (dir, book.id, saved.title)

@@ -20,6 +20,11 @@ struct Bucket {
 }
 
 /// The dominant colour of pixels given as RGB triples, or `None` without any.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "means of u8 values always fit"
+)]
 pub fn dominant_rgb(pixels: impl Iterator<Item = [u8; 3]>) -> Option<[u8; 3]> {
     let mut buckets = vec![Bucket::default(); 1 << (3 * BITS)];
     for [r, g, b] in pixels {

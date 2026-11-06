@@ -115,7 +115,7 @@ pub fn inspect(path: &Path) -> Result<Inspection> {
             // Not well-formed; the link check is skipped rather than guessed.
             continue;
         };
-        for node in html.descendants().filter(|n| n.is_element()) {
+        for node in html.descendants().filter(roxmltree::Node::is_element) {
             let target = match node.tag_name().name() {
                 // Only what a reader would notice: links, images and media.
                 // Missing stylesheets and page templates (common leftovers of

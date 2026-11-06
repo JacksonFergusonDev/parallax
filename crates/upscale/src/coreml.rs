@@ -29,6 +29,7 @@ pub struct CoreMl {
 // from one thread at a time is all `Send` promises here.
 unsafe impl Send for CoreMl {}
 
+#[expect(clippy::needless_pass_by_value, reason = "called through map_err")]
 fn model_error(error: Retained<NSError>) -> Error {
     Error::Model(error.localizedDescription().to_string())
 }
@@ -59,6 +60,7 @@ impl CoreMl {
     }
 
     fn predict(&self, tile: &[f32]) -> Result<Vec<f32>> {
+        #[expect(clippy::cast_possible_wrap, reason = "TILE is a small constant")]
         let side = TILE as isize;
         let shape: Vec<_> = [1, 3, side, side]
             .into_iter()
@@ -78,7 +80,9 @@ impl CoreMl {
                 |bytes: NonNull<std::ffi::c_void>,
                  size: NSInteger,
                  _: NonNull<NSArray<NSNumber>>| {
-                    let count = tile.len().min(size as usize / size_of::<f32>());
+                    let count = tile
+                        .len()
+                        .min(usize::try_from(size).unwrap_or(0) / size_of::<f32>());
                     std::ptr::copy_nonoverlapping(tile.as_ptr(), bytes.as_ptr().cast(), count);
                 },
             );
@@ -124,22 +128,26 @@ unsafe fn read_output(
             return Err(Error::Model("unexpected output type".into()));
         }
         let side = (TILE * SCALE) as usize;
-        let strides: Vec<usize> = output
+        let unsigned = |number: Retained<NSNumber>| {
+            usize::try_from(number.as_isize())
+                .map_err(|_| Error::Model(format!("negative output size {number:?}")))
+        };
+        let strides = output
             .strides()
             .iter()
-            .map(|stride| stride.as_isize() as usize)
-            .collect();
-        let shape: Vec<usize> = output
+            .map(unsigned)
+            .collect::<Result<Vec<usize>>>()?;
+        let shape = output
             .shape()
             .iter()
-            .map(|dimension| dimension.as_isize() as usize)
-            .collect();
+            .map(unsigned)
+            .collect::<Result<Vec<usize>>>()?;
         if shape != [1, 3, side, side] {
             return Err(Error::Model(format!("unexpected output shape {shape:?}")));
         }
         let dense = RefCell::new(Err(missing()));
         let read = RcBlock::new(|bytes: NonNull<std::ffi::c_void>, size: NSInteger| {
-            let values = size as usize / size_of::<f32>();
+            let values = usize::try_from(size).unwrap_or(0) / size_of::<f32>();
             let last = 2 * strides[1] + (side - 1) * (strides[2] + strides[3]);
             *dense.borrow_mut() = if last < values {
                 let source = std::slice::from_raw_parts(bytes.as_ptr().cast::<f32>(), values);

@@ -264,12 +264,11 @@ impl KoboDevice {
         if !record.books.is_empty() {
             let books_path = dir.join("books.json");
             let mut books: BTreeMap<String, ManagedBook> =
-                match read_json::<BooksFile>(&books_path) {
-                    Ok(f) => f.map(|f| f.books).unwrap_or_default(),
-                    Err(_) => {
-                        set_aside(&books_path);
-                        Vec::new()
-                    }
+                if let Ok(f) = read_json::<BooksFile>(&books_path) {
+                    f.map(|f| f.books).unwrap_or_default()
+                } else {
+                    set_aside(&books_path);
+                    Vec::new()
                 }
                 .into_iter()
                 .map(|b| (b.content_id.clone(), b))

@@ -261,7 +261,7 @@ fn label_key(label: &str) -> String {
         .replace('&', " and ")
         .chars()
         .filter(char::is_ascii_alphanumeric)
-        .flat_map(|c| c.to_lowercase())
+        .flat_map(char::to_lowercase)
         .collect()
 }
 

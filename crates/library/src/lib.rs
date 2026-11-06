@@ -130,21 +130,20 @@ impl Book {
     /// The first identifier with one of these schemes, given either as the
     /// scheme or as a `scheme:` prefix on the value (how calibre writes some).
     fn identifier(&self, schemes: &[&str]) -> Option<&str> {
-        self.identifiers
-            .iter()
-            .find_map(|i| match i.scheme.as_deref() {
-                Some(s) => schemes
+        self.identifiers.iter().find_map(|i| {
+            if let Some(s) = i.scheme.as_deref() {
+                schemes
                     .iter()
                     .any(|w| s.eq_ignore_ascii_case(w))
-                    .then_some(i.value.as_str()),
-                None => {
-                    let (s, value) = i.value.split_once(':')?;
-                    schemes
-                        .iter()
-                        .any(|w| s.eq_ignore_ascii_case(w))
-                        .then_some(value.trim())
-                }
-            })
+                    .then_some(i.value.as_str())
+            } else {
+                let (s, value) = i.value.split_once(':')?;
+                schemes
+                    .iter()
+                    .any(|w| s.eq_ignore_ascii_case(w))
+                    .then_some(value.trim())
+            }
+        })
     }
 }
 
@@ -249,7 +248,7 @@ impl Library {
                 meta.description,
                 json(&meta.identifiers),
                 hash,
-                size as i64,
+                size,
                 original_name,
                 now,
                 json(&meta.contributors),
@@ -671,7 +670,7 @@ fn book_from_row(row: &Row) -> rusqlite::Result<Book> {
         identifiers: serde_json::from_str(&row.get::<_, String>("identifiers")?)
             .unwrap_or_default(),
         original_name: row.get("original_name")?,
-        file_size: row.get::<_, i64>("file_size")? as u64,
+        file_size: row.get("file_size")?,
         has_cover: row.get("has_cover")?,
         custom_cover: row.get("custom_cover")?,
         cover_upscaled: row.get("cover_upscaled")?,

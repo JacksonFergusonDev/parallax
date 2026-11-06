@@ -254,10 +254,10 @@ mod tests {
             content_id: id.into(),
             title: id.into(),
             series: series.map(Into::into),
-            authors: authors.iter().map(|s| s.to_string()).collect(),
-            tags: tags.iter().map(|s| s.to_string()).collect(),
+            authors: authors.iter().map(ToString::to_string).collect(),
+            tags: tags.iter().map(ToString::to_string).collect(),
             folder_genre: None,
-            collections: collections.iter().map(|s| s.to_string()).collect(),
+            collections: collections.iter().map(ToString::to_string).collect(),
         }
     }
 

@@ -117,6 +117,11 @@ pub fn strip_kobo_markup(src: &Path, dest: &Path) -> Result<StripReport> {
 /// True when the EPUB is DRM-protected (Adobe ADEPT, Kobo, Apple…): it has
 /// `rights.xml`, or `encryption.xml` encrypts something other than fonts.
 pub fn has_drm(path: &Path) -> Result<bool> {
+    // Font obfuscation (IDPF and Adobe) is not DRM.
+    const FONT_OBFUSCATION: [&str; 2] = [
+        "http://www.idpf.org/2008/embedding",
+        "http://ns.adobe.com/pdf/enc#RC",
+    ];
     let mut zip = open_zip(path)?;
     if zip.by_name("META-INF/rights.xml").is_ok() {
         return Ok(true);
@@ -124,11 +129,6 @@ pub fn has_drm(path: &Path) -> Result<bool> {
     let Ok(encryption) = read_entry(&mut zip, "META-INF/encryption.xml") else {
         return Ok(false);
     };
-    // Font obfuscation (IDPF and Adobe) is not DRM.
-    const FONT_OBFUSCATION: [&str; 2] = [
-        "http://www.idpf.org/2008/embedding",
-        "http://ns.adobe.com/pdf/enc#RC",
-    ];
     let doc = roxmltree::Document::parse(&encryption)
         .map_err(|e| Error::Invalid(format!("META-INF/encryption.xml: {e}")))?;
     Ok(doc
@@ -174,7 +174,9 @@ const GENERATED: [&str; 3] = [
 fn is_kobo_only(name: &str) -> bool {
     let file = name.rsplit('/').next().unwrap_or(name);
     // Kobo Touch Extended's `plugininfo.kte` / `driverinfo.kte`.
-    file.ends_with(".kte")
+    Path::new(file)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("kte"))
         || file == "kobo.js"
         || file == "kobo.css"
         || name.starts_with("kte-css/")
@@ -224,12 +226,12 @@ fn strip_document(text: &str) -> Option<String> {
     )
     .ok()?;
     let mut cuts = Vec::new();
-    for node in doc.descendants().filter(|n| n.is_comment()) {
+    for node in doc.descendants().filter(roxmltree::Node::is_comment) {
         if node.text() == Some(" kobo-style ") {
             cuts.push(with_line(source, node.range()));
         }
     }
-    for node in doc.descendants().filter(|n| n.is_element()) {
+    for node in doc.descendants().filter(roxmltree::Node::is_element) {
         let tag = node.tag_name().name();
         let class = node.attribute("class").unwrap_or_default();
         let id = node.attribute("id").unwrap_or_default();

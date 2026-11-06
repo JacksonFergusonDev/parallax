@@ -83,7 +83,7 @@ fn discworld_book_gets_the_main_series_and_two_genres() {
         ("Discworld", Some("1"), Source::Wikidata, Confidence::High)
     );
     let mut names = genres(&found);
-    names.sort();
+    names.sort_unstable();
     assert_eq!(names, ["Fantasy", "Humor"]);
     assert!(found.problems.is_empty(), "{:?}", found.problems);
     // Apple is only asked when nobody else knew a genre.
@@ -135,18 +135,18 @@ fn failing_sources_are_reported_not_fatal() {
 
 #[test]
 fn responses_are_cached() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("cache.sqlite");
-    let q = query("Red Seas Under Red Skies", "Scott Lynch");
-    let first = CachedFetcher::open(Recorded::new(), &path).unwrap();
-    let a = lookup(&first, &q, &Options::default());
-    // A second run is answered entirely from the cache.
     struct Offline;
     impl Fetch for Offline {
         fn get(&self, _: &str, _: &[(&str, &str)]) -> Result<String, FetchError> {
             Err(FetchError::Http("offline".into()))
         }
     }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("cache.sqlite");
+    let q = query("Red Seas Under Red Skies", "Scott Lynch");
+    let first = CachedFetcher::open(Recorded::new(), &path).unwrap();
+    let a = lookup(&first, &q, &Options::default());
+    // A second run is answered entirely from the cache.
     let second = CachedFetcher::open(Offline, &path).unwrap();
     assert_eq!(lookup(&second, &q, &Options::default()), a);
 }
@@ -155,7 +155,7 @@ fn responses_are_cached() {
 /// Titles with bracketed notes found nothing on Wikidata before they were
 /// searched without them.
 #[test]
-#[ignore]
+#[ignore = "hits the real services"]
 fn live_bracketed_titles_find_their_series() {
     let fetch = erc_metadata::HttpFetcher::new().unwrap();
     for (title, number) in [

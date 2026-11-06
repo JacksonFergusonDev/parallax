@@ -545,7 +545,7 @@ mod tests {
 
     /// Hits the real services: `cargo test -p erc-covers -- --ignored`.
     #[test]
-    #[ignore]
+    #[ignore = "hits the real services"]
     fn live_search_finds_covers() {
         let bob = search(&CoverQuery {
             title: "We Are Legion (We Are Bob)".into(),

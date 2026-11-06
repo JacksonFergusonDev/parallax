@@ -106,9 +106,8 @@ impl Epub {
         };
         let entry = resolve_href(&self.opf_path, &href);
         let mut zip = open_zip(&self.path)?;
-        let data = match read_entry_bytes(&mut zip, &entry) {
-            Ok(data) => data,
-            Err(_) => return Ok(None),
+        let Ok(data) = read_entry_bytes(&mut zip, &entry) else {
+            return Ok(None);
         };
         Ok(Some(Cover { data, media_type }))
     }
@@ -220,7 +219,7 @@ fn read_entry_bytes(zip: &mut ZipArchive<BufReader<File>>, name: &str) -> Result
     let mut entry = zip
         .by_name(name)
         .map_err(|_| Error::Invalid(format!("missing {name}")))?;
-    let mut buf = Vec::with_capacity(entry.size() as usize);
+    let mut buf = Vec::with_capacity(usize::try_from(entry.size()).unwrap_or(0));
     entry
         .read_to_end(&mut buf)
         .map_err(|e| Error::Invalid(format!("{name}: {e}")))?;

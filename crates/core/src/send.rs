@@ -241,7 +241,7 @@ fn run_batch(
         .map(|i| {
             let (index, file) = (i + 1, labels[i].clone());
             let outcome = send(i, &mut |stage: Stage| {
-                on_progress(stage(index, total, file.clone()))
+                on_progress(stage(index, total, file.clone()));
             });
             on_progress(match &outcome.result {
                 Ok(info) => Progress::Done {

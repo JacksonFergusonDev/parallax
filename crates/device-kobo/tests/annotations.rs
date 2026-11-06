@@ -44,7 +44,7 @@ fn reads_highlights_in_reading_order_with_chapter_titles() {
         conn.execute(
             "INSERT INTO content (ContentID, ContentType, MimeType, BookID, ___UserID, Title, VolumeIndex)
              VALUES (?1, 9, 'application/xhtml+xml', ?2, 'kepub_user', ?3, ?4)",
-            params![format!("{PATH}!!{file}"), BOOK, file, i as i64],
+            params![format!("{PATH}!!{file}"), BOOK, file, i],
         )
         .unwrap();
     }
@@ -55,7 +55,7 @@ fn reads_highlights_in_reading_order_with_chapter_titles() {
         conn.execute(
             "INSERT INTO content (ContentID, ContentType, MimeType, BookID, ___UserID, Title, VolumeIndex, Depth)
              VALUES (?1, 899, 'application/x-kobo-epub+zip', ?2, 'kepub_user', ?3, ?4, 1)",
-            params![format!("{PATH}!!{file}"), BOOK, title, i as i64],
+            params![format!("{PATH}!!{file}"), BOOK, title, i],
         )
         .unwrap();
     }

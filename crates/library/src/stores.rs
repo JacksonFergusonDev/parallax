@@ -116,7 +116,7 @@ impl Library {
                 status,
                 percent,
                 last_read,
-                time_spent_secs.map(|t| t as i64),
+                time_spent_secs,
                 now()
             ],
         )?;
@@ -136,9 +136,11 @@ impl Library {
                     Ok(Reading {
                         device_serial: r.get(0)?,
                         status: r.get(1)?,
-                        percent: r.get::<_, i64>(2)?.clamp(0, 100) as u8,
+                        percent: u8::try_from(r.get::<_, i64>(2)?.clamp(0, 100)).unwrap_or(0),
                         last_read: r.get(3)?,
-                        time_spent_secs: r.get::<_, Option<i64>>(4)?.map(|t| t.max(0) as u64),
+                        time_spent_secs: r
+                            .get::<_, Option<i64>>(4)?
+                            .map(|t| u64::try_from(t).unwrap_or(0)),
                         seen_at: r.get(5)?,
                     })
                 },
@@ -239,8 +241,8 @@ impl Library {
         Ok(self.conn.query_row(
             "SELECT count(*) FROM annotations WHERE book_id = ?1 AND kind IN ('highlight', 'note')",
             [book_id],
-            |r| r.get::<_, i64>(0),
-        )? as usize)
+            |r| r.get(0),
+        )?)
     }
 
     /// Highlights and notes per book (bookmarks not counted).
@@ -250,7 +252,7 @@ impl Library {
              WHERE kind IN ('highlight', 'note') GROUP BY book_id",
         )?;
         let counts = stmt
-            .query_map([], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as usize)))?
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
             .collect::<rusqlite::Result<_>>()?;
         Ok(counts)
     }

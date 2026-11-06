@@ -133,7 +133,7 @@ fn read_database(conn: &Connection, report: &mut DeviceReport) -> rusqlite::Resu
     for (name, kind, sql) in objects {
         if kind == "table" {
             let n = conn.query_row(&format!("SELECT count(*) FROM \"{name}\""), [], |r| {
-                r.get::<_, i64>(0).map(|n| n as u64)
+                r.get::<_, u64>(0)
             })?;
             report.rows.insert(name, n);
         }
@@ -175,7 +175,7 @@ fn grouped(conn: &Connection, sql: &str) -> rusqlite::Result<BTreeMap<String, u6
             rusqlite::types::Value::Integer(i) => i.to_string(),
             other => format!("{other:?}"),
         };
-        Ok((key, r.get::<_, i64>(1)? as u64))
+        Ok((key, r.get::<_, u64>(1)?))
     })?
     .collect()
 }

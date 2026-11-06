@@ -41,7 +41,7 @@ fn converts_and_sends_each_book_independently() {
 
     let mut events = Vec::new();
     let outcomes = send_books(&kobo, &Kepubify::locate().unwrap(), &sources, |p| {
-        events.push(p)
+        events.push(p);
     });
 
     assert!(outcomes[0].result.is_ok());
