@@ -20,6 +20,7 @@ Requires Rust (stable), Node and pnpm, and [just](https://github.com/casey/just)
 ```bash
 just setup    # kepubify sidecar + UI dependencies
 just dev      # run the app with hot reload
+just dev-optimized # build and run it as a release behaves (slower to build, no hot reload)
 just check    # formatting, lints, type checks and tests (run before committing)
 just test-fat # extra tests that mount FAT32 disk images
 just build    # macOS .app bundle

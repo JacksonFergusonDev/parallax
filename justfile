@@ -32,6 +32,11 @@ test:
 dev: setup
     scripts/dev.sh
 
+# Build and run the app exactly as a release behaves. No hot reload.
+dev-optimized: setup
+    cd app && pnpm tauri build --no-bundle
+    target/release/erc-app
+
 # Opt-in tests that mount FAT32 disk images to check the device write path.
 test-fat:
     cargo test -p erc-device-kobo -- --ignored
