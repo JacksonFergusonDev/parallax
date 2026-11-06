@@ -27,7 +27,8 @@
         "enable": true,
         "scope": [
           "$APPDATA/library/books/**",
-          "$APPCACHE/device-covers/**"
+          "$APPCACHE/device-covers/**",
+          "$APPCACHE/upscale-previews/**"
         ]
       }
     }

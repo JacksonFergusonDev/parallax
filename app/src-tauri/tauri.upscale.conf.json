@@ -1,0 +1,7 @@
+{
+  "bundle": {
+    "resources": {
+      "models/cover-upscaler.mlmodelc/": "models/cover-upscaler.mlmodelc/"
+    }
+  }
+}

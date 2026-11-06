@@ -98,6 +98,8 @@ const MIGRATIONS: &[&str] = &[
         taken_at      TEXT NOT NULL,
         stats         TEXT NOT NULL
     );",
+    // 11: the custom cover was enlarged by the upscaler rather than found.
+    "ALTER TABLE books ADD COLUMN cover_upscaled INTEGER NOT NULL DEFAULT 0;",
 ];
 
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {

@@ -28,13 +28,17 @@ test:
     cargo test --workspace
     cd app && pnpm test
 
+# Build the Core ML cover upscaler (slow, once). Not needed for `just check`.
+upscale-model:
+    scripts/build-upscale-model.sh
+
 # Run the desktop app with hot reload.
-dev: setup
+dev: setup upscale-model
     scripts/dev.sh
 
 # Build and run the app exactly as a release behaves. No hot reload.
-dev-optimized: setup
-    cd app && pnpm tauri build --no-bundle
+dev-optimized: setup upscale-model
+    cd app && pnpm tauri build --no-bundle --config src-tauri/tauri.upscale.conf.json
     target/release/erc-app
 
 # Opt-in tests that mount FAT32 disk images to check the device write path.
@@ -42,5 +46,5 @@ test-fat:
     cargo test -p erc-device-kobo -- --ignored
 
 # Build the macOS app bundle (target/release/bundle/macos/).
-build: setup
-    cd app && pnpm tauri build --bundles app
+build: setup upscale-model
+    cd app && pnpm tauri build --bundles app --config src-tauri/tauri.upscale.conf.json

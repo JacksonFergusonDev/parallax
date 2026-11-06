@@ -52,7 +52,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 const COVER_HEIGHT: u32 = 600;
 /// Custom covers are stored at most this tall: the Kobo Libra 2's screen
 /// height, which is also the tallest current Kobo screen.
-const CUSTOM_COVER_MAX_HEIGHT: u32 = 1680;
+pub const CUSTOM_COVER_MAX_HEIGHT: u32 = 1680;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Book {
@@ -74,6 +74,8 @@ pub struct Book {
     pub has_cover: bool,
     /// The cover was chosen by the user rather than taken from the EPUB.
     pub custom_cover: bool,
+    /// The custom cover came from the upscaler.
+    pub cover_upscaled: bool,
     pub added_at: String,
     pub modified_at: String,
 }
@@ -465,10 +467,31 @@ impl Library {
         fs::write(&path, &jpeg).map_err(|e| io_err(&path, e))?;
         let has_thumb = write_thumbnail(&jpeg, &self.book_dir(id).join("cover.jpg"));
         self.conn.execute(
-            "UPDATE books SET custom_cover = 1, has_cover = ?1, modified_at = ?2 WHERE id = ?3",
+            "UPDATE books SET custom_cover = 1, cover_upscaled = 0, has_cover = ?1, modified_at = ?2 WHERE id = ?3",
             params![has_thumb, now(), id],
         )?;
         self.book(id)
+    }
+
+    /// Uses the upscaler's output as the book's cover, remembering where it
+    /// came from.
+    pub fn set_upscaled_cover(&mut self, id: i64, image: &[u8]) -> Result<Book> {
+        self.set_cover(id, image)?;
+        self.conn.execute(
+            "UPDATE books SET cover_upscaled = 1 WHERE id = ?1",
+            params![id],
+        )?;
+        self.book(id)
+    }
+
+    /// The best image of the book's current cover: the custom one if set, else
+    /// the EPUB's own. Not the grid thumbnail, which is much smaller.
+    pub fn cover_source(&self, id: i64) -> Result<Option<Vec<u8>>> {
+        let custom = self.custom_cover_file(id);
+        if custom.is_file() {
+            return Ok(Some(fs::read(&custom).map_err(|e| io_err(&custom, e))?));
+        }
+        Ok(Epub::open(self.book_file(id))?.cover()?.map(|c| c.data))
     }
 
     /// Goes back to the cover inside the EPUB.
@@ -480,7 +503,7 @@ impl Library {
         let original = Epub::open(self.book_file(id))?.cover().ok().flatten();
         let has_cover = original.is_some_and(|c| write_thumbnail(&c.data, &thumb));
         self.conn.execute(
-            "UPDATE books SET custom_cover = 0, has_cover = ?1, modified_at = ?2 WHERE id = ?3",
+            "UPDATE books SET custom_cover = 0, cover_upscaled = 0, has_cover = ?1, modified_at = ?2 WHERE id = ?3",
             params![has_cover, now(), id],
         )?;
         self.book(id)
@@ -626,6 +649,7 @@ fn book_from_row(row: &Row) -> rusqlite::Result<Book> {
         file_size: row.get::<_, i64>("file_size")? as u64,
         has_cover: row.get("has_cover")?,
         custom_cover: row.get("custom_cover")?,
+        cover_upscaled: row.get("cover_upscaled")?,
         added_at: row.get("added_at")?,
         modified_at: row.get("modified_at")?,
     })
@@ -722,6 +746,7 @@ mod tests {
             file_size: 1,
             has_cover: false,
             custom_cover: false,
+            cover_upscaled: false,
             added_at: String::new(),
             modified_at: String::new(),
         }

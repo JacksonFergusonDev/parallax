@@ -184,6 +184,14 @@ enum LibraryCommand {
     Rm { id: i64 },
     /// Search online for covers for a book.
     Covers { id: i64 },
+    /// Upscale a book's cover into an image file, leaving the book alone.
+    Upscale {
+        id: i64,
+        out: PathBuf,
+        /// The compiled Core ML model.
+        #[arg(long, default_value = "app/src-tauri/models/cover-upscaler.mlmodelc")]
+        model: PathBuf,
+    },
     /// Replace a book's cover from a URL or image file, or reset it.
     Cover {
         id: i64,
@@ -989,6 +997,31 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                 }
                 println!("{rows}");
             }
+        }
+        LibraryCommand::Upscale { id, out, model } => {
+            let source = lib
+                .cover_source(id)?
+                .context("this book has no cover to upscale")?;
+            let started = std::time::Instant::now();
+            let engine = erc_upscale::CoreMl::load(&model)?;
+            let up = erc_upscale::upscale_cover(
+                &engine,
+                &source,
+                erc_library::CUSTOM_COVER_MAX_HEIGHT,
+                |done, total| eprint!("\rtile {done} of {total}"),
+                &std::sync::atomic::AtomicBool::new(false),
+            )?;
+            eprintln!();
+            std::fs::write(&out, &up.after_png)?;
+            println!(
+                "{}×{} to {}×{} in {:.1}s: {}",
+                up.before_size.0,
+                up.before_size.1,
+                up.after_size.0,
+                up.after_size.1,
+                started.elapsed().as_secs_f32(),
+                out.display()
+            );
         }
         LibraryCommand::Cover {
             id,

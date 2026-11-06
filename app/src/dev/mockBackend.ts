@@ -66,6 +66,7 @@ let books: Book[] = SAMPLE.map(([title, author, series, index, tags], i) => ({
   file_size: 1_000_000,
   has_cover: i < SAMPLE.length - 1,
   custom_cover: false,
+  cover_upscaled: false,
   added_at: "2026-10-31T00:00:00Z",
   modified_at: "2026-10-31T00:00:00Z",
   cover: i < SAMPLE.length - 1 ? coverSvg(title, author, i) : null,
@@ -236,6 +237,7 @@ let storeBooks: DeviceBook[] = [
   collections: [],
 }));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+let upscaleCancelled = false;
 
 export function installMockBackend() {
   mockWindows("main");
@@ -978,9 +980,45 @@ export function installMockBackend() {
               : b,
           );
           return books.find((b) => b.id === a.id);
+        case "cover_upscale_available":
+          return true;
+        case "cover_upscale_preview": {
+          const book = books.find((b) => b.id === a.id);
+          upscaleCancelled = false;
+          for (let done = 1; done <= 12; done++) {
+            await sleep(120);
+            if (upscaleCancelled) throw "cancelled";
+            await emit("upscale-progress", { id: a.id, done, total: 12 });
+          }
+          return {
+            id: a.id,
+            run: 1,
+            before: book?.cover,
+            after: book?.cover,
+            before_size: [420, 630],
+            after_size: [1120, 1680],
+          };
+        }
+        case "cover_upscale_apply":
+          books = books.map((b) =>
+            b.id === a.id
+              ? {
+                  ...b,
+                  custom_cover: true,
+                  cover_upscaled: true,
+                  modified_at: new Date().toISOString(),
+                }
+              : b,
+          );
+          return books.find((b) => b.id === a.id);
+        case "cover_upscale_cancel":
+          upscaleCancelled = true;
+          return null;
         case "cover_reset":
           books = books.map((b) =>
-            b.id === a.id ? { ...b, custom_cover: false } : b,
+            b.id === a.id
+              ? { ...b, custom_cover: false, cover_upscaled: false }
+              : b,
           );
           return books.find((b) => b.id === a.id);
         case "plugin:dialog|message": {

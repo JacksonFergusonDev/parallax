@@ -5,6 +5,7 @@ import {
   type Book,
   type Finding,
   type ImportProgress,
+  upscaleAvailable,
 } from "../api";
 import { groupFindings } from "../checks";
 
@@ -12,15 +13,28 @@ interface Props {
   books: Map<number, Book>;
   /** Selects a book so its edit panel opens. */
   onShow: (id: number) => void;
+  /** Starts reviewing upscaled versions of these books' covers. */
+  onUpscale: (ids: number[]) => void;
   onClose: () => void;
 }
 
 /** Checks every book and lists what's worth fixing. */
-export function LibraryCheck({ books, onShow, onClose }: Props) {
+export function LibraryCheck({ books, onShow, onUpscale, onClose }: Props) {
   const [findings, setFindings] = useState<Finding[] | null>(null);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showNotes, setShowNotes] = useState(false);
+  const [canUpscale, setCanUpscale] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    upscaleAvailable()
+      .then((available) => alive && setCanUpscale(available))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -67,6 +81,16 @@ export function LibraryCheck({ books, onShow, onClose }: Props) {
                   <span className="muted">{g.findings.length}</span>
                 </h3>
                 <p className="muted">{g.info.help}</p>
+                {g.kind === "small_cover" && canUpscale && (
+                  <button
+                    className="link"
+                    onClick={() =>
+                      onUpscale(g.findings.flatMap((f) => f.book_ids))
+                    }
+                  >
+                    Upscale and review these…
+                  </button>
+                )}
                 <ul>
                   {g.findings.map((f, i) => (
                     <li key={i}>

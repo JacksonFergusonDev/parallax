@@ -2419,3 +2419,75 @@ form.enhance-key input {
   padding: 4px 0;
   font-size: 13px;
 }
+
+/* Upscale review: before and after stacked in one frame. */
+.modal.upscale-review {
+  width: min(760px, calc(100vw - 48px));
+}
+
+.upscale-waiting progress {
+  width: 240px;
+  accent-color: var(--accent);
+}
+
+.upscale-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.compare-stage {
+  display: flex;
+  justify-content: center;
+  height: min(62vh, 640px);
+  overflow: hidden;
+}
+
+.compare-stage.actual-size {
+  display: block;
+  overflow: auto;
+}
+
+.compare-images {
+  position: relative;
+  height: 100%;
+  flex: none;
+}
+
+.compare-stage.actual-size .compare-images {
+  height: auto;
+}
+
+.compare-images img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.compare-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.compare-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.compare-controls input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.upscale-credit {
+  font-size: 12px;
+}

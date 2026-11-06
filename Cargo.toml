@@ -60,6 +60,7 @@ uuid = { version = "1", features = ["v4"] }
 erc-convert = { path = "crates/convert" }
 erc-core = { path = "crates/core" }
 erc-covers = { path = "crates/covers" }
+erc-upscale = { path = "crates/upscale" }
 erc-device = { path = "crates/device" }
 erc-epub = { path = "crates/epub" }
 erc-library = { path = "crates/library" }

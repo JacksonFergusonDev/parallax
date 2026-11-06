@@ -49,6 +49,8 @@ export interface Book {
   has_cover: boolean;
   /** The cover was chosen by the user rather than taken from the EPUB. */
   custom_cover: boolean;
+  /** The custom cover came from the upscaler. */
+  cover_upscaled: boolean;
   added_at: string;
   modified_at: string;
   /** Absolute path of the cover thumbnail. */
@@ -656,6 +658,39 @@ export const setCoverFromFile = (id: number, path: string) =>
   write<Book>("cover_set_file", { id, path }, ["library"]);
 export const resetCover = (id: number) =>
   write<Book>("cover_reset", { id }, ["library"]);
+
+/** An upscaled cover waiting to be kept or discarded. */
+export interface UpscalePreview {
+  id: number;
+  run: number;
+  /** Absolute paths of the images to compare. */
+  before: string;
+  after: string;
+  before_size: [number, number];
+  after_size: [number, number];
+}
+
+export interface UpscaleProgress {
+  id: number;
+  done: number;
+  total: number;
+}
+
+/** Whether this build has the upscaling model. */
+export const upscaleAvailable = () =>
+  read<boolean>("cover_upscale_available", {}, []);
+/** Upscales without touching the book; null if already full size. */
+export const previewUpscale = (id: number) =>
+  invoke<UpscalePreview | null>("cover_upscale_preview", { id });
+export const applyUpscale = (id: number, run: number) =>
+  write<Book>("cover_upscale_apply", { id, run }, ["library"]);
+/** Stops the running job and discards undecided previews. */
+export const cancelUpscale = () => invoke<void>("cover_upscale_cancel");
+export const onUpscaleProgress = (
+  handler: (p: UpscaleProgress) => void,
+): Promise<UnlistenFn> =>
+  listen<UpscaleProgress>("upscale-progress", (e) => handler(e.payload));
+
 /** Dominant colour of each cover file; null where one can't be read. */
 export const coverColors = (paths: string[]) =>
   invoke<([number, number, number] | null)[]>("cover_colors", { paths });

@@ -3,3 +3,4 @@
 .spike-backups/
 tests/fixtures/private/
 app/src-tauri/binaries/
+app/src-tauri/models/

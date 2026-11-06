@@ -39,3 +39,9 @@ cargo run -p erc-cli -- library enhance  # preview metadata proposals
 ```
 
 Project plan and progress: [docs/PLAN.md](docs/PLAN.md), [PROGRESS.md](PROGRESS.md). Device findings: [docs/device-notes.md](docs/device-notes.md). Manual device checks: [docs/hardware-checks.md](docs/hardware-checks.md). App caching and invalidation: [docs/app-caching.md](docs/app-caching.md).
+
+## Cover upscaling
+
+"Upscale cover…" enlarges a cover and removes compression noise with [4xBHI_dat2_real](https://huggingface.co/Phips/4xBHI_dat2_real) by Philip Hofmann, used under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The weights are converted to Core ML at half precision with a fixed tile size. Every result is reviewed before and after, and nothing changes until it's kept. It needs macOS 15 or later.
+
+The model isn't in the repository. `just upscale-model` builds it from the pinned upstream weights (about five minutes and 9 GB of memory, once), and `just build`, `just dev` and `just dev-optimized` run that for you. The app hides the feature when the model is missing.

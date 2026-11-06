@@ -358,3 +358,49 @@ fn contributors_are_stored_edited_exported_and_backfilled() {
     let lib = Library::open(&root).unwrap();
     assert_eq!(lib.book(book.id).unwrap().contributors, Some(vec![tom]));
 }
+
+#[test]
+fn upscaled_covers_are_remembered_until_replaced() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut lib = Library::open(dir.path().join("lib")).unwrap();
+    let (book, _) = added(
+        lib.import(&epub(
+            dir.path(),
+            "a.epub",
+            "Dune",
+            "Frank Herbert",
+            None,
+            "a",
+        ))
+        .unwrap(),
+    );
+    let jpeg = |width, height| {
+        let img = image::RgbImage::from_pixel(width, height, image::Rgb([10, 120, 200]));
+        let mut out = Cursor::new(Vec::new());
+        img.write_to(&mut out, image::ImageFormat::Jpeg).unwrap();
+        out.into_inner()
+    };
+
+    // Before any change the source is the EPUB's own cover, not the thumbnail.
+    let original = Epub::open(lib.book_file(book.id))
+        .unwrap()
+        .cover()
+        .unwrap()
+        .unwrap();
+    assert_eq!(lib.cover_source(book.id).unwrap().unwrap(), original.data);
+
+    let upscaled = lib.set_upscaled_cover(book.id, &jpeg(40, 60)).unwrap();
+    assert!(upscaled.custom_cover && upscaled.cover_upscaled);
+    assert_eq!(lib.book(book.id).unwrap(), upscaled);
+    assert_eq!(lib.cover_size(book.id), Some((40, 60)));
+
+    let replaced = lib.set_cover(book.id, &jpeg(20, 30)).unwrap();
+    assert!(replaced.custom_cover && !replaced.cover_upscaled);
+    let source = lib.cover_source(book.id).unwrap().unwrap();
+    let source = image::load_from_memory(&source).unwrap();
+    assert_eq!((source.width(), source.height()), (20, 30));
+
+    lib.set_upscaled_cover(book.id, &jpeg(40, 60)).unwrap();
+    let reset = lib.reset_cover(book.id).unwrap();
+    assert!(!reset.custom_cover && !reset.cover_upscaled);
+}

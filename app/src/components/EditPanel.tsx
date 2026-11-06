@@ -1,11 +1,12 @@
 import { GeneratedCover } from "./GeneratedCover";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   coverSrc,
   resetCover,
   setCoverFromFile,
   setCoverFromUrl,
+  upscaleAvailable,
   type Book,
   type MetadataEdit,
 } from "../api";
@@ -13,6 +14,7 @@ import { GENRES, genreOf } from "../genres";
 import { ROLES, fromForm, toForm, type EditForm } from "../library";
 import { AnnotationsDialog } from "./AnnotationsDialog";
 import { CoverPicker } from "./CoverPicker";
+import { UpscaleReview } from "./UpscaleReview";
 
 interface Props {
   book: Book;
@@ -38,6 +40,18 @@ export function EditPanel({
   const [picker, setPicker] = useState(false);
   const [highlights, setHighlights] = useState(false);
   const [coverBusy, setCoverBusy] = useState(false);
+  const [canUpscale, setCanUpscale] = useState(false);
+  const [upscaling, setUpscaling] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    upscaleAvailable()
+      .then((available) => alive && setCanUpscale(available))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const changeCover = async (action: () => Promise<Book>) => {
     setCoverBusy(true);
@@ -118,6 +132,15 @@ export function EditPanel({
             <button className="link" disabled={coverBusy} onClick={chooseImage}>
               Choose image…
             </button>
+            {canUpscale && book.has_cover && !book.cover_upscaled && (
+              <button
+                className="link"
+                disabled={coverBusy}
+                onClick={() => setUpscaling(true)}
+              >
+                Upscale cover…
+              </button>
+            )}
             {book.custom_cover && (
               <button
                 className="link"
@@ -135,6 +158,13 @@ export function EditPanel({
       </div>
       {highlights && (
         <AnnotationsDialog book={book} onClose={() => setHighlights(false)} />
+      )}
+      {upscaling && (
+        <UpscaleReview
+          books={[book]}
+          onChanged={onChanged}
+          onClose={() => setUpscaling(false)}
+        />
       )}
       {picker && (
         <CoverPicker

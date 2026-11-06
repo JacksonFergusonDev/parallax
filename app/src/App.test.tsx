@@ -49,6 +49,7 @@ const localBook: Book = {
   file_size: 100,
   has_cover: true,
   custom_cover: false,
+  cover_upscaled: false,
   cover: "/local.jpg",
   added_at: "2026-10-31",
   modified_at: "2026-10-31",

@@ -1,6 +1,7 @@
 //! Tauri adapter: thin commands over the core crates. No business logic here.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use erc_convert::Kepubify;
@@ -16,7 +17,8 @@ use erc_covers::{Candidate, CoverQuery};
 use erc_device::{Collection, DeviceBook, DeviceInfo};
 use erc_device_kobo::{BookCheck, ErcState, KoboDevice, MACOS_VOLUMES, tidy_apple_double};
 use erc_epub::MetadataEdit;
-use erc_library::{Book, ImportOutcome, Library, Reading, Rule};
+use erc_library::{Book, CUSTOM_COVER_MAX_HEIGHT, ImportOutcome, Library, Reading, Rule};
+use erc_upscale::CoreMl;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -28,6 +30,10 @@ const IMPORT_PROGRESS: &str = "import-progress";
 const ENHANCE_PROGRESS: &str = "enhance-progress";
 /// Event carrying [`ImportProgress`] while the library is checked.
 const CHECK_PROGRESS: &str = "check-progress";
+/// Event carrying [`UpscaleProgress`] while a cover is upscaled.
+const UPSCALE_PROGRESS: &str = "upscale-progress";
+/// The compiled model, relative to the app's resources.
+const UPSCALE_MODEL: &str = "models/cover-upscaler.mlmodelc";
 
 #[derive(Clone, Serialize)]
 struct ImportProgress {
@@ -40,6 +46,67 @@ struct AppState {
     library: Arc<Mutex<Library>>,
     /// Pre-change backups of device databases.
     backup_root: PathBuf,
+    upscaler: Arc<Upscaler>,
+}
+
+/// Cover upscaling. One cover at a time: the model fills the GPU.
+struct Upscaler {
+    /// Where the model is, if this build has it.
+    model: Option<PathBuf>,
+    /// Loaded on first use, as it takes seconds and a lot of memory.
+    engine: Mutex<Option<CoreMl>>,
+    cancelled: AtomicBool,
+    /// Results waiting for the user's decision.
+    previews: PathBuf,
+    /// Numbers each result, so the webview never shows a cached earlier one.
+    runs: AtomicU64,
+}
+
+impl Upscaler {
+    fn new(model: Option<PathBuf>, previews: PathBuf) -> Self {
+        // Anything here was left undecided when the app last closed.
+        let _ = std::fs::remove_dir_all(&previews);
+        Self {
+            model,
+            engine: Mutex::new(None),
+            cancelled: AtomicBool::new(false),
+            previews,
+            runs: AtomicU64::new(0),
+        }
+    }
+
+    fn after_file(&self, id: i64, run: u64) -> PathBuf {
+        self.previews.join(format!("{id}-{run}-after.png"))
+    }
+}
+
+/// The bundled model, or the one `just upscale-model` built for development.
+fn find_upscale_model(app: &AppHandle) -> Option<PathBuf> {
+    let bundled = app.path().resource_dir().ok()?.join(UPSCALE_MODEL);
+    let built =
+        cfg!(debug_assertions).then(|| Path::new(env!("CARGO_MANIFEST_DIR")).join(UPSCALE_MODEL));
+    [Some(bundled), built]
+        .into_iter()
+        .flatten()
+        .find(|path| path.is_dir())
+}
+
+#[derive(Clone, Serialize)]
+struct UpscaleProgress {
+    id: i64,
+    done: usize,
+    total: usize,
+}
+
+/// An upscaled cover waiting to be kept or discarded.
+#[derive(Serialize)]
+struct UpscalePreview {
+    id: i64,
+    run: u64,
+    before: PathBuf,
+    after: PathBuf,
+    before_size: (u32, u32),
+    after_size: (u32, u32),
 }
 
 impl AppState {
@@ -913,6 +980,91 @@ fn cover_reset(state: State<AppState>, id: i64) -> CmdResult<LibraryBook> {
     Ok(with_cover(&lib, book))
 }
 
+/// Whether this build can upscale covers.
+#[tauri::command]
+fn cover_upscale_available(state: State<AppState>) -> bool {
+    cfg!(target_os = "macos") && state.upscaler.model.is_some()
+}
+
+/// Upscales a book's cover without changing the book. `None` means the cover
+/// is already full size. A long job: the UI cancels with `cover_upscale_cancel`.
+#[tauri::command]
+async fn cover_upscale_preview(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: i64,
+) -> CmdResult<Option<UpscalePreview>> {
+    let library = state.library.clone();
+    let upscaler = state.upscaler.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let model = upscaler
+            .model
+            .as_ref()
+            .ok_or("cover upscaling isn't available")?;
+        let cover = library
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .cover_source(id)
+            .map_err(err)?
+            .ok_or("this book has no cover")?;
+        let mut engine = upscaler.engine.lock().unwrap_or_else(|e| e.into_inner());
+        // Reset only now: a job cancelled just before this one has finished,
+        // since it held the lock.
+        upscaler.cancelled.store(false, Ordering::Relaxed);
+        if engine.is_none() {
+            *engine = Some(CoreMl::load(model).map_err(err)?);
+        }
+        let Some(engine) = engine.as_ref() else {
+            return Err("cover upscaling isn't available".to_owned());
+        };
+        let up = erc_upscale::upscale_cover(
+            engine,
+            &cover,
+            CUSTOM_COVER_MAX_HEIGHT,
+            |done, total| {
+                let _ = app.emit(UPSCALE_PROGRESS, UpscaleProgress { id, done, total });
+            },
+            &upscaler.cancelled,
+        );
+        let up = match up {
+            Err(erc_upscale::Error::AlreadyFullSize) => return Ok(None),
+            other => other.map_err(err)?,
+        };
+        let run = upscaler.runs.fetch_add(1, Ordering::Relaxed);
+        std::fs::create_dir_all(&upscaler.previews).map_err(err)?;
+        let before = upscaler.previews.join(format!("{id}-{run}-before.png"));
+        let after = upscaler.after_file(id, run);
+        std::fs::write(&before, &up.before_png).map_err(err)?;
+        std::fs::write(&after, &up.after_png).map_err(err)?;
+        Ok(Some(UpscalePreview {
+            id,
+            run,
+            before,
+            after,
+            before_size: up.before_size,
+            after_size: up.after_size,
+        }))
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Makes a preview the book's cover.
+#[tauri::command]
+fn cover_upscale_apply(state: State<AppState>, id: i64, run: u64) -> CmdResult<LibraryBook> {
+    let image = std::fs::read(state.upscaler.after_file(id, run)).map_err(err)?;
+    let mut lib = state.library();
+    let book = lib.set_upscaled_cover(id, &image).map_err(err)?;
+    Ok(with_cover(&lib, book))
+}
+
+/// Stops the running job and discards every undecided preview.
+#[tauri::command]
+fn cover_upscale_cancel(state: State<AppState>) {
+    state.upscaler.cancelled.store(true, Ordering::Relaxed);
+    let _ = std::fs::remove_dir_all(&state.upscaler.previews);
+}
+
 /// The dominant colour of each cover, for sorting by colour; `None` for a
 /// cover that can't be read. Only reads covers the app itself stores.
 #[tauri::command]
@@ -1006,9 +1158,12 @@ pub fn run() {
         .setup(|app| {
             let data = app.path().app_data_dir()?;
             let library = Library::open(data.join("library"))?;
+            let previews = app.path().app_cache_dir()?.join("upscale-previews");
+            let model = find_upscale_model(app.handle());
             app.manage(AppState {
                 library: Arc::new(Mutex::new(library)),
                 backup_root: data.join("device-backups"),
+                upscaler: Arc::new(Upscaler::new(model, previews)),
             });
             size_first_window(app)?;
             Ok(())
@@ -1063,6 +1218,10 @@ pub fn run() {
             cover_set_url,
             cover_set_file,
             cover_reset,
+            cover_upscale_available,
+            cover_upscale_preview,
+            cover_upscale_apply,
+            cover_upscale_cancel,
             cover_colors
         ])
         .run(tauri::generate_context!())

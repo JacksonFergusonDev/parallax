@@ -67,6 +67,7 @@ import {
   type ReviewGroup,
 } from "./components/DuplicateReview";
 import { EditPanel } from "./components/EditPanel";
+import { UpscaleReview } from "./components/UpscaleReview";
 import { useGridReflow } from "./reflow";
 import { colorColumn, generatedColor, useCoverColors } from "./coverColor";
 import { LibraryRow } from "./components/LibraryRow";
@@ -126,6 +127,7 @@ export default function App() {
   /** Books being looked up for series and genres. */
   const [enhancing, setEnhancing] = useState<number[] | null>(null);
   const [checking, setChecking] = useState(false);
+  const [upscaling, setUpscaling] = useState<number[] | null>(null);
   const [fromCalibre, setFromCalibre] = useState(false);
   const [tidying, setTidying] = useState(false);
   /** Bumped when an enhance saves, so an open edit form reloads. */
@@ -963,7 +965,23 @@ export default function App() {
             setView("library");
             setSelected(new Set([id]));
           }}
+          onUpscale={(ids) => {
+            setChecking(false);
+            setUpscaling(ids);
+          }}
           onClose={() => setChecking(false)}
+        />
+      )}
+      {upscaling && (
+        <UpscaleReview
+          books={books.filter((b) => upscaling.includes(b.id))}
+          onChanged={(updated) => {
+            setBooks((bs) =>
+              bs.map((b) => (b.id === updated.id ? updated : b)),
+            );
+            refreshOnDevice(device);
+          }}
+          onClose={() => setUpscaling(null)}
         />
       )}
       {enhancing && (

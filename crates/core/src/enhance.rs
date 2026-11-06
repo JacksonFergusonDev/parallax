@@ -291,6 +291,7 @@ mod tests {
             file_size: 1,
             has_cover: false,
             custom_cover: false,
+            cover_upscaled: false,
             added_at: String::new(),
             modified_at: String::new(),
         }

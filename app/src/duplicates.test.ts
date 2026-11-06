@@ -22,6 +22,7 @@ const book = (id: number, extra: Partial<Book> = {}): Book => ({
   file_size: 2_500_000,
   has_cover: false,
   custom_cover: false,
+  cover_upscaled: false,
   added_at: "2024-01-03T00:00:00Z",
   modified_at: "2024-01-03T00:00:00Z",
   cover: null,
