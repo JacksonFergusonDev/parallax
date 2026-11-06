@@ -1,13 +1,11 @@
 import { GeneratedCover } from "./GeneratedCover";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
-  coverInfo,
   coverSrc,
   resetCover,
   setCoverFromFile,
   setCoverFromUrl,
-  upscaleAvailable,
   type Book,
   type CoverInfo,
   type MetadataEdit,
@@ -20,6 +18,10 @@ import { UpscaleReview } from "./UpscaleReview";
 
 interface Props {
   book: Book;
+  /** The cover's size, known before the panel appears so nothing shifts. */
+  cover: CoverInfo | null;
+  /** Whether this build has the upscaling model. */
+  canUpscale: boolean;
   onSave: (id: number, edit: MetadataEdit) => Promise<void>;
   /** Called with the updated book after a cover change. */
   onChanged: (book: Book) => void;
@@ -42,6 +44,8 @@ function coverAdvice(cover: CoverInfo, canUpscale: boolean) {
 /** Keyed by book id in the parent, so selecting another book starts a fresh form. */
 export function EditPanel({
   book,
+  cover,
+  canUpscale,
   onSave,
   onChanged,
   onEnhance,
@@ -53,30 +57,7 @@ export function EditPanel({
   const [picker, setPicker] = useState(false);
   const [highlights, setHighlights] = useState(false);
   const [coverBusy, setCoverBusy] = useState(false);
-  const [canUpscale, setCanUpscale] = useState(false);
   const [upscaling, setUpscaling] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    upscaleAvailable()
-      .then((available) => alive && setCanUpscale(available))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  // Reading the size takes about a millisecond, so nothing stores it.
-  const [cover, setCover] = useState<CoverInfo | null>(null);
-  useEffect(() => {
-    let alive = true;
-    coverInfo(book.id)
-      .then((info) => alive && setCover(info))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [book.id, book.modified_at]);
 
   // Only offered where it can help: the upscaler has nothing to do for an
   // excellent cover, and doesn't enlarge its own output a second time.

@@ -38,6 +38,7 @@ import {
   type OnDevice,
   listCollections,
   reconcileDevice,
+  upscaleAvailable,
 } from "./api";
 import {
   applyProgress,
@@ -67,6 +68,7 @@ import {
   type ReviewGroup,
 } from "./components/DuplicateReview";
 import { EditPanel } from "./components/EditPanel";
+import { usePanelBook } from "./panelBook";
 import { UpscaleReview } from "./components/UpscaleReview";
 import { useGridReflow } from "./reflow";
 import { colorColumn, generatedColor, useCoverColors } from "./coverColor";
@@ -128,6 +130,12 @@ export default function App() {
   const [enhancing, setEnhancing] = useState<number[] | null>(null);
   const [checking, setChecking] = useState(false);
   const [upscaling, setUpscaling] = useState<number[] | null>(null);
+  const [canUpscale, setCanUpscale] = useState(false);
+  useEffect(() => {
+    upscaleAvailable()
+      .then(setCanUpscale)
+      .catch(() => {});
+  }, []);
   const [fromCalibre, setFromCalibre] = useState(false);
   const [tidying, setTidying] = useState(false);
   /** Bumped when an enhance saves, so an open edit form reloads. */
@@ -322,9 +330,11 @@ export default function App() {
     () => books.filter((b) => selected.has(b.id)),
     [books, selected],
   );
-  const editing = selectedBooks.length === 1 ? selectedBooks[0] : null;
+  const panel = usePanelBook(
+    selectedBooks.length === 1 ? selectedBooks[0] : null,
+  );
   const gridRef = useRef<HTMLDivElement>(null);
-  useGridReflow(gridRef, editing !== null);
+  useGridReflow(gridRef, panel !== null);
   const toSend = visible.filter(
     (b) => selected.has(b.id) && !onDevice.has(b.id),
   );
@@ -784,12 +794,14 @@ export default function App() {
               )}
             </div>
           </main>
-          {editing && (
+          {panel && (
             // Stays mounted while switching books, so it slides in only once.
             <div className="panel-slot">
               <EditPanel
-                key={`${editing.id}-${enhanced}`}
-                book={editing}
+                key={`${panel.book.id}-${enhanced}`}
+                book={panel.book}
+                cover={panel.cover}
+                canUpscale={canUpscale}
                 onSave={save}
                 onEnhance={(id) => setEnhancing([id])}
                 onChanged={(updated) => {

@@ -2,9 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { invoke } from "@tauri-apps/api/core";
 import { EditPanel } from "./EditPanel";
-import { readCache } from "../readCache";
 import type { Book, CoverInfo } from "../api";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -40,15 +38,12 @@ describe("EditPanel cover details", () => {
     available = true,
     change: Partial<Book> = {},
   ) => {
-    vi.mocked(invoke).mockImplementation(async (command) => {
-      if (command === "cover_info") return info;
-      if (command === "cover_upscale_available") return available;
-      return null;
-    });
     await act(async () => {
       root.render(
         <EditPanel
           book={book(change)}
+          cover={info}
+          canUpscale={available}
           onSave={vi.fn()}
           onChanged={vi.fn()}
           onEnhance={vi.fn()}
@@ -62,8 +57,6 @@ describe("EditPanel cover details", () => {
     (
       globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    vi.mocked(invoke).mockReset();
-    readCache.clear();
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);

@@ -985,6 +985,8 @@ export function installMockBackend() {
         case "cover_upscale_tiles":
           return (a.ids as number[]).length * 12;
         case "cover_info": {
+          // About what the real round trip takes, so the UI has to cope.
+          await sleep(12);
           const book = books.find((b) => b.id === a.id);
           if (!book?.has_cover) return null;
           const height = [791, 1420, 2200][(a.id as number) % 3];
