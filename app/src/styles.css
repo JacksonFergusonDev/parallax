@@ -2479,8 +2479,9 @@ form.enhance-key input {
   transition-timing-function: linear;
 }
 
-/* A fixed-width band of light, the same in both themes: --accent-fg is dark in
-   dark mode. It runs on `left` so it crosses the fill at any width. */
+/* A fixed-width band of lighter orange, built from --accent rather than
+   --accent-fg, which is dark in dark mode. It runs on `left` so it crosses
+   the fill at any width. */
 .upscale-bar-fill::after {
   content: "";
   position: absolute;
@@ -2491,7 +2492,7 @@ form.enhance-key input {
   background: linear-gradient(
     90deg,
     transparent,
-    rgb(255 255 255 / 0.8),
+    color-mix(in srgb, var(--accent) 45%, #ffe2c8),
     transparent
   );
   animation: upscale-pulse-fill 1.4s linear infinite;
