@@ -124,6 +124,15 @@ beforeEach(() => {
           return currentBooks;
         case "reconcile_device":
           return { series: 0, grouped: 0 };
+        case "device_history":
+          return {
+            device: null,
+            books: [],
+            log: [],
+            problems: [],
+            changed: [],
+            missing: [],
+          };
         default:
           return [];
       }
@@ -236,6 +245,44 @@ describe("reading stats", () => {
     });
     expect(calls("reading_stats").at(-1)?.[1]).toEqual({ mount: null });
     expect(panel("Reading")).not.toBeNull();
+  });
+});
+
+describe("device badge", () => {
+  const about = () => document.querySelector(".modal.about");
+  const badge = () => container.querySelector<HTMLElement>("button.badge")!;
+
+  it("opens About this Kobo from any tab, while that tab stays open", async () => {
+    await render();
+    await click(button("Reading"));
+    await click(badge());
+    expect(about()?.textContent).toContain("About this Kobo");
+    expect(button("Reading").getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("doesn't reopen About after the Kobo is unplugged and returns", async () => {
+    await render();
+    await click(badge());
+    expect(about()).not.toBeNull();
+    connected = [];
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(about()).toBeNull();
+    connected = [device];
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(about()).toBeNull();
+  });
+
+  it("isn't a button with no Kobo connected", async () => {
+    connected = [];
+    await render();
+    expect(container.querySelector("button.badge")).toBeNull();
+    expect(container.querySelector(".badge")?.textContent).toContain(
+      "No device",
+    );
   });
 });
 

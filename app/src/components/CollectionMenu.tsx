@@ -1,3 +1,4 @@
+import { FolderPlus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Collection } from "../api";
 
@@ -41,6 +42,7 @@ export function CollectionMenu({
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
       >
+        <FolderPlus />
         {label} ▾
       </button>
       {open && (

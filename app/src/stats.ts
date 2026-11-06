@@ -68,3 +68,53 @@ export function ticks(max: number): number[] {
   for (let v = 0; v <= top + 1e-9; v += step) out.push(Math.round(v));
   return out;
 }
+
+/** Loose title match between Kobo stats and the library. */
+export function titleKey(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+/** One warm sentence summing up the reading, for the top of the screen. */
+export function readingHeadline(
+  stats: { total_secs: number; finished: StatBook[]; reading: StatBook[] },
+  now: Date,
+): string {
+  const thisYear = stats.finished.filter(
+    (b) =>
+      b.finished_at &&
+      new Date(b.finished_at).getFullYear() === now.getFullYear(),
+  ).length;
+  const time = spokenTime(stats.total_secs);
+  const books = (n: number) => `${n} ${n === 1 ? "book" : "books"}`;
+  if (thisYear > 0)
+    return `${books(thisYear)} finished this year${time ? `, and ${time} spent reading` : ""}.`;
+  if (stats.reading.length > 0)
+    return `${books(stats.reading.length)} on the go${time ? `, ${time} read so far` : ""}.`;
+  if (time) return `${time} spent reading on your Kobo.`;
+  return "Your reading, at a glance.";
+}
+
+/** "16 hours", "1 hour", "40 minutes"; null for no time at all. */
+export function spokenTime(secs: number | null | undefined): string | null {
+  if (!secs) return null;
+  if (secs < 3600) {
+    const m = Math.max(1, Math.round(secs / 60));
+    return `${m} ${m === 1 ? "minute" : "minutes"}`;
+  }
+  const h = Math.round(secs / 3600);
+  return `${h} ${h === 1 ? "hour" : "hours"}`;
+}
+
+/** Below this much reading time a book was only opened, not started. */
+export const STARTED_SECS = 30 * 60;
+
+/** Books really being read: at least half an hour in. When the Kobo kept no
+ * time for a book, a few percent of progress counts instead. */
+export function startedBooks(reading: StatBook[]): StatBook[] {
+  return reading.filter((b) =>
+    b.time_secs != null ? b.time_secs >= STARTED_SECS : b.percent >= 5,
+  );
+}

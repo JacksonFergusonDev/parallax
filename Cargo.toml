@@ -21,6 +21,17 @@ debug = "line-tables-only"
 [profile.dev.package."*"]
 debug = false
 
+# Decoding images unoptimised is about 30x slower, which is noticeable when
+# reading a whole library's covers. These rarely rebuild, so it costs little.
+[profile.dev.package.image]
+opt-level = 3
+
+[profile.dev.package.zune-jpeg]
+opt-level = 3
+
+[profile.dev.package.zune-core]
+opt-level = 3
+
 [profile.release]
 codegen-units = 1
 lto = true

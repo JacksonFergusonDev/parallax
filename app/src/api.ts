@@ -656,6 +656,9 @@ export const setCoverFromFile = (id: number, path: string) =>
   write<Book>("cover_set_file", { id, path }, ["library"]);
 export const resetCover = (id: number) =>
   write<Book>("cover_reset", { id }, ["library"]);
+/** Dominant colour of each cover file; null where one can't be read. */
+export const coverColors = (paths: string[]) =>
+  invoke<([number, number, number] | null)[]>("cover_colors", { paths });
 export const ejectDevice = (mount: string) =>
   write<void>("eject_device", { mount }, [deviceTag(mount)]);
 

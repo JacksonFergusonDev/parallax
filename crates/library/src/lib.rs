@@ -11,6 +11,7 @@
 //! ```
 
 mod authors;
+mod color;
 mod rules;
 mod schema;
 mod stores;
@@ -26,6 +27,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 pub use authors::normalize_authors;
+pub use color::{dominant_color, dominant_colors};
 pub use rules::{Rule, RuleKind};
 pub use stores::{Annotation, Reading};
 

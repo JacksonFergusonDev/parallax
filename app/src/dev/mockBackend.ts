@@ -946,6 +946,15 @@ export function installMockBackend() {
           return null;
         case "eject_device":
           return null;
+        case "cover_colors":
+          return (a.paths as string[]).map((path) => {
+            const hex = /fill="#([0-9a-f]{6})"/.exec(
+              decodeURIComponent(path),
+            )?.[1];
+            if (!hex) return null;
+            const n = parseInt(hex, 16);
+            return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+          });
         case "cover_search":
           await sleep(600);
           return SAMPLE.slice(0, 6).map(([title, author], i) => {

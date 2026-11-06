@@ -1,16 +1,29 @@
+/* "Reading room": warm paper, ink-brown text, one confident terracotta
+   accent, and a serif (Fraunces) for anything that names a book or a number
+   worth noticing. The interface itself stays in the system sans. */
 :root {
-  --bg: #fbfaf8;
-  --surface: #ffffff;
-  --sunken: #f3f1ed;
-  --fg: #1d1c1a;
-  --muted: #77736c;
-  --border: #e7e4de;
-  --accent: #2f6f5e;
-  --accent-fg: #ffffff;
-  --ok: #2f6f5e;
-  --warn: #9a5b13;
+  --bg: #f6f1e7;
+  --surface: #fffcf6;
+  --sunken: #eee6d7;
+  --fg: #2a2118;
+  --muted: #85786a;
+  --border: #e3d8c6;
+  --accent: #b4532a;
+  --accent-fg: #fffaf3;
+  --ok: #3d7a5c;
+  --warn: #a8641a;
   --danger: #b4322a;
   --radius: 10px;
+  --serif: "Fraunces Variable", "Iowan Old Style", Georgia, serif;
+  --shadow-book:
+    0 1px 1px rgb(60 40 20 / 10%), 0 3px 6px rgb(60 40 20 / 10%),
+    0 10px 24px -6px rgb(60 40 20 / 22%);
+  --shadow-book-lift:
+    0 2px 2px rgb(60 40 20 / 8%), 0 12px 18px rgb(60 40 20 / 14%),
+    0 28px 44px -12px rgb(60 40 20 / 34%);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Gentler than --ease-out: covers drift up rather than snap. */
+  --ease-lift: cubic-bezier(0.33, 1, 0.68, 1);
   font-family:
     -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
   font-size: 14px;
@@ -21,17 +34,32 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1b1a19;
-    --surface: #242322;
-    --sunken: #201f1e;
-    --fg: #ecebe8;
-    --muted: #9a968f;
-    --border: #353331;
-    --accent: #5fb39c;
-    --accent-fg: #10201b;
-    --ok: #5fb39c;
-    --warn: #d9a25f;
+    --bg: #1b1612;
+    --surface: #241e19;
+    --sunken: #1f1915;
+    --fg: #f1e8da;
+    --muted: #a59683;
+    --border: #3a3029;
+    --accent: #e3895c;
+    --accent-fg: #2a140a;
+    --ok: #74b591;
+    --warn: #dea563;
     --danger: #e0756c;
+    --shadow-book:
+      0 1px 1px rgb(0 0 0 / 30%), 0 4px 8px rgb(0 0 0 / 30%),
+      0 12px 26px -6px rgb(0 0 0 / 45%);
+    --shadow-book-lift:
+      0 2px 2px rgb(0 0 0 / 28%), 0 14px 20px rgb(0 0 0 / 35%),
+      0 30px 48px -12px rgb(0 0 0 / 58%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -98,6 +126,10 @@ body {
   margin: 0;
 }
 
+.topbar {
+  background: color-mix(in srgb, var(--surface) 55%, var(--bg));
+}
+
 .search {
   flex: 1;
   max-width: 420px;
@@ -149,6 +181,54 @@ input:disabled {
 
 .badge.connected .dot {
   background: var(--ok);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 60%, transparent);
+  animation: connect-pulse 1.6s var(--ease-out) 2;
+}
+
+.badge.connected {
+  border-color: color-mix(in srgb, var(--ok) 40%, var(--border));
+  background: color-mix(in srgb, var(--ok) 8%, transparent);
+}
+
+button.badge {
+  border-radius: 999px;
+}
+
+button.badge.connected:hover {
+  border-color: color-mix(in srgb, var(--ok) 70%, var(--border));
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
+}
+
+.reader-icon {
+  flex-shrink: 0;
+}
+
+.reader-screen {
+  fill: var(--sunken);
+  transition: fill 300ms;
+}
+
+.reader-line {
+  fill: transparent;
+  transition: fill 300ms 150ms;
+}
+
+.badge.connected .reader-screen {
+  fill: color-mix(in srgb, var(--ok) 22%, var(--surface));
+}
+
+.badge.connected .reader-line {
+  fill: currentColor;
+  opacity: 0.6;
+}
+
+@keyframes connect-pulse {
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
 }
 
 /* Main area */
@@ -196,9 +276,22 @@ input:disabled {
 }
 
 .dropzone-title {
-  font-size: 16px;
-  font-weight: 600;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 500;
+  font-variation-settings:
+    "opsz" 48,
+    "SOFT" 60;
+  letter-spacing: -0.01em;
   margin: 0;
+}
+
+.dropzone {
+  background: radial-gradient(
+    60% 60% at 50% 40%,
+    color-mix(in srgb, var(--accent) 6%, transparent),
+    transparent
+  );
 }
 
 .dropzone .secondary {
@@ -259,12 +352,17 @@ input:disabled {
 .empty {
   text-align: center;
   margin-top: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 
 /* Cover grid */
 
 .grid {
   display: grid;
+  padding-top: 6px;
   /* Fixed-width columns and gaps: covers keep their size and spacing when
      the edit panel opens and the grid narrows; leftover width stays at the
      right instead of stretching columns or gaps. */
@@ -283,23 +381,52 @@ input:disabled {
   min-width: 0;
 }
 
+/* Covers read as physical books: square spine edge, rounded fore-edge, a
+   crease and sheen down the spine, and a soft shadow that deepens on hover. */
 .cover {
   position: relative;
   aspect-ratio: 2 / 3;
-  border-radius: 6px;
+  border-radius: 2px 5px 5px 2px;
   overflow: hidden;
   background: var(--sunken);
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 8%),
-    0 4px 14px rgb(0 0 0 / 6%);
-  margin-bottom: 8px;
+  box-shadow: var(--shadow-book);
+  margin-bottom: 10px;
   outline: 3px solid transparent;
-  outline-offset: 2px;
-  transition: outline-color 80ms;
+  outline-offset: 3px;
+  transition:
+    outline-color 80ms,
+    transform 420ms var(--ease-lift),
+    box-shadow 420ms var(--ease-lift);
+}
+
+.cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    rgb(0 0 0 / 22%) 0,
+    rgb(255 255 255 / 18%) 2.5%,
+    rgb(0 0 0 / 12%) 5%,
+    transparent 9%,
+    transparent 94%,
+    rgb(255 255 255 / 6%) 100%
+  );
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 6%);
+}
+
+.card:hover .cover,
+.picker-item:hover img {
+  transform: translateY(-7px);
+  box-shadow: var(--shadow-book-lift);
 }
 
 .card.selected .cover {
   outline-color: var(--accent);
+  transform: translateY(-7px);
+  box-shadow: var(--shadow-book-lift);
 }
 
 .card:focus-visible .cover {
@@ -313,17 +440,108 @@ input:disabled {
   display: block;
 }
 
-.cover-placeholder {
+/* Generated covers for books without one (see coverArt.ts). */
+.gen-cover {
+  position: relative;
   height: 100%;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px;
-  text-align: center;
+  flex-direction: column;
+  padding: 16% 12% 12% 16%;
+  background: var(--gc-bg);
+  color: var(--gc-ink);
+  overflow: hidden;
+  text-align: left;
+}
+
+.gen-title {
+  position: relative;
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 560;
+  font-variation-settings:
+    "SOFT" 60,
+    "opsz" 40;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.gen-author {
+  position: relative;
+  margin-top: auto;
+  font-size: 10px;
   font-weight: 600;
-  color: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gc-accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen-motif {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.motif-band .gen-motif {
+  background:
+    linear-gradient(var(--gc-accent), var(--gc-accent)) 0 72% / 100% 3px
+      no-repeat,
+    linear-gradient(var(--gc-accent), var(--gc-accent)) 0 calc(72% + 7px) / 100%
+      1px no-repeat;
+}
+
+.motif-sun .gen-motif {
+  background: radial-gradient(
+    circle at 78% 74%,
+    var(--gc-accent) 0 22%,
+    transparent 22.5%
+  );
+  opacity: 0.85;
+}
+
+.motif-stripes .gen-motif {
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0 9px,
+    color-mix(in srgb, var(--gc-accent) 35%, transparent) 9px 11px
+  );
+  mask: linear-gradient(transparent 58%, #000 60%);
+}
+
+.motif-frame .gen-motif {
+  inset: 7%;
+  border: 1.5px solid var(--gc-accent);
+  border-radius: 1px;
+  opacity: 0.8;
+}
+
+.motif-arch .gen-motif {
+  inset: auto 18% -12% 18%;
+  aspect-ratio: 1 / 1.1;
+  border-radius: 999px 999px 0 0;
+  background: color-mix(in srgb, var(--gc-accent) 45%, transparent);
+}
+
+.gen-cover.mini {
+  padding: 4px 3px;
+  justify-content: center;
+}
+
+.gen-cover.mini .gen-title {
+  font-size: 6.5px;
+  font-weight: 650;
+  -webkit-line-clamp: 4;
+}
+
+.gen-cover.mini.motif-frame .gen-motif {
+  border-width: 1px;
 }
 
 .overlay,
@@ -338,6 +556,8 @@ input:disabled {
   background: rgb(0 0 0 / 65%);
   color: #fff;
   backdrop-filter: blur(4px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  z-index: 1;
 }
 
 .on-device,
@@ -347,6 +567,63 @@ input:disabled {
 
 .overlay-failed {
   background: color-mix(in srgb, var(--danger) 88%, black);
+  animation: shake 360ms ease-in-out;
+}
+
+/* While a book travels to the Kobo, a sheen sweeps its cover; when it lands,
+   the badge pops. */
+.card:has(.overlay-preparing, .overlay-converting, .overlay-copying)
+  .cover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgb(255 255 255 / 28%) 50%,
+    transparent 70%
+  );
+  background-size: 250% 100%;
+  animation: sheen 1.2s linear infinite;
+}
+
+.overlay-sent {
+  animation: pop 420ms var(--ease-out);
+}
+
+.overlay-sent::before {
+  content: "✓ ";
+}
+
+@keyframes sheen {
+  from {
+    background-position: 125% 0;
+  }
+  to {
+    background-position: -125% 0;
+  }
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
+@keyframes shake {
+  25% {
+    translate: -3px 0;
+  }
+  75% {
+    translate: 3px 0;
+  }
 }
 
 .card-title,
@@ -357,7 +634,11 @@ input:disabled {
 }
 
 .card-title {
-  font-weight: 500;
+  font-family: var(--serif);
+  font-size: 14.5px;
+  font-weight: 540;
+  font-variation-settings: "opsz" 20;
+  letter-spacing: -0.005em;
 }
 
 .card-author {
@@ -376,6 +657,20 @@ input:disabled {
   background: var(--surface);
 }
 
+.panel-slot {
+  display: flex;
+  flex-shrink: 0;
+  min-height: 0;
+  animation: panel-in 380ms var(--ease-lift);
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    translate: 24px 0;
+  }
+}
+
 .panel-head {
   display: flex;
   justify-content: space-between;
@@ -385,8 +680,8 @@ input:disabled {
 
 .panel-cover {
   width: 96px;
-  border-radius: 4px;
-  box-shadow: 0 2px 10px rgb(0 0 0 / 12%);
+  border-radius: 2px 4px 4px 2px;
+  box-shadow: var(--shadow-book);
 }
 
 .form {
@@ -497,11 +792,60 @@ button:disabled {
   cursor: default;
 }
 
+/* Buttons with a leading icon. */
+button:has(> .lucide) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+button > .lucide {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.9;
+}
+
+.view-toolbar button > .lucide,
+.sidebar-foot button > .lucide,
+.segmented button > .lucide {
+  width: 13px;
+  height: 13px;
+}
+
+.sort-note {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+button {
+  transition:
+    background-color 120ms,
+    border-color 120ms,
+    transform 120ms var(--ease-out),
+    box-shadow 120ms;
+}
+
+button:not(:disabled):active {
+  transform: translateY(1px) scale(0.985);
+}
+
+button:not(.primary, .link, .icon, .danger-fill):not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--fg) 22%, var(--border));
+}
+
 button.primary {
   background: var(--accent);
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 80%, black);
   color: var(--accent-fg);
-  font-weight: 500;
+  font-weight: 600;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 18%),
+    0 1px 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+button.primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--accent) 90%, black);
 }
 
 button.danger {
@@ -528,13 +872,15 @@ button.icon {
 .panel-cover.placeholder {
   width: 96px;
   aspect-ratio: 2 / 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  color: var(--muted);
-  border: 1px dashed var(--border);
-  box-shadow: none;
+  overflow: hidden;
+}
+
+.panel-cover.placeholder .gen-title {
+  font-size: 13px;
+}
+
+.panel-cover.placeholder .gen-author {
+  font-size: 7px;
 }
 
 .cover-actions {
@@ -584,7 +930,10 @@ button.link {
 }
 
 .modal-head h2 {
-  font-size: 15px;
+  font-family: var(--serif);
+  font-weight: 550;
+  font-variation-settings: "opsz" 36;
+  font-size: 18px;
   margin: 0 0 2px;
 }
 
@@ -690,6 +1039,34 @@ button.link {
   box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
 }
 
+.tabs button {
+  font-weight: 500;
+}
+
+.tabs button.active {
+  color: var(--accent);
+}
+
+.tabs button,
+.segmented button {
+  transition:
+    background-color 160ms,
+    color 160ms,
+    box-shadow 160ms,
+    transform 120ms var(--ease-out);
+}
+
+.tabs button:not(.active, :disabled):hover,
+.segmented button:not(.active, :disabled):hover {
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  color: var(--fg);
+}
+
+.tabs button.active:hover,
+.segmented button.active:hover {
+  box-shadow: 0 1px 4px rgb(0 0 0 / 18%);
+}
+
 /* Kobo view */
 
 .device-toolbar,
@@ -728,16 +1105,24 @@ button.link {
 }
 
 .list-row.selected {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.list-row .cell:nth-child(2) {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-variation-settings: "opsz" 18;
 }
 
 .thumb {
   width: 32px;
   height: 48px;
-  border-radius: 3px;
+  border-radius: 1px 3px 3px 1px;
   overflow: hidden;
   background: var(--sunken);
-  border: 1px solid var(--border);
+  box-shadow:
+    0 1px 2px rgb(60 40 20 / 18%),
+    inset 2px 0 0 rgb(0 0 0 / 12%);
 }
 
 .thumb img {
@@ -858,7 +1243,7 @@ button.danger-fill {
 .read-badge {
   position: absolute;
   right: 6px;
-  bottom: 6px;
+  top: 6px;
   font-size: 11px;
   font-weight: 600;
   padding: 2px 7px;
@@ -867,6 +1252,11 @@ button.danger-fill {
   backdrop-filter: blur(4px);
   background: color-mix(in srgb, var(--warn) 88%, black);
 }
+.read-badge {
+  z-index: 1;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+}
+
 .read-badge.finished {
   background: color-mix(in srgb, var(--ok) 88%, black);
 }
@@ -965,6 +1355,58 @@ button.danger-fill {
 
 button.link.danger {
   color: var(--danger);
+}
+
+/* Tool buttons in the Library toolbar and the On Kobo sidebar: small boxed
+   buttons rather than bare links. */
+.view-toolbar button.link,
+.sidebar-foot button.link {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 12.5px;
+  font-weight: 500;
+  box-shadow: 0 1px 1px rgb(60 40 20 / 6%);
+}
+
+.view-toolbar button.link:not(:disabled):hover,
+.sidebar-foot button.link:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  color: var(--accent);
+}
+
+.sidebar-foot button.link.danger {
+  color: var(--danger);
+}
+
+.sidebar-foot button.link.danger:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+  color: var(--danger);
+}
+
+.sidebar-foot {
+  align-items: stretch;
+  gap: 6px;
+  padding-inline: 0;
+}
+
+.sidebar-foot button.link {
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.view-toolbar {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.view-toolbar > .muted {
+  white-space: nowrap;
 }
 
 .chips {
@@ -1513,8 +1955,11 @@ form.enhance-key input {
   padding-top: 16px;
 }
 
-.reading {
-  max-width: 880px;
+/* Fills the window up to a comfortable reading width, centred beyond it. */
+.reading-page {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 22px;
@@ -1554,9 +1999,157 @@ form.enhance-key input {
 }
 
 .stat-value {
-  font-size: 26px;
-  font-weight: 600;
+  font-family: var(--serif);
+  font-size: 34px;
+  font-weight: 500;
+  font-variation-settings:
+    "opsz" 72,
+    "SOFT" 50;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums;
+}
+
+.stat-tile:first-child {
+  background:
+    radial-gradient(
+      120% 140% at 100% 0%,
+      color-mix(in srgb, var(--accent) 22%, transparent),
+      transparent 60%
+    ),
+    var(--surface);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.stat-tile:first-child .stat-value {
+  color: var(--accent);
+}
+
+.reading-headline {
+  font-family: var(--serif);
+  font-size: 30px;
+  font-weight: 450;
+  font-variation-settings:
+    "opsz" 96,
+    "SOFT" 80,
+    "WONK" 1;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 4px 0 -14px;
+  text-wrap: balance;
+  max-width: 24ch;
+}
+
+/* Books being read, as small covers with a progress bar. */
+.now-reading {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.now-card {
+  display: flex;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.now-cover {
+  position: relative;
+  width: 56px;
+  flex-shrink: 0;
+  aspect-ratio: 2 / 3;
+  border-radius: 1px 3px 3px 1px;
+  overflow: hidden;
+  box-shadow: var(--shadow-book);
+}
+
+.now-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.now-cover .gen-cover.mini .gen-title {
+  font-size: 9px;
+}
+
+.now-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.now-body .stat-title {
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 550;
+}
+
+.now-author {
+  font-size: 12px;
+  margin-bottom: auto;
+}
+
+.now-meta {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+
+.now-percent {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.now-body .progress {
+  margin: 8px 0 4px;
+}
+
+/* Books finished, drawn as stacked spines. */
+.spine-stack {
+  width: min(44px, 80%);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  transition: transform 200ms var(--ease-out);
+}
+
+.spine-stack.hovered {
+  transform: translateY(-2px);
+}
+
+.spine {
+  flex: 1;
+  width: var(--w);
+  margin-top: 1px;
+  border-radius: 1.5px;
+  translate: var(--tilt) 0;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 12%,
+      rgb(255 255 255 / 18%) 12% 15%,
+      transparent 15% 85%,
+      rgb(0 0 0 / 15%) 85% 88%,
+      transparent 88%
+    ),
+    var(--spine);
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 18%);
+}
+
+.shelf-art {
+  color: var(--border);
+  margin-bottom: 8px;
 }
 
 .stat-note {
@@ -1564,8 +2157,18 @@ form.enhance-key input {
 }
 
 .reading-section h3 {
-  font-size: 14px;
-  margin: 0 0 8px;
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 550;
+  font-variation-settings: "opsz" 36;
+  letter-spacing: -0.01em;
+  margin: 0 0 10px;
+}
+
+.reading-section h3 .muted {
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .reading-section h4 {
@@ -1620,6 +2223,7 @@ form.enhance-key input {
 .progress {
   height: 6px;
   border-radius: 3px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent);
   background: var(--sunken);
   overflow: hidden;
 }
@@ -1627,13 +2231,26 @@ form.enhance-key input {
 .progress-fill {
   height: 100%;
   border-radius: 3px;
-  background: var(--accent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 70%, var(--warn)),
+    var(--accent)
+  );
+  transform-origin: left;
+  animation: grow-in 700ms var(--ease-out) both;
+}
+
+@keyframes grow-in {
+  from {
+    transform: scaleX(0);
+  }
 }
 
 /* One-series column chart: thin columns with 4px rounded tops on a hairline
    baseline, recessive gridlines, a tooltip per column. */
 .column-chart {
   padding-left: 28px;
+  padding-top: 16px;
 }
 
 .chart-plot {

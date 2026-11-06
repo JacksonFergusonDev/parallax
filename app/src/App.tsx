@@ -1,4 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  BookOpen,
+  Copy,
+  Eject,
+  Import,
+  LibraryBig,
+  Plus,
+  RefreshCw,
+  Send,
+  ShieldCheck,
+  Tablet,
+  Tags,
+  Trash2,
+  WandSparkles,
+} from "lucide-react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import {
@@ -39,6 +54,7 @@ import { clickSelect, SELECTION_HINT } from "./selection";
 import { BookCard } from "./components/BookCard";
 import { CalibreImport } from "./components/CalibreImport";
 import { ReadingView } from "./components/ReadingView";
+import { ShelfArt } from "./components/ShelfArt";
 import { TidyGenres } from "./components/TidyGenres";
 import { CollectionMenu } from "./components/CollectionMenu";
 import { NameDialog } from "./components/NameDialog";
@@ -51,6 +67,8 @@ import {
   type ReviewGroup,
 } from "./components/DuplicateReview";
 import { EditPanel } from "./components/EditPanel";
+import { useGridReflow } from "./reflow";
+import { colorColumn, generatedColor, useCoverColors } from "./coverColor";
 import { LibraryRow } from "./components/LibraryRow";
 import {
   SortHeader,
@@ -64,7 +82,10 @@ import { usePresentation } from "./presentation";
 import "./styles.css";
 
 const DEVICE_POLL_MS = 2000;
-const LIBRARY_KEYS = libraryColumns(() => undefined).map((c) => c.key);
+const LIBRARY_KEYS = [
+  ...libraryColumns(() => undefined).map((c) => c.key),
+  "color" as const,
+];
 const NEW_COLLECTION = "\u0000new";
 
 type Notice = { kind: "error" | "info"; text: string };
@@ -87,6 +108,7 @@ export default function App() {
   const [naming, setNaming] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [query, setQuery] = useState("");
+  const [aboutOpen, setAboutOpen] = useState(false);
   const { mode, setMode, sort, setSort } = useViewState<LibraryKey>(
     "library",
     LIBRARY_KEYS,
@@ -268,15 +290,39 @@ export default function App() {
     [onDevice],
   );
   const columns = useMemo(() => libraryColumns(deviceState), [deviceState]);
+  const covers = useMemo(
+    () =>
+      books.flatMap((b) => {
+        const key = coverSrc(b);
+        return key && b.cover ? [{ key, path: b.cover }] : [];
+      }),
+    [books],
+  );
+  const { colorOf, loading: colorsLoading } = useCoverColors(
+    sort?.key === "color",
+    covers,
+  );
+  const sortColumns = useMemo(
+    () => [
+      ...columns,
+      colorColumn<Book, LibraryKey>("color", (b) => {
+        const key = coverSrc(b);
+        return key ? colorOf(key) : generatedColor(b.title);
+      }),
+    ],
+    [columns, colorOf],
+  );
   const visible = useMemo(
-    () => applySort(defaultOrder(filterBooks(books, query)), sort, columns),
-    [books, query, sort, columns],
+    () => applySort(defaultOrder(filterBooks(books, query)), sort, sortColumns),
+    [books, query, sort, sortColumns],
   );
   const selectedBooks = useMemo(
     () => books.filter((b) => selected.has(b.id)),
     [books, selected],
   );
   const editing = selectedBooks.length === 1 ? selectedBooks[0] : null;
+  const gridRef = useRef<HTMLDivElement>(null);
+  useGridReflow(gridRef, editing !== null);
   const toSend = visible.filter(
     (b) => selected.has(b.id) && !onDevice.has(b.id),
   );
@@ -503,6 +549,7 @@ export default function App() {
             className={activeView === "library" ? "active" : ""}
             onClick={() => setView("library")}
           >
+            <LibraryBig />
             Library
           </button>
           {device && (
@@ -516,6 +563,7 @@ export default function App() {
                 setView("device");
               }}
             >
+              <Tablet />
               On Kobo
             </button>
           )}
@@ -529,6 +577,7 @@ export default function App() {
               setView("reading");
             }}
           >
+            <BookOpen />
             Reading
           </button>
         </div>
@@ -541,7 +590,7 @@ export default function App() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <DeviceBadge device={device} />
+        <DeviceBadge device={device} onOpen={() => setAboutOpen(true)} />
       </header>
 
       {/* Retain loaded data, decoded images and scroll positions across tabs.
@@ -549,7 +598,7 @@ export default function App() {
       {activeView === "reading" && (
         <div className="tab-panel" role="tabpanel" aria-label="Reading">
           <div className="scroll reading-scroll">
-            <ReadingView mount={device?.mount ?? null} />
+            <ReadingView mount={device?.mount ?? null} library={books} />
           </div>
         </div>
       )}
@@ -567,6 +616,8 @@ export default function App() {
             query={query}
             libraryByContentId={libraryByContentId}
             onLibraryChanged={refresh}
+            about={aboutOpen}
+            onAboutChange={setAboutOpen}
             onChanged={() => {
               refreshOnDevice(device);
               listCollections(device.mount)
@@ -615,12 +666,15 @@ export default function App() {
                     );
                   }}
                 >
+                  <Copy />
                   Find duplicates…
                 </button>
                 <button className="link" onClick={() => setChecking(true)}>
+                  <ShieldCheck />
                   Check library…
                 </button>
                 <button className="link" onClick={() => setFromCalibre(true)}>
+                  <Import />
                   Import from calibre…
                 </button>
                 <button
@@ -628,6 +682,7 @@ export default function App() {
                   onClick={() => setTidying(true)}
                   title="Give genres one standard name in your library and on your Kobo"
                 >
+                  <Tags />
                   Tidy genres…
                 </button>
                 <button
@@ -639,6 +694,7 @@ export default function App() {
                   }
                   title="Look up series and genres for the selected books, or all books shown"
                 >
+                  <WandSparkles />
                   {selected.size
                     ? `Find series & genres for ${selected.size}…`
                     : "Find series & genres…"}
@@ -652,7 +708,8 @@ export default function App() {
                   onMode={setMode}
                   sort={sort}
                   onSort={setSort}
-                  columns={columns}
+                  columns={sortColumns}
+                  note={colorsLoading ? "Reading cover colours…" : null}
                 />
               </div>
             )}
@@ -664,10 +721,11 @@ export default function App() {
             >
               {loaded && books.length === 0 ? (
                 <div className="dropzone">
-                  <p className="dropzone-title">Drop EPUB files here</p>
+                  <ShelfArt />
+                  <p className="dropzone-title">Your shelves are empty</p>
                   <p className="muted">
-                    They're added to your library, ready to edit and send to
-                    your Kobo.
+                    Drop EPUB files here. They're added to your library, ready
+                    to edit and send to your Kobo.
                   </p>
                   <div className="dropzone-actions">
                     <button className="secondary" onClick={chooseFiles}>
@@ -682,9 +740,14 @@ export default function App() {
                   </div>
                 </div>
               ) : visible.length === 0 && loaded ? (
-                <p className="muted empty">No books match “{query}”.</p>
+                <div className="empty">
+                  <p className="dropzone-title">
+                    Nothing on the shelf by that name
+                  </p>
+                  <p className="muted">No books match “{query}”.</p>
+                </div>
               ) : mode === "grid" ? (
-                <div className="grid">
+                <div className="grid" ref={gridRef}>
                   {visible.map((b) => (
                     <BookCard
                       key={b.id}
@@ -720,19 +783,22 @@ export default function App() {
             </div>
           </main>
           {editing && (
-            <EditPanel
-              key={`${editing.id}-${enhanced}`}
-              book={editing}
-              onSave={save}
-              onEnhance={(id) => setEnhancing([id])}
-              onChanged={(updated) => {
-                setBooks((bs) =>
-                  bs.map((b) => (b.id === updated.id ? updated : b)),
-                );
-                refreshOnDevice(device);
-              }}
-              onClose={() => setSelected(new Set())}
-            />
+            // Stays mounted while switching books, so it slides in only once.
+            <div className="panel-slot">
+              <EditPanel
+                key={`${editing.id}-${enhanced}`}
+                book={editing}
+                onSave={save}
+                onEnhance={(id) => setEnhancing([id])}
+                onChanged={(updated) => {
+                  setBooks((bs) =>
+                    bs.map((b) => (b.id === updated.id ? updated : b)),
+                  );
+                  refreshOnDevice(device);
+                }}
+                onClose={() => setSelected(new Set())}
+              />
+            </div>
           )}
         </div>
 
@@ -742,6 +808,7 @@ export default function App() {
             onClick={chooseFiles}
             disabled={busy !== null}
           >
+            <Plus />
             {busy === "importing" ? "Adding…" : "Add books…"}
           </button>
           {notice ? (
@@ -758,6 +825,7 @@ export default function App() {
               onClick={remove}
               disabled={busy !== null}
             >
+              <Trash2 />
               Remove
             </button>
           )}
@@ -767,6 +835,7 @@ export default function App() {
               onClick={eject}
               disabled={busy !== null}
             >
+              <Eject />
               {busy === "ejecting" ? "Ejecting…" : "Eject Kobo"}
             </button>
           )}
@@ -782,6 +851,7 @@ export default function App() {
               disabled={!device || busy !== null}
               title="Replace the copies on your Kobo with your edits, keeping reading progress"
             >
+              <RefreshCw />
               {busy === "updating"
                 ? "Updating…"
                 : `Update ${toUpdate.length} on Kobo`}
@@ -847,6 +917,7 @@ export default function App() {
                 : (device.read_only ?? undefined)
             }
           >
+            <Send />
             {busy === "sending"
               ? "Sending…"
               : toSend.length > 0

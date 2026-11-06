@@ -1,3 +1,4 @@
+import { GeneratedCover } from "./GeneratedCover";
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
@@ -102,7 +103,9 @@ export function EditPanel({
           {src ? (
             <img className="panel-cover" src={src} alt="" />
           ) : (
-            <div className="panel-cover placeholder">No cover</div>
+            <div className="panel-cover placeholder">
+              <GeneratedCover title={book.title} author={book.authors[0]} />
+            </div>
           )}
           <div className="cover-actions">
             <button

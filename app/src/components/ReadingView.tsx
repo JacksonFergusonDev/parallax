@@ -1,16 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
-import { readingStats, type SavedStats, type StatBook } from "../api";
+import {
+  coverSrc,
+  readingStats,
+  type Book,
+  type SavedStats,
+  type StatBook,
+} from "../api";
+import { spineColor } from "../coverArt";
 import {
   finishedByMonth,
   finishedByYear,
   hours,
+  readingHeadline,
+  startedBooks,
   ticks,
+  titleKey,
   type Bucket,
 } from "../stats";
+import { GeneratedCover } from "./GeneratedCover";
+import { ShelfArt } from "./ShelfArt";
 
 interface Props {
   /** The connected Kobo; null shows the last saved stats. */
   mount: string | null;
+  /** The library, for real covers of books being read. */
+  library: Book[];
 }
 
 const dateFmt = (iso: string | null) =>
@@ -23,7 +37,7 @@ const dateFmt = (iso: string | null) =>
     : "";
 
 /** Reading statistics from the Kobo, or the last ones saved. */
-export function ReadingView({ mount }: Props) {
+export function ReadingView({ mount, library }: Props) {
   const [saved, setSaved] = useState<SavedStats | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<"years" | "months">("years");
@@ -43,6 +57,14 @@ export function ReadingView({ mount }: Props) {
   }, [mount]);
 
   const now = useMemo(() => new Date(), []);
+  const covers = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const b of library) {
+      const src = coverSrc(b);
+      if (src) m.set(titleKey(b.title), src);
+    }
+    return m;
+  }, [library]);
   const stats = saved?.stats;
   const buckets = useMemo(
     () =>
@@ -60,6 +82,7 @@ export function ReadingView({ mount }: Props) {
     return (
       <div className="reading-empty">
         {error && <p className="notice notice-error wrap">{error}</p>}
+        <ShelfArt />
         <p className="dropzone-title">No reading stats yet</p>
         <p className="muted">
           Connect your Kobo once and its reading time, books in progress and
@@ -68,6 +91,7 @@ export function ReadingView({ mount }: Props) {
       </div>
     );
 
+  const reading = startedBooks(stats.reading);
   const thisYear = stats.finished.filter(
     (b) =>
       b.finished_at &&
@@ -82,7 +106,10 @@ export function ReadingView({ mount }: Props) {
   }
 
   return (
-    <div className="reading">
+    <div className="reading-page">
+      <h2 className="reading-headline">
+        {readingHeadline({ ...stats, reading }, now)}
+      </h2>
       <p className="muted reading-source">
         {stats.device_model}
         {mount
@@ -106,7 +133,7 @@ export function ReadingView({ mount }: Props) {
           label={`Finished in ${now.getFullYear()}`}
           value={String(thisYear)}
         />
-        <Tile label="Reading now" value={String(stats.reading.length)} />
+        <Tile label="Reading now" value={String(reading.length)} />
       </div>
 
       <section className="reading-section">
@@ -136,33 +163,52 @@ export function ReadingView({ mount }: Props) {
         )}
       </section>
 
-      {stats.reading.length > 0 && (
+      {reading.length > 0 && (
         <section className="reading-section">
           <h3>
-            Reading now <span className="muted">{stats.reading.length}</span>
+            Reading now <span className="muted">{reading.length}</span>
           </h3>
-          <ul className="stat-list">
-            {stats.reading.map((b) => (
-              <li key={b.content_id} className="stat-row">
-                <BookName book={b} />
-                <div className="progress" title={`${b.percent}% read`}>
-                  <div
-                    className="progress-fill"
-                    style={{ width: `${b.percent}%` }}
-                  />
-                </div>
-                <span className="stat-num">{b.percent}%</span>
-                <span className="muted stat-num" title="Time spent reading">
-                  {hours(b.time_secs)}
-                </span>
-                <span
-                  className="muted stat-num"
-                  title="Kobo's estimate of the time left"
-                >
-                  {b.left_secs ? `${hours(b.left_secs)} left` : ""}
-                </span>
-              </li>
-            ))}
+          <ul className="now-reading">
+            {reading.map((b) => {
+              const src = covers.get(titleKey(b.title));
+              return (
+                <li key={b.content_id} className="now-card">
+                  <div className="now-cover">
+                    {src ? (
+                      <img src={src} alt="" draggable={false} />
+                    ) : (
+                      <GeneratedCover title={b.title} size="mini" />
+                    )}
+                  </div>
+                  <div className="now-body">
+                    <BookName book={b} author={false} />
+                    {b.author && (
+                      <span className="muted now-author">{b.author}</span>
+                    )}
+                    <div className="progress" title={`${b.percent}% read`}>
+                      <div
+                        className="progress-fill"
+                        style={{ width: `${b.percent}%` }}
+                      />
+                    </div>
+                    <div className="now-meta">
+                      <span className="now-percent">{b.percent}%</span>
+                      <span className="muted" title="Time spent reading">
+                        {hours(b.time_secs)} read
+                      </span>
+                      {b.left_secs ? (
+                        <span
+                          className="muted"
+                          title="Kobo's estimate of the time left"
+                        >
+                          · {hours(b.left_secs)} left
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}
@@ -232,14 +278,20 @@ function Tile({
   );
 }
 
-function BookName({ book }: { book: StatBook }) {
+function BookName({
+  book,
+  author = true,
+}: {
+  book: StatBook;
+  author?: boolean;
+}) {
   return (
     <span
       className="stat-book"
       title={book.author ? `${book.title} by ${book.author}` : book.title}
     >
       <span className="stat-title">{book.title}</span>
-      {book.author && <span className="muted"> · {book.author}</span>}
+      {author && book.author && <span className="muted"> · {book.author}</span>}
       {!book.on_device && <span className="muted"> · removed</span>}
     </span>
   );
@@ -252,6 +304,8 @@ function ColumnChart({ buckets }: { buckets: Bucket[] }) {
   const axis = ticks(max);
   const top = axis[axis.length - 1];
   const peak = buckets.findIndex((b) => b.count === max && max > 0);
+  // Each finished book is drawn as a spine while they stay thick enough.
+  const stacked = top <= 30;
 
   return (
     <div
@@ -285,12 +339,32 @@ function ColumnChart({ buckets }: { buckets: Bucket[] }) {
                   {b.count}
                 </span>
               )}
-              {b.count > 0 && (
-                <div
-                  className={`column ${hover === i ? "hovered" : ""}`}
-                  style={{ height: `${(b.count / top) * 100}%` }}
-                />
-              )}
+              {b.count > 0 &&
+                (stacked ? (
+                  <div
+                    className={`spine-stack ${hover === i ? "hovered" : ""}`}
+                    style={{ height: `${(b.count / top) * 100}%` }}
+                  >
+                    {Array.from({ length: b.count }, (_, n) => (
+                      <span
+                        key={n}
+                        className="spine"
+                        style={
+                          {
+                            "--spine": spineColor(`${b.key}:${n}`),
+                            "--tilt": `${((n * 7) % 5) - 2}px`,
+                            "--w": `${84 + ((n * 13) % 17)}%`,
+                          } as React.CSSProperties
+                        }
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    className={`column ${hover === i ? "hovered" : ""}`}
+                    style={{ height: `${(b.count / top) * 100}%` }}
+                  />
+                ))}
               {hover === i && (
                 <div
                   className="chart-tooltip"

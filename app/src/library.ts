@@ -131,7 +131,14 @@ export const fromForm = (f: EditForm): MetadataEdit => ({
 export const isBookFile = (path: string) => /\.(epub|kepub)$/i.test(path);
 
 export type LibraryKey =
-  "title" | "author" | "series" | "tags" | "progress" | "kobo" | "added";
+  | "title"
+  | "author"
+  | "series"
+  | "tags"
+  | "progress"
+  | "kobo"
+  | "added"
+  | "color";
 
 /** "The Hobbit" sorts under H. */
 export const titleKey = (t: string) => t.replace(/^(the|a|an)\s+/i, "");
