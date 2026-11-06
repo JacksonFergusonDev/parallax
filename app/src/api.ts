@@ -42,8 +42,15 @@ export interface Book {
   tags: string[];
   language: string | null;
   publisher: string | null;
+  /** ISO 8601, to whatever precision the EPUB gives. */
+  published: string | null;
   description: string | null;
   identifiers: Identifier[];
+  /** Null when the EPUB couldn't be measured. */
+  words: number | null;
+  pages: number | null;
+  /** Worked out from the words, rather than listed by the publisher. */
+  pages_estimated: boolean;
   original_name: string;
   file_size: number;
   has_cover: boolean;

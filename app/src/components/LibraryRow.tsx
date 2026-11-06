@@ -52,6 +52,14 @@ export const LibraryRow = memo(function LibraryRow({
       </span>
       <span className="cell muted">{book.tags.join(", ")}</span>
       <span
+        className="cell end muted"
+        title={
+          book.pages_estimated ? "Estimated from the word count" : undefined
+        }
+      >
+        {book.pages?.toLocaleString()}
+      </span>
+      <span
         className={`cell end status-${book.reading?.status ?? "none"}`}
         title={
           book.reading?.last_read

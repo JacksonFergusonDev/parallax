@@ -178,9 +178,33 @@ pub fn read_metadata(doc: &Document) -> Metadata {
             .collect(),
         language: first_dc("language"),
         publisher: first_dc("publisher"),
+        published: published(&children),
         description: first_dc("description"),
         identifiers,
     }
+}
+
+/// The publication date. EPUB2 can label `dc:date`s with an event, as a file
+/// can also record when it was created or modified; unlabelled means published.
+fn published(children: &[Node]) -> Option<String> {
+    let dates = || children.iter().filter(|n| is_dc(n, "date"));
+    let event = |n: &&Node, wanted: Option<&str>| {
+        n.attribute((OPF_NS, "event"))
+            .map(str::to_lowercase)
+            .as_deref()
+            == wanted
+    };
+    dates()
+        .find(|n| event(n, Some("publication")))
+        .or_else(|| dates().find(|n| event(n, None)))
+        .and_then(text)
+        .filter(|date| is_real_date(date))
+}
+
+/// Starts with a year, and not 0101: calibre's "undefined" date.
+fn is_real_date(date: &str) -> bool {
+    date.get(..4)
+        .is_some_and(|y| y.bytes().all(|b| b.is_ascii_digit()) && y != "0101")
 }
 
 /// `(href, media-type)` of the cover image: EPUB3 `cover-image` property,

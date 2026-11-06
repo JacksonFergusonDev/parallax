@@ -420,3 +420,60 @@ fn upscaled_covers_are_remembered_until_replaced() {
     let reset = lib.reset_cover(book.id).unwrap();
     assert!(!reset.custom_cover && !reset.cover_upscaled);
 }
+
+/// An EPUB with a publication date and a chapter of 600 words.
+fn long_epub(dir: &Path) -> PathBuf {
+    let opf = r#"<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Long</dc:title>
+    <dc:identifier id="uid">urn:uuid:long</dc:identifier>
+    <dc:date>1965-08-01</dc:date>
+  </metadata>
+  <manifest><item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/></manifest>
+  <spine><itemref idref="c1"/></spine>
+</package>"#;
+    let path = dir.join("long.epub");
+    let mut zip = ZipWriter::new(File::create(&path).unwrap());
+    let options = SimpleFileOptions::default();
+    for (name, data) in [
+        (
+            "META-INF/container.xml",
+            r#"<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#.to_owned(),
+        ),
+        ("content.opf", opf.to_owned()),
+        ("c1.xhtml", format!("<body>{}</body>", "word ".repeat(600))),
+    ] {
+        zip.start_file(name, options).unwrap();
+        zip.write_all(data.as_bytes()).unwrap();
+    }
+    zip.finish().unwrap();
+    path
+}
+
+#[test]
+fn length_and_publication_date_are_stored_and_backfilled() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("lib");
+    let mut lib = Library::open(&root).unwrap();
+    let (book, _) = added(lib.import(&long_epub(dir.path())).unwrap());
+    assert_eq!(book.published.as_deref(), Some("1965-08-01"));
+    assert_eq!(book.words, Some(600));
+    assert_eq!(book.pages, Some(2));
+    assert!(book.pages_estimated);
+
+    // A library from before these were tracked reads them on open.
+    drop(lib);
+    rusqlite::Connection::open(root.join("library.sqlite"))
+        .unwrap()
+        .execute(
+            "UPDATE books SET published = NULL, words = NULL, pages = NULL",
+            [],
+        )
+        .unwrap();
+    let lib = Library::open(&root).unwrap();
+    let book = lib.book(book.id).unwrap();
+    assert_eq!(book.published.as_deref(), Some("1965-08-01"));
+    assert_eq!(book.words, Some(600));
+    assert_eq!(book.pages, Some(2));
+}

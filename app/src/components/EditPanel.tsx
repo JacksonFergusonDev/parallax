@@ -1,5 +1,5 @@
 import { GeneratedCover } from "./GeneratedCover";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   coverSrc,
@@ -11,7 +11,19 @@ import {
   type MetadataEdit,
 } from "../api";
 import { GENRES, genreOf } from "../genres";
-import { ROLES, fromForm, toForm, type EditForm } from "../library";
+import { shortDate } from "../device";
+import { formatSize } from "../duplicates";
+import {
+  ROLES,
+  fromForm,
+  isbnOf,
+  languageLabel,
+  pagesLabel,
+  plainDescription,
+  publishedLabel,
+  toForm,
+  type EditForm,
+} from "../library";
 import { AnnotationsDialog } from "./AnnotationsDialog";
 import { CoverPicker } from "./CoverPicker";
 import { UpscaleReview } from "./UpscaleReview";
@@ -39,6 +51,61 @@ function coverAdvice(cover: CoverInfo, canUpscale: boolean) {
   return canUpscale
     ? `${look} Upscaling or a sharper cover would help.`
     : `${look} A sharper cover would help.`;
+}
+
+/** Longer descriptions start collapsed. */
+const LONG_DESCRIPTION = 320;
+
+function Description({ html }: { html: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const text = plainDescription(html);
+  if (!text) return null;
+  const long = text.length > LONG_DESCRIPTION;
+  return (
+    <section className="description">
+      <p className={long && !expanded ? "clamped" : undefined}>{text}</p>
+      {long && (
+        <button className="link" onClick={() => setExpanded(!expanded)}>
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
+    </section>
+  );
+}
+
+/** The book's details that aren't edited here; missing ones are left out. */
+function Facts({ book }: { book: Book }) {
+  const facts: [string, string | null | undefined, string?][] = [
+    ["Published", book.published && publishedLabel(book.published)],
+    ["Publisher", book.publisher],
+    [
+      "Pages",
+      pagesLabel(book),
+      book.pages_estimated
+        ? "Estimated from the word count"
+        : "From the print edition",
+    ],
+    ["Words", book.words?.toLocaleString()],
+    ["Language", book.language && languageLabel(book.language)],
+    ["ISBN", isbnOf(book)],
+    ["Last read", book.reading?.last_read && shortDate(book.reading.last_read)],
+    ["Added", shortDate(book.added_at)],
+    ["Size", formatSize(book.file_size)],
+    ["File", book.original_name, book.original_name],
+  ];
+  return (
+    <dl className="facts">
+      {facts.map(
+        ([label, value, title]) =>
+          value && (
+            <Fragment key={label}>
+              <dt>{label}</dt>
+              <dd title={title}>{value}</dd>
+            </Fragment>
+          ),
+      )}
+    </dl>
+  );
 }
 
 /** Keyed by book id in the parent, so selecting another book starts a fresh form. */
@@ -381,22 +448,8 @@ export function EditPanel({
           </button>
         </div>
       </form>
-      <dl className="facts">
-        {book.publisher && (
-          <>
-            <dt>Publisher</dt>
-            <dd>{book.publisher}</dd>
-          </>
-        )}
-        {book.language && (
-          <>
-            <dt>Language</dt>
-            <dd>{book.language}</dd>
-          </>
-        )}
-        <dt>File</dt>
-        <dd title={book.original_name}>{book.original_name}</dd>
-      </dl>
+      {book.description && <Description html={book.description} />}
+      <Facts book={book} />
     </aside>
   );
 }

@@ -100,6 +100,12 @@ const MIGRATIONS: &[&str] = &[
     );",
     // 11: the custom cover was enlarged by the upscaler rather than found.
     "ALTER TABLE books ADD COLUMN cover_upscaled INTEGER NOT NULL DEFAULT 0;",
+    // 12: publication date and length; `words` is NULL until the EPUB has been
+    // measured (books imported earlier are filled in when the library opens).
+    "ALTER TABLE books ADD COLUMN published TEXT;
+     ALTER TABLE books ADD COLUMN words INTEGER;
+     ALTER TABLE books ADD COLUMN pages INTEGER;
+     ALTER TABLE books ADD COLUMN pages_estimated INTEGER NOT NULL DEFAULT 1;",
 ];
 
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {

@@ -447,3 +447,142 @@ fn writes_contributors_epub3_and_none_leaves_them() {
         p
     });
 }
+
+fn opf_with(metadata: &str, manifest: &str, spine: &str) -> String {
+    format!(
+        r#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title>T</dc:title>{metadata}
+  </metadata>
+  <manifest>{manifest}</manifest>
+  <spine>{spine}</spine>
+</package>"#
+    )
+}
+
+fn published(dates: &str) -> Option<String> {
+    let dir = tempfile::tempdir().unwrap();
+    let path = make_epub(dir.path(), "b.epub", &opf_with(dates, "", ""), &[]);
+    Epub::open(path).unwrap().metadata().published
+}
+
+#[test]
+fn reads_the_publication_date() {
+    assert_eq!(
+        published("<dc:date>1997-02-15T05:00:00+00:00</dc:date>").as_deref(),
+        Some("1997-02-15T05:00:00+00:00")
+    );
+    assert_eq!(
+        published(
+            r#"<dc:date opf:event="modification">2020-01-01</dc:date>
+               <dc:date opf:event="publication">1965</dc:date>"#
+        )
+        .as_deref(),
+        Some("1965")
+    );
+}
+
+#[test]
+fn ignores_dates_that_are_not_publication_dates() {
+    assert_eq!(published(""), None);
+    assert_eq!(
+        published(r#"<dc:date opf:event="creation">2020-01-01</dc:date>"#),
+        None
+    );
+    // calibre's "undefined".
+    assert_eq!(
+        published("<dc:date>0101-01-01T00:00:00+00:00</dc:date>"),
+        None
+    );
+    assert_eq!(published("<dc:date>Spring 1999</dc:date>"), None);
+}
+
+const CHAPTER: &str = r#"<item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/>"#;
+const CHAPTER_REF: &str = r#"<itemref idref="c1"/>"#;
+
+fn prose(words: usize) -> Vec<u8> {
+    format!("<html><body><p>{}</p></body></html>", "word ".repeat(words)).into_bytes()
+}
+
+#[test]
+fn estimates_pages_from_the_spines_words() {
+    let dir = tempfile::tempdir().unwrap();
+    let not_in_spine = r#"<item id="x" href="x.xhtml" media-type="application/xhtml+xml"/>"#;
+    let opf = opf_with("", &format!("{CHAPTER}{not_in_spine}"), CHAPTER_REF);
+    let chapter = prose(3000);
+    let unread = prose(9000);
+    let files: &[(&str, &[u8])] = &[("c1.xhtml", &chapter), ("x.xhtml", &unread)];
+    let path = make_epub(dir.path(), "b.epub", &opf, files);
+    let extent = Epub::open(path).unwrap().extent().unwrap();
+    assert_eq!(extent.words, 3000);
+    assert_eq!(extent.pages, Some(10));
+    assert!(extent.pages_estimated);
+}
+
+#[test]
+fn prefers_the_print_page_list() {
+    let dir = tempfile::tempdir().unwrap();
+    let ncx = r#"<item id="n" href="toc.ncx" media-type="application/x-dtbncx+xml"/>"#;
+    let opf = opf_with("", &format!("{CHAPTER}{ncx}"), CHAPTER_REF);
+    let list = format!(
+        "<ncx><pageList>{}</pageList></ncx>",
+        "<pageTarget/>".repeat(12)
+    );
+    let chapter = prose(3000);
+    let files: &[(&str, &[u8])] = &[("c1.xhtml", &chapter), ("toc.ncx", list.as_bytes())];
+    let path = make_epub(dir.path(), "b.epub", &opf, files);
+    let extent = Epub::open(path).unwrap().extent().unwrap();
+    assert_eq!(extent.pages, Some(12));
+    assert!(!extent.pages_estimated);
+}
+
+#[test]
+fn a_stub_page_list_is_not_trusted() {
+    let dir = tempfile::tempdir().unwrap();
+    let ncx = r#"<item id="n" href="toc.ncx" media-type="application/x-dtbncx+xml"/>"#;
+    let opf = opf_with("", &format!("{CHAPTER}{ncx}"), CHAPTER_REF);
+    let list = "<ncx><pageList><pageTarget/></pageList></ncx>";
+    let chapter = prose(3000);
+    let files: &[(&str, &[u8])] = &[("c1.xhtml", &chapter), ("toc.ncx", list.as_bytes())];
+    let path = make_epub(dir.path(), "b.epub", &opf, files);
+    let extent = Epub::open(path).unwrap().extent().unwrap();
+    assert_eq!(extent.pages, Some(10));
+    assert!(extent.pages_estimated);
+}
+
+#[test]
+fn picture_pages_count_towards_the_estimate() {
+    let dir = tempfile::tempdir().unwrap();
+    let manifest = r#"<item id="a" href="a.xhtml" media-type="application/xhtml+xml"/>
+                      <item id="b" href="b.xhtml" media-type="application/xhtml+xml"/>"#;
+    let opf = opf_with("", manifest, r#"<itemref idref="a"/><itemref idref="b"/>"#);
+    let page: &[u8] = b"<html><body><img src='p.jpg'/></body></html>";
+    let files: &[(&str, &[u8])] = &[("a.xhtml", page), ("b.xhtml", page)];
+    let path = make_epub(dir.path(), "b.epub", &opf, files);
+    let extent = Epub::open(path).unwrap().extent().unwrap();
+    assert_eq!(extent.words, 0);
+    assert_eq!(extent.pages, Some(2));
+}
+
+#[test]
+fn an_empty_book_has_no_page_count() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = make_epub(dir.path(), "b.epub", &opf_with("", "", ""), &[]);
+    let extent = Epub::open(path).unwrap().extent().unwrap();
+    assert_eq!(extent.pages, None);
+}
+
+#[test]
+fn encrypted_books_cannot_be_measured() {
+    let dir = tempfile::tempdir().unwrap();
+    let opf = opf_with("", CHAPTER, CHAPTER_REF);
+    let path = make_epub(dir.path(), "b.epub", &opf, &[("c1.xhtml", &prose(10))]);
+    let mut zip =
+        ZipWriter::new_append(File::options().read(true).write(true).open(&path).unwrap()).unwrap();
+    zip.start_file("META-INF/rights.xml", SimpleFileOptions::default())
+        .unwrap();
+    zip.write_all(b"<rights/>").unwrap();
+    zip.finish().unwrap();
+    assert!(Epub::open(path).unwrap().extent().is_err());
+}

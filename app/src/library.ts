@@ -135,6 +135,7 @@ export type LibraryKey =
   | "author"
   | "series"
   | "tags"
+  | "pages"
   | "progress"
   | "kobo"
   | "added"
@@ -197,6 +198,13 @@ export const libraryColumns = (
     value: (b) => (b.tags.length ? b.tags.join(", ") : null),
   },
   {
+    key: "pages",
+    label: "Pages",
+    width: "64px",
+    align: "end",
+    value: (b) => b.pages,
+  },
+  {
     key: "progress",
     label: "Progress",
     width: "80px",
@@ -227,6 +235,56 @@ export const libraryColumns = (
     value: (b) => b.added_at,
   },
 ];
+
+/** "412", or "About 410" when worked out from the book's words. */
+export function pagesLabel(b: Book): string | null {
+  if (b.pages === null) return null;
+  const count = b.pages.toLocaleString();
+  return b.pages_estimated ? `About ${count}` : count;
+}
+
+/**
+ * "1997" or "February 1997". Days are left out: EPUB dates are often shifted
+ * by a time zone, or a placeholder for a book only known by its month.
+ */
+export function publishedLabel(date: string): string {
+  const [, year, month] = /^(\d{4})(?:-(\d{2}))?/.exec(date) ?? [];
+  if (!year) return date;
+  if (!month) return year;
+  return new Date(Date.UTC(+year, +month - 1)).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** "English" for "en"; codes the browser doesn't know stay as they are. */
+export function languageLabel(code: string): string {
+  try {
+    return (
+      new Intl.DisplayNames(undefined, { type: "language" }).of(code) ?? code
+    );
+  } catch {
+    return code;
+  }
+}
+
+/** The book's ISBN, given as an identifier scheme or a prefix on the value. */
+export function isbnOf(b: Book): string | null {
+  for (const { scheme, value } of b.identifiers) {
+    if (scheme?.toLowerCase() === "isbn") return value;
+    const prefixed = !scheme && /^isbn:\s*(.+)/i.exec(value);
+    if (prefixed) return prefixed[1];
+  }
+  return null;
+}
+
+/** A description as plain text; EPUBs and calibre often store it as HTML. */
+export function plainDescription(html: string): string {
+  const spaced = html.replace(/<br\s*\/?>|<\/(p|div|li|h\d)>/gi, "$&\n");
+  const doc = new DOMParser().parseFromString(spaced, "text/html");
+  return (doc.body.textContent ?? "").replace(/\n\s*\n+/g, "\n").trim();
+}
 
 /** "Finished", "63%", "Unread", or "" when no Kobo has reported it. */
 export function progressLabel(b: Book): string {

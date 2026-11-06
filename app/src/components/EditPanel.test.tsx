@@ -22,6 +22,8 @@ const book = (change: Partial<Book> = {}) =>
     contributors: [],
     genres: [],
     tags: [],
+    identifiers: [],
+    pages: null,
     has_cover: true,
     custom_cover: false,
     cover_upscaled: false,
@@ -108,5 +110,76 @@ describe("EditPanel cover details", () => {
     await show(null, true, { has_cover: false });
     expect(host.querySelector(".cover-size")).toBeNull();
     expect(host.textContent).not.toContain("Upscale cover…");
+  });
+});
+
+describe("EditPanel book details", () => {
+  let root: Root;
+  let host: HTMLDivElement;
+
+  const show = async (change: Partial<Book>) => {
+    await act(async () => {
+      root.render(
+        <EditPanel
+          book={book(change)}
+          cover={null}
+          canUpscale={false}
+          onSave={vi.fn()}
+          onChanged={vi.fn()}
+          onEnhance={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+    });
+  };
+  const fact = (label: string) =>
+    [...host.querySelectorAll("dt")].find((dt) => dt.textContent === label)
+      ?.nextElementSibling?.textContent;
+
+  beforeEach(() => {
+    (
+      globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    host.remove();
+  });
+
+  it("shows what's known and leaves out the rest", async () => {
+    await show({
+      published: "1965-08-15",
+      pages: 412,
+      pages_estimated: true,
+      words: 123_456,
+      language: "en",
+      original_name: "dune.epub",
+    });
+    expect(fact("Published")).toMatch(/August 1965/);
+    expect(fact("Pages")).toBe("About 412");
+    expect(fact("Words")).toBe((123_456).toLocaleString());
+    expect(fact("Language")).toBe("English");
+    expect(fact("File")).toBe("dune.epub");
+    expect(fact("Publisher")).toBeUndefined();
+    expect(fact("ISBN")).toBeUndefined();
+    expect(fact("Last read")).toBeUndefined();
+  });
+
+  it("shows a description as text, collapsing long ones", async () => {
+    await show({
+      description: `<p>First <b>part</b>.</p><p>${"More. ".repeat(80)}</p>`,
+    });
+    const text = host.querySelector(".description p");
+    expect(text?.textContent).toMatch(/^First part\.\nMore\./);
+    expect(text?.className).toBe("clamped");
+
+    const toggle = host.querySelector<HTMLButtonElement>(".description button");
+    await act(async () => toggle?.click());
+    expect(text?.className).toBe("");
+    expect(toggle?.textContent).toBe("Show less");
   });
 });

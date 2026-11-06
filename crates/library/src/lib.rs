@@ -21,7 +21,8 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
-use erc_epub::{Contributor, Cover, Epub, Identifier, Metadata, MetadataEdit};
+use erc_epub::{Contributor, Cover, Epub, Extent, Identifier, Metadata, MetadataEdit};
+use rayon::prelude::*;
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -92,8 +93,15 @@ pub struct Book {
     pub tags: Vec<String>,
     pub language: Option<String>,
     pub publisher: Option<String>,
+    /// ISO 8601, to whatever precision the EPUB gives.
+    pub published: Option<String>,
     pub description: Option<String>,
     pub identifiers: Vec<Identifier>,
+    /// `None` when the EPUB couldn't be measured.
+    pub words: Option<u64>,
+    pub pages: Option<u64>,
+    /// The pages were worked out from the words, not listed by the publisher.
+    pub pages_estimated: bool,
     pub original_name: String,
     pub file_size: u64,
     pub has_cover: bool,
@@ -182,6 +190,7 @@ impl Library {
         schema::migrate(&conn)?;
         let library = Self { root, conn };
         library.backfill_contributors();
+        library.backfill_extents();
         Ok(library)
     }
 
@@ -208,6 +217,49 @@ impl Library {
         }
     }
 
+    /// Reads the publication date and length of books imported before they
+    /// were tracked, across cores as this reads every book in full. Best
+    /// effort: a book that can't be measured stays unknown.
+    fn backfill_extents(&self) {
+        let Ok(mut stmt) = self
+            .conn
+            .prepare("SELECT id FROM books WHERE words IS NULL")
+        else {
+            return;
+        };
+        let books: Vec<(i64, PathBuf)> = stmt
+            .query_map([], |r| r.get(0))
+            .map(|rows| rows.flatten().collect::<Vec<i64>>())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|id| (id, self.book_file(id)))
+            .collect();
+        let measured: Vec<(i64, Option<String>, Extent)> = books
+            .par_iter()
+            .filter_map(|(id, file)| {
+                let epub = Epub::open(file).ok()?;
+                Some((*id, epub.metadata().published, epub.extent().ok()?))
+            })
+            .collect();
+        let Ok(tx) = self.conn.unchecked_transaction() else {
+            return;
+        };
+        for (id, published, extent) in measured {
+            let _ = tx.execute(
+                "UPDATE books SET published = ?1, words = ?2, pages = ?3, pages_estimated = ?4
+                 WHERE id = ?5",
+                params![
+                    published,
+                    extent.words,
+                    extent.pages,
+                    extent.pages_estimated,
+                    id
+                ],
+            );
+        }
+        let _ = tx.commit();
+    }
+
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -219,6 +271,7 @@ impl Library {
         }
         let epub = Epub::open(path)?;
         let meta = epub.metadata();
+        let extent = epub.extent().ok();
         let original_name = path
             .file_name()
             .unwrap_or_default()
@@ -235,8 +288,8 @@ impl Library {
         tx.execute(
             "INSERT INTO books (title, authors, series, series_index, tags, language, publisher, description,
                                 identifiers, file_hash, file_size, original_name, has_cover, added_at, modified_at,
-                                contributors)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 0, ?13, ?13, ?14)",
+                                contributors, published, words, pages, pages_estimated)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 0, ?13, ?13, ?14, ?15, ?16, ?17, ?18)",
             params![
                 title,
                 json(&authors),
@@ -252,6 +305,10 @@ impl Library {
                 original_name,
                 now,
                 json(&meta.contributors),
+                meta.published,
+                extent.map(|e| e.words),
+                extent.and_then(|e| e.pages),
+                extent.is_none_or(|e| e.pages_estimated),
             ],
         )?;
         let id = tx.last_insert_rowid();
@@ -666,9 +723,13 @@ fn book_from_row(row: &Row) -> rusqlite::Result<Book> {
             .and_then(|s| serde_json::from_str(&s).ok()),
         language: row.get("language")?,
         publisher: row.get("publisher")?,
+        published: row.get("published")?,
         description: row.get("description")?,
         identifiers: serde_json::from_str(&row.get::<_, String>("identifiers")?)
             .unwrap_or_default(),
+        words: row.get("words")?,
+        pages: row.get("pages")?,
+        pages_estimated: row.get("pages_estimated")?,
         original_name: row.get("original_name")?,
         file_size: row.get("file_size")?,
         has_cover: row.get("has_cover")?,
@@ -780,6 +841,7 @@ mod tests {
             tags: vec![],
             language: None,
             publisher: None,
+            published: None,
             description: None,
             identifiers: ids
                 .iter()
@@ -788,6 +850,9 @@ mod tests {
                     value: (*value).to_owned(),
                 })
                 .collect(),
+            words: None,
+            pages: None,
+            pages_estimated: true,
             original_name: "t.epub".into(),
             file_size: 1,
             has_cover: false,

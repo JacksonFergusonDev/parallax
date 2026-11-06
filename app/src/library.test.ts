@@ -5,7 +5,11 @@ import {
   filterBooks,
   fromForm,
   defaultOrder,
+  isbnOf,
+  languageLabel,
   libraryColumns,
+  pagesLabel,
+  publishedLabel,
   summarizeImport,
   toForm,
 } from "./library";
@@ -25,8 +29,12 @@ const book = (
   tags: [],
   language: null,
   publisher: null,
+  published: null,
   description: null,
   identifiers: [],
+  words: null,
+  pages: null,
+  pages_estimated: true,
   original_name: `${title}.epub`,
   file_size: 1,
   has_cover: false,
@@ -256,5 +264,50 @@ describe("sorting", () => {
     });
     expect(parseSort('{"key":"rating","dir":"asc"}', keys)).toBeNull();
     expect(parseSort("title", keys)).toBeNull();
+  });
+});
+
+describe("book details", () => {
+  it("sorts longest first, with unmeasured books last either way", () => {
+    const books = [
+      book(1, "Short", [], { pages: 90 }),
+      book(2, "Unknown", []),
+      book(3, "Long", [], { pages: 900 }),
+    ];
+    const titles = (dir: "asc" | "desc") =>
+      applySort(
+        books,
+        { key: "pages", dir },
+        libraryColumns(() => undefined),
+      ).map((b) => b.title);
+    expect(titles("desc")).toEqual(["Long", "Short", "Unknown"]);
+    expect(titles("asc")).toEqual(["Short", "Long", "Unknown"]);
+  });
+
+  it("says when a page count is an estimate", () => {
+    const pages = (extra: Partial<Book>) => pagesLabel(book(1, "T", [], extra));
+    expect(pages({ pages: 412, pages_estimated: false })).toBe("412");
+    expect(pages({ pages: 412, pages_estimated: true })).toBe("About 412");
+    expect(pages({ pages: null })).toBeNull();
+  });
+
+  it("shows publication dates without the unreliable day", () => {
+    expect(publishedLabel("1965")).toBe("1965");
+    // Late on the last day of the month stays in that month in any time zone.
+    expect(publishedLabel("2020-06-30T22:00:00+00:00")).toMatch(/June 2020/);
+    expect(publishedLabel("2020-01-01")).toMatch(/January 2020/);
+  });
+
+  it("names languages and keeps unknown codes", () => {
+    expect(languageLabel("en")).toBe("English");
+    expect(languageLabel("not a code")).toBe("not a code");
+  });
+
+  it("finds the ISBN however it's stored", () => {
+    const isbn = (scheme: string | null, value: string) =>
+      isbnOf(book(1, "T", [], { identifiers: [{ scheme, value }] }));
+    expect(isbn("ISBN", "978")).toBe("978");
+    expect(isbn(null, "isbn:978")).toBe("978");
+    expect(isbn("uuid", "978")).toBeNull();
   });
 });

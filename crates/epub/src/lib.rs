@@ -5,6 +5,7 @@
 //! everything else in the package document survives byte for byte. Every
 //! other zip entry is copied without recompression.
 
+mod extent;
 mod inspect;
 mod kepub;
 mod opf;
@@ -17,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
+pub use extent::Extent;
 pub use inspect::{Inspection, inspect, is_clutter};
 pub use kepub::{StripReport, has_drm, strip_kobo_markup};
 pub use opf::{Contributor, Identifier};
@@ -49,6 +51,8 @@ pub struct Metadata {
     pub tags: Vec<String>,
     pub language: Option<String>,
     pub publisher: Option<String>,
+    /// ISO 8601, to whatever precision the EPUB gives: "1997", "2013-05-15T04:00:00+00:00".
+    pub published: Option<String>,
     pub description: Option<String>,
     pub identifiers: Vec<Identifier>,
 }

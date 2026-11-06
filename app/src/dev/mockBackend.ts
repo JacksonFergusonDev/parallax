@@ -60,8 +60,15 @@ let books: Book[] = SAMPLE.map(([title, author, series, index, tags], i) => ({
   tags,
   language: "en",
   publisher: i % 2 ? "Penguin" : null,
-  description: null,
-  identifiers: [],
+  published: i % 3 ? `${1965 + i * 4}-08-15T04:00:00+00:00` : null,
+  description:
+    i === 0
+      ? `<p>${"A sweeping tale of politics, prophecy and desert survival. ".repeat(8)}</p><p>Now <i>with</i> a new introduction.</p>`
+      : null,
+  identifiers: i === 0 ? [{ scheme: "isbn", value: "9780441013593" }] : [],
+  words: 60_000 + i * 21_000,
+  pages: 200 + i * 70,
+  pages_estimated: i % 4 !== 1,
   original_name: `${title}.epub`,
   file_size: 1_000_000,
   has_cover: i < SAMPLE.length - 1,
