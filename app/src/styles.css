@@ -2479,7 +2479,31 @@ form.enhance-key input {
   transition-timing-function: linear;
 }
 
-.upscale-bar-fill::after,
+/* A fixed-width band of light, the same in both themes: --accent-fg is dark in
+   dark mode. It runs on `left` so it crosses the fill at any width. */
+.upscale-bar-fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -90px;
+  width: 90px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.8),
+    transparent
+  );
+  animation: upscale-pulse-fill 1.4s linear infinite;
+}
+
+@keyframes upscale-pulse-fill {
+  to {
+    left: 100%;
+  }
+}
+
+/* Nothing is filled yet, so the pulse is the accent colour on the empty bar. */
 .upscale-bar.starting::after {
   content: "";
   position: absolute;
@@ -2487,21 +2511,11 @@ form.enhance-key input {
   background: linear-gradient(
     90deg,
     transparent,
-    color-mix(in srgb, var(--accent-fg) 65%, transparent),
+    color-mix(in srgb, var(--accent) 70%, transparent),
     transparent
   );
   transform: translateX(-100%);
   animation: upscale-pulse 1.8s ease-in-out infinite;
-}
-
-/* Nothing is filled yet, so the pulse is the accent colour on the empty bar. */
-.upscale-bar.starting::after {
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--accent) 70%, transparent),
-    transparent
-  );
 }
 
 @keyframes upscale-pulse {
