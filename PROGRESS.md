@@ -47,6 +47,7 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 - Kobo MVP (M0–M8) and phase 1.5 (M9–M16) complete and verified on the real Libra 2: the user confirmed every app feature works (2026-11-04), after the round 1 fixes (search titles, cover matching, Amazon/Indigo covers, selection, collections from Library).
 - Awaiting device reports from other Kobo models (docs/device-support.md); only the Libra 2 is verified.
 - Kindle (phase 2) deferred indefinitely (2026-11-04): the user has no Kindle and wants to keep improving the app for Kobo users. Keep the `Device` trait and capability flags as they are; no Kindle work until asked.
+- AI cover upscaling bake-off done (2026-11-06), nothing built yet. Compared Apple `VTSuperResolutionScaler`, Real-ESRGAN x4plus and `4xBHI_dat2_real` on the 11 lowest-resolution library covers and 6 deliberately degraded ones (M3 MacBook Air, per cover cold → throttled: 0.45 → 0.53 s, 8.9 → 11.7 s, 37 → 49 s). Real-ESRGAN corrupts small lettering, DAT2 is sharpest but adds outlines on dark covers, and Apple's scaler is the cleanest but softer. Awaiting the user's visual verdict. Outputs and scripts are in `local/cover-upscale-bakeoff/` (untracked). The Apple scaler needs macOS 26+, is 4× only, and takes gamma-encoded `64RGBAHalf` buffers.
 - Next: Kobo improvements chosen by the user.
 
 ## Unresolved
