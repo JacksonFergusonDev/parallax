@@ -14,6 +14,7 @@ erc-device-kobo.workspace = true
 erc-epub.workspace = true
 erc-library.workspace = true
 erc-metadata.workspace = true
+rayon.workspace = true
 rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true

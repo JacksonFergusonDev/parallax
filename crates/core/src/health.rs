@@ -3,9 +3,11 @@
 //! only the library and the EPUB files.
 
 use std::collections::BTreeMap;
+use std::sync::Mutex;
 
-use erc_epub::inspect;
-use erc_library::{Book, CoverQuality, Library};
+use erc_epub::{Inspection, inspect};
+use erc_library::{Book, BookFiles, CoverQuality, Library};
+use rayon::prelude::*;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
@@ -34,88 +36,111 @@ pub struct Finding {
     pub detail: String,
 }
 
-/// Runs every check; `on_progress(done, total)` after each book's file.
+/// Runs every check. Book files are read across the CPU's cores;
+/// `on_progress(done, total)` follows each one, in the order they finish.
+/// Findings come out in the same order however the reads were scheduled.
 pub fn check_library(
     library: &Library,
-    mut on_progress: impl FnMut(usize, usize),
+    on_progress: impl FnMut(usize, usize) + Send,
 ) -> erc_library::Result<Vec<Finding>> {
     let books = library.books()?;
+    let files: Vec<BookFiles> = books.iter().map(|b| library.book_files(b.id)).collect();
+    let progress = Mutex::new((0, on_progress));
+    let reads: Vec<FileRead> = files
+        .par_iter()
+        .map(|file| {
+            let read = FileRead {
+                inspection: inspect(&file.book).map_err(|e| e.to_string()),
+                cover_size: file.cover_size(),
+            };
+            let mut progress = progress.lock().unwrap_or_else(|e| e.into_inner());
+            progress.0 += 1;
+            let done = progress.0;
+            (progress.1)(done, books.len());
+            read
+        })
+        .collect();
+
     let mut out = Vec::new();
-    let one = |check, id, detail: String| Finding {
-        check,
-        book_ids: vec![id],
-        detail,
-    };
-    for (i, book) in books.iter().enumerate() {
-        match inspect(&library.book_file(book.id)) {
-            Err(e) => out.push(one(Check::Unreadable, book.id, e.to_string())),
-            Ok(found) => {
-                let list = |v: &[String]| {
-                    let shown: Vec<&str> = v.iter().take(3).map(String::as_str).collect();
-                    let more = v.len().saturating_sub(3);
-                    if more > 0 {
-                        format!("{} and {more} more", shown.join(", "))
-                    } else {
-                        shown.join(", ")
-                    }
-                };
-                if found.drm {
-                    out.push(one(Check::Drm, book.id, "protected by DRM".into()));
-                }
-                if !found.missing_files.is_empty() {
-                    out.push(one(
-                        Check::MissingFiles,
-                        book.id,
-                        list(&found.missing_files),
-                    ));
-                }
-                if !found.broken_links.is_empty() {
-                    let mut links: Vec<String> = Vec::new();
-                    for (_, target) in &found.broken_links {
-                        if !links.contains(target) {
-                            links.push(target.clone());
-                        }
-                    }
-                    out.push(one(Check::BrokenLinks, book.id, list(&links)));
-                }
-                if !found.unmanifested.is_empty() {
-                    out.push(one(Check::Unmanifested, book.id, list(&found.unmanifested)));
-                }
-                if !found.clutter.is_empty() {
-                    out.push(one(Check::Clutter, book.id, list(&found.clutter)));
-                }
-                if !found.fonts.is_empty() {
-                    out.push(one(Check::EmbeddedFonts, book.id, list(&found.fonts)));
-                }
-            }
-        }
-        match library.cover_size(book.id) {
-            None => out.push(one(Check::NoCover, book.id, String::new())),
-            Some((w, h)) if CoverQuality::of_height(h) == CoverQuality::Low => {
-                out.push(one(Check::SmallCover, book.id, format!("{w}×{h}")));
-            }
-            Some(_) => {}
-        }
-        if book.authors.is_empty()
-            || book
-                .authors
-                .iter()
-                .all(|a| a.trim().eq_ignore_ascii_case("unknown"))
-        {
-            out.push(one(Check::NoAuthor, book.id, String::new()));
-        }
-        if book.series.is_some() && book.series_index.is_none() {
-            out.push(one(
-                Check::SeriesWithoutNumber,
-                book.id,
-                book.series.clone().unwrap_or_default(),
-            ));
-        }
-        on_progress(i + 1, books.len());
+    for (book, read) in books.iter().zip(reads) {
+        book_findings(book, read, &mut out);
     }
     out.extend(series_gaps(&books));
     out.sort_by_key(|f| f.check);
     Ok(out)
+}
+
+/// What the checks need from a book's files.
+struct FileRead {
+    inspection: Result<Inspection, String>,
+    cover_size: Option<(u32, u32)>,
+}
+
+fn book_findings(book: &Book, read: FileRead, out: &mut Vec<Finding>) {
+    let one = |check, detail: String| Finding {
+        check,
+        book_ids: vec![book.id],
+        detail,
+    };
+    match read.inspection {
+        Err(e) => out.push(one(Check::Unreadable, e)),
+        Ok(found) => {
+            let list = |v: &[String]| {
+                let shown: Vec<&str> = v.iter().take(3).map(String::as_str).collect();
+                let more = v.len().saturating_sub(3);
+                if more > 0 {
+                    format!("{} and {more} more", shown.join(", "))
+                } else {
+                    shown.join(", ")
+                }
+            };
+            if found.drm {
+                out.push(one(Check::Drm, "protected by DRM".into()));
+            }
+            if !found.missing_files.is_empty() {
+                out.push(one(Check::MissingFiles, list(&found.missing_files)));
+            }
+            if !found.broken_links.is_empty() {
+                let mut links: Vec<String> = Vec::new();
+                for (_, target) in &found.broken_links {
+                    if !links.contains(target) {
+                        links.push(target.clone());
+                    }
+                }
+                out.push(one(Check::BrokenLinks, list(&links)));
+            }
+            if !found.unmanifested.is_empty() {
+                out.push(one(Check::Unmanifested, list(&found.unmanifested)));
+            }
+            if !found.clutter.is_empty() {
+                out.push(one(Check::Clutter, list(&found.clutter)));
+            }
+            if !found.fonts.is_empty() {
+                out.push(one(Check::EmbeddedFonts, list(&found.fonts)));
+            }
+        }
+    }
+    match read.cover_size {
+        None => out.push(one(Check::NoCover, String::new())),
+        Some((w, h)) if CoverQuality::of_height(h) == CoverQuality::Low => {
+            out.push(one(Check::SmallCover, format!("{w}×{h}")));
+        }
+        Some(_) => {}
+    }
+    if book.authors.is_empty()
+        || book
+            .authors
+            .iter()
+            .all(|a| a.trim().eq_ignore_ascii_case("unknown"))
+    {
+        out.push(one(Check::NoAuthor, String::new()));
+    }
+    if book.series.is_some() && book.series_index.is_none() {
+        out.push(one(
+            Check::SeriesWithoutNumber,
+            book.series.clone().unwrap_or_default(),
+        ));
+    }
 }
 
 /// Whole-numbered series with numbers missing between the first and last

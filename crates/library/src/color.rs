@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use image::imageops::FilterType;
+use rayon::prelude::*;
 
 /// Covers shrink to this before counting; plenty for a dominant colour.
 const SAMPLE: u32 = 48;
@@ -54,28 +55,10 @@ pub fn dominant_color(path: &Path) -> Option<[u8; 3]> {
 /// [`dominant_color`] for many files, spread across the CPU's cores. Results
 /// are in the order of `paths`.
 pub fn dominant_colors<P: AsRef<Path> + Sync>(paths: &[P]) -> Vec<Option<[u8; 3]>> {
-    let threads = std::thread::available_parallelism().map_or(1, usize::from);
-    let chunk = paths.len().div_ceil(threads).max(1);
-    std::thread::scope(|scope| {
-        let workers: Vec<_> = paths
-            .chunks(chunk)
-            .map(|part| {
-                scope.spawn(move || {
-                    part.iter()
-                        .map(|path| dominant_color(path.as_ref()))
-                        .collect::<Vec<_>>()
-                })
-            })
-            .collect();
-        workers
-            .into_iter()
-            .flat_map(|worker| {
-                worker
-                    .join()
-                    .unwrap_or_else(|e| std::panic::resume_unwind(e))
-            })
-            .collect()
-    })
+    paths
+        .par_iter()
+        .map(|path| dominant_color(path.as_ref()))
+        .collect()
 }
 
 #[cfg(test)]

@@ -18,18 +18,10 @@ all = { level = "warn", priority = -1 }
 [profile.dev]
 debug = "line-tables-only"
 
+# Dependencies rarely rebuild, so optimising them costs one slower clean build.
+# Unoptimised, decoding images and parsing EPUBs is 5-30x slower.
 [profile.dev.package."*"]
 debug = false
-
-# Decoding images unoptimised is about 30x slower, which is noticeable when
-# reading a whole library's covers. These rarely rebuild, so it costs little.
-[profile.dev.package.image]
-opt-level = 3
-
-[profile.dev.package.zune-jpeg]
-opt-level = 3
-
-[profile.dev.package.zune-core]
 opt-level = 3
 
 [profile.release]
@@ -56,6 +48,7 @@ thiserror = "2"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 sha2 = "0.11"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
+rayon = "1"
 uuid = { version = "1", features = ["v4"] }
 erc-convert = { path = "crates/convert" }
 erc-core = { path = "crates/core" }

@@ -428,16 +428,16 @@ impl Library {
     /// Width and height of the cover sent to devices: the custom one if set,
     /// else the EPUB's own.
     pub fn cover_size(&self, id: i64) -> Option<(u32, u32)> {
-        let custom = self.custom_cover_file(id);
-        if custom.is_file() {
-            return image::image_dimensions(&custom).ok();
+        self.book_files(id).cover_size()
+    }
+
+    /// Where a book's files are, for reading them on other threads: the
+    /// database connection can't be shared, but paths can.
+    pub fn book_files(&self, id: i64) -> BookFiles {
+        BookFiles {
+            book: self.book_file(id),
+            custom_cover: self.custom_cover_file(id),
         }
-        let cover = Epub::open(self.book_file(id)).ok()?.cover().ok()??;
-        image::ImageReader::new(std::io::Cursor::new(cover.data))
-            .with_guessed_format()
-            .ok()?
-            .into_dimensions()
-            .ok()
     }
 
     pub fn cover_file(&self, id: i64) -> Option<PathBuf> {
@@ -678,6 +678,28 @@ fn book_from_row(row: &Row) -> rusqlite::Result<Book> {
         added_at: row.get("added_at")?,
         modified_at: row.get("modified_at")?,
     })
+}
+
+/// A book's files on disk; see [`Library::book_files`].
+#[derive(Debug, Clone)]
+pub struct BookFiles {
+    pub book: PathBuf,
+    custom_cover: PathBuf,
+}
+
+impl BookFiles {
+    /// See [`Library::cover_size`].
+    pub fn cover_size(&self) -> Option<(u32, u32)> {
+        if self.custom_cover.is_file() {
+            return image::image_dimensions(&self.custom_cover).ok();
+        }
+        let cover = Epub::open(&self.book).ok()?.cover().ok()??;
+        image::ImageReader::new(std::io::Cursor::new(cover.data))
+            .with_guessed_format()
+            .ok()?
+            .into_dimensions()
+            .ok()
+    }
 }
 
 /// Decodes `data` and writes a JPEG thumbnail. Returns false if the image
