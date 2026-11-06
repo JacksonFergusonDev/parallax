@@ -56,21 +56,29 @@ function ReaderIcon() {
   );
 }
 
-export function DeviceBadge({ device }: { device: DeviceInfo | null }) {
+export function DeviceBadge({
+  device,
+  onOpen,
+}: {
+  device: DeviceInfo | null;
+  /** Show the details of the connected device. */
+  onOpen: () => void;
+}) {
   return device ? (
-    <div
+    <button
       className={`badge connected ${device.read_only ? "read-only" : ""}`}
+      onClick={onOpen}
       title={
         device.read_only
-          ? `Firmware ${device.firmware}. Read-only: ${device.read_only}`
-          : `Firmware ${device.firmware}`
+          ? `About this Kobo. Firmware ${device.firmware}. Read-only: ${device.read_only}`
+          : `About this Kobo. Firmware ${device.firmware}`
       }
     >
       <ReaderIcon />
       {device.model}
       {device.read_only && <span className="muted"> · read-only</span>}
       <span className="dot" />
-    </div>
+    </button>
   ) : (
     <div
       className="badge"

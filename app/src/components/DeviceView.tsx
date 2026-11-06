@@ -1,3 +1,19 @@
+import { createPortal } from "react-dom";
+import {
+  BookmarkCheck,
+  Copy,
+  Eject,
+  Eraser,
+  FolderMinus,
+  FolderTree,
+  Info,
+  LibraryBig,
+  ListChecks,
+  ShieldCheck,
+  Trash2,
+  WandSparkles,
+} from "lucide-react";
+import { colorColumn, generatedColor, useCoverColors } from "../coverColor";
 import { ShelfArt } from "./ShelfArt";
 import { GeneratedCover } from "./GeneratedCover";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -51,7 +67,7 @@ import {
   useViewState,
 } from "./ViewControls";
 
-const DEVICE_KEYS = deviceColumns.map((c) => c.key);
+const DEVICE_KEYS = [...deviceColumns.map((c) => c.key), "color" as const];
 
 interface Props {
   device: DeviceInfo;
@@ -64,6 +80,9 @@ interface Props {
   /** Books were added to the library. */
   onLibraryChanged: () => void;
   onEjected: () => void;
+  /** About this Kobo is open; the top bar's device badge opens it too. */
+  about: boolean;
+  onAboutChange: (open: boolean) => void;
 }
 
 type Dialog =
@@ -71,7 +90,6 @@ type Dialog =
   | { kind: "rename"; name: string }
   | { kind: "folders" }
   | { kind: "rules" }
-  | { kind: "about" }
   | { kind: "check" }
   | { kind: "duplicates"; groups: Promise<ReviewGroup[]> }
   /** Library ids of this Kobo's books, being enhanced. */
@@ -86,6 +104,8 @@ export function DeviceView({
   onChanged,
   onLibraryChanged,
   onEjected,
+  about,
+  onAboutChange,
 }: Props) {
   const [books, setBooks] = useState<DeviceBook[] | null>(null);
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -143,10 +163,36 @@ export function DeviceView({
       ),
     [books, shelf],
   );
-  const visible = useMemo(
-    () => applySort(filterDeviceBooks(inShelf, query), sort, deviceColumns),
-    [inShelf, query, sort],
+  const covers = useMemo(
+    () =>
+      (books ?? []).flatMap((b) => {
+        const lib = libraryByContentId.get(b.id);
+        const key = deviceCoverSrc(b, lib);
+        const path = b.cover ?? lib?.cover;
+        return key && path ? [{ key, path }] : [];
+      }),
+    [books, libraryByContentId],
   );
+  const { colorOf, loading: colorsLoading } = useCoverColors(
+    sort?.key === "color",
+    covers,
+  );
+  const sortColumns = useMemo(
+    () => [
+      ...deviceColumns,
+      colorColumn<DeviceBook, DeviceKey>("color", (b) => {
+        const key = deviceCoverSrc(b, libraryByContentId.get(b.id));
+        return key ? colorOf(key) : generatedColor(b.title);
+      }),
+    ],
+    [colorOf, libraryByContentId],
+  );
+  const visible = useMemo(
+    () => applySort(filterDeviceBooks(inShelf, query), sort, sortColumns),
+    [inShelf, query, sort, sortColumns],
+  );
+  // A dialog left open when the Kobo goes away shouldn't return with it.
+  useEffect(() => () => onAboutChange(false), [onAboutChange]);
   const chosen = visible.filter((b) => selected.has(b.id));
   const removable = chosen.filter((b) => b.sideloaded);
   const importable = chosen.filter(
@@ -382,6 +428,7 @@ export function DeviceView({
               disabled={locked}
               title="Add this Kobo's books to your library, fill in series and genres, then make collections from them"
             >
+              <WandSparkles />
               Enhance and organise…
             </button>
             <button
@@ -389,6 +436,7 @@ export function DeviceView({
               onClick={() => setDialog({ kind: "rules" })}
               disabled={readOnly !== null}
             >
+              <ListChecks />
               Automatic collections…
             </button>
             <button
@@ -396,6 +444,7 @@ export function DeviceView({
               onClick={() => setDialog({ kind: "folders" })}
               disabled={locked}
             >
+              <FolderTree />
               Folders → collections…
             </button>
             <button
@@ -413,6 +462,7 @@ export function DeviceView({
               }}
               disabled={busy !== null}
             >
+              <Copy />
               Find duplicates…
             </button>
             <button
@@ -421,6 +471,7 @@ export function DeviceView({
               disabled={busy !== null}
               title="Copy every book you added yourself into your library, as plain EPUBs. Store books are skipped."
             >
+              <LibraryBig />
               Add all to library
             </button>
             <button
@@ -429,6 +480,7 @@ export function DeviceView({
               disabled={busy !== null}
               title="Delete hidden ._ files macOS leaves on the Kobo"
             >
+              <Eraser />
               Remove macOS clutter
             </button>
             <button
@@ -436,12 +488,11 @@ export function DeviceView({
               onClick={() => setDialog({ kind: "check" })}
               disabled={busy !== null}
             >
+              <ShieldCheck />
               Check this Kobo…
             </button>
-            <button
-              className="link"
-              onClick={() => setDialog({ kind: "about" })}
-            >
+            <button className="link" onClick={() => onAboutChange(true)}>
+              <Info />
               About this Kobo…
             </button>
           </div>
@@ -488,7 +539,8 @@ export function DeviceView({
               onMode={setMode}
               sort={sort}
               onSort={setSort}
-              columns={deviceColumns}
+              columns={sortColumns}
+              note={colorsLoading ? "Reading cover colours…" : null}
             />
           </div>
           <div className="scroll">
@@ -595,6 +647,7 @@ export function DeviceView({
         )}
         <span className="spacer" />
         <button className="secondary" onClick={eject} disabled={busy !== null}>
+          <Eject />
           {busy === "ejecting" ? "Ejecting…" : "Eject Kobo"}
         </button>
         {shelf && (
@@ -603,11 +656,13 @@ export function DeviceView({
             onClick={removeFromShelf}
             disabled={chosen.length === 0 || locked}
           >
+            <FolderMinus />
             Remove from collection
           </button>
         )}
         <ActionMenu
           label="Mark as"
+          icon={<BookmarkCheck />}
           disabled={chosen.length === 0 || locked}
           items={[
             {
@@ -653,6 +708,7 @@ export function DeviceView({
             disabled={busy !== null}
             title="Copy these books into your library as plain EPUBs"
           >
+            <LibraryBig />
             {`Add ${importable.length} to library`}
           </button>
         )}
@@ -668,6 +724,7 @@ export function DeviceView({
           onClick={removeBooks}
           disabled={removable.length === 0 || locked}
         >
+          <Trash2 />
           {removable.length
             ? `Remove ${removable.length} from Kobo`
             : "Remove from Kobo"}
@@ -774,13 +831,16 @@ export function DeviceView({
           onClose={() => setDialog(null)}
         />
       )}
-      {dialog?.kind === "about" && (
-        <AboutKobo
-          device={device}
-          titles={new Map((books ?? []).map((b) => [b.id, b.title]))}
-          onClose={() => setDialog(null)}
-        />
-      )}
+      {/* In the body: this panel is hidden while another tab is showing. */}
+      {about &&
+        createPortal(
+          <AboutKobo
+            device={device}
+            titles={new Map((books ?? []).map((b) => [b.id, b.title]))}
+            onClose={() => onAboutChange(false)}
+          />,
+          document.body,
+        )}
       {dialog?.kind === "folders" && (
         <FolderImport
           mount={device.mount}

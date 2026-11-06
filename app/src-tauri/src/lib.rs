@@ -913,11 +913,80 @@ fn cover_reset(state: State<AppState>, id: i64) -> CmdResult<LibraryBook> {
     Ok(with_cover(&lib, book))
 }
 
+/// The dominant colour of each cover, for sorting by colour; `None` for a
+/// cover that can't be read. Only reads covers the app itself stores.
+#[tauri::command]
+async fn cover_colors(app: AppHandle, paths: Vec<PathBuf>) -> CmdResult<Vec<Option<[u8; 3]>>> {
+    let roots = [
+        app.path().app_data_dir().map_err(err)?.join("library"),
+        app.path()
+            .app_cache_dir()
+            .map_err(err)?
+            .join("device-covers"),
+    ]
+    .map(|root| root.canonicalize().unwrap_or(root));
+    tauri::async_runtime::spawn_blocking(move || {
+        paths
+            .iter()
+            .map(|path| {
+                let path = path.canonicalize().ok()?;
+                roots
+                    .iter()
+                    .any(|root| path.starts_with(root))
+                    .then(|| erc_library::dominant_color(&path))
+                    .flatten()
+            })
+            .collect()
+    })
+    .await
+    .map_err(err)
+}
+
 /// The frontend calls this after its initial layout and covers are ready.
 #[tauri::command]
 fn show_main_window(window: tauri::WebviewWindow) -> tauri::Result<()> {
     window.show()?;
     window.set_focus()
+}
+
+/// Saved window geometry. Renamed from the plugin's default when the default
+/// window grew, so existing installs get the new size once.
+const WINDOW_STATE_FILE: &str = ".window-state-v2.json";
+
+/// A roomy first window for a screen of this logical size: most of the
+/// screen, without sprawling across a large display.
+fn first_window_size(screen_width: f64, screen_height: f64) -> (f64, f64) {
+    (
+        (screen_width * 0.9).min(1680.0),
+        (screen_height * 0.9).min(1080.0),
+    )
+}
+
+/// Sizes and centres the window on first launch; later launches restore the
+/// saved geometry instead.
+fn size_first_window(app: &tauri::App) -> tauri::Result<()> {
+    if app
+        .path()
+        .app_config_dir()?
+        .join(WINDOW_STATE_FILE)
+        .exists()
+    {
+        return Ok(());
+    }
+    let Some(window) = app.get_webview_window("main") else {
+        return Ok(());
+    };
+    let monitor = match window.current_monitor()? {
+        Some(monitor) => Some(monitor),
+        None => window.primary_monitor()?,
+    };
+    if let Some(monitor) = monitor {
+        let screen = monitor.size().to_logical::<f64>(monitor.scale_factor());
+        let (width, height) = first_window_size(screen.width, screen.height);
+        window.set_size(tauri::LogicalSize::new(width, height))?;
+        window.center()?;
+    }
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -927,6 +996,7 @@ pub fn run() {
         // Reopens the window where and how big it was last time.
         .plugin(
             tauri_plugin_window_state::Builder::default()
+                .with_filename(WINDOW_STATE_FILE)
                 .with_state_flags(
                     tauri_plugin_window_state::StateFlags::all()
                         - tauri_plugin_window_state::StateFlags::VISIBLE,
@@ -940,6 +1010,7 @@ pub fn run() {
                 library: Arc::new(Mutex::new(library)),
                 backup_root: data.join("device-backups"),
             });
+            size_first_window(app)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -991,8 +1062,24 @@ pub fn run() {
             cover_search,
             cover_set_url,
             cover_set_file,
-            cover_reset
+            cover_reset,
+            cover_colors
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::first_window_size;
+
+    #[test]
+    fn first_window_fills_most_of_a_laptop_screen() {
+        assert_eq!(first_window_size(1500.0, 1000.0), (1350.0, 900.0));
+    }
+
+    #[test]
+    fn first_window_stops_growing_on_large_displays() {
+        assert_eq!(first_window_size(3840.0, 2160.0), (1680.0, 1080.0));
+    }
 }

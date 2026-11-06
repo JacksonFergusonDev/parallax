@@ -190,6 +190,15 @@ input:disabled {
   background: color-mix(in srgb, var(--ok) 8%, transparent);
 }
 
+button.badge {
+  border-radius: 999px;
+}
+
+button.badge.connected:hover {
+  border-color: color-mix(in srgb, var(--ok) 70%, var(--border));
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
+}
+
 .reader-icon {
   flex-shrink: 0;
 }
@@ -783,6 +792,32 @@ button:disabled {
   cursor: default;
 }
 
+/* Buttons with a leading icon. */
+button:has(> .lucide) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+button > .lucide {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.9;
+}
+
+.view-toolbar button > .lucide,
+.sidebar-foot button > .lucide,
+.segmented button > .lucide {
+  width: 13px;
+  height: 13px;
+}
+
+.sort-note {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 button {
   transition:
     background-color 120ms,
@@ -1010,9 +1045,26 @@ button.link {
 
 .tabs button.active {
   color: var(--accent);
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 10%),
-    inset 0 -2px 0 var(--accent);
+}
+
+.tabs button,
+.segmented button {
+  transition:
+    background-color 160ms,
+    color 160ms,
+    box-shadow 160ms,
+    transform 120ms var(--ease-out);
+}
+
+.tabs button:not(.active, :disabled):hover,
+.segmented button:not(.active, :disabled):hover {
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  color: var(--fg);
+}
+
+.tabs button.active:hover,
+.segmented button.active:hover {
+  box-shadow: 0 1px 4px rgb(0 0 0 / 18%);
 }
 
 /* Kobo view */
@@ -1339,6 +1391,7 @@ button.link.danger {
 .sidebar-foot {
   align-items: stretch;
   gap: 6px;
+  padding-inline: 0;
 }
 
 .sidebar-foot button.link {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { LayoutGrid, List } from "lucide-react";
 import { nextSort, parseSort, type Column, type Sort } from "../sort";
 
 export type ViewMode = "grid" | "list";
@@ -41,6 +42,8 @@ interface ControlsProps<T, K extends string> {
   sort: Sort<K>;
   onSort: (sort: Sort<K>) => void;
   columns: readonly Column<T, K>[];
+  /** Shown beside the sort picker, such as a sort still being prepared. */
+  note?: string | null;
 }
 
 /** View toggle, plus a sort picker in the grid (the list sorts by header). */
@@ -50,11 +53,13 @@ export function ViewControls<T, K extends string>({
   sort,
   onSort,
   columns,
+  note,
 }: ControlsProps<T, K>) {
   return (
     <div className="view-controls">
       {mode === "grid" && (
         <>
+          {note && <span className="muted sort-note">{note}</span>}
           <select
             className="sort-select"
             aria-label="Sort by"
@@ -97,6 +102,7 @@ export function ViewControls<T, K extends string>({
             title={m === "grid" ? "Covers" : "List"}
             onClick={() => onMode(m)}
           >
+            {m === "grid" ? <LayoutGrid /> : <List />}
             {m === "grid" ? "Covers" : "List"}
           </button>
         ))}

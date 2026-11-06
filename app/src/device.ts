@@ -79,7 +79,7 @@ export function shortDate(iso: string | null, now = new Date()): string {
 }
 
 export type DeviceKey =
-  "title" | "author" | "series" | "status" | "last_read" | "added";
+  "title" | "author" | "series" | "status" | "last_read" | "added" | "color";
 
 export const deviceColumns: Column<DeviceBook, DeviceKey>[] = [
   {

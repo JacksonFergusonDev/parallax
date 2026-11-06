@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from "react";
 
 interface Props {
   label: string;
+  icon?: React.ReactNode;
   disabled?: boolean;
   items: { label: string; onPick: () => void }[];
 }
 
 /** A button that opens a short list of actions. */
-export function ActionMenu({ label, disabled, items }: Props) {
+export function ActionMenu({ label, icon, disabled, items }: Props) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -27,6 +28,7 @@ export function ActionMenu({ label, disabled, items }: Props) {
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
       >
+        {icon}
         {label} ▾
       </button>
       {open && (
