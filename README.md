@@ -42,6 +42,6 @@ Project plan and progress: [docs/PLAN.md](docs/PLAN.md), [PROGRESS.md](PROGRESS.
 
 ## Cover upscaling
 
-"Upscale cover…" enlarges a cover and removes compression noise with [4xBHI_dat2_real](https://huggingface.co/Phips/4xBHI_dat2_real) by Philip Hofmann, used under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The weights are converted to Core ML at half precision with a fixed tile size. Every result is reviewed before and after, and nothing changes until it's kept. It needs macOS 15 or later.
+"Upscale cover…" enlarges a cover and removes compression noise with [4xBHI_dat2_real](https://huggingface.co/Phips/4xBHI_dat2_real) by Philip Hofmann, used under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The weights are converted to Core ML at half precision with a fixed tile size. Every result is reviewed before and after, and nothing changes until it's kept. It's offered for covers under 1680 pixels tall, and needs macOS 15 or later.
 
 The model isn't in the repository. `just upscale-model` builds it from the pinned upstream weights (about five minutes and 9 GB of memory, once), and `just build`, `just dev` and `just dev-optimized` run that for you. The app hides the feature when the model is missing.

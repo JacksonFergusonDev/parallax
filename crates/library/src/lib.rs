@@ -53,6 +53,31 @@ const COVER_HEIGHT: u32 = 600;
 /// Custom covers are stored at most this tall: the Kobo Libra 2's screen
 /// height, which is also the tallest current Kobo screen.
 pub const CUSTOM_COVER_MAX_HEIGHT: u32 = 1680;
+/// Below this height a cover looks soft on current Kobos; the cover picker
+/// uses the same line.
+const SMALL_COVER_HEIGHT: u32 = 1200;
+
+/// How well a cover will fill an e-reader's screen.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverQuality {
+    /// Visibly soft or pixellated.
+    Low,
+    /// Slightly soft on the sharpest screens.
+    Decent,
+    /// At least as tall as the tallest current Kobo screen.
+    Excellent,
+}
+
+impl CoverQuality {
+    pub fn of_height(height: u32) -> Self {
+        match height {
+            h if h >= CUSTOM_COVER_MAX_HEIGHT => Self::Excellent,
+            h if h >= SMALL_COVER_HEIGHT => Self::Decent,
+            _ => Self::Low,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Book {

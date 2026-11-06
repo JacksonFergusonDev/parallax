@@ -360,6 +360,22 @@ fn contributors_are_stored_edited_exported_and_backfilled() {
 }
 
 #[test]
+fn cover_quality_follows_the_kobo_screen_height() {
+    use erc_library::{CUSTOM_COVER_MAX_HEIGHT, CoverQuality};
+    assert_eq!(CoverQuality::of_height(1199), CoverQuality::Low);
+    assert_eq!(CoverQuality::of_height(1200), CoverQuality::Decent);
+    // The upscaler refuses from this height, so "excellent" must start here.
+    assert_eq!(
+        CoverQuality::of_height(CUSTOM_COVER_MAX_HEIGHT - 1),
+        CoverQuality::Decent
+    );
+    assert_eq!(
+        CoverQuality::of_height(CUSTOM_COVER_MAX_HEIGHT),
+        CoverQuality::Excellent
+    );
+}
+
+#[test]
 fn upscaled_covers_are_remembered_until_replaced() {
     let dir = tempfile::tempdir().unwrap();
     let mut lib = Library::open(dir.path().join("lib")).unwrap();

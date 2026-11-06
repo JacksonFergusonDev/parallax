@@ -17,7 +17,9 @@ use erc_covers::{Candidate, CoverQuery};
 use erc_device::{Collection, DeviceBook, DeviceInfo};
 use erc_device_kobo::{BookCheck, ErcState, KoboDevice, MACOS_VOLUMES, tidy_apple_double};
 use erc_epub::MetadataEdit;
-use erc_library::{Book, CUSTOM_COVER_MAX_HEIGHT, ImportOutcome, Library, Reading, Rule};
+use erc_library::{
+    Book, CUSTOM_COVER_MAX_HEIGHT, CoverQuality, ImportOutcome, Library, Reading, Rule,
+};
 use erc_upscale::CoreMl;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -89,6 +91,13 @@ fn find_upscale_model(app: &AppHandle) -> Option<PathBuf> {
         .into_iter()
         .flatten()
         .find(|path| path.is_dir())
+}
+
+#[derive(Serialize)]
+struct CoverInfo {
+    width: u32,
+    height: u32,
+    quality: CoverQuality,
 }
 
 #[derive(Clone, Serialize)]
@@ -986,6 +995,40 @@ fn cover_upscale_available(state: State<AppState>) -> bool {
     cfg!(target_os = "macos") && state.upscaler.model.is_some()
 }
 
+/// The size and rating of the cover sent to devices. Read on demand rather
+/// than stored: it takes about a millisecond, and can't go stale.
+#[tauri::command]
+async fn cover_info(state: State<'_, AppState>, id: i64) -> CmdResult<Option<CoverInfo>> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        lib.cover_size(id).map(|(width, height)| CoverInfo {
+            width,
+            height,
+            quality: CoverQuality::of_height(height),
+        })
+    })
+    .await
+    .map_err(err)
+}
+
+/// How many tiles upscaling these books' covers will run, for estimating the
+/// time left. Covers that are already full size cost nothing.
+#[tauri::command]
+async fn cover_upscale_tiles(state: State<'_, AppState>, ids: Vec<i64>) -> CmdResult<usize> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let lib = library.lock().unwrap_or_else(|e| e.into_inner());
+        ids.iter()
+            .filter_map(|&id| lib.cover_size(id))
+            .filter(|&(_, height)| height < CUSTOM_COVER_MAX_HEIGHT)
+            .map(|(width, height)| erc_upscale::tile_count(width, height))
+            .sum()
+    })
+    .await
+    .map_err(err)
+}
+
 /// Upscales a book's cover without changing the book. `None` means the cover
 /// is already full size. A long job: the UI cancels with `cover_upscale_cancel`.
 #[tauri::command]
@@ -1218,7 +1261,9 @@ pub fn run() {
             cover_set_url,
             cover_set_file,
             cover_reset,
+            cover_info,
             cover_upscale_available,
+            cover_upscale_tiles,
             cover_upscale_preview,
             cover_upscale_apply,
             cover_upscale_cancel,

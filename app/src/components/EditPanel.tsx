@@ -2,12 +2,14 @@ import { GeneratedCover } from "./GeneratedCover";
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
+  coverInfo,
   coverSrc,
   resetCover,
   setCoverFromFile,
   setCoverFromUrl,
   upscaleAvailable,
   type Book,
+  type CoverInfo,
   type MetadataEdit,
 } from "../api";
 import { GENRES, genreOf } from "../genres";
@@ -24,6 +26,17 @@ interface Props {
   /** Look up this book's series and genres online. */
   onEnhance: (id: number) => void;
   onClose: () => void;
+}
+
+/** What a cover that isn't excellent will look like, and what would help. */
+function coverAdvice(cover: CoverInfo, canUpscale: boolean) {
+  const look =
+    cover.quality === "low"
+      ? "Will look pixellated on an e-reader."
+      : "May look slightly soft on an e-reader.";
+  return canUpscale
+    ? `${look} Upscaling or a sharper cover would help.`
+    : `${look} A sharper cover would help.`;
 }
 
 /** Keyed by book id in the parent, so selecting another book starts a fresh form. */
@@ -52,6 +65,26 @@ export function EditPanel({
       alive = false;
     };
   }, []);
+
+  // Reading the size takes about a millisecond, so nothing stores it.
+  const [cover, setCover] = useState<CoverInfo | null>(null);
+  useEffect(() => {
+    let alive = true;
+    coverInfo(book.id)
+      .then((info) => alive && setCover(info))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [book.id, book.modified_at]);
+
+  // Only offered where it can help: the upscaler has nothing to do for an
+  // excellent cover, and doesn't enlarge its own output a second time.
+  const offerUpscale =
+    canUpscale &&
+    !!cover &&
+    cover.quality !== "excellent" &&
+    !book.cover_upscaled;
 
   const changeCover = async (action: () => Promise<Book>) => {
     setCoverBusy(true);
@@ -122,6 +155,19 @@ export function EditPanel({
             </div>
           )}
           <div className="cover-actions">
+            {cover && (
+              <div className="cover-size">
+                <span>
+                  {cover.width}×{cover.height}{" "}
+                  <span className={`cover-quality ${cover.quality}`}>
+                    ({cover.quality})
+                  </span>
+                </span>
+                {cover.quality !== "excellent" && (
+                  <p className="hint">{coverAdvice(cover, offerUpscale)}</p>
+                )}
+              </div>
+            )}
             <button
               className="link"
               disabled={coverBusy}
@@ -132,7 +178,7 @@ export function EditPanel({
             <button className="link" disabled={coverBusy} onClick={chooseImage}>
               Choose image…
             </button>
-            {canUpscale && book.has_cover && !book.cover_upscaled && (
+            {offerUpscale && (
               <button
                 className="link"
                 disabled={coverBusy}

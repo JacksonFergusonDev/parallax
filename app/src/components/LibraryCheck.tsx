@@ -82,14 +82,12 @@ export function LibraryCheck({ books, onShow, onUpscale, onClose }: Props) {
                 </h3>
                 <p className="muted">{g.info.help}</p>
                 {g.kind === "small_cover" && canUpscale && (
-                  <button
-                    className="link"
-                    onClick={() =>
-                      onUpscale(g.findings.flatMap((f) => f.book_ids))
-                    }
-                  >
-                    Upscale and review these…
-                  </button>
+                  <UpscaleThese
+                    ids={g.findings
+                      .flatMap((f) => f.book_ids)
+                      .filter((id) => !books.get(id)?.cover_upscaled)}
+                    onUpscale={onUpscale}
+                  />
                 )}
                 <ul>
                   {g.findings.map((f, i) => (
@@ -126,5 +124,21 @@ export function LibraryCheck({ books, onShow, onUpscale, onClose }: Props) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Starts upscaling the covers that can still be improved, if any. */
+function UpscaleThese({
+  ids,
+  onUpscale,
+}: {
+  ids: number[];
+  onUpscale: (ids: number[]) => void;
+}) {
+  if (!ids.length) return null;
+  return (
+    <button className="link" onClick={() => onUpscale(ids)}>
+      Upscale and review these…
+    </button>
   );
 }

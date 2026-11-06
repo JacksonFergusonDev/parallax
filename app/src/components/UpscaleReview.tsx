@@ -5,10 +5,15 @@ import {
   cancelUpscale,
   onUpscaleProgress,
   previewUpscale,
+  upscaleTiles,
   type Book,
   type UpscalePreview,
-  type UpscaleProgress,
 } from "../api";
+import {
+  timeLeft,
+  UpscaleEstimate,
+  type UpscaleStatus,
+} from "../upscaleEstimate";
 
 interface Props {
   books: Book[];
@@ -29,14 +34,26 @@ export function UpscaleReview({ books, onChanged, onClose }: Props) {
   const [fullSize, setFullSize] = useState(0);
   const [kept, setKept] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [progress, setProgress] = useState<UpscaleProgress | null>(null);
+  const [status, setStatus] = useState<UpscaleStatus | null>(null);
+  const [workingOn, setWorkingOn] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const ids = useRef(books.map((b) => b.id));
 
   useEffect(() => {
     let alive = true;
-    const unlisten = onUpscaleProgress((p) => alive && setProgress(p));
+    let estimate: UpscaleEstimate | null = null;
+    const unlisten = onUpscaleProgress((p) => {
+      if (!alive || !estimate) return;
+      setStatus(estimate.record(p, performance.now()));
+      setWorkingOn(p.id);
+    });
     (async () => {
+      try {
+        estimate = new UpscaleEstimate(await upscaleTiles(ids.current));
+      } catch (e) {
+        if (alive) setError(String(e));
+        return;
+      }
       for (const id of ids.current) {
         if (!alive) return;
         try {
@@ -68,6 +85,11 @@ export function UpscaleReview({ books, onChanged, onClose }: Props) {
   const book = books.find((b) => b.id === current?.id);
   const done = finished && position >= ready.length;
 
+  // A single cover has nothing to sum up: deciding on it is the end.
+  useEffect(() => {
+    if (done && books.length === 1) onClose();
+  }, [done, books.length, onClose]);
+
   const keep = useCallback(async () => {
     if (!current) return;
     setSaving(true);
@@ -83,12 +105,14 @@ export function UpscaleReview({ books, onChanged, onClose }: Props) {
     }
   }, [current, onChanged]);
 
-  const working =
-    progress && !finished
-      ? `Upscaling ${books.find((b) => b.id === progress.id)?.title ?? "cover"}: ${Math.round((progress.done / progress.total) * 100)}%`
-      : !finished && !error
-        ? "Starting…"
-        : "";
+  const running = !finished && !error;
+  const title = books.find((b) => b.id === workingOn)?.title;
+  const working = !running
+    ? ""
+    : status
+      ? `Upscaling ${title ?? "cover"}`
+      : "Starting…";
+  const left = status ? timeLeft(status.secondsLeft) : "";
 
   return (
     <div className="modal-backdrop">
@@ -118,23 +142,22 @@ export function UpscaleReview({ books, onChanged, onClose }: Props) {
         ) : done ? (
           <p className="muted modal-empty">
             {kept === 1 ? "1 cover" : `${kept} covers`} upscaled.
-            {fullSize > 0 &&
-              ` ${fullSize} ${fullSize === 1 ? "was" : "were"} already full size.`}
           </p>
         ) : (
           !error && (
             <div className="modal-empty upscale-waiting">
-              <progress
-                value={progress?.done ?? 0}
-                max={progress?.total ?? 1}
-              />
+              <UpscaleBar status={status} />
+              <span className="muted">{left || "\u00a0"}</span>
             </div>
           )
         )}
         <div className="form-actions">
           <span className="muted upscale-credit">
-            {current && working ? (
-              working
+            {current && running ? (
+              <>
+                <UpscaleBar status={status} />
+                {[working, left].filter(Boolean).join(" · ")}
+              </>
             ) : (
               <>
                 Model: 4xBHI_dat2_real by Philip Hofmann, CC BY 4.0, converted
@@ -142,7 +165,6 @@ export function UpscaleReview({ books, onChanged, onClose }: Props) {
               </>
             )}
           </span>
-          <span className="spacer" />
           {current ? (
             <>
               <button
@@ -162,6 +184,34 @@ export function UpscaleReview({ books, onChanged, onClose }: Props) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Glides towards the end of the running tile rather than stepping when one
+ * finishes, with a pulse travelling through it. Before the first tile, while
+ * the model loads, only the pulse shows.
+ */
+function UpscaleBar({ status }: { status: UpscaleStatus | null }) {
+  const percent = status ? status.target * 100 : 0;
+  return (
+    <div
+      className={`upscale-bar ${status ? "" : "starting"}`}
+      role="progressbar"
+      aria-label="Upscaling progress"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={status ? Math.round(percent) : undefined}
+    >
+      <div
+        className="upscale-bar-fill"
+        style={{
+          width: `${percent}%`,
+          // A little slow, so the next tile lands before the bar stops.
+          transitionDuration: `${(status?.tileMs ?? 0) * 1.2}ms`,
+        }}
+      />
     </div>
   );
 }

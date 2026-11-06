@@ -5,12 +5,8 @@
 use std::collections::BTreeMap;
 
 use erc_epub::inspect;
-use erc_library::{Book, Library};
+use erc_library::{Book, CoverQuality, Library};
 use serde::Serialize;
-
-/// Covers shorter than this look soft on current Kobos (the Libra 2 screen
-/// is 1680 px tall); the cover picker uses the same line.
-pub const SMALL_COVER_HEIGHT: u32 = 1200;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -95,7 +91,7 @@ pub fn check_library(
         }
         match library.cover_size(book.id) {
             None => out.push(one(Check::NoCover, book.id, String::new())),
-            Some((w, h)) if h < SMALL_COVER_HEIGHT => {
+            Some((w, h)) if CoverQuality::of_height(h) == CoverQuality::Low => {
                 out.push(one(Check::SmallCover, book.id, format!("{w}×{h}")));
             }
             Some(_) => {}

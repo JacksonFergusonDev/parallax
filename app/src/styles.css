@@ -890,6 +890,19 @@ button.icon {
   gap: 6px;
 }
 
+.cover-size {
+  font-size: 13px;
+}
+
+.cover-size .hint {
+  margin: 2px 0 2px;
+  line-height: 1.35;
+}
+
+.cover-quality.low {
+  color: var(--warn);
+}
+
 button.link {
   border: none;
   background: none;
@@ -2425,9 +2438,83 @@ form.enhance-key input {
   width: min(760px, calc(100vw - 48px));
 }
 
-.upscale-waiting progress {
-  width: 240px;
-  accent-color: var(--accent);
+.upscale-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.upscale-waiting .upscale-bar {
+  width: 280px;
+}
+
+.upscale-bar {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.upscale-credit .upscale-bar {
+  height: 4px;
+  margin-bottom: 5px;
+}
+
+/* Linear, and timed in the component to last one tile, so the bar arrives
+   about when the next tile reports in. */
+.upscale-bar-fill {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 70%, var(--warn)),
+    var(--accent)
+  );
+  transition-property: width;
+  transition-timing-function: linear;
+}
+
+.upscale-bar-fill::after,
+.upscale-bar.starting::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--accent-fg) 65%, transparent),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: upscale-pulse 1.8s ease-in-out infinite;
+}
+
+/* Nothing is filled yet, so the pulse is the accent colour on the empty bar. */
+.upscale-bar.starting::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--accent) 70%, transparent),
+    transparent
+  );
+}
+
+@keyframes upscale-pulse {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upscale-bar-fill::after,
+  .upscale-bar.starting::after {
+    animation: none;
+  }
 }
 
 .upscale-compare {
@@ -2489,5 +2576,7 @@ form.enhance-key input {
 }
 
 .upscale-credit {
+  flex: 1;
+  min-width: 0;
   font-size: 12px;
 }

@@ -96,7 +96,26 @@ describe("UpscaleReview", () => {
 
     expect(host.textContent).toContain("Emma · 1 of 1");
     await click("Keep original");
-    expect(host.textContent).toContain("1 was already full size.");
+    expect(host.textContent).toContain("0 covers upscaled.");
+    expect(host.textContent).not.toContain("full size");
+  });
+
+  it("closes itself once a single cover is decided", async () => {
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      const id = (args as { id: number } | undefined)?.id;
+      if (command === "cover_upscale_preview") return preview(id!);
+      return null;
+    });
+    await show([book(1, "Dune")]);
+    expect(onClose).not.toHaveBeenCalled();
+    await click("Keep original");
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("closes without a word if a single cover needs nothing", async () => {
+    vi.mocked(invoke).mockResolvedValue(null);
+    await show([book(1, "Dune")]);
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
   it("stops the job and stops asking when closed", async () => {

@@ -982,11 +982,29 @@ export function installMockBackend() {
           return books.find((b) => b.id === a.id);
         case "cover_upscale_available":
           return true;
+        case "cover_upscale_tiles":
+          return (a.ids as number[]).length * 12;
+        case "cover_info": {
+          const book = books.find((b) => b.id === a.id);
+          if (!book?.has_cover) return null;
+          const height = [791, 1420, 2200][(a.id as number) % 3];
+          return {
+            width: Math.round(height * 0.66),
+            height: book.cover_upscaled ? 1680 : height,
+            quality: book.cover_upscaled
+              ? "excellent"
+              : height < 1200
+                ? "low"
+                : height < 1680
+                  ? "decent"
+                  : "excellent",
+          };
+        }
         case "cover_upscale_preview": {
           const book = books.find((b) => b.id === a.id);
           upscaleCancelled = false;
           for (let done = 1; done <= 12; done++) {
-            await sleep(120);
+            await sleep(600);
             if (upscaleCancelled) throw "cancelled";
             await emit("upscale-progress", { id: a.id, done, total: 12 });
           }

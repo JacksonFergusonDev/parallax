@@ -670,15 +670,29 @@ export interface UpscalePreview {
   after_size: [number, number];
 }
 
+export type CoverQuality = "low" | "decent" | "excellent";
+
+export interface CoverInfo {
+  width: number;
+  height: number;
+  quality: CoverQuality;
+}
+
 export interface UpscaleProgress {
   id: number;
   done: number;
   total: number;
 }
 
+/** The size and rating of the cover sent to devices; null if there is none. */
+export const coverInfo = (id: number) =>
+  invoke<CoverInfo | null>("cover_info", { id });
 /** Whether this build has the upscaling model. */
 export const upscaleAvailable = () =>
   read<boolean>("cover_upscale_available", {}, []);
+/** Tiles the upscaler will run for these books, for estimating time left. */
+export const upscaleTiles = (ids: number[]) =>
+  invoke<number>("cover_upscale_tiles", { ids });
 /** Upscales without touching the book; null if already full size. */
 export const previewUpscale = (id: number) =>
   invoke<UpscalePreview | null>("cover_upscale_preview", { id });
