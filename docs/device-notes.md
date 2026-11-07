@@ -35,6 +35,11 @@ Written only during ERC changes, never on connect. All writes are temp-file + re
 - `log.jsonl`: one JSON object per operation (`at`, `erc_version`, `op` = send/replace/remove/collection/series/tidy/restore, `content_ids`, `detail`, `backup` = the database backup file taken first, `error` when the write session failed). Newest last, capped at 2000 entries.
 - An unreadable file is renamed to `<name>.unreadable-<timestamp>` and rebuilt; recording never fails the change itself.
 
+## Backups (on the computer, not the Kobo)
+
+- `<app data>/device-backups/<serial>/KoboReader-<stamp>.sqlite.zst`: the database before a change, each compressed on its own, with `KoboReader-<stamp>.json` beside it (firmware, database version, what changed). To open one by hand: `zstd -d <file>`.
+- `removed/<stamp>/`: book files that change removed, for 30 days. See `crates/device-kobo/src/backups.rs`.
+
 ## Confirmed hazards
 
 - **AppleDouble files**: 68 `._*` files in `KEpub/`, but **none imported into `content`** (fw 4.38 skips dotfiles; an earlier count of 2 was a `LIKE` false positive, since `_` is a wildcard: use `instr()` or escape the `_`). The app should still never create them (copy without xattrs) and can offer to tidy existing ones as a low-priority cleanup.

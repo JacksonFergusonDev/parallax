@@ -2,10 +2,16 @@
 //!
 //! Under `<backup root>/<serial>/`:
 //! ```text
-//! KoboReader-<stamp>.sqlite   the database just before a change
-//! KoboReader-<stamp>.json     what that change was
-//! removed/<stamp>/            book files that change removed, with manifest.json
+//! KoboReader-<stamp>.sqlite.zst  the database just before a change
+//! KoboReader-<stamp>.json        what that change was
+//! removed/<stamp>/               book files that change removed, with manifest.json
 //! ```
+//!
+//! Each backup is compressed on its own, about 19 to 1 on the reference Kobo.
+//! Storing only what changed between backups would save a little more, but
+//! then one damaged file could take several backups with it. Backups from
+//! before compression (`.sqlite`) still work, and are compressed at the next
+//! write session.
 //!
 //! A database backup can't bring back a deleted file, so removals copy the
 //! file here first. Going back to a backup puts back the files removed by it
@@ -13,13 +19,15 @@
 //! as one more backup so that going back can itself be undone.
 
 use std::collections::{BTreeMap, HashSet};
-use std::fs;
+use std::fs::{self, File};
+use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};
 
 use chrono::{Duration, NaiveDateTime, SecondsFormat, TimeZone, Utc};
 use rusqlite::backup::Backup;
 use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::KoboDevice;
 use crate::db::open_immutable;
@@ -39,6 +47,12 @@ pub const REMOVED_KEPT_DAYS: i64 = 30;
 
 const PREFIX: &str = "KoboReader-";
 const EXTENSION: &str = ".sqlite";
+const PACKED: &str = ".sqlite.zst";
+/// Measured on a real 37.5 MB database: 1.98 MB in 0.14 s. Level 19 saves
+/// another 0.2 MB but takes 6.5 s, and every write session waits for this.
+const LEVEL: i32 = 9;
+/// Unfinished work older than this was left by a crash.
+const STALE_SECS: u64 = 3600;
 const REMOVED_DIR: &str = "removed";
 const MANIFEST: &str = "manifest.json";
 const STAMP: &str = "%Y%m%d-%H%M%S%.3f";
@@ -65,10 +79,54 @@ pub struct RestoreOutcome {
     pub files_restored: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 struct Sidecar {
-    firmware: String,
+    #[serde(default)]
+    firmware: Option<String>,
+    /// Here so listing backups doesn't have to decompress them.
+    #[serde(default)]
+    db_version: Option<u32>,
     entries: Vec<LogEntry>,
+}
+
+/// A backup as a plain database file, unpacked for as long as this lives.
+pub(crate) struct Plain {
+    path: PathBuf,
+    temporary: bool,
+}
+
+impl Plain {
+    pub(crate) fn open(backup: &Path) -> Result<Self> {
+        let name = file_name(backup);
+        if !name.ends_with(PACKED) {
+            return Ok(Self {
+                path: backup.to_path_buf(),
+                temporary: false,
+            });
+        }
+        let pid = std::process::id();
+        let dir = backup.parent().unwrap_or(backup);
+        let plain = Self {
+            path: dir.join(format!("{}.{pid}.unpacked", stem(&name))),
+            temporary: true,
+        };
+        let source = File::open(backup).map_err(|e| io_err(backup, e))?;
+        let dest = File::create(&plain.path).map_err(|e| io_err(&plain.path, e))?;
+        zstd::stream::copy_decode(source, dest).map_err(|e| io_err(backup, e))?;
+        Ok(plain)
+    }
+
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for Plain {
+    fn drop(&mut self) {
+        if self.temporary {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,20 +153,23 @@ impl KoboDevice {
             .into_iter()
             .map(|file| {
                 let path = dir.join(&file);
-                let sidecar = read_sidecar(&path);
-                let db_version = readable_version(&path);
-                let firmware = sidecar.as_ref().map(|s| s.firmware.as_str());
+                let sidecar = read_sidecar(&path).unwrap_or_default();
+                let db_version = sidecar.db_version.or_else(|| {
+                    Plain::open(&path)
+                        .ok()
+                        .and_then(|p| readable_version(p.path()))
+                });
+                let firmware = sidecar.firmware.as_deref();
                 let blocked = self.restore_blocker(current, db_version, firmware);
-                let entries = sidecar.as_ref().map_or_else(
+                let mut entries = sidecar.entries;
+                if entries.is_empty() {
                     // Backups from before sidecars: the Kobo's own log names them.
-                    || {
-                        log.iter()
-                            .filter(|e| e.backup.as_deref() == Some(file.as_str()))
-                            .cloned()
-                            .collect()
-                    },
-                    |s| s.entries.clone(),
-                );
+                    entries = log
+                        .iter()
+                        .filter(|e| e.backup.as_deref().is_some_and(|b| stem(b) == stem(&file)))
+                        .cloned()
+                        .collect();
+                }
                 BackupInfo {
                     at: stamp_time(&file).unwrap_or_default(),
                     removed_files: read_manifest(&removed_dir(&path)).len(),
@@ -159,16 +220,14 @@ impl KoboDevice {
         {
             return Err(cannot("that backup is from a different Kobo"));
         }
-        let path = dir.join(&name);
-        if !path.is_file() {
-            return Err(cannot("this Kobo has no such backup"));
-        }
+        let path = locate(&dir, &name).ok_or_else(|| cannot("this Kobo has no such backup"))?;
+        let plain = Plain::open(&path).map_err(|_| cannot("this backup is damaged"))?;
 
         let db = self.db_path();
         let sidecar = read_sidecar(&path);
         let current = readable_version(&db);
-        let firmware = sidecar.as_ref().map(|s| s.firmware.as_str());
-        if let Some(why) = self.restore_blocker(current, readable_version(&path), firmware) {
+        let firmware = sidecar.as_ref().and_then(|s| s.firmware.as_deref());
+        if let Some(why) = self.restore_blocker(current, readable_version(plain.path()), firmware) {
             return Err(Error::CannotRestore(why));
         }
         if current.is_some()
@@ -177,7 +236,7 @@ impl KoboDevice {
         {
             return Err(blocker);
         }
-        if quick_check(&path).as_deref() != Some("ok") {
+        if quick_check(plain.path()).as_deref() != Some("ok") {
             return Err(cannot("this backup is damaged"));
         }
 
@@ -185,14 +244,14 @@ impl KoboDevice {
         let safety_name = file_name(&safety);
         let mut entry = LogEntry::new("restore").detail(name.clone());
         entry.backup = Some(safety_name.clone());
-        self.write_sidecar(&safety, std::slice::from_ref(&entry));
+        self.write_sidecar(&safety, std::slice::from_ref(&entry), current);
 
         // Files first: a failure here leaves at worst an extra file Nickel
         // imports, where the other order would leave rows with no file.
         let books = self.put_back_removed(&dir, &name)?;
         let files_restored = books.len();
-        restore(&db, &path)?;
-        if quick_check_immutable(&db).as_deref() != Some("ok") {
+        restore(&db, plain.path())?;
+        if quick_check(&db).as_deref() != Some("ok") {
             restore(&db, &safety)?;
             return Err(Error::RolledBack("the restored copy didn't verify".into()));
         }
@@ -240,14 +299,20 @@ impl KoboDevice {
         Ok(changes)
     }
 
-    pub(crate) fn write_sidecar(&self, backup: &Path, entries: &[LogEntry]) {
-        let sidecar = Sidecar {
-            firmware: self.version().firmware.to_string(),
-            entries: entries.to_vec(),
-        };
-        if let Ok(json) = serde_json::to_vec_pretty(&sidecar) {
-            let _ = fs::write(backup.with_extension("json"), json);
-        }
+    pub(crate) fn write_sidecar(
+        &self,
+        backup: &Path,
+        entries: &[LogEntry],
+        db_version: Option<u32>,
+    ) {
+        save_sidecar(
+            backup,
+            &Sidecar {
+                firmware: Some(self.version().firmware.to_string()),
+                db_version,
+                entries: entries.to_vec(),
+            },
+        );
     }
 }
 
@@ -271,24 +336,28 @@ pub(crate) fn hold_removed(backup: &Path, path: &Path, rel: &str) -> Result<()> 
     fs::write(&manifest, json).map_err(|e| io_err(&manifest, e))
 }
 
-/// Backs the open database up into `dir`, verified.
+/// Backs the open database up into `dir`, verified, and compresses it.
 pub(crate) fn take_backup(conn: &Connection, dir: &Path) -> Result<PathBuf> {
     fs::create_dir_all(dir).map_err(|e| io_err(dir, e))?;
     let path = new_backup_path(dir);
-    {
-        let mut dest = Connection::open(&path)?;
-        let backup = Backup::new(conn, &mut dest)?;
-        backup.run_to_completion(256, std::time::Duration::ZERO, None)?;
-    }
-    let check: String =
-        Connection::open(&path)?.query_row("PRAGMA quick_check", [], |r| r.get(0))?;
-    if check != "ok" {
-        let _ = fs::remove_file(&path);
-        return Err(Error::CorruptBefore(format!(
-            "backup failed verification: {check}"
-        )));
-    }
-    Ok(path)
+    let staging = staging_path(&path);
+    let result = (|| {
+        {
+            let mut dest = Connection::open(&staging)?;
+            let backup = Backup::new(conn, &mut dest)?;
+            backup.run_to_completion(256, std::time::Duration::ZERO, None)?;
+        }
+        let check: String =
+            Connection::open(&staging)?.query_row("PRAGMA quick_check", [], |r| r.get(0))?;
+        if check != "ok" {
+            return Err(Error::CorruptBefore(format!(
+                "backup failed verification: {check}"
+            )));
+        }
+        pack(&staging, &path)
+    })();
+    let _ = fs::remove_file(&staging);
+    result.map(|()| path)
 }
 
 /// Saves the database as it is, even if SQLite can't read it: a damaged
@@ -305,14 +374,47 @@ fn save_current(db: &Path, dir: &Path) -> Result<PathBuf> {
     }
     fs::create_dir_all(dir).map_err(|e| io_err(dir, e))?;
     let path = new_backup_path(dir);
-    crate::transfer::copy_plain(db, &path)?;
-    Ok(path)
+    let staging = staging_path(&path);
+    let result = crate::transfer::copy_plain(db, &staging).and_then(|_| pack(&staging, &path));
+    let _ = fs::remove_file(&staging);
+    result.map(|()| path)
+}
+
+/// Compresses `plain` to `dest`, which only appears once reading it back
+/// gives exactly the same bytes.
+fn pack(plain: &Path, dest: &Path) -> Result<()> {
+    let tmp = dest.with_extension("zst.tmp");
+    let result = (|| -> io::Result<()> {
+        let mut encoder = zstd::Encoder::new(File::create(&tmp)?, LEVEL)?;
+        io::copy(&mut File::open(plain)?, &mut encoder)?;
+        encoder.finish()?.sync_all()?;
+        let unpacked = zstd::Decoder::new(File::open(&tmp)?)?;
+        if digest(unpacked)? != digest(File::open(plain)?)? {
+            return Err(io::Error::other("compressed copy doesn't match"));
+        }
+        fs::rename(&tmp, dest)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    result.map_err(|e| io_err(dest, e))
+}
+
+fn digest(mut reader: impl Read) -> io::Result<Vec<u8>> {
+    let mut hash = Sha256::new();
+    let mut buffer = vec![0; 1 << 20];
+    loop {
+        match reader.read(&mut buffer)? {
+            0 => return Ok(hash.finalize().to_vec()),
+            n => hash.update(&buffer[..n]),
+        }
+    }
 }
 
 fn new_backup_path(dir: &Path) -> PathBuf {
     loop {
         let stamp = Utc::now().format(STAMP);
-        let path = dir.join(format!("{PREFIX}{stamp}{EXTENSION}"));
+        let path = dir.join(format!("{PREFIX}{stamp}{PACKED}"));
         if !path.exists() {
             return path;
         }
@@ -320,9 +422,72 @@ fn new_backup_path(dir: &Path) -> PathBuf {
     }
 }
 
+/// Where a backup is before it's compressed.
+fn staging_path(path: &Path) -> PathBuf {
+    path.with_file_name(format!("{}.sqlite.tmp", stem(&file_name(path))))
+}
+
+/// The file for a backup name, which may have been compressed since listing.
+fn locate(dir: &Path, name: &str) -> Option<PathBuf> {
+    [PACKED, EXTENSION]
+        .iter()
+        .map(|extension| dir.join(format!("{}{extension}", stem(name))))
+        .find(|path| path.is_file())
+}
+
+/// Compresses backups from before compression. A failure leaves the backup
+/// as it was, to try again next time.
+fn compress_existing(dir: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for path in entries.flatten().map(|e| e.path()) {
+        let name = file_name(&path);
+        if !is_backup(&name) || name.ends_with(PACKED) {
+            continue;
+        }
+        let packed = dir.join(format!("{}{PACKED}", stem(&name)));
+        if packed.is_file() {
+            // Stopped after packing it, which only finishes once verified.
+            let _ = fs::remove_file(&path);
+            continue;
+        }
+        let mut sidecar = read_sidecar(&path).unwrap_or_default();
+        sidecar.db_version = sidecar.db_version.or_else(|| readable_version(&path));
+        if pack(&path, &packed).is_ok() {
+            save_sidecar(&packed, &sidecar);
+            let _ = fs::remove_file(&path);
+        }
+    }
+}
+
+/// Forgets temporary files a crash left behind.
+fn remove_stale(dir: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let old = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age.as_secs() > STALE_SECS);
+        let path = entry.path();
+        let temporary = path
+            .extension()
+            .is_some_and(|e| e == "tmp" || e == "unpacked");
+        if old && temporary {
+            let _ = fs::remove_file(path);
+        }
+    }
+}
+
 /// Applies the retention rules (see the constants) and forgets removed book
 /// files past [`REMOVED_KEPT_DAYS`].
 pub(crate) fn prune(dir: &Path) {
+    compress_existing(dir);
+    remove_stale(dir);
     let names = backup_names(dir);
     let cutoff = format!(
         "{PREFIX}{}",
@@ -350,8 +515,8 @@ pub(crate) fn prune(dir: &Path) {
     );
     for name in names.iter().filter(|n| !keep.contains(n.as_str())) {
         let path = dir.join(name);
-        let _ = fs::remove_file(&path);
-        let _ = fs::remove_file(path.with_extension("json"));
+        let _ = fs::remove_file(sidecar_path(&path));
+        let _ = fs::remove_file(path);
     }
 
     let Ok(held) = fs::read_dir(dir.join(REMOVED_DIR)) else {
@@ -369,7 +534,9 @@ fn was_removal(backup: &Path) -> bool {
 }
 
 fn is_backup(name: &str) -> bool {
-    name.starts_with(PREFIX) && name.ends_with(EXTENSION) && !name.contains(['/', '\\'])
+    name.starts_with(PREFIX)
+        && (name.ends_with(EXTENSION) || name.ends_with(PACKED))
+        && !name.contains(['/', '\\'])
 }
 
 /// Backup file names in `dir`, oldest first.
@@ -383,11 +550,15 @@ fn backup_names(dir: &Path) -> Vec<String> {
         })
         .unwrap_or_default();
     names.sort();
+    // Both forms exist if compression stopped just before tidying up.
+    names.dedup_by(|a, b| stem(a) == stem(b));
     names
 }
 
 fn stem(name: &str) -> &str {
-    name.strip_suffix(EXTENSION).unwrap_or(name)
+    name.strip_suffix(PACKED)
+        .or_else(|| name.strip_suffix(EXTENSION))
+        .unwrap_or(name)
 }
 
 /// `20261104` from `KoboReader-20261104-210442.223.sqlite`.
@@ -414,9 +585,19 @@ fn removed_dir(backup: &Path) -> PathBuf {
         .join(stem(&name))
 }
 
+fn sidecar_path(backup: &Path) -> PathBuf {
+    backup.with_file_name(format!("{}.json", stem(&file_name(backup))))
+}
+
 fn read_sidecar(backup: &Path) -> Option<Sidecar> {
-    let bytes = fs::read(backup.with_extension("json")).ok()?;
+    let bytes = fs::read(sidecar_path(backup)).ok()?;
     serde_json::from_slice(&bytes).ok()
+}
+
+fn save_sidecar(backup: &Path, sidecar: &Sidecar) {
+    if let Ok(json) = serde_json::to_vec_pretty(sidecar) {
+        let _ = fs::write(sidecar_path(backup), json);
+    }
 }
 
 fn read_manifest(dir: &Path) -> Vec<RemovedFile> {
@@ -433,15 +614,8 @@ fn readable_version(db: &Path) -> Option<u32> {
         .ok()
 }
 
+/// Leaves no side files, so it's safe for the database on the device.
 fn quick_check(path: &Path) -> Option<String> {
-    Connection::open(path)
-        .ok()?
-        .query_row("PRAGMA quick_check", [], |r| r.get(0))
-        .ok()
-}
-
-/// As [`quick_check`], leaving no side files: for the database on the device.
-fn quick_check_immutable(path: &Path) -> Option<String> {
     open_immutable(path)
         .ok()?
         .query_row("PRAGMA quick_check", [], |r| r.get(0))

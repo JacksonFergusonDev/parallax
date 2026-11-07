@@ -11,7 +11,7 @@ Licensed under GPLv3. Device logic is ported from [calibre](https://calibre-eboo
 3. Select books and **Send to Kobo**, optionally straight into a collection. Then **Eject Kobo** and unplug it so it imports them.
 4. The **On Kobo** tab (⌘2) shows what's on the device, with reading progress, and lets you manage collections, remove books, and turn folders into collections.
 
-Every change to the Kobo's database is backed up first, to `~/Library/Application Support/dev.erc.companion/device-backups/`. Removed books are held on your Mac for 30 days, and the library is saved before removals and bulk changes. **Revert changes…**, in both the Library and On Kobo tabs, lists these points by time and goes back to one. How things are now is saved first, so a revert can be undone too.
+Every change to the Kobo's database is backed up first, compressed, to `~/Library/Application Support/dev.erc.companion/device-backups/`. Removed books are held on your Mac for 30 days, and the library is saved before removals and bulk changes. **Revert changes…**, in both the Library and On Kobo tabs, lists these points by time and goes back to one. How things are now is saved first, so a revert can be undone too.
 
 ## Development
 

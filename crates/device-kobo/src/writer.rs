@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use rusqlite::{Connection, OpenFlags, Transaction, TransactionBehavior};
 
 use crate::KoboDevice;
-use crate::backups::{hold_removed, prune, sanitize, take_backup};
+use crate::backups::{Plain, hold_removed, prune, sanitize, take_backup};
 use crate::error::{Error, Result};
 use crate::state::{BookChange, LogEntry, Record};
 
@@ -27,6 +27,7 @@ pub struct DeviceWriter<'a> {
     device: &'a KoboDevice,
     conn: Option<Connection>,
     backup: PathBuf,
+    db_version: Option<u32>,
     /// Written to `/.erc/` when the session ends.
     record: Record,
 }
@@ -61,11 +62,16 @@ impl KoboDevice {
         }
         let dir = backup_root.join(sanitize(&self.version().serial));
         let backup = take_backup(&conn, &dir)?;
+        let db_version = conn
+            .query_row("SELECT version FROM DbVersion", [], |r| r.get(0))
+            .ok();
+        self.write_sidecar(&backup, &[], db_version);
         prune(&dir);
         Ok(DeviceWriter {
             device: self,
             conn: Some(conn),
             backup,
+            db_version,
             record: Record::default(),
         })
     }
@@ -128,7 +134,8 @@ impl<'a> DeviceWriter<'a> {
                 entry.error = Some(e.to_string());
             }
         }
-        self.device.write_sidecar(&self.backup, &record.entries);
+        self.device
+            .write_sidecar(&self.backup, &record.entries, self.db_version);
         self.device.record(record);
         result
     }
@@ -165,6 +172,8 @@ impl Drop for DeviceWriter<'_> {
 /// open to it. The database and its side files stay as they were until the
 /// whole backup is on the device.
 pub fn restore(db_path: &Path, backup: &Path) -> Result<()> {
+    let plain = Plain::open(backup)?;
+    let backup = plain.path();
     let tmp = db_path.with_extension("sqlite.erc-restore");
     let _ = fs::remove_file(&tmp);
     let bytes = crate::transfer::copy_plain(backup, &tmp).inspect_err(|_| {

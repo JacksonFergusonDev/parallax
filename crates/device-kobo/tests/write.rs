@@ -87,9 +87,12 @@ fn removes_book_rows_files_and_covers() {
     let id = cid(BOOK);
 
     let mut writer = kobo.open_writer(&backups).unwrap();
-    let backup = writer.backup_path().to_path_buf();
+    let packed = writer.backup_path().to_path_buf();
     remove_book(&mut writer, &id).unwrap();
     writer.close().unwrap();
+    let backup = dir.path().join("unpacked.sqlite");
+    let bytes = zstd::decode_all(fs::File::open(&packed).unwrap()).unwrap();
+    fs::write(&backup, bytes).unwrap();
 
     for table in [
         "content",
@@ -459,7 +462,8 @@ fn going_back_repairs_a_damaged_database_and_keeps_it() {
         2
     );
     let kept = backups.join("N000000000001").join(&outcome.safety_backup);
-    assert_eq!(fs::read(kept).unwrap(), b"this database was damaged");
+    let kept = zstd::decode_all(fs::File::open(kept).unwrap()).unwrap();
+    assert_eq!(kept, b"this database was damaged");
 }
 
 #[test]
@@ -472,6 +476,139 @@ fn a_failed_copy_leaves_the_database_and_its_side_files() {
     assert!(restore(&db, &dir.path().join("missing.sqlite")).is_err());
     assert!(wal.exists());
     assert!(!db.with_extension("sqlite.erc-restore").exists());
+}
+
+/// A backup as older versions wrote it: an uncompressed `.sqlite`, with no
+/// sidecar. Returns its name.
+fn plain_backup(kobo: &KoboDevice, backups: &Path, stamp: &str) -> String {
+    let writer = kobo.open_writer(backups).unwrap();
+    let packed = writer.backup_path().to_path_buf();
+    writer.close().unwrap();
+    let name = format!("KoboReader-{stamp}.sqlite");
+    let bytes = zstd::decode_all(fs::File::open(&packed).unwrap()).unwrap();
+    fs::write(packed.with_file_name(&name), bytes).unwrap();
+    fs::remove_file(&packed).unwrap();
+    let stem = packed
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .replace(".sqlite.zst", "");
+    fs::remove_file(packed.with_file_name(format!("{stem}.json"))).unwrap();
+    name
+}
+
+#[test]
+fn backups_are_compressed_and_list_without_being_unpacked() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    let name = remove_with_backup(&kobo, &backups, BOOK);
+    assert!(name.ends_with(".sqlite.zst"));
+
+    let folder = backups.join("N000000000001");
+    let packed = folder.join(&name);
+    assert!(fs::metadata(&packed).unwrap().len() < fs::metadata(&db).unwrap().len());
+    // Unreadable now, so a version can only have come from the sidecar.
+    fs::write(&packed, b"damaged").unwrap();
+    assert!(kobo.backups(&backups)[0].db_version.is_some());
+
+    let leftovers: Vec<_> = fs::read_dir(&folder)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.extension()
+                .is_some_and(|e| e == "tmp" || e == "unpacked" || e == "sqlite")
+        })
+        .collect();
+    assert!(leftovers.is_empty(), "{leftovers:?}");
+}
+
+#[test]
+fn a_cut_off_backup_is_refused_and_leaves_no_temporary_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    let name = remove_with_backup(&kobo, &backups, BOOK);
+    let folder = backups.join("N000000000001");
+    let bytes = fs::read(folder.join(&name)).unwrap();
+    fs::write(folder.join(&name), &bytes[..bytes.len() / 2]).unwrap();
+    let before = fs::read(&db).unwrap();
+
+    assert!(matches!(
+        kobo.restore_backup(&backups, Path::new(&name)),
+        Err(Error::CannotRestore(_))
+    ));
+    assert_eq!(fs::read(&db).unwrap(), before);
+    let unpacked = fs::read_dir(&folder)
+        .unwrap()
+        .flatten()
+        .any(|e| e.path().extension().is_some_and(|x| x == "unpacked"));
+    assert!(!unpacked);
+}
+
+#[test]
+fn an_uncompressed_backup_still_restores() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    let name = plain_backup(&kobo, &backups, "20261101-120000.000");
+    Connection::open(&db)
+        .unwrap()
+        .execute("DELETE FROM content", [])
+        .unwrap();
+
+    assert!(kobo.backups(&backups).iter().any(|b| b.file == name));
+    kobo.restore_backup(&backups, Path::new(&name)).unwrap();
+    assert_eq!(
+        count(&db, "SELECT count(*) FROM content WHERE BookID IS NULL"),
+        2
+    );
+}
+
+#[test]
+fn existing_backups_are_compressed_and_keep_working_under_their_old_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    let name = plain_backup(&kobo, &backups, "20261101-120000.000");
+    let folder = backups.join("N000000000001");
+
+    kobo.open_writer(&backups).unwrap().close().unwrap();
+    assert!(!folder.join(&name).exists());
+    let packed = format!("{name}.zst");
+    let listed = kobo.backups(&backups);
+    let entry = listed.iter().find(|b| b.file == packed).unwrap();
+    assert!(entry.db_version.is_some());
+    assert_eq!(entry.blocked, None);
+
+    Connection::open(&db)
+        .unwrap()
+        .execute("DELETE FROM content", [])
+        .unwrap();
+    // A name listed just before it was compressed still finds it.
+    kobo.restore_backup(&backups, Path::new(&name)).unwrap();
+    assert_eq!(
+        count(&db, "SELECT count(*) FROM content WHERE BookID IS NULL"),
+        2
+    );
+}
+
+#[test]
+fn an_interrupted_compression_is_finished_not_duplicated() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, _db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    let name = plain_backup(&kobo, &backups, "20261101-120000.000");
+    let folder = backups.join("N000000000001");
+    let bytes = fs::read(folder.join(&name)).unwrap();
+    let packed = zstd::encode_all(&bytes[..], 3).unwrap();
+    fs::write(folder.join(format!("{name}.zst")), packed).unwrap();
+
+    assert_eq!(kobo.backups(&backups).len(), 1);
+    kobo.open_writer(&backups).unwrap().close().unwrap();
+    assert!(!folder.join(&name).exists());
+    assert_eq!(kobo.backups(&backups).len(), 2);
 }
 
 #[test]
