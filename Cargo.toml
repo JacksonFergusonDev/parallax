@@ -70,7 +70,7 @@ tempfile = "3"
 thiserror = "2"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 sha2 = "0.11"
-zstd = "0.13"
+zstd = "0.14"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 rayon = "1"
 uuid = { version = "1", features = ["v4"] }
