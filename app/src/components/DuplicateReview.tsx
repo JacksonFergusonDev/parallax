@@ -1,5 +1,5 @@
 import { GeneratedCover } from "./GeneratedCover";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import type { DuplicateReason } from "../api";
 
@@ -34,8 +34,8 @@ interface Props {
   dismiss: (key: string) => Promise<void>;
   onChanged: () => void;
   onClose: () => void;
-  /** Part of a longer review: what to call this step. */
-  step?: string;
+  /** Part of a longer review: shows where in it this is. */
+  step?: ReactNode;
 }
 
 const REASONS: Record<DuplicateReason, string> = {
@@ -77,10 +77,13 @@ export function DuplicateReview({
 
   return (
     <div className="modal-backdrop" onClick={step ? undefined : close}>
-      <div className="modal duplicates" onClick={(e) => e.stopPropagation()}>
+      <div
+        className={`modal duplicates ${step ? "review-large" : ""}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {step}
         <div className="modal-head">
           <div>
-            {step && <p className="review-step">{step}</p>}
             <h2>Duplicates in your {place}</h2>
             <p className="muted">
               {groups === null

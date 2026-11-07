@@ -472,8 +472,8 @@ export function installMockBackend() {
               series: null,
               series_index: null,
               tags: [],
-              cover: null,
-              has_cover: false,
+              cover: name.startsWith("The") ? books[0].cover : null,
+              has_cover: name.startsWith("The"),
               original_name: name,
             };
             books = [...books, book];
@@ -500,6 +500,7 @@ export function installMockBackend() {
               ...(b.authors.length ? [] : [found("no_author")]),
               ...(b.title.includes("_") ? [found("title_from_file")] : []),
               ...(b.has_cover ? [] : [found("no_cover")]),
+              ...(b.has_cover && id % 3 === 0 ? [found("small_cover")] : []),
             ];
           });
           return { findings, duplicates: [], bulk: ids.length > 25 };
@@ -1021,7 +1022,15 @@ export function installMockBackend() {
         case "cover_search":
           await sleep(600);
           return SAMPLE.slice(0, 6).map(([title, author], i) => {
-            const url = coverSvg(title, author, i + 2);
+            // A sharp first result, as a real store's would be.
+            const url = coverSvg(title, author, i + 2).replace(
+              encodeURIComponent('width="400" height="600">'),
+              encodeURIComponent(
+                i === 0
+                  ? 'width="1400" height="2100" viewBox="0 0 400 600">'
+                  : 'width="400" height="600">',
+              ),
+            );
             return {
               source: i % 2 ? "Open Library" : "Apple Books",
               url,

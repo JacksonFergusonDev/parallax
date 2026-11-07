@@ -92,6 +92,7 @@ import {
   flaggedCount,
   needsReview,
   plural,
+  sendableIds,
   type FailedFile,
   type ReviewBatch,
 } from "./importReview";
@@ -106,6 +107,8 @@ const LIBRARY_KEYS = [
 const NEW_COLLECTION = "\u0000new";
 
 type Notice = { kind: "error" | "info"; text: string };
+
+const none = new Set<number>();
 
 export default function App() {
   const [books, setBooks] = useState<Book[]>([]);
@@ -272,17 +275,51 @@ export default function App() {
     };
   }, []);
 
+  /** The connected Kobo, if books can be sent to it. */
+  const writable = device?.read_only === null ? device : null;
+  const sendTo = useRef(writable);
+  useEffect(() => {
+    sendTo.current = writable;
+  });
+
+  /** Sends books from the review, showing progress on them as usual. */
+  const sendReviewed = async (ids: number[]) => {
+    if (!writable) return [];
+    batch.current = ids;
+    setStatuses(Object.fromEntries(ids.map((id) => [id, { stage: "queued" }])));
+    setBusy("sending");
+    try {
+      const outcomes = await sendBooks(writable.mount, ids);
+      await refreshOnDevice(writable);
+      return outcomes;
+    } finally {
+      setBusy(null);
+    }
+  };
+
   /** Looks over new books and raises what's worth fixing, if anything. */
   const reviewAdded = useCallback(
-    async (ids: number[], failed: FailedFile[], bulk = false) => {
+    async (
+      ids: number[],
+      failed: FailedFile[],
+      from: "files" | "calibre" | "kobo" = "files",
+    ) => {
       if (ids.length === 0 && failed.length === 0) return;
       try {
         if ((await getSetting(REVIEW_SETTING)) === "off") return;
-        const review = await reviewBooks(ids);
-        const added = { ids, failed, review };
-        if (bulk || review.bulk) {
+        const found = await reviewBooks(ids);
+        const review = { ...found, bulk: found.bulk || from === "calibre" };
+        const added = { ids, failed, review, fromKobo: from === "kobo" };
+        const offerSending =
+          sendTo.current !== null &&
+          sendableIds(added, none, () => false).length > 0;
+        if (review.bulk) {
           if (flaggedCount(added) > 0) setReviewOffer(added);
-        } else if (needsReview(added) || (await anyBetterCover(review))) {
+        } else if (
+          needsReview(added) ||
+          offerSending ||
+          (await anyBetterCover(review))
+        ) {
           setReviews((queue) => [...queue, added]);
         }
       } catch (e) {
@@ -674,7 +711,7 @@ export default function App() {
             libraryByContentId={libraryByContentId}
             onLibraryChanged={refresh}
             onBooksAdded={(ids) => {
-              void refresh().then(() => reviewAdded(ids, []));
+              void refresh().then(() => reviewAdded(ids, [], "kobo"));
             }}
             about={aboutOpen}
             onAboutChange={setAboutOpen}
@@ -1031,7 +1068,7 @@ export default function App() {
       {fromCalibre && (
         <CalibreImport
           onImported={(ids) => {
-            void refresh().then(() => reviewAdded(ids, [], true));
+            void refresh().then(() => reviewAdded(ids, [], "calibre"));
           }}
           onClose={() => setFromCalibre(false)}
         />
@@ -1097,6 +1134,8 @@ export default function App() {
           mount={device?.mount ?? null}
           canUpscale={canUpscale}
           onKobo={(id) => onDevice.has(id)}
+          kobo={writable ? { name: writable.model, send: sendReviewed } : null}
+          statuses={statuses}
           onChanged={() => {
             void refresh();
             setEnhanced((n) => n + 1);

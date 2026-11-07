@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
   applyUpscale,
@@ -20,6 +26,8 @@ interface Props {
   /** Called with the updated book each time an upscaled cover is kept. */
   onChanged: (book: Book) => void;
   onClose: () => void;
+  /** Part of a longer review: shows where in it this is. */
+  step?: ReactNode;
 }
 
 /**
@@ -27,7 +35,7 @@ interface Props {
  * prepared while the current one is being judged; nothing changes in the
  * library unless "Use upscaled" is pressed.
  */
-export function UpscaleReview({ books, onChanged, onClose }: Props) {
+export function UpscaleReview({ books, onChanged, onClose, step }: Props) {
   const [ready, setReady] = useState<UpscalePreview[]>([]);
   const [position, setPosition] = useState(0);
   const [finished, setFinished] = useState(false);
@@ -117,10 +125,11 @@ export function UpscaleReview({ books, onChanged, onClose }: Props) {
   return (
     <div className="modal-backdrop">
       <div
-        className="modal upscale-review"
+        className={`modal upscale-review ${step ? "review-large" : ""}`}
         role="dialog"
         aria-label="Upscale covers"
       >
+        {step}
         <div className="modal-head">
           <div>
             <h2>Upscale {books.length === 1 ? "cover" : "covers"}</h2>

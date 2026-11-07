@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   coverSrc,
@@ -13,6 +19,7 @@ import {
   updateBook,
   type Book,
   type Proposal,
+  type SendOutcome,
 } from "../api";
 import { libraryReviewGroups } from "../duplicates";
 import {
@@ -27,11 +34,14 @@ import { GENRES } from "../genres";
 import {
   coverIds,
   findBetterCover,
+  initialSend,
   lacksGenre,
   manualIds,
+  onlySending,
   plural,
   reviewProposals,
   reviewSteps,
+  sendableIds,
   STEP_NAMES,
   summaryLines,
   type CoverSearch,
@@ -39,10 +49,11 @@ import {
   type ReviewBatch,
   type Step,
 } from "../importReview";
-import { fromForm, toForm } from "../library";
+import { fromForm, toForm, type SendStatus } from "../library";
 import { CoverPicker } from "./CoverPicker";
 import { DuplicateReview, type ReviewGroup } from "./DuplicateReview";
 import { ProposalChanges } from "./EnhanceReview";
+import { GeneratedCover } from "./GeneratedCover";
 import { UpscaleReview } from "./UpscaleReview";
 
 export const REVIEW_SETTING = "review_on_add";
@@ -54,6 +65,13 @@ interface Props {
   mount: string | null;
   canUpscale: boolean;
   onKobo: (id: number) => boolean;
+  /** A connected Kobo that books can be sent to. */
+  kobo: {
+    name: string;
+    send: (ids: number[]) => Promise<SendOutcome[]>;
+  } | null;
+  /** Progress of books being sent, by book. */
+  statuses: Record<number, SendStatus>;
   /** Something was saved; the library should be reloaded. */
   onChanged: () => void;
   onClose: () => void;
@@ -76,7 +94,49 @@ interface ManualEdit {
   genre?: string;
 }
 
-const ORDER: Step[] = ["duplicates", "metadata", "covers"];
+const ORDER: Step[] = ["duplicates", "metadata", "covers", "send"];
+
+const SEND_STAGES: Record<SendStatus["stage"], string> = {
+  queued: "Waiting…",
+  preparing: "Preparing…",
+  converting: "Converting…",
+  copying: "Copying…",
+  sent: "Sent",
+  failed: "Failed",
+};
+
+/** A book's cover, or the stand-in the library shows without one. */
+function CoverImage({ book, src }: { book?: Book; src?: string | null }) {
+  const shown = src ?? (book ? coverSrc(book) : null);
+  return shown ? (
+    <img src={shown} alt="" loading="lazy" draggable={false} />
+  ) : (
+    <GeneratedCover title={book?.title ?? ""} size="mini" />
+  );
+}
+
+/** Where the review has got to, by name. */
+function StepTracker({ steps, current }: { steps: Step[]; current: Step }) {
+  const position = steps.indexOf(current);
+  return (
+    <ol className="review-tracker" aria-label="Review steps">
+      {steps.map((step, i) => (
+        <li
+          key={step}
+          className={
+            i === position ? "current" : i < position ? "finished" : ""
+          }
+          aria-current={i === position ? "step" : undefined}
+        >
+          <span className="review-tracker-number">
+            {i < position ? "✓" : i + 1}
+          </span>
+          {STEP_NAMES[step]}
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 /**
  * Says what was found in books just added, then walks through one kind of
@@ -89,17 +149,19 @@ export function ImportReview({
   mount,
   canUpscale,
   onKobo,
+  kobo,
+  statuses,
   onChanged,
   onClose,
 }: Props) {
   const { ids, review } = batch;
-  const [screen, setScreen] = useState<Screen>("summary");
-  const [lookup, setLookup] = useState<Lookup>({
-    kind: "running",
-    done: 0,
-    total: 0,
-    title: "",
-  });
+  const sendOnly = onlySending(batch);
+  const [screen, setScreen] = useState<Screen>(sendOnly ? "send" : "summary");
+  const [lookup, setLookup] = useState<Lookup>(
+    sendOnly
+      ? { kind: "done", proposals: [], problems: [] }
+      : { kind: "running", done: 0, total: 0, title: "" },
+  );
   const [selection, setSelection] = useState<Selection>(new Map());
   const [edits, setEdits] = useState<Map<number, ManualEdit>>(new Map());
   const [covers, setCovers] = useState<Map<number, CoverRow>>(new Map());
@@ -107,7 +169,17 @@ export function ImportReview({
   const [removed, setRemoved] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState({ details: 0, covers: 0, upscaled: 0 });
+  const [done, setDone] = useState({
+    details: 0,
+    covers: 0,
+    upscaled: 0,
+    sent: 0,
+  });
+  const [unsent, setUnsent] = useState<string[]>([]);
+  const [toSend, setToSend] = useState(() =>
+    initialSend(sendableIds(batch, new Set(), onKobo), review),
+  );
+  const [sending, setSending] = useState(false);
   /** Set when the duplicates step opens, so refreshes don't reshuffle it. */
   const [duplicateGroups, setDuplicateGroups] = useState<Promise<
     ReviewGroup[]
@@ -129,6 +201,7 @@ export function ImportReview({
   // Looks everything up as soon as the window opens, so the answers are
   // there by the time they're needed. Nothing is saved without the user.
   useEffect(() => {
+    if (sendOnly) return;
     let alive = true;
     const unlisten = onEnhanceProgress((p) => {
       if (alive)
@@ -164,7 +237,7 @@ export function ImportReview({
       alive = false;
       unlisten.then((f) => f());
     };
-  }, [ids, review, mount, searchCover]);
+  }, [ids, review, mount, searchCover, sendOnly]);
 
   const wanted = useMemo(() => coverIds(review, removed), [review, removed]);
   const searched = wanted.every((id) => covers.has(id));
@@ -175,12 +248,17 @@ export function ImportReview({
   const betterCovers = searched
     ? wanted.filter((id) => covers.get(id)?.best).length
     : null;
+  const sendable = sendableIds(batch, removed, onKobo);
+  // Books stay listed once sent, when they've become "on the Kobo".
+  const [sendList] = useState(() => sendable);
   const steps = reviewSteps(
     batch,
     lookup,
     removed,
     offerable ? true : searched ? false : null,
+    kobo !== null && sendable.length > 0,
   );
+  const fixes = steps.filter((s) => s !== "send");
 
   const title = useCallback(
     (id: number) => books.get(id)?.title ?? `Book ${id}`,
@@ -193,7 +271,7 @@ export function ImportReview({
     const next = steps.find((s) => ORDER.indexOf(s) > position);
     if (next) setScreen(next);
     else if (
-      changes.details + changes.covers + changes.upscaled > 0 ||
+      changes.details + changes.covers + changes.upscaled + changes.sent > 0 ||
       removed.size > 0
     )
       setScreen("done");
@@ -217,8 +295,33 @@ export function ImportReview({
       ? reviewProposals(lookup.proposals, review, removed)
       : [];
   const manual = manualIds(review, lookup, removed);
-  const position = steps.indexOf(screen as Step) + 1;
-  const stepLabel = `Step ${position} of ${steps.length}`;
+  const tracker = steps.includes(screen as Step) ? (
+    <StepTracker steps={steps} current={screen as Step} />
+  ) : null;
+
+  const sendBooks = async () => {
+    if (!kobo) return;
+    setSending(true);
+    setError(null);
+    try {
+      const outcomes = await kobo.send(sendList.filter((id) => toSend.has(id)));
+      const failed = outcomes.filter((o) => "Err" in o.result);
+      const changes = { ...done, sent: outcomes.length - failed.length };
+      setDone(changes);
+      setUnsent(
+        failed.map((o) =>
+          o.book_id === null
+            ? o.source
+            : (books.get(o.book_id)?.title ?? o.source),
+        ),
+      );
+      setScreen("done");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSending(false);
+    }
+  };
 
   const saveDetails = async () => {
     setSaving(true);
@@ -311,7 +414,7 @@ export function ImportReview({
     return (
       <DuplicateReview
         place="library"
-        step={stepLabel}
+        step={tracker}
         groups={duplicateGroups}
         removeWarning="They're removed from your library; copies on your Kobo stay."
         remove={(target) => remove(target.map(Number))}
@@ -332,7 +435,8 @@ export function ImportReview({
           setDone((d) => ({ ...d, upscaled: d.upscaled + 1 }));
           onChanged();
         }}
-        onClose={() => setScreen("done")}
+        onClose={() => advance("covers")}
+        step={<StepTracker steps={steps} current="covers" />}
       />
     );
 
@@ -340,17 +444,13 @@ export function ImportReview({
   return (
     <div className="modal-backdrop">
       <div
-        className="modal enhance import-review"
+        className="modal enhance import-review review-large"
         role="dialog"
         aria-label="Review new books"
       >
+        {tracker}
         <div className="modal-head">
           <div>
-            {position > 0 && (
-              <p className="review-step">
-                {stepLabel} · {STEP_NAMES[screen as Step]}
-              </p>
-            )}
             <h2>
               {screen === "summary"
                 ? added > 0
@@ -359,8 +459,10 @@ export function ImportReview({
                 : screen === "metadata"
                   ? "Check the book details"
                   : screen === "covers"
-                    ? "Choose better covers"
-                    : "All done"}
+                    ? "Choose your covers"
+                    : screen === "send"
+                      ? "Send to your Kobo?"
+                      : "All done"}
             </h2>
             <p className="muted">
               {screen === "summary"
@@ -370,11 +472,22 @@ export function ImportReview({
                 : screen === "metadata"
                   ? "Ticked items are sure matches. Nothing is saved until you continue."
                   : screen === "covers"
-                    ? "Each book starts on the best option we found."
-                    : "Your books are ready."}
+                    ? "Click the cover you want for each book. The best one we found is already selected."
+                    : screen === "send"
+                      ? kobo
+                        ? `Your ${kobo.name} is connected. Untick anything you don't want on it.`
+                        : "Your Kobo isn't connected any more."
+                      : done.sent > 0
+                        ? "Eject your Kobo and unplug it to import the new books."
+                        : "Your books are ready."}
             </p>
           </div>
-          <button className="icon" aria-label="Close" onClick={onClose}>
+          <button
+            className="icon"
+            aria-label="Close"
+            disabled={sending}
+            onClick={onClose}
+          >
             ×
           </button>
         </div>
@@ -406,15 +519,24 @@ export function ImportReview({
             <div className="form-actions review-actions">
               <ReviewOnAdd />
               <span className="spacer" />
-              {steps.length > 0 ? (
+              {fixes.length > 0 ? (
                 <>
-                  <button className="secondary" onClick={onClose}>
+                  <button
+                    className="secondary"
+                    onClick={() =>
+                      steps.includes("send") ? setScreen("send") : onClose()
+                    }
+                  >
                     Keep as is
                   </button>
                   <button className="primary" autoFocus onClick={start}>
                     Review
                   </button>
                 </>
+              ) : steps.includes("send") ? (
+                <button className="primary" autoFocus onClick={start}>
+                  Continue
+                </button>
               ) : (
                 <button className="primary" autoFocus onClick={onClose}>
                   Done
@@ -452,7 +574,6 @@ export function ImportReview({
               ].map((id) => {
                 const book = books.get(id);
                 const proposal = proposals.find((p) => p.book_id === id);
-                const src = book ? coverSrc(book) : null;
                 const edit = edits.get(id) ?? {};
                 const change = (patch: ManualEdit) =>
                   setEdits((e) => new Map(e).set(id, { ...edit, ...patch }));
@@ -463,7 +584,7 @@ export function ImportReview({
                 return (
                   <li key={id}>
                     <span className="thumb">
-                      {src ? <img src={src} alt="" loading="lazy" /> : null}
+                      <CoverImage book={book} />
                     </span>
                     <div className="enhance-book">
                       <div className="row-title">{title(id)}</div>
@@ -563,79 +684,70 @@ export function ImportReview({
             {searched && !offerable && (
               <p className="muted modal-empty">No better covers were found.</p>
             )}
-            <ul className="enhance-list review-covers">
+            <ul className="review-covers">
               {wanted.map((id) => {
                 const book = books.get(id);
                 const row = covers.get(id);
-                const src = book ? coverSrc(book) : null;
-                const offered =
-                  row?.picked ?? row?.best?.candidate.preview_url ?? null;
                 const set = (patch: Partial<CoverRow>) =>
                   row &&
                   setCovers((c) => new Map(c).set(id, { ...row, ...patch }));
+                const offered = row?.picked ?? row?.best?.candidate.url ?? null;
                 return (
                   <li key={id}>
-                    <span className="thumb review-thumb">
-                      {src ? <img src={src} alt="" loading="lazy" /> : null}
-                    </span>
-                    <div className="enhance-book">
-                      <div className="row-title">{title(id)}</div>
-                      <div className="row-sub">
-                        {row?.current
-                          ? `Current cover is ${row.current} px tall`
-                          : "No cover yet"}
-                      </div>
+                    <div className="row-title">{title(id)}</div>
+                    <div className="row-sub">{book?.authors.join(", ")}</div>
+                    <div className="review-cover-options">
+                      <CoverOption
+                        label="Current cover"
+                        detail={
+                          row?.current
+                            ? `${row.currentWidth}×${row.current}`
+                            : "None yet"
+                        }
+                        selected={row?.choice === "keep"}
+                        onSelect={() => set({ choice: "keep" })}
+                      >
+                        <CoverImage book={book} />
+                      </CoverOption>
                       {!row ? (
-                        <div className="muted">Searching…</div>
+                        <div className="review-cover-searching muted">
+                          Searching for covers…
+                        </div>
                       ) : (
-                        <div className="review-cover-choices">
-                          {(row.best || row.picked) && (
-                            <label>
-                              <input
-                                type="radio"
-                                name={`cover-${id}`}
-                                checked={row.choice === "use"}
-                                onChange={() => set({ choice: "use" })}
-                              />
-                              {row.picked
-                                ? "Use the cover you chose"
-                                : `Use the ${row.best?.candidate.source} cover (${row.best?.width}×${row.best?.height})`}
-                            </label>
+                        <>
+                          {offered && (
+                            <CoverOption
+                              label="New cover"
+                              detail={
+                                row.picked
+                                  ? "Your choice"
+                                  : `${row.best?.candidate.source} · ${row.best?.width}×${row.best?.height}`
+                              }
+                              selected={row.choice === "use"}
+                              onSelect={() => set({ choice: "use" })}
+                            >
+                              <CoverImage book={book} src={offered} />
+                            </CoverOption>
                           )}
                           {canUpscale && row.current !== null && (
-                            <label>
-                              <input
-                                type="radio"
-                                name={`cover-${id}`}
-                                checked={row.choice === "upscale"}
-                                onChange={() => set({ choice: "upscale" })}
-                              />
-                              Upscale the current cover
-                            </label>
+                            <CoverOption
+                              label="Upscaled cover"
+                              detail="You'll compare it first"
+                              selected={row.choice === "upscale"}
+                              onSelect={() => set({ choice: "upscale" })}
+                            >
+                              <CoverImage book={book} />
+                            </CoverOption>
                           )}
-                          <label>
-                            <input
-                              type="radio"
-                              name={`cover-${id}`}
-                              checked={row.choice === "keep"}
-                              onChange={() => set({ choice: "keep" })}
-                            />
-                            Keep it as it is
-                          </label>
                           <button
-                            className="link"
+                            className="review-cover-more"
                             onClick={() => setPicking(id)}
                           >
                             See all covers…
                           </button>
-                        </div>
+                        </>
                       )}
                     </div>
-                    {offered && row?.choice === "use" && (
-                      <span className="thumb review-thumb">
-                        <img src={offered} alt="" loading="lazy" />
-                      </span>
-                    )}
                   </li>
                 );
               })}
@@ -660,6 +772,91 @@ export function ImportReview({
           </>
         )}
 
+        {screen === "send" && (
+          <>
+            <ul className="enhance-list review-send">
+              {sendList
+                .filter((id) => !removed.has(id))
+                .map((id) => {
+                  const book = books.get(id);
+                  const status = sending ? statuses[id] : undefined;
+                  const doubtful = review.findings.find(
+                    (f) =>
+                      f.book_id === id &&
+                      (f.issue === "damaged" || f.issue === "drm"),
+                  );
+                  return (
+                    <li key={id}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          disabled={sending}
+                          checked={toSend.has(id)}
+                          onChange={() =>
+                            setToSend((t) => {
+                              const next = new Set(t);
+                              if (!next.delete(id)) next.add(id);
+                              return next;
+                            })
+                          }
+                        />
+                        <span className="thumb">
+                          <CoverImage book={book} />
+                        </span>
+                        <span className="enhance-book">
+                          <span className="row-title">{title(id)}</span>
+                          <span className="row-sub">
+                            {book?.authors.join(", ")}
+                          </span>
+                          {doubtful && (
+                            <span className="unsure">
+                              {doubtful.issue === "drm" ? "has DRM" : "damaged"}
+                            </span>
+                          )}
+                        </span>
+                        {status && (
+                          <span
+                            className={
+                              status.stage === "failed"
+                                ? "notice-error"
+                                : "muted"
+                            }
+                            title={
+                              status.stage === "failed"
+                                ? status.error
+                                : undefined
+                            }
+                          >
+                            {SEND_STAGES[status.stage]}
+                          </span>
+                        )}
+                      </label>
+                    </li>
+                  );
+                })}
+            </ul>
+            <div className="form-actions">
+              <button
+                className="secondary"
+                disabled={sending}
+                onClick={() => advance("send")}
+              >
+                {kobo ? "Not now" : "Continue"}
+              </button>
+              {kobo && (
+                <button
+                  className="primary"
+                  autoFocus
+                  disabled={sending || toSend.size === 0}
+                  onClick={sendBooks}
+                >
+                  {sending ? "Sending…" : `Send ${plural(toSend.size, "book")}`}
+                </button>
+              )}
+            </div>
+          </>
+        )}
+
         {screen === "done" && (
           <>
             <ul className="review-summary">
@@ -675,7 +872,25 @@ export function ImportReview({
               {removed.size > 0 && (
                 <li>Removed {plural(removed.size, "book")}</li>
               )}
-              {done.details + done.covers + done.upscaled + removed.size ===
+              {done.sent > 0 && (
+                <li>Sent {plural(done.sent, "book")} to your Kobo</li>
+              )}
+              {unsent.length > 0 && (
+                <li className="warning">
+                  <div>
+                    <div className="review-line">
+                      {plural(unsent.length, "book")} couldn't be sent
+                    </div>
+                    <div className="muted">{unsent.join(", ")}</div>
+                  </div>
+                </li>
+              )}
+              {done.details +
+                done.covers +
+                done.upscaled +
+                done.sent +
+                removed.size +
+                unsent.length ===
                 0 && <li>Nothing was changed.</li>}
             </ul>
             <div className="form-actions">
@@ -700,6 +915,36 @@ export function ImportReview({
         />
       )}
     </div>
+  );
+}
+
+/** One cover to choose, big enough to judge, saying what it is. */
+function CoverOption({
+  label,
+  detail,
+  selected,
+  onSelect,
+  children,
+}: {
+  label: string;
+  detail: string;
+  selected: boolean;
+  onSelect: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      className={`review-cover-option ${selected ? "selected" : ""}`}
+      aria-pressed={selected}
+      onClick={onSelect}
+    >
+      <span className="review-cover-label">{label}</span>
+      <span className="review-cover-image">{children}</span>
+      <span className="review-cover-detail">{detail}</span>
+      <span className="review-cover-check">
+        {selected ? "✓ Selected" : "\u00a0"}
+      </span>
+    </button>
   );
 }
 

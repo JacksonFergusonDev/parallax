@@ -2615,17 +2615,6 @@ form.enhance-key input {
   font-size: 12px;
 }
 
-.review-step {
-  margin: 0 0 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.modal.import-review .modal-head p.review-step {
-  margin: 0 0 4px;
-}
 .review-summary {
   list-style: none;
   margin: 0;
@@ -2670,27 +2659,257 @@ form.enhance-key input {
   flex: 1;
   min-width: 0;
 }
-.review-covers > li {
-  grid-template-columns: auto 1fr auto;
-}
-.review-thumb {
-  width: 64px;
-  height: 96px;
-}
-.review-cover-choices {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  margin-top: 6px;
-}
-.review-cover-choices label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
 .review-offer {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+}
+
+/* The review after adding books: one large window that stays the same size
+   from step to step, so its buttons don't move. */
+.modal.review-large {
+  width: min(1080px, calc(100vw - 32px));
+  height: min(800px, calc(100vh - 32px));
+  max-height: none;
+  padding: 28px 32px;
+  gap: 18px;
+  font-size: 16px;
+}
+.review-large .modal-head {
+  margin-bottom: 0;
+}
+.review-large .modal-head h2 {
+  font-size: 28px;
+  margin-bottom: 6px;
+}
+.review-large .modal-head p {
+  font-size: 16px;
+  margin: 0;
+}
+.review-large .icon {
+  font-size: 24px;
+  width: 40px;
+  height: 40px;
+}
+.review-large .form-actions {
+  margin-top: auto;
+  flex-shrink: 0;
+  gap: 12px;
+}
+.review-large .form-actions button {
+  font-size: 16px;
+  padding: 12px 24px;
+  border-radius: 10px;
+}
+.review-large input[type="checkbox"],
+.review-large input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.review-large .review-field input {
+  font-size: 16px;
+  padding: 10px 12px;
+}
+.review-large .row-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+.review-large .row-sub {
+  font-size: 15px;
+}
+.review-large .enhance-list {
+  flex: 1;
+  min-height: 0;
+}
+.review-large .enhance-list > li {
+  grid-template-columns: 96px 1fr;
+  gap: 20px;
+  padding: 18px 0;
+}
+.review-large .thumb {
+  width: 96px;
+  height: 144px;
+}
+.review-large .enhance-book {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.review-large .enhance-change {
+  gap: 10px;
+  padding: 3px 0;
+}
+.review-large .enhance-field {
+  font-size: 12px;
+  min-width: 56px;
+}
+.review-large .enhance-problems {
+  font-size: 14px;
+  margin: 0;
+}
+.review-large .review-summary {
+  flex: 1;
+  min-height: 0;
+}
+.review-large .review-summary > li {
+  padding: 16px 2px;
+}
+.review-large .review-line {
+  font-size: 18px;
+  margin-bottom: 2px;
+}
+.review-large .review-toggle {
+  font-size: 15px;
+}
+.review-large .modal-empty {
+  flex: 1;
+}
+
+.review-large .upscale-compare {
+  flex: 1;
+}
+.review-large .compare-stage {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+.review-tracker {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin: 0;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 15px;
+}
+.review-tracker li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.review-tracker .current {
+  color: var(--fg);
+  font-weight: 600;
+}
+.review-tracker-number {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  font-size: 14px;
+}
+.review-tracker .current .review-tracker-number {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+.review-tracker .finished .review-tracker-number {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.review-covers {
+  list-style: none;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--border);
+}
+.review-covers > li {
+  padding: 18px 0 22px;
+  border-bottom: 1px solid var(--border);
+}
+.review-cover-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 16px;
+  margin-top: 14px;
+}
+button.review-cover-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 232px;
+  padding: 14px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: transparent;
+  white-space: normal;
+}
+button.review-cover-option.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.review-cover-label {
+  font-size: 16px;
+  font-weight: 600;
+}
+.review-cover-image {
+  display: block;
+  width: 200px;
+  height: 300px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--sunken);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
+}
+.review-cover-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.review-cover-detail {
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+.review-cover-check {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+button.review-cover-more {
+  width: 160px;
+  border-style: dashed;
+  border-radius: 12px;
+  font-size: 15px;
+  white-space: normal;
+}
+.review-cover-searching {
+  align-self: center;
+  padding: 0 24px;
+}
+
+.review-send > li {
+  display: block;
+  padding: 0;
+}
+.review-large .review-send > li {
+  display: block;
+  padding: 12px 0;
+}
+.review-send label {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  cursor: pointer;
+}
+.review-send .enhance-book {
+  flex: 1;
+}
+.review-send .unsure {
+  align-self: flex-start;
 }

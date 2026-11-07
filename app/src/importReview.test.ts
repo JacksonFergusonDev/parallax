@@ -13,9 +13,12 @@ import {
   failedFiles,
   flaggedCount,
   manualIds,
+  initialSend,
   needsReview,
+  onlySending,
   reviewProposals,
   reviewSteps,
+  sendableIds,
   summaryLines,
   type Lookup,
   type MeasuredCover,
@@ -300,5 +303,47 @@ describe("summaryLines", () => {
         ]),
       ),
     ).toBe("2 books have no author");
+  });
+});
+
+describe("sending", () => {
+  const notOn = () => false;
+
+  it("offers new books that aren't on the Kobo or removed", () => {
+    const on = (id: number) => id === 2;
+    expect(sendableIds(batch(review([])), new Set([1]), notOn)).toEqual([2]);
+    expect(sendableIds(batch(review([])), none, on)).toEqual([1]);
+  });
+
+  it("doesn't offer what came from the Kobo or a bulk import", () => {
+    const fromKobo = { ...batch(review([])), fromKobo: true };
+    expect(sendableIds(fromKobo, none, notOn)).toEqual([]);
+    const bulk = batch({ ...review([]), bulk: true });
+    expect(sendableIds(bulk, none, notOn)).toEqual([]);
+  });
+
+  it("starts with books that may not open unticked", () => {
+    const r = review([
+      ["drm", 1],
+      ["damaged", 2],
+      ["no_genre", 3],
+    ]);
+    expect([...initialSend([1, 2, 3, 4], r)]).toEqual([3, 4]);
+  });
+
+  it("comes last among the steps", () => {
+    const r = review([["no_cover", 1]]);
+    expect(reviewSteps(batch(r), found(), none, true, true)).toEqual([
+      "covers",
+      "send",
+    ]);
+  });
+
+  it("knows when sending is the only reason to open", () => {
+    expect(onlySending(batch(review([])))).toBe(true);
+    expect(onlySending(batch(review([["no_genre", 1]])))).toBe(false);
+    expect(
+      onlySending(batch(review([]), [{ name: "a.epub", reason: "bad" }])),
+    ).toBe(false);
   });
 });

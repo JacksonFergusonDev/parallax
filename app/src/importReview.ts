@@ -25,6 +25,8 @@ export interface ReviewBatch {
   ids: number[];
   failed: FailedFile[];
   review: Review;
+  /** They came from the Kobo, so there's no sending them back. */
+  fromKobo?: boolean;
 }
 
 export type Lookup =
@@ -32,12 +34,13 @@ export type Lookup =
   | { kind: "done"; proposals: Proposal[]; problems: string[] }
   | { kind: "failed"; message: string };
 
-export type Step = "duplicates" | "metadata" | "covers";
+export type Step = "duplicates" | "metadata" | "covers" | "send";
 
 export const STEP_NAMES: Record<Step, string> = {
   duplicates: "Duplicates",
   metadata: "Book details",
   covers: "Covers",
+  send: "Send to Kobo",
 };
 
 export const plural = (n: number, word: string) =>
@@ -96,6 +99,26 @@ export const flaggedCount = ({ review }: ReviewBatch) =>
     ...review.duplicates.flatMap((g) => g.members.map((m) => m.book_id)),
   ]).size;
 
+/** Nothing to fix: the only reason to open is to offer sending. */
+export const onlySending = (batch: ReviewBatch) =>
+  batch.failed.length === 0 && flaggedCount(batch) === 0;
+
+/** Books to offer sending. A bulk import is too much to assume about. */
+export const sendableIds = (
+  { ids, review, fromKobo }: ReviewBatch,
+  removed: Set<number>,
+  onKobo: (id: number) => boolean,
+) =>
+  fromKobo || review.bulk
+    ? []
+    : ids.filter((id) => !removed.has(id) && !onKobo(id));
+
+/** Sending starts ticked, except for books that may not open. */
+export const initialSend = (ids: number[], review: Review) => {
+  const doubtful = new Set(withIssue(review, new Set(), "damaged", "drm"));
+  return new Set(ids.filter((id) => !doubtful.has(id)));
+};
+
 /** A proposal for a book that has a genre only adds noise: keep its series. */
 export const reviewProposals = (
   proposals: Proposal[],
@@ -131,6 +154,7 @@ export function bestCover(
 export interface CoverSearch {
   /** The book's cover height; null when it has none. */
   current: number | null;
+  currentWidth: number | null;
   best: MeasuredCover | null;
 }
 
@@ -150,6 +174,7 @@ export async function findBetterCover(id: number): Promise<CoverSearch> {
   const current = info?.height ?? null;
   return {
     current,
+    currentWidth: info?.width ?? null,
     best: bestCover(
       measured.filter((m): m is MeasuredCover => m !== null),
       current,
@@ -194,6 +219,8 @@ export function reviewSteps(
   removed: Set<number>,
   /** Whether there's a cover to offer or upscale; null while searching. */
   coversToOffer: boolean | null,
+  /** Whether there are books to offer sending to a connected Kobo. */
+  sendable = false,
 ): Step[] {
   const { review } = batch;
   const steps: Step[] = [];
@@ -210,6 +237,7 @@ export function reviewSteps(
     steps.push("metadata");
   if (coverIds(review, removed).length > 0 && coversToOffer !== false)
     steps.push("covers");
+  if (sendable) steps.push("send");
   return steps;
 }
 
