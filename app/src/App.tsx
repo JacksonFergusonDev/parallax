@@ -20,6 +20,7 @@ import {
   booksOnDevice,
   changeCollections,
   coverSrc,
+  deviceBooks,
   dismissDuplicates,
   ejectDevice,
   libraryDuplicates,
@@ -54,6 +55,15 @@ import {
   summarizeImport,
   type SendStatus,
 } from "./library";
+import {
+  filterLibrary,
+  isFiltered,
+  libraryFacets,
+  NO_FILTER,
+  withoutKobo,
+  type BookFacts,
+  type LibraryFilter,
+} from "./libraryFilter";
 import { clickSelect, SELECTION_HINT } from "./selection";
 import { BookCard } from "./components/BookCard";
 import { CalibreImport } from "./components/CalibreImport";
@@ -72,6 +82,7 @@ import {
   type ReviewGroup,
 } from "./components/DuplicateReview";
 import { EditPanel } from "./components/EditPanel";
+import { LibraryFilters } from "./components/LibraryFilters";
 import { usePanelBook } from "./panelBook";
 import { UpscaleReview } from "./components/UpscaleReview";
 import { useGridReflow } from "./reflow";
@@ -133,6 +144,11 @@ export default function App() {
   const [naming, setNaming] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<LibraryFilter>(NO_FILTER);
+  /** Collections of each book on the Kobo, by content id. */
+  const [shelvesByContentId, setShelvesByContentId] = useState<
+    Map<string, string[]>
+  >(new Map());
   const [aboutOpen, setAboutOpen] = useState(false);
   const { mode, setMode, sort, setSort } = useViewState<LibraryKey>(
     "library",
@@ -386,6 +402,33 @@ export default function App() {
           : undefined,
     [onDevice],
   );
+  // Read again whenever what's on the Kobo or its collections change.
+  useEffect(() => {
+    if (!device) return;
+    let alive = true;
+    deviceBooks(device.mount)
+      .catch(() => [])
+      .then(
+        (list) =>
+          alive &&
+          setShelvesByContentId(
+            new Map(list.map((b) => [b.id, b.collections])),
+          ),
+      );
+    return () => {
+      alive = false;
+    };
+  }, [device, onDevice, collections, deviceRevision]);
+  const facts = useMemo<BookFacts>(
+    () => ({
+      deviceState,
+      collectionsOf: (b) => {
+        const contentId = onDevice.get(b.id)?.content_id;
+        return (contentId && shelvesByContentId.get(contentId)) || [];
+      },
+    }),
+    [deviceState, onDevice, shelvesByContentId],
+  );
   const columns = useMemo(() => libraryColumns(deviceState), [deviceState]);
   const covers = useMemo(
     () =>
@@ -410,15 +453,29 @@ export default function App() {
     [columns, colorOf],
   );
   const shownSort = useSettledSort(sort, colorsLoading);
+  const searched = useMemo(() => filterBooks(books, query), [books, query]);
+  const shownFilter = device ? filter : withoutKobo(filter);
+  const facets = useMemo(
+    () => libraryFacets(searched, shownFilter, facts),
+    [searched, shownFilter, facts],
+  );
   const visible = useMemo(
     () =>
       applySort(
-        defaultOrder(filterBooks(books, query)),
+        defaultOrder(filterLibrary(searched, shownFilter, facts)),
         shownSort,
         sortColumns,
       ),
-    [books, query, shownSort, sortColumns],
+    [searched, shownFilter, facts, shownSort, sortColumns],
   );
+  const changeFilter = (next: LibraryFilter) => {
+    setFilter(next);
+    // Remove and Send act on the selection, so it mustn't hold hidden books.
+    const shown = new Set(
+      filterLibrary(searched, next, facts).map((b) => b.id),
+    );
+    setSelected((prev) => new Set([...prev].filter((id) => shown.has(id))));
+  };
   const selectedBooks = useMemo(
     () => books.filter((b) => selected.has(b.id)),
     [books, selected],
@@ -821,6 +878,14 @@ export default function App() {
                 />
               </div>
             )}
+            {books.length > 0 && (
+              <LibraryFilters
+                filter={shownFilter}
+                facets={facets}
+                connected={device !== null}
+                onChange={changeFilter}
+              />
+            )}
             <div
               className="scroll"
               onClick={(e) =>
@@ -849,10 +914,28 @@ export default function App() {
                 </div>
               ) : visible.length === 0 && loaded ? (
                 <div className="empty">
-                  <p className="dropzone-title">
-                    Nothing on the shelf by that name
-                  </p>
-                  <p className="muted">No books match “{query}”.</p>
+                  {isFiltered(shownFilter) ? (
+                    <>
+                      <p className="dropzone-title">Nothing on this shelf</p>
+                      <p className="muted">
+                        No books match these filters
+                        {query.trim() && ` and “${query}”`}.
+                      </p>
+                      <button
+                        className="secondary"
+                        onClick={() => changeFilter(NO_FILTER)}
+                      >
+                        Clear filters
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="dropzone-title">
+                        Nothing on the shelf by that name
+                      </p>
+                      <p className="muted">No books match “{query}”.</p>
+                    </>
+                  )}
                 </div>
               ) : mode === "grid" ? (
                 <div className="grid" ref={gridRef}>

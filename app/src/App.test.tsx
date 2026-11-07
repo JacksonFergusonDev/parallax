@@ -200,6 +200,52 @@ describe("selection and collections", () => {
     expect(panel("On Kobo").textContent).toContain("⌘-click to select several");
   });
 
+  it("filters the Library by what's on the Kobo and drops hidden selections", async () => {
+    const normal = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(async (command, args) =>
+      command === "books_on_device"
+        ? [
+            {
+              book_id: localBook.id,
+              device_path: "book.epub",
+              content_id: koboBook.id,
+              sent_at: "2026-01-01T00:00:00Z",
+              stale: false,
+            },
+          ]
+        : normal(command, args),
+    );
+    await render();
+    const cards = () => panel("Library").querySelectorAll("button.card");
+    await click(cards()[0] as HTMLElement);
+    expect(panel("Library").textContent).toContain("1 selected");
+
+    await click(button("On Kobo 1"));
+    expect(cards()).toHaveLength(1);
+    expect(panel("Library").textContent).toContain("1 selected");
+
+    await click(button("Not on Kobo 0"));
+    expect(cards()).toHaveLength(0);
+    expect(panel("Library").textContent).toContain("No books match these");
+    expect(panel("Library").textContent).not.toContain("1 selected");
+
+    await click(button("Clear filters"));
+    expect(cards()).toHaveLength(1);
+  });
+
+  it("offers only library filters with no Kobo connected", async () => {
+    connected = [];
+    await render();
+    const library = panel("Library");
+    expect(
+      library.querySelector('[aria-label="Filter by genre"]'),
+    ).toBeTruthy();
+    expect(library.querySelector('[aria-label="Filter by collection"]')).toBe(
+      null,
+    );
+    expect(library.querySelector(".filter-bar .segmented")).toBe(null);
+  });
+
   it("adds Library books already on the Kobo to a collection", async () => {
     const normal = vi.mocked(invoke).getMockImplementation()!;
     vi.mocked(invoke).mockImplementation(async (command, args) => {
