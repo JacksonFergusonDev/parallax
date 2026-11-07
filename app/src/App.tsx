@@ -1,19 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
-  Copy,
+  SlidersHorizontal,
   Eject,
-  Import,
   LibraryBig,
   Plus,
   RefreshCw,
   Send,
-  ShieldCheck,
   Tablet,
-  Tags,
   Trash2,
-  WandSparkles,
-  History,
 } from "lucide-react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { ask, open } from "@tauri-apps/plugin-dialog";
@@ -83,6 +78,7 @@ import {
   DuplicateReview,
   type ReviewGroup,
 } from "./components/DuplicateReview";
+import { ActionMenu } from "./components/ActionMenu";
 import { EditPanel } from "./components/EditPanel";
 import { LibraryFilters } from "./components/LibraryFilters";
 import { usePanelBook } from "./panelBook";
@@ -810,89 +806,82 @@ export default function App() {
         <div className="body">
           <main className="content">
             {books.length > 0 && (
-              <div className="view-toolbar">
-                <span className="muted">
-                  {visible.length === books.length
-                    ? `${books.length} ${books.length === 1 ? "book" : "books"}`
-                    : `${visible.length} of ${books.length}`}
-                </span>
-                <button
-                  className="link"
-                  onClick={() => {
-                    const byId = new Map(books.map((b) => [b.id, b]));
-                    setDuplicates(
-                      libraryDuplicates().then((groups) =>
-                        libraryReviewGroups(
-                          groups,
-                          byId,
-                          (id) => onDevice.has(id),
-                          coverSrc,
-                        ),
-                      ),
-                    );
-                  }}
-                >
-                  <Copy />
-                  Find duplicates…
-                </button>
-                <button className="link" onClick={() => setChecking(true)}>
-                  <ShieldCheck />
-                  Check library…
-                </button>
-                <button
-                  className="link"
-                  onClick={() => setReverting("library")}
-                >
-                  <History />
-                  Revert changes…
-                </button>
-                <button className="link" onClick={() => setFromCalibre(true)}>
-                  <Import />
-                  Import from calibre…
-                </button>
-                <button
-                  className="link"
-                  onClick={() => setTidying(true)}
-                  title="Give genres one standard name in your library and on your Kobo"
-                >
-                  <Tags />
-                  Tidy genres…
-                </button>
-                <button
-                  className="link"
-                  onClick={() =>
-                    setEnhancing(
-                      selected.size ? [...selected] : visible.map((b) => b.id),
-                    )
-                  }
-                  title="Look up series and genres for the selected books, or all books shown"
-                >
-                  <WandSparkles />
-                  {selected.size
-                    ? `Find series & genres for ${selected.size}…`
-                    : "Find series & genres…"}
-                </button>
-                <span className="spacer" />
-                {selected.size > 0 && (
-                  <span className="muted">{selected.size} selected</span>
-                )}
-                <ViewControls
-                  mode={mode}
-                  onMode={setMode}
-                  sort={sort}
-                  onSort={setSort}
-                  columns={sortColumns}
-                  note={colorsLoading ? "Reading cover colours…" : null}
+              <section
+                className="library-toolbar"
+                aria-label="Library controls"
+              >
+                <div className="view-toolbar">
+                  <span className="muted">
+                    {visible.length === books.length
+                      ? `${books.length} ${books.length === 1 ? "book" : "books"}`
+                      : `${visible.length} of ${books.length}`}
+                  </span>
+                  <ActionMenu
+                    label="Library tools"
+                    icon={<SlidersHorizontal />}
+                    items={[
+                      {
+                        label: "Find duplicates…",
+                        onPick: () => {
+                          const byId = new Map(books.map((b) => [b.id, b]));
+                          setDuplicates(
+                            libraryDuplicates().then((groups) =>
+                              libraryReviewGroups(
+                                groups,
+                                byId,
+                                (id) => onDevice.has(id),
+                                coverSrc,
+                              ),
+                            ),
+                          );
+                        },
+                      },
+                      {
+                        label: "Check library…",
+                        onPick: () => setChecking(true),
+                      },
+                      {
+                        label: "Revert changes…",
+                        onPick: () => setReverting("library"),
+                      },
+                      {
+                        label: "Import from calibre…",
+                        onPick: () => setFromCalibre(true),
+                      },
+                      { label: "Tidy genres…", onPick: () => setTidying(true) },
+                      {
+                        label: selected.size
+                          ? `Find series & genres for ${selected.size}…`
+                          : "Find series & genres…",
+                        onPick: () =>
+                          setEnhancing(
+                            selected.size
+                              ? [...selected]
+                              : visible.map((b) => b.id),
+                          ),
+                      },
+                    ]}
+                  />
+                  <span className="spacer" />
+                  {selected.size > 0 && (
+                    <span className="muted">{selected.size} selected</span>
+                  )}
+                  <ViewControls
+                    mode={mode}
+                    onMode={setMode}
+                    sort={sort}
+                    onSort={setSort}
+                    columns={sortColumns}
+                    note={colorsLoading ? "Reading cover colours…" : null}
+                  />
+                </div>
+                <LibraryFilters
+                  filter={shownFilter}
+                  facets={facets}
+                  connected={device !== null}
+                  onChange={changeFilter}
                 />
-              </div>
-            )}
-            {books.length > 0 && (
-              <LibraryFilters
-                filter={shownFilter}
-                facets={facets}
-                connected={device !== null}
-                onChange={changeFilter}
-              />
+              </section>
             )}
             <div
               className="scroll"

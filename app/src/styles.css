@@ -1475,6 +1475,54 @@ button.link.danger {
   white-space: nowrap;
 }
 
+/* One shared surface for library browsing controls. */
+.library-toolbar {
+  flex-shrink: 0;
+  margin: 10px 20px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.library-toolbar .view-toolbar {
+  padding: 10px 12px;
+}
+
+.library-toolbar .filter-bar {
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
+}
+
+.library-toolbar .view-controls {
+  margin-left: auto;
+}
+
+.library-toolbar .menu-root > button {
+  padding: 5px 10px;
+  font-size: 13px;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.library-toolbar .menu-root > button:hover,
+.library-toolbar .menu-root > button[aria-expanded="true"] {
+  background: var(--sunken);
+}
+
+.library-toolbar .menu {
+  top: calc(100% + 6px);
+  bottom: auto;
+  left: 0;
+  right: auto;
+  min-width: 240px;
+}
+
+.library-toolbar .filter-select {
+  flex: 1;
+  min-width: 120px;
+}
+
 .filter-count {
   opacity: 0.65;
   font-variant-numeric: tabular-nums;

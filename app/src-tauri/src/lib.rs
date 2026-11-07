@@ -1281,17 +1281,23 @@ fn show_main_window(window: tauri::WebviewWindow) -> tauri::Result<()> {
     window.set_focus()
 }
 
-/// Saved window geometry. Renamed from the plugin's default when the default
-/// window grew, so existing installs get the new size once.
-const WINDOW_STATE_FILE: &str = ".window-state-v2.json";
+/// Versioned saved geometry: existing installs get the fitted width once,
+/// then subsequent launches restore the user's chosen size and position.
+const WINDOW_STATE_FILE: &str = ".window-state-v3.json";
 
-/// A roomy first window for a screen of this logical size: most of the
-/// screen, without sprawling across a large display.
+/// Fit complete Library cover columns beside the permanent details panel.
+/// Keep these dimensions aligned with .grid, .scroll and .panel-slot in styles.css.
 fn first_window_size(screen_width: f64, screen_height: f64) -> (f64, f64) {
-    (
-        (screen_width * 0.9).min(1680.0),
-        (screen_height * 0.9).min(1080.0),
-    )
+    let max_width = (screen_width * 0.9).min(1680.0);
+    let panel = 320.0;
+    let shelf_padding = 40.0;
+    let scrollbar = 15.0;
+    let card = 148.0;
+    let gap = 18.0;
+    let fixed = panel + shelf_padding + scrollbar;
+    let columns = ((max_width - fixed + gap) / (card + gap)).floor().max(1.0);
+    let width = (fixed + columns * (card + gap) - gap).max(800.0);
+    (width, (screen_height * 0.9).min(1080.0))
 }
 
 /// Sizes and centres the window on first launch; later launches restore the
@@ -1427,12 +1433,22 @@ mod tests {
 
     #[test]
     fn first_window_fills_most_of_a_laptop_screen() {
-        assert_eq!(first_window_size(1500.0, 1000.0), (1350.0, 900.0));
+        assert_eq!(first_window_size(1500.0, 1000.0), (1187.0, 900.0));
     }
 
     #[test]
     fn first_window_stops_growing_on_large_displays() {
-        assert_eq!(first_window_size(3840.0, 2160.0), (1680.0, 1080.0));
+        assert_eq!(first_window_size(3840.0, 2160.0), (1519.0, 1080.0));
+    }
+
+    #[test]
+    fn first_window_fits_whole_columns_and_respects_minimum_width() {
+        for screen in [1280.0, 1440.0, 1512.0, 1728.0, 1920.0, 2560.0] {
+            let (width, _) = first_window_size(screen, 1000.0);
+            assert!(width <= (screen * 0.9).min(1680.0));
+            assert_eq!((width - 320.0 - 40.0 - 15.0 + 18.0) % 166.0, 0.0);
+        }
+        assert_eq!(first_window_size(800.0, 600.0).0, 800.0);
     }
 
     #[test]

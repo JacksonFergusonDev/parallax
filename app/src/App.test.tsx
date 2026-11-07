@@ -174,6 +174,49 @@ describe("read-only Kobos", () => {
   });
 });
 
+describe("library toolbar", () => {
+  it("groups library tools and opens an action from the menu", async () => {
+    await render();
+    expect(
+      panel("Library").querySelector('[aria-label="Library controls"]'),
+    ).not.toBeNull();
+    expect(panel("Library").querySelector('[role="menu"]')).toBeNull();
+    const tools = button("Library tools ▾");
+    await click(tools);
+    expect(tools.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      [...panel("Library").querySelectorAll('[role="menuitem"]')].map(
+        (el) => el.textContent,
+      ),
+    ).toEqual([
+      "Find duplicates…",
+      "Check library…",
+      "Revert changes…",
+      "Import from calibre…",
+      "Tidy genres…",
+      "Find series & genres…",
+    ]);
+    await act(async () => {
+      tools.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    });
+    expect(tools.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(tools);
+    await click(tools);
+    await click(
+      [
+        ...panel("Library").querySelectorAll<HTMLButtonElement>(
+          '[role="menuitem"]',
+        ),
+      ].find((el) => el.textContent === "Revert changes…")!,
+    );
+    expect(panel("Library").querySelector('[role="menu"]')).toBeNull();
+    // StrictMode runs the dialog's mount effect twice.
+    expect(calls("library_snapshots")).toHaveLength(2);
+  });
+});
+
 describe("permanent library details", () => {
   it("keeps its slot through selection, switching, multiple selection and clearing", async () => {
     const normal = vi.mocked(invoke).getMockImplementation()!;

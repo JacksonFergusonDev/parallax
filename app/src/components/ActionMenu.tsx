@@ -17,8 +17,18 @@ export function ActionMenu({ label, icon, disabled, items }: Props) {
     const close = (e: MouseEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
     };
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        root.current?.querySelector("button")?.focus();
+      }
+    };
     window.addEventListener("mousedown", close);
-    return () => window.removeEventListener("mousedown", close);
+    window.addEventListener("keydown", escape);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", escape);
+    };
   }, [open]);
 
   return (
@@ -26,6 +36,8 @@ export function ActionMenu({ label, icon, disabled, items }: Props) {
       <button
         className="secondary"
         disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
         {icon}
