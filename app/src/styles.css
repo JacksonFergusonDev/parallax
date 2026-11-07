@@ -21,6 +21,11 @@
   --shadow-book-lift:
     0 2px 2px rgb(60 40 20 / 8%), 0 12px 18px rgb(60 40 20 / 14%),
     0 28px 44px -12px rgb(60 40 20 / 34%);
+  /* The same shadows for bent covers: a box-shadow would stay rectangular. */
+  --drop-book: drop-shadow(0 1px 1px rgb(60 40 20 / 16%))
+    drop-shadow(0 6px 8px rgb(60 40 20 / 20%));
+  --drop-book-lift: drop-shadow(0 2px 2px rgb(60 40 20 / 12%))
+    drop-shadow(0 18px 16px rgb(60 40 20 / 30%));
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   /* Gentler than --ease-out: covers drift up rather than snap. */
   --ease-lift: cubic-bezier(0.33, 1, 0.68, 1);
@@ -51,6 +56,10 @@
     --shadow-book-lift:
       0 2px 2px rgb(0 0 0 / 28%), 0 14px 20px rgb(0 0 0 / 35%),
       0 30px 48px -12px rgb(0 0 0 / 58%);
+    --drop-book: drop-shadow(0 1px 1px rgb(0 0 0 / 40%))
+      drop-shadow(0 6px 9px rgb(0 0 0 / 45%));
+    --drop-book-lift: drop-shadow(0 2px 2px rgb(0 0 0 / 35%))
+      drop-shadow(0 20px 18px rgb(0 0 0 / 55%));
   }
 }
 
@@ -381,43 +390,41 @@ button.badge.connected:hover {
   min-width: 0;
 }
 
-/* Covers read as physical books: square spine edge, rounded fore-edge, a
-   crease and sheen down the spine, and a soft shadow that deepens on hover. */
+/* Covers read as physical books: #book-warp (BookWarpFilter) rolls the art
+   around the spine, bows it and shades it, and a soft shadow follows the bent
+   outline and deepens on hover. */
+.book-warp-defs {
+  position: absolute;
+}
+
 .cover {
   position: relative;
   aspect-ratio: 2 / 3;
   border-radius: 2px 5px 5px 2px;
-  overflow: hidden;
-  background: var(--sunken);
-  box-shadow: var(--shadow-book);
+  filter: var(--drop-book);
   margin-bottom: 10px;
   outline: 3px solid transparent;
   outline-offset: 3px;
   transition:
     outline-color 80ms,
     transform 420ms var(--ease-lift),
-    box-shadow 420ms var(--ease-lift);
+    filter 420ms var(--ease-lift);
 }
 
-.cover::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+.cover img,
+.cover .gen-cover,
+.now-cover img,
+.now-cover .gen-cover {
   border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    rgb(0 0 0 / 22%) 0,
-    rgb(255 255 255 / 18%) 2.5%,
-    rgb(0 0 0 / 12%) 5%,
-    transparent 9%,
-    transparent 94%,
-    rgb(255 255 255 / 6%) 100%
-  );
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 6%);
+  filter: url(#book-warp);
 }
 
 .card:hover .cover,
+.card.selected .cover {
+  transform: translateY(-7px);
+  filter: var(--drop-book-lift);
+}
+
 .picker-item:hover img {
   transform: translateY(-7px);
   box-shadow: var(--shadow-book-lift);
@@ -425,8 +432,6 @@ button.badge.connected:hover {
 
 .card.selected .cover {
   outline-color: var(--accent);
-  transform: translateY(-7px);
-  box-shadow: var(--shadow-book-lift);
 }
 
 .card:focus-visible .cover {
@@ -438,12 +443,14 @@ button.badge.connected:hover {
   height: 100%;
   object-fit: cover;
   display: block;
+  background: var(--sunken);
 }
 
 /* Generated covers for books without one (see coverArt.ts). */
 .gen-cover {
   position: relative;
   height: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   padding: 16% 12% 12% 16%;
@@ -681,7 +688,7 @@ button.badge.connected:hover {
 .panel-cover {
   width: 96px;
   border-radius: 2px 4px 4px 2px;
-  box-shadow: var(--shadow-book);
+  filter: url(#book-warp) var(--drop-book);
 }
 
 .form {
@@ -2098,7 +2105,7 @@ form.enhance-key input {
   aspect-ratio: 2 / 3;
   border-radius: 1px 3px 3px 1px;
   overflow: hidden;
-  box-shadow: var(--shadow-book);
+  filter: var(--drop-book);
 }
 
 .now-cover img {

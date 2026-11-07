@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { isTauri } from "@tauri-apps/api/core";
 import App from "./App";
+import { BookWarpFilter } from "./components/BookWarpFilter";
 import "@fontsource-variable/fraunces/full.css";
 import "@fontsource-variable/fraunces/full-italic.css";
 
@@ -12,6 +13,7 @@ async function start() {
   }
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
+      <BookWarpFilter />
       <App />
     </React.StrictMode>,
   );
