@@ -1,6 +1,7 @@
 import {
   isFiltered,
   NO_FILTER,
+  NONE,
   type Counted,
   type Facets,
   type KoboFilter,
@@ -25,12 +26,17 @@ const READING: [ReadingFilter, string][] = [
 function FilterSelect({
   label,
   all,
+  none,
+  noneCount,
   value,
   options,
   onChange,
 }: {
   label: string;
   all: string;
+  /** The option for books with none of these. */
+  none: string;
+  noneCount: number;
   value: string | null;
   options: readonly Counted[];
   onChange: (value: string | null) => void;
@@ -43,6 +49,11 @@ function FilterSelect({
       onChange={(e) => onChange(e.target.value || null)}
     >
       <option value="">{all}</option>
+      {(noneCount > 0 || value === NONE) && (
+        <option value={NONE}>
+          {none} ({noneCount})
+        </option>
+      )}
       {options.map(([name, count]) => (
         <option key={name} value={name}>
           {name} ({count})
@@ -81,6 +92,8 @@ export function LibraryFilters({ filter, facets, connected, onChange }: Props) {
           <FilterSelect
             label="Filter by collection"
             all="All collections"
+            none="In no collection"
+            noneCount={facets.noCollection}
             value={filter.collection}
             options={facets.collections}
             onChange={(collection) => onChange({ ...filter, collection })}
@@ -90,6 +103,8 @@ export function LibraryFilters({ filter, facets, connected, onChange }: Props) {
       <FilterSelect
         label="Filter by genre"
         all="All genres"
+        none="No genre"
+        noneCount={facets.noGenre}
         value={filter.genre}
         options={facets.genres}
         onChange={(genre) => onChange({ ...filter, genre })}

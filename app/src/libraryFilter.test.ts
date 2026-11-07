@@ -6,6 +6,7 @@ import {
   isFiltered,
   libraryFacets,
   NO_FILTER,
+  NONE,
   withoutKobo,
   type BookFacts,
 } from "./libraryFilter";
@@ -64,6 +65,23 @@ describe("filterLibrary", () => {
     expect(ids({ reading: "finished" })).toEqual([2]);
   });
 
+  it("finds books in no collection, on the Kobo or not", () => {
+    expect(ids({ collection: NONE })).toEqual([3, 4]);
+    states[3] = "on";
+    expect(ids({ collection: NONE, kobo: "on" })).toEqual([3]);
+    delete states[3];
+  });
+
+  it("finds books with no genre, even with other tags", () => {
+    const tagged = book(5, ["dragons"]);
+    const found = filterLibrary(
+      [...books, tagged],
+      { ...NO_FILTER, genre: NONE },
+      facts,
+    );
+    expect(found.map((b) => b.id)).toEqual([4, 5]);
+  });
+
   it("combines filters", () => {
     expect(ids({ collection: "Best", reading: "reading" })).toEqual([1]);
     expect(ids({ kobo: "off", genre: "Fantasy" })).toEqual([]);
@@ -119,6 +137,19 @@ describe("libraryFacets", () => {
     const facets = libraryFacets(books, { ...NO_FILTER, kobo: "off" }, facts);
     expect(facets.genres).toEqual([["Classics", 1]]);
     expect(facets.collections).toEqual([]);
+  });
+
+  it("counts books with no collection or genre", () => {
+    const facets = libraryFacets(books, NO_FILTER, facts);
+    expect(facets.noCollection).toBe(2);
+    expect(facets.noGenre).toBe(1);
+  });
+
+  it("doesn't list the none choice as a name", () => {
+    const filter = { ...NO_FILTER, genre: NONE, collection: NONE };
+    const facets = libraryFacets(books, filter, facts);
+    expect(facets.genres.map(([name]) => name)).not.toContain(NONE);
+    expect(facets.collections.map(([name]) => name)).not.toContain(NONE);
   });
 
   it("keeps the chosen option listed when nothing matches it", () => {

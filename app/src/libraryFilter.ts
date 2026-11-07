@@ -7,6 +7,9 @@ import { collator } from "./sort";
 export type KoboFilter = "all" | "on" | "off" | "stale";
 export type ReadingFilter = "unread" | "reading" | "finished";
 
+/** As a collection or genre filter: books with none. No real name is this. */
+export const NONE = "\0none";
+
 export interface LibraryFilter {
   kobo: KoboFilter;
   collection: string | null;
@@ -60,6 +63,11 @@ function matchesKobo(state: DeviceState, kobo: KoboFilter): boolean {
   }
 }
 
+function matchesName(names: readonly string[], choice: string | null): boolean {
+  if (choice === null) return true;
+  return choice === NONE ? names.length === 0 : names.includes(choice);
+}
+
 export function filterLibrary(
   books: Book[],
   f: LibraryFilter,
@@ -69,9 +77,8 @@ export function filterLibrary(
   return books.filter(
     (b) =>
       matchesKobo(facts.deviceState(b), f.kobo) &&
-      (f.collection === null ||
-        facts.collectionsOf(b).includes(f.collection)) &&
-      (f.genre === null || splitGenres(b.tags).genres.includes(f.genre)) &&
+      matchesName(facts.collectionsOf(b), f.collection) &&
+      matchesName(splitGenres(b.tags).genres, f.genre) &&
       (f.reading === null || readingOf(b) === f.reading),
   );
 }
@@ -81,7 +88,11 @@ export type Counted = readonly [name: string, count: number];
 export interface Facets {
   kobo: Record<KoboFilter, number>;
   collections: Counted[];
+  /** Books in no collection. */
+  noCollection: number;
   genres: Counted[];
+  /** Books with no genre. */
+  noGenre: number;
   reading: Record<ReadingFilter, number>;
 }
 
@@ -92,7 +103,7 @@ function tally(
   current: string | null,
 ): Counted[] {
   const counts = new Map<string, number>();
-  if (current !== null) counts.set(current, 0);
+  if (current !== null && current !== NONE) counts.set(current, 0);
   for (const b of books) {
     for (const name of namesOf(b)) {
       counts.set(name, (counts.get(name) ?? 0) + 1);
@@ -110,6 +121,9 @@ export function libraryFacets(
 ): Facets {
   const others = (without: Partial<LibraryFilter>) =>
     filterLibrary(books, { ...f, ...without }, facts);
+  const forCollection = others({ collection: null });
+  const forGenre = others({ genre: null });
+  const genresOf = (b: Book) => splitGenres(b.tags).genres;
   const forKobo = others({ kobo: "all" });
   const states = forKobo.map(facts.deviceState);
   const forReading = others({ reading: null }).map(readingOf);
@@ -122,16 +136,12 @@ export function libraryFacets(
       off: states.filter((s) => s === undefined).length,
       stale: states.filter((s) => s === "stale").length,
     },
-    collections: tally(
-      others({ collection: null }),
-      facts.collectionsOf,
-      f.collection,
-    ),
-    genres: tally(
-      others({ genre: null }),
-      (b) => splitGenres(b.tags).genres,
-      f.genre,
-    ),
+    collections: tally(forCollection, facts.collectionsOf, f.collection),
+    noCollection: forCollection.filter(
+      (b) => facts.collectionsOf(b).length === 0,
+    ).length,
+    genres: tally(forGenre, genresOf, f.genre),
+    noGenre: forGenre.filter((b) => genresOf(b).length === 0).length,
     reading: {
       unread: readingCount("unread"),
       reading: readingCount("reading"),
