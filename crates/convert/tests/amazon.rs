@@ -126,6 +126,78 @@ fn combo_file_uses_the_kf8_half_and_keeps_its_images() {
     assert!(Epub::open(&out).unwrap().cover().unwrap().is_some());
 }
 
+/// `combo.mobi` with `image` added as a new last record, named by the KF8 header
+/// as its first resource. calibre keeps every resource in the first half, but
+/// KindleGen files can have some in the KF8 half.
+fn combo_with_kf8_image(image: &[u8]) -> Vec<u8> {
+    const COUNT: usize = 76;
+    const TABLE: usize = 78;
+    const KF8_RECORD: usize = 13;
+    const FIRST_IMAGE: usize = 108;
+    let combo = fs::read(fixture("combo.mobi")).unwrap();
+    let u32_at = |d: &[u8], at: usize| u32::from_be_bytes(d[at..at + 4].try_into().unwrap());
+
+    let records = usize::from(u16::from_be_bytes(
+        combo[COUNT..COUNT + 2].try_into().unwrap(),
+    ));
+    let table_end = TABLE + records * 8;
+    let mut book = combo[..table_end].to_vec();
+    for i in 0..records {
+        let offset = u32_at(&combo, TABLE + i * 8) + 8;
+        book[TABLE + i * 8..TABLE + i * 8 + 4].copy_from_slice(&offset.to_be_bytes());
+    }
+    let new_offset = u32::try_from(combo.len() + 8).unwrap();
+    book.extend_from_slice(&new_offset.to_be_bytes());
+    book.extend_from_slice(&u32::try_from(records * 2).unwrap().to_be_bytes());
+    book.extend_from_slice(&combo[table_end..]);
+    book.extend_from_slice(image);
+    book[COUNT..COUNT + 2].copy_from_slice(&u16::try_from(records + 1).unwrap().to_be_bytes());
+
+    let header = u32_at(&book, TABLE + KF8_RECORD * 8) as usize + FIRST_IMAGE;
+    let first = u32::try_from(records - KF8_RECORD).unwrap();
+    book[header..header + 4].copy_from_slice(&first.to_be_bytes());
+    book
+}
+
+#[test]
+fn combo_file_keeps_images_from_both_halves() {
+    let image = b"\x89PNG\r\n\x1a\nimage in the KF8 half";
+    let dir = tempfile::tempdir().unwrap();
+    let book = dir.path().join("book.mobi");
+    let out = dir.path().join("book.epub");
+    fs::write(&book, combo_with_kf8_image(image)).unwrap();
+
+    InProcess.convert(&book, &out).unwrap();
+
+    let files = entries(&out);
+    let (_plain_dir, plain) = convert("combo.mobi");
+    assert_eq!(images(&files), images(&entries(&plain)) + 1);
+    assert!(files.iter().any(|(_, data)| data == image));
+}
+
+#[test]
+fn old_mobi_without_an_ncx_gets_its_contents_from_the_guide() {
+    const RECORD_0: usize = 78;
+    const NCX_INDEX: usize = 244;
+    let mut book = fs::read(fixture("old.mobi")).unwrap();
+    let record0 = u32::from_be_bytes(book[RECORD_0..RECORD_0 + 4].try_into().unwrap()) as usize;
+    book[record0 + NCX_INDEX..record0 + NCX_INDEX + 4].fill(0xff);
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("book.mobi");
+    let out = dir.path().join("book.epub");
+    fs::write(&input, book).unwrap();
+
+    InProcess.convert(&input, &out).unwrap();
+
+    let files = entries(&out);
+    let (_, ncx) = files
+        .iter()
+        .find(|(n, _)| has_extension(n, &["ncx"]))
+        .unwrap();
+    let ncx = String::from_utf8_lossy(ncx);
+    assert!(ncx.matches("<navPoint").count() >= 2, "{ncx}");
+}
+
 #[test]
 fn old_mobi_converts() {
     let (_dir, out) = convert("old.mobi");

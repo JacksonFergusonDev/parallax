@@ -330,7 +330,19 @@ impl MobiImporter {
             });
             nodes.into_iter().map(toc_node_to_entry).collect()
         } else {
-            vec![TocEntry::new(&metadata.title, &split.chapter_paths[0])]
+            let entries: Vec<TocEntry> = toc_from_guide(&text, codec)
+                .into_iter()
+                .filter_map(|(pos, title)| {
+                    let chapter = *split.filepos_to_chapter.get(&format!("filepos{pos}"))?;
+                    let href = format!("{}#filepos{pos}", split.chapter_paths[chapter]);
+                    Some(TocEntry::new(&title, &href))
+                })
+                .collect();
+            if entries.len() > 1 {
+                entries
+            } else {
+                vec![TocEntry::new(&metadata.title, &split.chapter_paths[0])]
+            }
         };
 
         // `assets` was already discovered above for the cover/filepos
@@ -538,6 +550,94 @@ fn build_metadata(
 /// No-op (and allocation-free) when the bytes are already valid UTF-8, so it
 /// is safe to apply to both the CP1252 passthrough and the already-decoded
 /// wrapped output.
+/// The contents page `<guide>` points at, for books with no NCX index: each
+/// link from there to the next page break, as (filepos, title).
+fn toc_from_guide(text: &[u8], codec: &str) -> Vec<(u32, String)> {
+    let Some(mut at) = guide_toc_position(text) else {
+        return Vec::new();
+    };
+    let mut entries = Vec::new();
+    while let Some((tag, end)) = next_tag(text, at) {
+        at = end;
+        let lower = tag.to_ascii_lowercase();
+        if lower.starts_with(b"mbp:pagebreak") && !entries.is_empty() {
+            break;
+        }
+        if !lower.starts_with(b"a ") {
+            continue;
+        }
+        let Some(pos) = filepos_attr(tag) else {
+            continue;
+        };
+        let Some(close) = memchr::memmem::find(&text[end..], b"</a") else {
+            break;
+        };
+        let title = link_title(&text[end..end + close], codec);
+        if !title.is_empty() {
+            entries.push((pos, title));
+        }
+    }
+    entries
+}
+
+/// Where the `<guide>` entry of type `toc` points.
+fn guide_toc_position(text: &[u8]) -> Option<usize> {
+    let start = memchr::memmem::find(text, b"<guide")?;
+    let end = start + memchr::memmem::find(&text[start..], b"</guide>")?;
+    let guide = &text[..end];
+    let mut at = start;
+    while let Some((tag, next)) = next_tag(guide, at) {
+        at = next;
+        let lower = tag.to_ascii_lowercase();
+        if lower.starts_with(b"reference")
+            && (memchr::memmem::find(&lower, b"type=\"toc\"").is_some()
+                || memchr::memmem::find(&lower, b"type=toc").is_some())
+        {
+            return filepos_attr(tag).map(|pos| pos as usize);
+        }
+    }
+    None
+}
+
+/// The next tag at or after `at`, without its brackets, and the offset after it.
+fn next_tag(text: &[u8], at: usize) -> Option<(&[u8], usize)> {
+    let open = at + memchr::memchr(b'<', text.get(at..)?)?;
+    let close = open + memchr::memchr(b'>', &text[open..])?;
+    Some((&text[open + 1..close], close + 1))
+}
+
+fn filepos_attr(tag: &[u8]) -> Option<u32> {
+    const NAME: &[u8] = b"filepos=";
+    let value = &tag[memchr::memmem::find(tag, NAME)? + NAME.len()..];
+    let digits: String = value
+        .iter()
+        .skip_while(|b| matches!(b, b'"' | b'\''))
+        .take_while(|b| b.is_ascii_digit())
+        .map(|&b| b as char)
+        .collect();
+    digits.parse().ok()
+}
+
+/// A link's text: tags removed, entities decoded, whitespace collapsed.
+fn link_title(html: &[u8], codec: &str) -> String {
+    let decoded = crate::util::decode_text(html, Some(codec))
+        .replace("<br", " <br")
+        .replace("<BR", " <BR");
+    let mut text = String::with_capacity(decoded.len());
+    let mut in_tag = false;
+    for c in decoded.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            c if !in_tag => text.push(c),
+            _ => {}
+        }
+    }
+    let text = text.replace("&nbsp;", " ");
+    let text = quick_xml::escape::unescape(&text).map_or_else(|_| text.clone(), |t| t.into_owned());
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn ensure_utf8(bytes: Vec<u8>, codec: &str) -> Vec<u8> {
     match crate::util::decode_text(&bytes, Some(codec)) {
         std::borrow::Cow::Borrowed(_) => bytes,
