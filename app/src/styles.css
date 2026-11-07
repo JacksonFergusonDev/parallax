@@ -667,14 +667,28 @@ button.badge.connected:hover {
   display: flex;
   flex-shrink: 0;
   min-height: 0;
-  animation: panel-in 380ms var(--ease-lift);
+  width: 320px;
 }
 
-@keyframes panel-in {
-  from {
-    opacity: 0;
-    translate: 24px 0;
-  }
+.panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--muted);
+}
+
+.panel-empty h2 {
+  margin: 16px 0 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.panel-empty p {
+  max-width: 230px;
+  line-height: 1.5;
 }
 
 .panel-head {

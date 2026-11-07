@@ -87,7 +87,6 @@ import { EditPanel } from "./components/EditPanel";
 import { LibraryFilters } from "./components/LibraryFilters";
 import { usePanelBook } from "./panelBook";
 import { UpscaleReview } from "./components/UpscaleReview";
-import { useGridReflow } from "./reflow";
 import {
   colorColumn,
   generatedColor,
@@ -486,8 +485,6 @@ export default function App() {
   const panel = usePanelBook(
     selectedBooks.length === 1 ? selectedBooks[0] : null,
   );
-  const gridRef = useRef<HTMLDivElement>(null);
-  useGridReflow(gridRef, panel !== null);
   const toSend = visible.filter(
     (b) => selected.has(b.id) && !onDevice.has(b.id),
   );
@@ -949,7 +946,7 @@ export default function App() {
                   )}
                 </div>
               ) : mode === "grid" ? (
-                <div className="grid" ref={gridRef}>
+                <div className="grid">
                   {visible.map((b) => (
                     <BookCard
                       key={b.id}
@@ -984,9 +981,8 @@ export default function App() {
               )}
             </div>
           </main>
-          {panel && (
-            // Stays mounted while switching books, so it slides in only once.
-            <div className="panel-slot">
+          <div className="panel-slot">
+            {panel ? (
               <EditPanel
                 key={`${panel.book.id}-${enhanced}`}
                 book={panel.book}
@@ -1002,8 +998,24 @@ export default function App() {
                 }}
                 onClose={() => setSelected(new Set())}
               />
-            </div>
-          )}
+            ) : (
+              <aside className="panel panel-empty" aria-label="Book details">
+                <BookOpen aria-hidden="true" />
+                <h2>
+                  {selectedBooks.length > 1
+                    ? `${selectedBooks.length} books selected`
+                    : selectedBooks.length === 1
+                      ? "Loading book details…"
+                      : "Select a book"}
+                </h2>
+                <p className="muted">
+                  {selectedBooks.length > 1
+                    ? "Select one book to view and edit its details."
+                    : "View and edit its details here."}
+                </p>
+              </aside>
+            )}
+          </div>
         </div>
 
         <footer className="actions">

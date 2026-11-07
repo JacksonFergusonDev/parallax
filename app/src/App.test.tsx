@@ -174,6 +174,46 @@ describe("read-only Kobos", () => {
   });
 });
 
+describe("permanent library details", () => {
+  it("keeps its slot through selection, switching, multiple selection and clearing", async () => {
+    const normal = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(async (command, args) =>
+      command === "library_list"
+        ? [localBook, { ...localBook, id: 2, title: "Second book" }]
+        : normal(command, args),
+    );
+    await render();
+    const library = panel("Library");
+    const slot = library.querySelector(".panel-slot")!;
+    const cards = library.querySelectorAll<HTMLButtonElement>("button.card");
+    const expectSlot = () => {
+      expect(library.querySelector(".panel-slot")).toBe(slot);
+      expect(slot.querySelector(".panel")).not.toBeNull();
+      expect([...library.querySelectorAll("button.card")]).toEqual([...cards]);
+    };
+    expect(slot.textContent).toContain("Select a book");
+    await click(cards[0]);
+    expectSlot();
+    expect(slot.querySelector("form")).not.toBeNull();
+    await click(cards[1]);
+    expectSlot();
+    expect(slot.querySelector<HTMLInputElement>("input")?.value).toBe(
+      "Second book",
+    );
+    await act(async () => {
+      cards[0].dispatchEvent(
+        new MouseEvent("click", { bubbles: true, metaKey: true }),
+      );
+    });
+    expectSlot();
+    expect(slot.textContent).toContain("2 books selected");
+    await click(cards[0]);
+    await click(slot.querySelector<HTMLButtonElement>('[aria-label="Close"]')!);
+    expectSlot();
+    expect(slot.textContent).toContain("Select a book");
+  });
+});
+
 describe("selection and collections", () => {
   it("selects one book per click and more with ⌘ in both views", async () => {
     currentBooks = [
