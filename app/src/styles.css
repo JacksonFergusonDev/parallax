@@ -21,7 +21,7 @@
   --shadow-book-lift:
     0 2px 2px rgb(60 40 20 / 8%), 0 12px 18px rgb(60 40 20 / 14%),
     0 28px 44px -12px rgb(60 40 20 / 34%);
-  /* The same shadows for bent covers: a box-shadow would stay rectangular. */
+  /* For filtered covers: #book-warp would clip a box-shadow. */
   --drop-book: drop-shadow(0 1px 1px rgb(60 40 20 / 16%))
     drop-shadow(0 6px 8px rgb(60 40 20 / 20%));
   --drop-book-lift: drop-shadow(0 2px 2px rgb(60 40 20 / 12%))
@@ -391,8 +391,7 @@ button.badge.connected:hover {
 }
 
 /* Covers read as physical books: #book-warp (BookWarpFilter) rolls the art
-   around the spine, bows it and shades it, and a soft shadow follows the bent
-   outline and deepens on hover. */
+   around the spine and shades it, and a soft shadow deepens on hover. */
 .book-warp-defs {
   position: absolute;
 }

@@ -25,7 +25,7 @@ function buildMaps() {
   return warp && shade ? { warp, shade, scale } : null;
 }
 
-/** Defines `#book-warp`, which bends a flat cover into a book's front cover
+/** Defines `#book-warp`, which rolls a flat cover's art around the spine
  * and shades it. One filter serves images and generated covers alike; covers
  * pick it up in styles.css. Without a canvas, covers simply stay flat. */
 export function BookWarpFilter() {
@@ -69,7 +69,7 @@ export function BookWarpFilter() {
             preserveAspectRatio="none"
             result="light"
           />
-          {/* Only light the cover itself, not the gaps the bend leaves. */}
+          {/* Keep the cover's transparency, such as its rounded corners. */}
           <feComposite in="light" in2="bent" operator="in" result="lit" />
           <feMerge>
             <feMergeNode in="bent" />

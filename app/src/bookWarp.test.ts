@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { artworkAt, heightAt, lightAt, shadeMap, warpMap } from "./bookWarp";
+import { artworkAt, lightAt, shadeMap, warpMap } from "./bookWarp";
 
 const steps = Array.from({ length: 101 }, (_, i) => i / 100);
 
@@ -19,24 +19,6 @@ describe("artworkAt", () => {
     const atSpine = artworkAt(0.01) - artworkAt(0);
     const onTheFlat = artworkAt(0.51) - artworkAt(0.5);
     expect(atSpine).toBeGreaterThan(onTheFlat * 1.5);
-  });
-});
-
-describe("heightAt", () => {
-  it("is tallest at the crown and shorter towards both edges", () => {
-    expect(heightAt(0.4)).toBeCloseTo(1);
-    expect(heightAt(0)).toBeLessThan(heightAt(1));
-    expect(heightAt(1)).toBeLessThan(1);
-  });
-
-  it("curves without a visible kink", () => {
-    for (let i = 2; i < steps.length; i++) {
-      const bend =
-        heightAt(steps[i]) -
-        2 * heightAt(steps[i - 1]) +
-        heightAt(steps[i - 2]);
-      expect(Math.abs(bend)).toBeLessThan(0.0005);
-    }
   });
 });
 
@@ -66,15 +48,9 @@ describe("warpMap", () => {
     expect(u + decode(pixels[at(x, 40)])).toBeCloseTo(artworkAt(u), 2);
   });
 
-  it("reads past the artwork above the top edge, leaving it transparent", () => {
-    const v = 0.5 / height;
-    expect(v + decode(pixels[at(0, 0) + 1])).toBeLessThan(0);
-  });
-
-  it("leaves the middle row where it is", () => {
-    const lower = decode(pixels[at(0, height / 2) + 1]);
-    const upper = decode(pixels[at(0, height / 2 - 1) + 1]);
-    expect(Math.abs(lower + upper)).toBeLessThan(scale / 100);
+  it("never moves anything up or down, so the cover stays rectangular", () => {
+    const vertical = pixels.filter((_, i) => i % 4 === 1);
+    expect(new Set(vertical)).toEqual(new Set([128]));
   });
 
   it("fits every offset inside the channel", () => {
