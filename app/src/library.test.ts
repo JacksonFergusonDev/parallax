@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Book, ImportResult } from "./api";
 import {
+  isBookFile,
   applyProgress,
   filterBooks,
   fromForm,
@@ -309,5 +310,27 @@ describe("book details", () => {
     expect(isbn("ISBN", "978")).toBe("978");
     expect(isbn(null, "isbn:978")).toBe("978");
     expect(isbn("uuid", "978")).toBeNull();
+  });
+});
+
+describe("isBookFile", () => {
+  it("accepts EPUBs and Amazon formats, in any case", () => {
+    for (const name of [
+      "a.epub",
+      "a.kepub",
+      "a.azw3",
+      "a.AZW",
+      "a.mobi",
+      "a.prc",
+      "a.kfx",
+    ]) {
+      expect(isBookFile(`/books/${name}`)).toBe(true);
+    }
+  });
+
+  it("rejects everything else", () => {
+    for (const name of ["a.pdf", "a.txt", "azw3", "a.azw3.bak"]) {
+      expect(isBookFile(`/books/${name}`)).toBe(false);
+    }
   });
 });

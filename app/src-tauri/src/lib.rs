@@ -8,11 +8,13 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use erc_convert::Kepubify;
+use erc_convert::amazon::ChildProcess;
 use erc_core::collections::{CollectionChange, FolderGroup};
 use erc_core::device::{OnDevice, RemoveOutcome};
 use erc_core::duplicates::{DeviceGroup, LibraryGroup};
 use erc_core::enhance::{Accepted, DeviceClues, Proposal};
 use erc_core::import::DeviceImportOutcome;
+use erc_core::ingest::import_file;
 use erc_core::rules::PlannedCollection;
 use erc_core::rules::Trigger;
 use erc_core::send::{SendOutcome, send_library_books, update_on_device};
@@ -195,19 +197,20 @@ async fn library_import(
 ) -> CmdResult<Vec<ImportResult>> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let amazon = ChildProcess::current().map_err(err)?;
         let mut lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        paths
+        Ok(paths
             .into_iter()
             .map(|path| ImportResult {
-                outcome: lib.import(&path).map_err(err),
+                outcome: import_file(&mut lib, &amazon, &path).map_err(err),
                 path,
             })
-            .collect()
+            .collect())
     })
     .await
-    .map_err(err)
+    .map_err(err)?
 }
 
 #[tauri::command]
@@ -834,11 +837,13 @@ async fn calibre_import(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let books = erc_core::calibre::read_library(&path).map_err(err)?;
+        let amazon = ChildProcess::current().map_err(err)?;
         let mut lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         Ok(erc_core::calibre::import(
             &mut lib,
+            &amazon,
             &books,
             |index, total, title| {
                 let _ = app.emit(

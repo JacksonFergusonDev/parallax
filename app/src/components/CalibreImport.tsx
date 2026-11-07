@@ -98,10 +98,10 @@ export function CalibreImport({ onImported, onClose }: Props) {
           <div>
             <h2>Import from calibre</h2>
             <p className="muted">
-              Copies your calibre books (EPUB, or KEPUB when that's all there
-              is) with calibre's titles, authors, series, tags and covers.
-              calibre's library isn't changed, and books already here aren't
-              added twice.
+              Copies your calibre books (EPUB, or KEPUB or a DRM-free Kindle
+              format when that's all there is, converted to EPUB) with calibre's
+              titles, authors, series, tags and covers. calibre's library isn't
+              changed, and books already here aren't added twice.
             </p>
           </div>
         </div>

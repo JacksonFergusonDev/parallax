@@ -1,6 +1,9 @@
-//! Ebook conversion. The only converter today is kepubify, run as a sidecar
-//! binary; the [`Converter`] trait keeps callers independent of it so a native
-//! implementation can replace it later.
+//! Ebook conversion. KEPUB comes from kepubify, run as a sidecar binary, and
+//! Amazon formats become EPUB through [`amazon`]; [`ToKepub`] chains the two.
+//! The [`Converter`] trait keeps callers independent of both so a native
+//! implementation can replace them later.
+
+pub mod amazon;
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -11,9 +14,15 @@ pub enum Error {
     #[error("kepubify binary not found (looked in: {0})")]
     NotFound(String),
     #[error("could not run kepubify: {0}")]
-    Spawn(#[from] std::io::Error),
+    Spawn(std::io::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
     #[error("kepubify failed to convert {input}: {message}")]
     Failed { input: PathBuf, message: String },
+    #[error("{} is DRM-protected", .0.display())]
+    DrmProtected(PathBuf),
+    #[error("could not convert {input}: {message}", input = input.display())]
+    Amazon { input: PathBuf, message: String },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -79,7 +88,8 @@ impl Converter for Kepubify {
             .arg("--output")
             .arg(output)
             .arg(input)
-            .output()?;
+            .output()
+            .map_err(Error::Spawn)?;
         // kepubify reports per-file errors in its summary and may still exit 0,
         // so the output file existing is the real success signal.
         if out.status.success() && output.is_file() {
@@ -102,6 +112,42 @@ impl Converter for Kepubify {
                 message
             },
         })
+    }
+}
+
+/// Any book to KEPUB: Amazon formats go through EPUB first, as kepubify only
+/// reads EPUB.
+pub struct ToKepub {
+    amazon: Box<dyn Converter>,
+    kepub: Box<dyn Converter>,
+}
+
+impl ToKepub {
+    pub fn new(amazon: impl Converter + 'static, kepub: impl Converter + 'static) -> Self {
+        Self {
+            amazon: Box::new(amazon),
+            kepub: Box::new(kepub),
+        }
+    }
+
+    /// The real converters: kepubify, and boko in a child of this executable.
+    pub fn locate() -> Result<Self> {
+        Ok(Self::new(
+            amazon::ChildProcess::current()?,
+            Kepubify::locate()?,
+        ))
+    }
+}
+
+impl Converter for ToKepub {
+    fn convert(&self, input: &Path, output: &Path) -> Result<()> {
+        if amazon::sniff(input)?.is_none() {
+            return self.kepub.convert(input, output);
+        }
+        let workdir = tempfile::tempdir()?;
+        let epub = workdir.path().join("book.epub");
+        self.amazon.convert(input, &epub)?;
+        self.kepub.convert(&epub, output)
     }
 }
 

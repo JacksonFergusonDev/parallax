@@ -5,7 +5,9 @@ use std::fs::{self, File};
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 
+use erc_convert::amazon::InProcess;
 use erc_core::calibre::{CalibreImport, import, preview, read_library};
+use erc_epub::Epub;
 use erc_library::{ImportOutcome, Library};
 use rusqlite::{Connection, params};
 use zip::ZipWriter;
@@ -180,7 +182,9 @@ fn imports_calibre_metadata_once_and_skips_what_it_cannot_read() {
     assert_eq!(plan.no_epub, [("PDF".to_owned(), 1)]);
 
     let mut progress = Vec::new();
-    let outcomes = import(&mut library, &books, |i, n, _| progress.push((i, n)));
+    let outcomes = import(&mut library, &InProcess, &books, |i, n, _| {
+        progress.push((i, n));
+    });
     assert_eq!(progress.last(), Some(&(4, 4)));
     let result = |id: i64| {
         outcomes
@@ -225,6 +229,7 @@ fn imports_calibre_metadata_once_and_skips_what_it_cannot_read() {
     let count = library.books().unwrap().len();
     let again = import(
         &mut library,
+        &InProcess,
         &read_library(&cal.root).unwrap(),
         |_, _, _| {},
     );
@@ -244,6 +249,36 @@ fn imports_calibre_metadata_once_and_skips_what_it_cannot_read() {
         names.iter().all(|n| !n.starts_with("metadata.db-")),
         "{names:?}"
     );
+}
+
+#[test]
+fn converts_a_book_that_only_has_an_amazon_format() {
+    let dir = tempfile::tempdir().unwrap();
+    let cal = Calibre::new(dir.path().join("Calibre Library"));
+    cal.book(1, "Kindle Only", "Ann Author", &["PDF"], false);
+    let azw3 = cal.root.join("Ann Author/Kindle Only (1)/book.azw3");
+    fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/amazon/book.azw3"),
+        &azw3,
+    )
+    .unwrap();
+    cal.conn
+        .execute(
+            "UPDATE data SET format = 'AZW3', name = 'book' WHERE book = 1",
+            [],
+        )
+        .unwrap();
+
+    let mut library = Library::open(dir.path().join("lib")).unwrap();
+    let books = read_library(&cal.root).unwrap();
+    assert_eq!(preview(&library, &books).new, 1);
+    let outcomes = import(&mut library, &InProcess, &books, |_, _, _| {});
+    let Ok(CalibreImport::Added { book_id }) = outcomes[0].result else {
+        panic!("{:?}", outcomes[0].result);
+    };
+    // calibre's title wins over the file's, as for any calibre book.
+    assert_eq!(library.book(book_id).unwrap().title, "Kindle Only");
+    assert!(Epub::open(library.book_file(book_id)).is_ok());
 }
 
 #[test]

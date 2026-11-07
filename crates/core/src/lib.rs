@@ -9,6 +9,7 @@ pub mod enhance;
 pub mod genres;
 pub mod health;
 pub mod import;
+pub mod ingest;
 pub mod rules;
 pub mod send;
 pub mod stats;

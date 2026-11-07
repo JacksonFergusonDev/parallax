@@ -11,7 +11,8 @@ use output::{Reporter, failure, success, table, warning};
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
-use erc_convert::Kepubify;
+use erc_convert::amazon::ChildProcess;
+use erc_convert::{Kepubify, ToKepub};
 use erc_core::calibre;
 use erc_core::collections::{self, CollectionChange, folder_groups, reconcile_series};
 use erc_core::device::{
@@ -22,6 +23,7 @@ use erc_core::duplicates::{Reason, device_duplicates, library_duplicates};
 use erc_core::enhance;
 use erc_core::health::check_library;
 use erc_core::import::{DeviceImport, import_from_device};
+use erc_core::ingest::import_file;
 use erc_core::rules;
 use erc_core::send::{SendOutcome, send_books, send_library_books, update_on_device};
 use erc_device::{DeviceBook, ReadStatus};
@@ -58,7 +60,7 @@ enum Command {
     EpubInfo { file: PathBuf },
     /// Convert EPUBs to KEPUB, copy them to the Kobo and eject it. Writes files.
     Send {
-        /// EPUB or KEPUB files.
+        /// EPUB, KEPUB or Amazon (AZW3, MOBI, AZW, PRC, KFX) files.
         #[arg(required = true)]
         files: Vec<PathBuf>,
         /// Mount point of the Kobo (default: the first one found in /Volumes).
@@ -151,7 +153,8 @@ enum RulesCommand {
 
 #[derive(Subcommand)]
 enum LibraryCommand {
-    /// Import EPUB files.
+    /// Import EPUB files, or Amazon books (AZW3, MOBI, AZW, PRC, KFX), which
+    /// are converted to EPUB.
     Add {
         #[arg(required = true)]
         files: Vec<PathBuf>,
@@ -275,8 +278,8 @@ enum LibraryCommand {
         #[arg(long)]
         apply: bool,
     },
-    /// Import a calibre library: EPUBs (or KEPUBs) with calibre's metadata and
-    /// covers. Only reads the calibre library; books already here are matched.
+    /// Import a calibre library: EPUBs (or KEPUBs or Amazon formats, converted)
+    /// with calibre's metadata and covers. Only reads the calibre library; books already here are matched.
     FromCalibre {
         /// The calibre library folder (the one with metadata.db); calibre's
         /// current library if omitted.
@@ -476,6 +479,7 @@ fn find_kobo(mount: Option<&Path>) -> Result<KoboDevice> {
 }
 
 fn main() -> Result<()> {
+    erc_convert::amazon::run_child_if_asked();
     let cli = Cli::parse();
     if cli.json {
         console::set_colors_enabled(false);
@@ -545,7 +549,7 @@ fn main() -> Result<()> {
         } => {
             let kobo = find_kobo(mount.as_deref())?;
             let progress = Reporter::new(cli.json);
-            let outcomes = send_books(&kobo, &Kepubify::locate()?, &files, |p| progress.send(p));
+            let outcomes = send_books(&kobo, &ToKepub::locate()?, &files, |p| progress.send(p));
             drop(progress);
             finish_send(&kobo, &outcomes, no_eject, cli.json)?;
         }
@@ -899,8 +903,9 @@ fn main() -> Result<()> {
 fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Result<()> {
     match command {
         LibraryCommand::Add { files } => {
+            let amazon = ChildProcess::current()?;
             for file in files {
-                match lib.import(&file) {
+                match import_file(lib, &amazon, &file) {
                     Ok(ImportOutcome::Added {
                         book,
                         possible_duplicate_of,
@@ -1360,7 +1365,8 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                 return Ok(());
             }
             let progress = Reporter::new(json);
-            let outcomes = calibre::import(lib, &books, |i, n, title| {
+            let amazon = ChildProcess::current()?;
+            let outcomes = calibre::import(lib, &amazon, &books, |i, n, title| {
                 progress.update(i.saturating_sub(1), n, &format!("importing {title}"));
             });
             drop(progress);

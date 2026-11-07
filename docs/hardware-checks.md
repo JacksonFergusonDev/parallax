@@ -136,3 +136,11 @@ Batched so you can do several in one sitting when Claude asks:
 |---|---|
 | Collection survives sync with its books | Yes: Fantasy, Fiction, Horror, Nonfiction, Sci-Fi (made by the app) synced and kept their books (firmware 4.38.23852) |
 | Deleted collection stays deleted after sync | Yes: 30 synced collections soft-deleted by the app stayed gone after the next sync |
+
+## Amazon formats (2026-11-06)
+
+Automated tests only cover Kindle files made by calibre. Check on a Kobo with real DRM-free books:
+
+- A file bought DRM-free or made by KindleGen (`.azw3`, and a combo `.mobi` if you have one): add it, send it, and check the cover, images, styling, TOC and a footnote link.
+- An old-style `.mobi`: formatting may be plainer, as boko writes no stylesheet for these.
+- A DRM-protected Kindle file: it should be refused with a DRM message, and nothing added.

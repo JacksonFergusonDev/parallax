@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["app/src-tauri", "crates/*"]
+exclude = ["vendor/boko"]
 
 [workspace.package]
 edition = "2024"
@@ -54,6 +55,7 @@ strip = true
 
 [workspace.dependencies]
 anyhow = "1"
+boko = { version = "0.6.0", default-features = false }
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 clap = { version = "4", features = ["derive"] }
 comfy-table = "8"
@@ -80,3 +82,7 @@ erc-epub = { path = "crates/epub" }
 erc-library = { path = "crates/library" }
 erc-metadata = { path = "crates/metadata" }
 erc-device-kobo = { path = "crates/device-kobo" }
+
+# boko with two fixes that aren't released yet; see vendor/boko/VENDORED.md.
+[patch.crates-io]
+boko = { path = "vendor/boko" }

@@ -6,7 +6,8 @@
 //! writes metadata into the EPUB when exporting), so title, authors, series,
 //! tags, identifiers, publisher, description and cover come from there.
 //! EPUB is preferred; a KEPUB-only book (calibre's Kobo plugin keeps one) is
-//! cleaned of Kobo markup first; books with neither are skipped. Importing
+//! cleaned of Kobo markup first, and an Amazon-only book is converted; other
+//! books are skipped. Importing
 //! again matches books already imported (by calibre's book uuid) or already
 //! in the library (same file, ISBN, or title and first author), so it never
 //! duplicates.
@@ -14,6 +15,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use erc_convert::Converter;
 use erc_epub::{Epub, Identifier, Metadata, has_drm, strip_kobo_markup};
 use erc_library::{ImportOutcome, Library};
 use rusqlite::{Connection, OpenFlags};
@@ -55,12 +57,27 @@ impl CalibreBook {
             .map(|(_, p)| p.as_path())
     }
 
-    /// The file ERC can import, if any.
-    fn source(&self) -> Option<(&Path, bool)> {
-        self.format("EPUB")
-            .map(|p| (p, false))
-            .or_else(|| self.format("KEPUB").map(|p| (p, true)))
+    /// The file ERC can import, if any, best format first.
+    fn source(&self) -> Option<(&Path, Source)> {
+        [
+            ("EPUB", Source::Epub),
+            ("KEPUB", Source::Kepub),
+            ("AZW3", Source::Amazon),
+            ("MOBI", Source::Amazon),
+            ("AZW", Source::Amazon),
+            ("PRC", Source::Amazon),
+            ("KFX", Source::Amazon),
+        ]
+        .into_iter()
+        .find_map(|(name, source)| Some((self.format(name)?, source)))
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Source {
+    Epub,
+    Kepub,
+    Amazon,
 }
 
 /// Where calibre says its library is, else calibre's default folder, if it
@@ -319,10 +336,12 @@ pub struct CalibreImportOutcome {
     pub result: Result<CalibreImport, String>,
 }
 
-/// Imports `books` into `library`. `on_progress(index, total, title)` is
-/// called before each book.
+/// Imports `books` into `library`, using `amazon` to turn books that only have
+/// Amazon formats into EPUBs. `on_progress(index, total, title)` is called
+/// before each book.
 pub fn import(
     library: &mut Library,
+    amazon: &dyn Converter,
     books: &[CalibreBook],
     mut on_progress: impl FnMut(usize, usize, &str),
 ) -> Vec<CalibreImportOutcome> {
@@ -335,20 +354,24 @@ pub fn import(
             CalibreImportOutcome {
                 calibre_id: book.id,
                 title: book.title.clone(),
-                result: import_one(library, book),
+                result: import_one(library, amazon, book),
             }
         })
         .collect()
 }
 
-fn import_one(library: &mut Library, book: &CalibreBook) -> Result<CalibreImport, String> {
+fn import_one(
+    library: &mut Library,
+    amazon: &dyn Converter,
+    book: &CalibreBook,
+) -> Result<CalibreImport, String> {
     let link = |library: &Library, book_id: i64| match &book.uuid {
         Some(uuid) => library
             .record_calibre_link(uuid, book_id)
             .map_err(|e| e.to_string()),
         None => Ok(()),
     };
-    let Some((source, kepub)) = book.source() else {
+    let Some((source, kind)) = book.source() else {
         let formats: Vec<&str> = book.formats.iter().map(|(f, _)| f.as_str()).collect();
         return Ok(CalibreImport::Skipped {
             reason: if formats.is_empty() {
@@ -362,25 +385,37 @@ fn import_one(library: &mut Library, book: &CalibreBook) -> Result<CalibreImport
         link(library, id)?;
         return Ok(CalibreImport::Matched { book_id: id });
     }
-    if has_drm(source).map_err(|e| e.to_string())? {
-        return Ok(CalibreImport::Skipped {
-            reason: "DRM-protected".to_owned(),
-        });
+    let drm = || CalibreImport::Skipped {
+        reason: "DRM-protected".to_owned(),
+    };
+    if kind != Source::Amazon && has_drm(source).map_err(|e| e.to_string())? {
+        return Ok(drm());
     }
     let workdir = tempfile::tempdir().map_err(|e| e.to_string())?;
-    let file = if kepub {
-        let stem = source
-            .file_stem()
-            .map_or_else(|| "book".into(), |s| s.to_string_lossy());
-        let clean = workdir.path().join(format!("{stem}.epub"));
-        strip_kobo_markup(source, &clean).map_err(|e| e.to_string())?;
-        clean
-    } else {
-        source.to_owned()
+    let stem = source
+        .file_stem()
+        .map_or_else(|| "book".into(), |s| s.to_string_lossy());
+    let clean = workdir.path().join(format!("{stem}.epub"));
+    let file = match kind {
+        Source::Epub => source,
+        Source::Kepub => {
+            strip_kobo_markup(source, &clean).map_err(|e| e.to_string())?;
+            &clean
+        }
+        Source::Amazon => match amazon.convert(source, &clean) {
+            Ok(()) => &clean,
+            Err(erc_convert::Error::DrmProtected(_)) => return Ok(drm()),
+            Err(e) => return Err(e.to_string()),
+        },
     };
     // Fail early with a clear message rather than inside the library.
-    Epub::open(&file).map_err(|e| e.to_string())?;
-    let added = match library.import(&file).map_err(|e| e.to_string())? {
+    Epub::open(file).map_err(|e| e.to_string())?;
+    let imported = if kind == Source::Amazon {
+        library.import_converted(file, source)
+    } else {
+        library.import(file)
+    };
+    let added = match imported.map_err(|e| e.to_string())? {
         ImportOutcome::Added { book: added, .. } => added,
         ImportOutcome::AlreadyInLibrary { book: same } => {
             link(library, same.id)?;

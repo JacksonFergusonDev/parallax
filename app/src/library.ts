@@ -128,7 +128,20 @@ export const fromForm = (f: EditForm): MetadataEdit => ({
       : null,
 });
 
-export const isBookFile = (path: string) => /\.(epub|kepub)$/i.test(path);
+/** Amazon formats are converted to EPUB when they're added. */
+export const BOOK_EXTENSIONS = [
+  "epub",
+  "kepub",
+  "azw3",
+  "azw",
+  "mobi",
+  "prc",
+  "kfx",
+];
+
+const BOOK_FILE = new RegExp(`\\.(${BOOK_EXTENSIONS.join("|")})$`, "i");
+
+export const isBookFile = (path: string) => BOOK_FILE.test(path);
 
 export type LibraryKey =
   | "title"

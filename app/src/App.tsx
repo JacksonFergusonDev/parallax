@@ -47,6 +47,7 @@ import {
   libraryColumns,
   type DeviceState,
   type LibraryKey,
+  BOOK_EXTENSIONS,
   isBookFile,
   summarizeImport,
   type SendStatus,
@@ -258,7 +259,10 @@ export default function App() {
     async (paths: string[]) => {
       const files = paths.filter(isBookFile);
       if (files.length === 0) {
-        setNotice({ kind: "error", text: "Only EPUB files can be added." });
+        setNotice({
+          kind: "error",
+          text: "Only EPUB and Kindle books can be added.",
+        });
         return;
       }
       setBusy("importing");
@@ -373,7 +377,7 @@ export default function App() {
   const chooseFiles = useCallback(async () => {
     const picked = await open({
       multiple: true,
-      filters: [{ name: "EPUB", extensions: ["epub"] }],
+      filters: [{ name: "Books", extensions: BOOK_EXTENSIONS }],
     });
     if (picked) doImport(Array.isArray(picked) ? picked : [picked]);
   }, [doImport]);
@@ -736,8 +740,8 @@ export default function App() {
                   <ShelfArt />
                   <p className="dropzone-title">Your shelves are empty</p>
                   <p className="muted">
-                    Drop EPUB files here. They're added to your library, ready
-                    to edit and send to your Kobo.
+                    Drop EPUB or DRM-free Kindle books here. They're added to
+                    your library, ready to edit and send to your Kobo.
                   </p>
                   <div className="dropzone-actions">
                     <button className="secondary" onClick={chooseFiles}>

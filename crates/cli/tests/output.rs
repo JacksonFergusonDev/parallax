@@ -95,3 +95,37 @@ fn empty_library_keeps_a_useful_summary_and_empty_json_array() {
         serde_json::json!([])
     );
 }
+
+fn amazon_fixture() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/amazon/book.azw3")
+}
+
+fn add(root: &Path, file: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_erc"))
+        .args(["library", "--library"])
+        .arg(root)
+        .arg("add")
+        .arg(file)
+        .env("NO_COLOR", "1")
+        .output()
+        .unwrap()
+}
+
+/// Goes through the real child process, as the app does.
+#[test]
+fn adding_an_amazon_book_converts_it_in_a_child_process() {
+    let dir = tempfile::tempdir().unwrap();
+    let first = String::from_utf8(add(dir.path(), &amazon_fixture()).stdout).unwrap();
+    assert!(first.contains("added #1 Amazon Fixture"), "{first}");
+    let second = String::from_utf8(add(dir.path(), &amazon_fixture()).stdout).unwrap();
+    assert!(second.contains("already in library"), "{second}");
+}
+
+#[test]
+fn a_drm_book_is_refused_by_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let locked = dir.path().join("locked.kfx");
+    std::fs::write(&locked, b"\xeaDRMION\xee rest of the file").unwrap();
+    let stderr = String::from_utf8(add(dir.path(), &locked).stderr).unwrap();
+    assert!(stderr.contains("DRM-protected"), "{stderr}");
+}

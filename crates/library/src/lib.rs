@@ -265,22 +265,42 @@ impl Library {
     }
 
     pub fn import(&mut self, path: &Path) -> Result<ImportOutcome> {
-        let (hash, size) = hash_file(path)?;
+        self.import_from(path, path)
+    }
+
+    /// Imports `epub`, a conversion of `original`. The book is identified by
+    /// `original`, so adding that file again finds it even though conversion
+    /// needn't produce identical bytes.
+    pub fn import_converted(&mut self, epub: &Path, original: &Path) -> Result<ImportOutcome> {
+        self.import_from(epub, original)
+    }
+
+    /// The library's book made from exactly the file at `path`, if any.
+    pub fn book_from_file(&self, path: &Path) -> Result<Option<Book>> {
+        self.find_by_hash(&hash_file(path)?.0)
+    }
+
+    fn import_from(&mut self, path: &Path, original: &Path) -> Result<ImportOutcome> {
+        let (hash, _) = hash_file(original)?;
         if let Some(book) = self.find_by_hash(&hash)? {
             return Ok(ImportOutcome::AlreadyInLibrary { book });
         }
+        let size = fs::metadata(path).map_err(|e| io_err(path, e))?.len();
         let epub = Epub::open(path)?;
         let meta = epub.metadata();
         let extent = epub.extent().ok();
-        let original_name = path
+        let original_name = original
             .file_name()
             .unwrap_or_default()
             .to_string_lossy()
             .into_owned();
-        let title = meta
-            .title
-            .clone()
-            .unwrap_or_else(|| original_name.trim_end_matches(".epub").to_owned());
+        let title = meta.title.clone().unwrap_or_else(|| {
+            original
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned()
+        });
         let authors = normalize_authors(&meta.authors);
         let now = now();
 

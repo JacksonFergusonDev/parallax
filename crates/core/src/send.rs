@@ -62,10 +62,12 @@ const KEPUB_EXT: &str = ".kepub.epub";
 pub fn device_path_for(source: &Path) -> String {
     let name = source.file_name().unwrap_or_default().to_string_lossy();
     let lower = name.to_lowercase();
-    let stem = [KEPUB_EXT, ".kepub", ".epub"]
-        .iter()
-        .find(|ext| lower.ends_with(*ext))
-        .map_or(&name[..], |ext| &name[..name.len() - ext.len()]);
+    let stem = [
+        KEPUB_EXT, ".kepub", ".epub", ".azw3", ".azw", ".mobi", ".prc", ".kfx",
+    ]
+    .iter()
+    .find(|ext| lower.ends_with(*ext))
+    .map_or(&name[..], |ext| &name[..name.len() - ext.len()]);
     format!("{BOOKS_DIR}/{}{KEPUB_EXT}", device_file_name(stem))
 }
 
@@ -311,6 +313,10 @@ mod tests {
         assert_eq!(
             device_path_for(Path::new("/x/A: B.EPUB")),
             "KEpub/A_ B.kepub.epub"
+        );
+        assert_eq!(
+            device_path_for(Path::new("/x/Dune.azw3")),
+            "KEpub/Dune.kepub.epub"
         );
     }
 }
