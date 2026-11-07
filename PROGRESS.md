@@ -56,7 +56,7 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 ## Unresolved
 
-- boko fixes not yet upstream: drop `vendor/boko` and the patch entry once a release has both.
+- boko fixes not released: the link bug is in open upstream PR #37; the combo image fix is ready to submit. Drop `vendor/boko` and the patch entry once a release has both.
 - Hardcover (optional series source, PLAN §7.4) not implemented: needs your API token to build and verify against the real API.
 
 ## Next
