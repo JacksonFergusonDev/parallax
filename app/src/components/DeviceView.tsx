@@ -79,6 +79,8 @@ interface Props {
   onChanged: () => void;
   /** Books were added to the library. */
   onLibraryChanged: () => void;
+  /** These books are new to the library, and aren't being organised. */
+  onBooksAdded: (ids: number[]) => void;
   onEjected: () => void;
   /** About this Kobo is open; the top bar's device badge opens it too. */
   about: boolean;
@@ -103,6 +105,7 @@ export function DeviceView({
   libraryByContentId,
   onChanged,
   onLibraryChanged,
+  onBooksAdded,
   onEjected,
   about,
   onAboutChange,
@@ -311,6 +314,13 @@ export function DeviceView({
         const outcomes = await importFromDevice(device.mount, contentIds);
         setSelected(new Set());
         onLibraryChanged();
+        onBooksAdded(
+          outcomes.flatMap((o) =>
+            "Ok" in o.result && o.result.Ok.kind === "added"
+              ? [o.result.Ok.book_id]
+              : [],
+          ),
+        );
         return summarizeDeviceImport(outcomes);
       } finally {
         unlisten();

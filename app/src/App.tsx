@@ -23,7 +23,9 @@ import {
   dismissDuplicates,
   ejectDevice,
   libraryDuplicates,
+  getSetting,
   importBooks,
+  reviewBooks,
   listBooks,
   listDevices,
   onSendProgress,
@@ -63,6 +65,7 @@ import { NameDialog } from "./components/NameDialog";
 import { DeviceBadge } from "./components/DeviceBadge";
 import { DeviceView } from "./components/DeviceView";
 import { EnhanceReview } from "./components/EnhanceReview";
+import { ImportReview, REVIEW_SETTING } from "./components/ImportReview";
 import { LibraryCheck } from "./components/LibraryCheck";
 import {
   DuplicateReview,
@@ -82,6 +85,16 @@ import {
 } from "./components/ViewControls";
 import { applySort } from "./sort";
 import { libraryReviewGroups } from "./duplicates";
+import {
+  addedIds,
+  anyBetterCover,
+  failedFiles,
+  flaggedCount,
+  needsReview,
+  plural,
+  type FailedFile,
+  type ReviewBatch,
+} from "./importReview";
 import { usePresentation } from "./presentation";
 import "./styles.css";
 
@@ -142,6 +155,10 @@ export default function App() {
   /** Bumped when an enhance saves, so an open edit form reloads. */
   const [enhanced, setEnhanced] = useState(0);
   const [notice, setNotice] = useState<Notice | null>(null);
+  /** Added books waiting for review; the first one is open. */
+  const [reviews, setReviews] = useState<ReviewBatch[]>([]);
+  /** Too many books to open a review for: it's offered instead. */
+  const [reviewOffer, setReviewOffer] = useState<ReviewBatch | null>(null);
   const batch = useRef<number[]>([]);
   const anchor = useRef<number | null>(null);
 
@@ -255,6 +272,29 @@ export default function App() {
     };
   }, []);
 
+  /** Looks over new books and raises what's worth fixing, if anything. */
+  const reviewAdded = useCallback(
+    async (ids: number[], failed: FailedFile[], bulk = false) => {
+      if (ids.length === 0 && failed.length === 0) return;
+      try {
+        if ((await getSetting(REVIEW_SETTING)) === "off") return;
+        const review = await reviewBooks(ids);
+        const added = { ids, failed, review };
+        if (bulk || review.bulk) {
+          if (flaggedCount(added) > 0) setReviewOffer(added);
+        } else if (needsReview(added) || (await anyBetterCover(review))) {
+          setReviews((queue) => [...queue, added]);
+        }
+      } catch (e) {
+        setNotice({
+          kind: "error",
+          text: `Couldn't check the new books: ${String(e)}`,
+        });
+      }
+    },
+    [],
+  );
+
   const doImport = useCallback(
     async (paths: string[]) => {
       const files = paths.filter(isBookFile);
@@ -270,13 +310,14 @@ export default function App() {
         const results = await importBooks(files);
         setNotice({ kind: "info", text: summarizeImport(results) });
         await refresh();
+        void reviewAdded(addedIds(results), failedFiles(results));
       } catch (e) {
         setNotice({ kind: "error", text: String(e) });
       } finally {
         setBusy(null);
       }
     },
-    [refresh],
+    [refresh, reviewAdded],
   );
 
   useEffect(() => {
@@ -632,6 +673,9 @@ export default function App() {
             query={query}
             libraryByContentId={libraryByContentId}
             onLibraryChanged={refresh}
+            onBooksAdded={(ids) => {
+              void refresh().then(() => reviewAdded(ids, []));
+            }}
             about={aboutOpen}
             onAboutChange={setAboutOpen}
             onChanged={() => {
@@ -829,7 +873,24 @@ export default function App() {
             <Plus />
             {busy === "importing" ? "Adding…" : "Add books…"}
           </button>
-          {notice ? (
+          {reviewOffer ? (
+            <span className="notice notice-info review-offer">
+              {plural(reviewOffer.ids.length, "book")} added ·{" "}
+              {flaggedCount(reviewOffer)} could use attention
+              <button
+                className="link"
+                onClick={() => {
+                  setReviews((queue) => [...queue, reviewOffer]);
+                  setReviewOffer(null);
+                }}
+              >
+                Review
+              </button>
+              <button className="link" onClick={() => setReviewOffer(null)}>
+                Not now
+              </button>
+            </span>
+          ) : notice ? (
             <span className={`notice notice-${notice.kind}`}>
               {notice.text}
             </span>
@@ -969,7 +1030,9 @@ export default function App() {
       )}
       {fromCalibre && (
         <CalibreImport
-          onImported={refresh}
+          onImported={(ids) => {
+            void refresh().then(() => reviewAdded(ids, [], true));
+          }}
           onClose={() => setFromCalibre(false)}
         />
       )}
@@ -1024,6 +1087,22 @@ export default function App() {
               : undefined
           }
           onClose={() => setEnhancing(null)}
+        />
+      )}
+      {reviews[0] && (
+        <ImportReview
+          key={reviews[0].ids.join()}
+          batch={reviews[0]}
+          books={new Map(books.map((b) => [b.id, b]))}
+          mount={device?.mount ?? null}
+          canUpscale={canUpscale}
+          onKobo={(id) => onDevice.has(id)}
+          onChanged={() => {
+            void refresh();
+            setEnhanced((n) => n + 1);
+            refreshOnDevice(device);
+          }}
+          onClose={() => setReviews((queue) => queue.slice(1))}
         />
       )}
       {duplicates && (

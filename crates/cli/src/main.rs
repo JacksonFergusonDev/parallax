@@ -237,6 +237,8 @@ enum LibraryCommand {
     /// Check every book: covers, authors, series numbers and gaps, and EPUB
     /// structure (missing files, broken links, clutter, DRM).
     Check,
+    /// What the app would raise about these books if they had just been added.
+    Review { ids: Vec<i64> },
     /// Look up series and genres online (and on a connected Kobo) for books
     /// that lack them. Shows proposals; --apply saves the confident ones.
     Enhance {
@@ -1183,6 +1185,29 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             }
             println!("{rows}");
             println!("{} findings", findings.len());
+        }
+        LibraryCommand::Review { ids } => {
+            let books = ids
+                .iter()
+                .map(|&id| lib.book(id))
+                .collect::<erc_library::Result<Vec<_>>>()?;
+            let files: Vec<_> = ids.iter().map(|&id| lib.book_files(id)).collect();
+            let duplicates = erc_core::duplicates::library_duplicates(lib)?;
+            let review = erc_core::review::review(&books, &files, duplicates);
+            if json {
+                return print_json(&review);
+            }
+            let mut rows = table(&["Issue", "Book", "Detail"]);
+            for f in &review.findings {
+                let title = lib.book(f.book_id).map(|b| b.title).unwrap_or_default();
+                rows.add_row(vec![format!("{:?}", f.issue), title, f.detail.clone()]);
+            }
+            println!("{rows}");
+            println!(
+                "{} findings, {} duplicate groups",
+                review.findings.len(),
+                review.duplicates.len()
+            );
         }
         LibraryCommand::Annotations { id, format, out } => {
             let book = lib.book(id)?;

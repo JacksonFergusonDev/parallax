@@ -542,9 +542,10 @@ export const enhancePropose = (ids: number[], mount: string | null) =>
   invoke<Proposal[]>("enhance_propose", { ids, mount });
 export const enhanceApply = (accepted: Accepted[]) =>
   write<Book[]>("enhance_apply", { accepted }, ["library", "plans"]);
-export const getSetting = (key: "google_books_key") =>
+export type SettingKey = "google_books_key" | "review_on_add";
+export const getSetting = (key: SettingKey) =>
   invoke<string | null>("setting_get", { key });
-export const setSetting = (key: "google_books_key", value: string | null) =>
+export const setSetting = (key: SettingKey, value: string | null) =>
   invoke<void>("setting_set", { key, value });
 export const onEnhanceProgress = (
   handler: (p: ImportProgress) => void,
@@ -569,6 +570,32 @@ export interface Finding {
   book_ids: number[];
   detail: string;
 }
+
+export type Issue =
+  | "damaged"
+  | "drm"
+  | "no_genre"
+  | "no_author"
+  | "title_from_file"
+  | "no_cover"
+  | "small_cover";
+
+export interface ReviewFinding {
+  issue: Issue;
+  book_id: number;
+  detail: string;
+}
+
+/** What's worth raising about books just added. */
+export interface Review {
+  findings: ReviewFinding[];
+  duplicates: LibraryDuplicateGroup[];
+  /** Too many books to review without being asked. */
+  bulk: boolean;
+}
+
+export const reviewBooks = (ids: number[]) =>
+  invoke<Review>("library_review", { ids });
 
 export const libraryCheck = () =>
   read<Finding[]>("library_check", {}, ["library"]);

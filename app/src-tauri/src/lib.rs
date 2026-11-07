@@ -544,6 +544,34 @@ async fn set_reading_status(
     .map_err(err)?
 }
 
+/// What's worth raising about books just added. Holds the library only to
+/// list them, not while their files are read.
+#[tauri::command]
+async fn library_review(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+) -> CmdResult<erc_core::review::Review> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let (books, files, duplicates) = {
+            let lib = library
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let books = ids
+                .iter()
+                .map(|&id| lib.book(id))
+                .collect::<erc_library::Result<Vec<_>>>()
+                .map_err(err)?;
+            let files: Vec<_> = ids.iter().map(|&id| lib.book_files(id)).collect();
+            let duplicates = erc_core::duplicates::library_duplicates(&lib).map_err(err)?;
+            (books, files, duplicates)
+        };
+        Ok(erc_core::review::review(&books, &files, duplicates))
+    })
+    .await
+    .map_err(err)?
+}
+
 /// Series and genre proposals for `ids`, using a connected Kobo's series and
 /// folders too when `mount` is given. Holds the library only to read the
 /// books, not during lookups.
@@ -604,7 +632,10 @@ fn enhance_apply(state: State<AppState>, accepted: Vec<Accepted>) -> CmdResult<V
 }
 
 /// Settings the app may read and change.
-const SETTINGS: [&str; 1] = [erc_core::enhance::GOOGLE_BOOKS_KEY];
+const SETTINGS: [&str; 2] = [
+    erc_core::enhance::GOOGLE_BOOKS_KEY,
+    erc_core::review::REVIEW_ON_ADD,
+];
 
 #[tauri::command]
 fn setting_get(state: State<AppState>, key: String) -> CmdResult<Option<String>> {
@@ -1275,6 +1306,7 @@ pub fn run() {
             list_devices,
             library_list,
             library_import,
+            library_review,
             library_update,
             library_remove,
             books_on_device,

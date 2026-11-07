@@ -11,7 +11,8 @@ import {
 } from "../api";
 
 interface Props {
-  onImported: () => void;
+  /** Called with the books that are new to the library. */
+  onImported: (ids: number[]) => void;
   onClose: () => void;
 }
 
@@ -68,8 +69,15 @@ export function CalibreImport({ onImported, onClose }: Props) {
     setError(null);
     const unlisten = await onImportProgress(setProgress);
     try {
-      setOutcomes(await calibreImport(path));
-      onImported();
+      const outcomes = await calibreImport(path);
+      setOutcomes(outcomes);
+      onImported(
+        outcomes.flatMap((o) =>
+          "Ok" in o.result && o.result.Ok.kind === "added"
+            ? [o.result.Ok.book_id]
+            : [],
+        ),
+      );
     } catch (e) {
       setError(String(e));
     } finally {

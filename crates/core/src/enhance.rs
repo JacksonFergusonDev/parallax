@@ -182,12 +182,15 @@ pub fn proposal(book: &Book, clues: &DeviceClues, lookup: Option<&Lookup>) -> Pr
     out
 }
 
+/// Whether any of a book's tags is a genre.
+pub fn has_genre(book: &Book) -> bool {
+    book.tags.iter().any(|t| genres::from_label(t).is_some())
+}
+
 /// Whether a book still needs looking up online: it lacks a series or any
 /// genre tag.
 fn needs_lookup(book: &Book) -> bool {
-    book.series.is_none()
-        || book.series_index.is_none()
-        || !book.tags.iter().any(|t| genres::from_label(t).is_some())
+    book.series.is_none() || book.series_index.is_none() || !has_genre(book)
 }
 
 /// Lookup options from the library's settings.

@@ -34,6 +34,8 @@ interface Props {
   dismiss: (key: string) => Promise<void>;
   onChanged: () => void;
   onClose: () => void;
+  /** Part of a longer review: what to call this step. */
+  step?: string;
 }
 
 const REASONS: Record<DuplicateReason, string> = {
@@ -51,6 +53,7 @@ export function DuplicateReview({
   dismiss,
   onChanged,
   onClose,
+  step,
 }: Props) {
   const [groups, setGroups] = useState<ReviewGroup[] | null>(null);
   const [index, setIndex] = useState(0);
@@ -73,10 +76,11 @@ export function DuplicateReview({
   };
 
   return (
-    <div className="modal-backdrop" onClick={close}>
+    <div className="modal-backdrop" onClick={step ? undefined : close}>
       <div className="modal duplicates" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
+            {step && <p className="review-step">{step}</p>}
             <h2>Duplicates in your {place}</h2>
             <p className="muted">
               {groups === null
@@ -109,7 +113,7 @@ export function DuplicateReview({
         ) : (
           <div className="form-actions">
             <button className="primary" onClick={close} autoFocus>
-              Done
+              {step ? "Next" : "Done"}
             </button>
           </div>
         )}

@@ -19,6 +19,7 @@ import {
   toggleGenre,
   toggleSeries,
   withChanges,
+  type Choice,
   type Selection,
 } from "../enhance";
 
@@ -166,45 +167,16 @@ export function EnhanceReview({ ids, mount, onApplied, kobo, onClose }: Props) {
                         {book?.title ?? `Book ${p.book_id}`}
                       </div>
                       <div className="row-sub">{book?.authors.join(", ")}</div>
-                      {p.series && (
-                        <label className="enhance-change">
-                          <input
-                            type="checkbox"
-                            checked={choice?.series ?? false}
-                            onChange={() =>
-                              setSelection((s) => toggleSeries(s, p.book_id))
-                            }
-                          />
-                          <span className="enhance-field">Series</span>
-                          <span>
-                            {p.series.name}
-                            {p.series.index ? ` #${p.series.index}` : ""}
-                          </span>
-                          <span className="muted">{p.series.source}</span>
-                          {!p.series.confident && (
-                            <span className="unsure">unsure</span>
-                          )}
-                        </label>
-                      )}
-                      {p.genres.map((g) => (
-                        <label key={g.name} className="enhance-change">
-                          <input
-                            type="checkbox"
-                            checked={choice?.genres.has(g.name) ?? false}
-                            onChange={() =>
-                              setSelection((s) =>
-                                toggleGenre(s, p.book_id, g.name),
-                              )
-                            }
-                          />
-                          <span className="enhance-field">Genre</span>
-                          <span>{g.name}</span>
-                          <span className="muted">{g.sources.join(", ")}</span>
-                          {!g.confident && (
-                            <span className="unsure">unsure</span>
-                          )}
-                        </label>
-                      ))}
+                      <ProposalChanges
+                        proposal={p}
+                        choice={choice}
+                        onToggleSeries={() =>
+                          setSelection((s) => toggleSeries(s, p.book_id))
+                        }
+                        onToggleGenre={(g) =>
+                          setSelection((s) => toggleGenre(s, p.book_id, g))
+                        }
+                      />
                     </div>
                   </li>
                 );
@@ -243,6 +215,54 @@ export function EnhanceReview({ ids, mount, onApplied, kobo, onClose }: Props) {
         )}
       </div>
     </div>
+  );
+}
+
+/** The ticks for one book's proposed series and genres. */
+export function ProposalChanges({
+  proposal,
+  choice,
+  onToggleSeries,
+  onToggleGenre,
+}: {
+  proposal: Proposal;
+  choice: Choice | undefined;
+  onToggleSeries: () => void;
+  onToggleGenre: (genre: string) => void;
+}) {
+  const { series, genres } = proposal;
+  return (
+    <>
+      {series && (
+        <label className="enhance-change">
+          <input
+            type="checkbox"
+            checked={choice?.series ?? false}
+            onChange={onToggleSeries}
+          />
+          <span className="enhance-field">Series</span>
+          <span>
+            {series.name}
+            {series.index ? ` #${series.index}` : ""}
+          </span>
+          <span className="muted">{series.source}</span>
+          {!series.confident && <span className="unsure">unsure</span>}
+        </label>
+      )}
+      {genres.map((g) => (
+        <label key={g.name} className="enhance-change">
+          <input
+            type="checkbox"
+            checked={choice?.genres.has(g.name) ?? false}
+            onChange={() => onToggleGenre(g.name)}
+          />
+          <span className="enhance-field">Genre</span>
+          <span>{g.name}</span>
+          <span className="muted">{g.sources.join(", ")}</span>
+          {!g.confident && <span className="unsure">unsure</span>}
+        </label>
+      ))}
+    </>
   );
 }
 

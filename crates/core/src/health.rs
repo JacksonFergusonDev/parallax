@@ -45,6 +45,19 @@ pub fn check_library(
 ) -> erc_library::Result<Vec<Finding>> {
     let books = library.books()?;
     let files: Vec<BookFiles> = books.iter().map(|b| library.book_files(b.id)).collect();
+    let mut out = check_files(&books, &files, on_progress);
+    out.extend(series_gaps(&books));
+    out.sort_by_key(|f| f.check);
+    Ok(out)
+}
+
+/// The checks on each of `books`, whose files are `files`, leaving out those
+/// that compare books. Needs no library, so a caller can let go of it first.
+pub fn check_files(
+    books: &[Book],
+    files: &[BookFiles],
+    on_progress: impl FnMut(usize, usize) + Send,
+) -> Vec<Finding> {
     let progress = Mutex::new((0, on_progress));
     let reads: Vec<FileRead> = files
         .par_iter()
@@ -67,9 +80,7 @@ pub fn check_library(
     for (book, read) in books.iter().zip(reads) {
         book_findings(book, read, &mut out);
     }
-    out.extend(series_gaps(&books));
-    out.sort_by_key(|f| f.check);
-    Ok(out)
+    out
 }
 
 /// What the checks need from a book's files.

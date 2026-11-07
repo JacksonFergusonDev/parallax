@@ -8,6 +8,7 @@ import {
   upscaleAvailable,
 } from "../api";
 import { groupFindings } from "../checks";
+import { ReviewOnAdd } from "./ImportReview";
 
 interface Props {
   books: Map<number, Book>;
@@ -117,6 +118,7 @@ export function LibraryCheck({ books, onShow, onUpscale, onClose }: Props) {
                 : `Show ${notes.reduce((n, g) => n + g.findings.length, 0)} notes`}
             </button>
           )}
+          <ReviewOnAdd />
           <span className="spacer" />
           <button className="primary" onClick={onClose} autoFocus>
             Done

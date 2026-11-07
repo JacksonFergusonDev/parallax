@@ -448,8 +448,62 @@ export function installMockBackend() {
         case "library_remove":
           books = books.filter((b) => !(a.ids as number[]).includes(b.id));
           return null;
+        case "plugin:dialog|open":
+          return [
+            "/Users/you/Downloads/my_scan_01.epub",
+            "/Users/you/Downloads/no_author_notes.epub",
+            "/Users/you/Downloads/The Long Way Home.epub",
+            "/Users/you/Downloads/broken.epub",
+          ];
         case "library_import":
-          return [];
+          return (a.paths as string[]).map((path) => {
+            const name = path.split("/").pop() ?? path;
+            if (name.startsWith("broken"))
+              return {
+                path,
+                outcome: { Err: "not a valid EPUB: no container.xml" },
+              };
+            const id = Math.max(...books.map((b) => b.id)) + 1;
+            const book = {
+              ...books[0],
+              id,
+              title: name.replace(/\.epub$/, ""),
+              authors: name.startsWith("no_author") ? [] : ["A New Author"],
+              series: null,
+              series_index: null,
+              tags: [],
+              cover: null,
+              has_cover: false,
+              original_name: name,
+            };
+            books = [...books, book];
+            return {
+              path,
+              outcome: {
+                Ok: { kind: "added", book, possible_duplicate_of: null },
+              },
+            };
+          });
+        case "library_review": {
+          const ids = a.ids as number[];
+          const findings = ids.flatMap((id) => {
+            const b = books.find((x) => x.id === id);
+            const found = (issue: string) => ({
+              issue,
+              book_id: id,
+              detail: "",
+            });
+            // Imports from calibre aren't really added here.
+            if (!b) return [found("no_genre")];
+            return [
+              ...(b.tags.length ? [] : [found("no_genre")]),
+              ...(b.authors.length ? [] : [found("no_author")]),
+              ...(b.title.includes("_") ? [found("title_from_file")] : []),
+              ...(b.has_cover ? [] : [found("no_cover")]),
+            ];
+          });
+          return { findings, duplicates: [], bulk: ids.length > 25 };
+        }
         case "send_books": {
           const ids = a.ids as number[];
           for (const [i, id] of ids.entries()) {
