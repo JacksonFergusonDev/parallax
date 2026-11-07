@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: https://*.mzstatic.com https://covers.openlibrary.org https://*.archive.org https://archive.org https://books.google.com https://books.googleusercontent.com",
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline' blob:; img-src 'self' asset: http://asset.localhost data: blob: https://*.mzstatic.com https://covers.openlibrary.org https://*.archive.org https://archive.org https://books.google.com https://books.googleusercontent.com; font-src 'self' blob: data:; media-src 'self' blob:; frame-src blob:; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'",
       "assetProtocol": {
         "enable": true,
         "scope": [

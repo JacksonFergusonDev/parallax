@@ -9,6 +9,7 @@ mod extent;
 mod inspect;
 mod kepub;
 mod opf;
+mod reading;
 
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
@@ -22,6 +23,7 @@ pub use extent::Extent;
 pub use inspect::{Inspection, inspect, is_clutter};
 pub use kepub::{StripReport, has_drm, strip_kobo_markup};
 pub use opf::{Contributor, Identifier};
+pub use reading::{BookFile, Entry};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

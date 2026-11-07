@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "reader",
+  "description": "Reader windows show untrusted books, so they get their own book and nothing else",
+  "windows": [
+    "reader-*"
+  ],
+  "permissions": [
+    "allow-reader-book",
+    "allow-reader-entry",
+    "allow-reader-save-position",
+    "allow-reader-save-settings"
+  ]
+}

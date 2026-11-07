@@ -106,6 +106,15 @@ const MIGRATIONS: &[&str] = &[
      ALTER TABLE books ADD COLUMN words INTEGER;
      ALTER TABLE books ADD COLUMN pages INTEGER;
      ALTER TABLE books ADD COLUMN pages_estimated INTEGER NOT NULL DEFAULT 1;",
+    // 13: where the in-app reader was last in each book.
+    "CREATE TABLE reader_positions (
+        book_id    INTEGER PRIMARY KEY REFERENCES books(id) ON DELETE CASCADE,
+        href       TEXT NOT NULL,
+        cfi        TEXT NOT NULL,
+        fraction   REAL NOT NULL,
+        quote      TEXT,
+        updated_at TEXT NOT NULL
+    );",
 ];
 
 /// The schema version this build creates.

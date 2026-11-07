@@ -3,6 +3,7 @@ import { Fragment, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   coverSrc,
+  openReader,
   resetCover,
   setCoverFromFile,
   setCoverFromUrl,
@@ -203,6 +204,15 @@ export function EditPanel({
             </div>
           )}
           <div className="cover-actions">
+            <button
+              className="primary"
+              onClick={() => {
+                setError(null);
+                openReader(book.id).catch((err) => setError(String(err)));
+              }}
+            >
+              Read
+            </button>
             {cover && (
               <div className="cover-size">
                 <span>

@@ -629,3 +629,29 @@ mod snapshots {
         assert_eq!(lib.snapshots().len(), erc_library::SNAPSHOTS_KEPT);
     }
 }
+
+#[test]
+fn reader_positions_are_kept_clamped_and_go_with_the_book() {
+    use erc_library::ReaderPosition;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut lib = Library::open(dir.path().join("lib")).unwrap();
+    let book = epub(dir.path(), "a.epub", "Emma", "Jane Austen", None, "a");
+    let (book, _) = added(lib.import(&book).unwrap());
+    let id = book.id;
+    assert_eq!(lib.reader_position(id).unwrap(), None);
+
+    let position = ReaderPosition {
+        href: "OEBPS/one.xhtml".into(),
+        cfi: "epubcfi(/6/2!/4/2/1:0)".into(),
+        fraction: 2.0,
+        quote: Some("It was".into()),
+    };
+    lib.set_reader_position(id, &position).unwrap();
+    let saved = lib.reader_position(id).unwrap().unwrap();
+    assert_eq!(saved.fraction, 1.0);
+    assert_eq!(saved.cfi, position.cfi);
+
+    lib.remove(id).unwrap();
+    assert_eq!(lib.reader_position(id).unwrap(), None);
+}

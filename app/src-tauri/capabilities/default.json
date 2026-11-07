@@ -70,6 +70,7 @@
     "allow-cover-upscale-preview",
     "allow-cover-upscale-apply",
     "allow-cover-upscale-cancel",
-    "allow-cover-colors"
+    "allow-cover-colors",
+    "allow-reader-open"
   ]
 }

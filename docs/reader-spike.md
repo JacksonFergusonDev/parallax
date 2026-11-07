@@ -2,7 +2,7 @@
 
 Run on 2026-11-07 against a minimal release build (Tauri 2.12.5, wry 0.57.1, Vite 8.3.5, macOS 27.0.1) with the `readest/foliate-js` fork at `b34a0aa`. It tests the design in [the research report](../reports/EPUB%20reader%20library%20landscape.md). Source and fixtures are in [spikes/reader](../spikes/reader/README.md).
 
-**Verdict: the design holds, so go ahead.** Both gating questions passed in real Tauri, with positive controls. Stub commands stood in for the real ones, and nothing touched a Kobo. The app's manifest was added afterwards; no reader code is in the app.
+**Verdict: the design holds, so go ahead.** Both gating questions passed in real Tauri, with positive controls. Stub commands stood in for the real ones, and nothing touched a Kobo. The app's manifest and a basic reader were added afterwards.
 
 ## Results
 

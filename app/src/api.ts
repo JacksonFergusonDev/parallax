@@ -758,6 +758,9 @@ export interface UpscaleProgress {
   total: number;
 }
 
+/** Opens the book in its own reader window, or brings that window forward. */
+export const openReader = (id: number) => invoke<void>("reader_open", { id });
+
 /** The size and rating of the cover sent to devices; null if there is none. */
 export const coverInfo = (id: number) =>
   invoke<CoverInfo | null>("cover_info", { id });

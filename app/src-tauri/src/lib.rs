@@ -32,6 +32,8 @@ use erc_upscale::CoreMl;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+mod reader;
+
 /// Event carrying [`erc_core::send::Progress`] while books are sent.
 const SEND_PROGRESS: &str = "send-progress";
 /// Event carrying [`ImportProgress`] while books come in from a device.
@@ -1343,6 +1345,7 @@ pub fn run() {
                 backup_root: data.join("device-backups"),
                 upscaler: Arc::new(Upscaler::new(model, previews)),
             });
+            app.manage(reader::OpenBooks::default());
             size_first_window(app)?;
             Ok(())
         })
@@ -1407,7 +1410,12 @@ pub fn run() {
             cover_upscale_preview,
             cover_upscale_apply,
             cover_upscale_cancel,
-            cover_colors
+            cover_colors,
+            reader::reader_open,
+            reader::reader_book,
+            reader::reader_entry,
+            reader::reader_save_position,
+            reader::reader_save_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1428,13 +1436,22 @@ mod tests {
     }
 
     #[test]
-    fn every_command_is_declared_and_granted_to_the_main_window() {
+    fn every_command_is_declared_and_granted_to_one_kind_of_window() {
         fn names(text: &str, open: &str, close: char) -> Vec<String> {
             let (_, rest) = text.split_once(open).unwrap();
             let (list, _) = rest.split_once(close).unwrap();
             list.split(',')
-                .map(|name| name.trim().trim_matches('"').to_string())
+                .map(|name| name.trim().trim_matches('"'))
+                .map(|name| name.rsplit("::").next().unwrap().to_string())
                 .filter(|name| !name.is_empty())
+                .collect()
+        }
+        fn granted(capability: &str) -> Vec<String> {
+            let capability: serde_json::Value = serde_json::from_str(capability).unwrap();
+            let permissions = capability["permissions"].as_array().unwrap();
+            permissions
+                .iter()
+                .map(|p| p.as_str().unwrap().to_string())
                 .collect()
         }
 
@@ -1442,16 +1459,25 @@ mod tests {
         let declared = names(include_str!("../build.rs"), "&[&str] = &[\n", ']');
         assert_eq!(handled, declared, "build.rs differs from generate_handler!");
 
-        let capability: serde_json::Value =
-            serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
-        let granted = capability["permissions"].as_array().unwrap();
+        let main = granted(include_str!("../capabilities/default.json"));
+        let reader = granted(include_str!("../capabilities/reader.json"));
         for command in handled {
             let permission = format!("allow-{}", command.replace('_', "-"));
             assert!(
-                granted.iter().any(|p| p == permission.as_str()),
-                "{permission} isn't granted to the main window"
+                main.contains(&permission) != reader.contains(&permission),
+                "{permission} must be granted to exactly one of main and reader"
             );
         }
+        // Nothing but its own book: books can carry hostile scripts.
+        assert_eq!(
+            reader,
+            [
+                "allow-reader-book",
+                "allow-reader-entry",
+                "allow-reader-save-position",
+                "allow-reader-save-settings",
+            ]
+        );
     }
 
     /// A stub handler, because the real commands run on the Wry runtime. The

@@ -1125,6 +1125,9 @@ export function installMockBackend() {
           return true;
         case "cover_upscale_tiles":
           return (a.ids as number[]).length * 12;
+        case "reader_open":
+          window.open("/reader.html", `reader-${a.id}`);
+          return null;
         case "cover_info": {
           // About what the real round trip takes, so the UI has to cope.
           await sleep(12);

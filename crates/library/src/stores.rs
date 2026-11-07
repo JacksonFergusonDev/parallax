@@ -41,6 +41,21 @@ pub struct Reading {
     pub seen_at: String,
 }
 
+/// Where the in-app reader was last in a book.
+///
+/// `cfi` is exact but only holds for this copy of the book; `href`, `fraction`
+/// and `quote` find the place again if it stops resolving.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReaderPosition {
+    /// The section, as a path inside the EPUB.
+    pub href: String,
+    pub cfi: String,
+    /// How far through the book, from 0 to 1.
+    pub fraction: f64,
+    /// The start of the text on the page.
+    pub quote: Option<String>,
+}
+
 impl Library {
     /// Ids of books with a copy on any device.
     pub fn books_on_any_device(&self) -> Result<HashSet<i64>> {
@@ -80,6 +95,43 @@ impl Library {
                 r.get(0)
             })
             .optional()?)
+    }
+
+    pub fn reader_position(&self, book_id: i64) -> Result<Option<ReaderPosition>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT href, cfi, fraction, quote FROM reader_positions WHERE book_id = ?1",
+                [book_id],
+                |r| {
+                    Ok(ReaderPosition {
+                        href: r.get(0)?,
+                        cfi: r.get(1)?,
+                        fraction: r.get(2)?,
+                        quote: r.get(3)?,
+                    })
+                },
+            )
+            .optional()?)
+    }
+
+    /// Remembers `position`. Very short books can report more than 1, so the
+    /// fraction is clamped here for everything that reads it later.
+    pub fn set_reader_position(&self, book_id: i64, position: &ReaderPosition) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO reader_positions
+                 (book_id, href, cfi, fraction, quote, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                book_id,
+                position.href,
+                position.cfi,
+                position.fraction.clamp(0.0, 1.0),
+                position.quote,
+                now(),
+            ],
+        )?;
+        Ok(())
     }
 
     /// Sets, or with `None` clears, a setting.

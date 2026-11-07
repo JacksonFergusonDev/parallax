@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' blob:; img-src blob: data:; font-src blob: data:; media-src blob:; frame-src blob:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reader</title>
+  </head>
+  <body>
+    <header class="bar">
+      <button id="contents" aria-expanded="false" aria-controls="toc">
+        Contents
+      </button>
+      <h1 id="title"></h1>
+      <button id="appearance" aria-expanded="false" aria-controls="settings">
+        Aa
+      </button>
+    </header>
+    <main id="stage">
+      <button id="prev" class="turn" aria-label="Previous page">‹</button>
+      <div id="book"></div>
+      <button id="next" class="turn" aria-label="Next page">›</button>
+    </main>
+    <footer class="bar">
+      <span id="chapter"></span>
+      <span id="progress"></span>
+    </footer>
+    <nav id="toc" aria-label="Contents" hidden></nav>
+    <section id="settings" aria-label="Appearance" hidden>
+      <div class="row">
+        <span>Text size</span>
+        <div class="stepper">
+          <button id="smaller" aria-label="Smaller text">A−</button>
+          <output id="size"></output>
+          <button id="larger" aria-label="Larger text">A+</button>
+        </div>
+      </div>
+      <div class="row themes" role="radiogroup" aria-label="Theme">
+        <button data-theme="auto" role="radio">Auto</button>
+        <button data-theme="light" role="radio">Light</button>
+        <button data-theme="sepia" role="radio">Sepia</button>
+        <button data-theme="dark" role="radio">Dark</button>
+      </div>
+    </section>
+    <p id="message" role="alert" hidden></p>
+    <script type="module" src="/src/reader/main.ts"></script>
+  </body>
+</html>

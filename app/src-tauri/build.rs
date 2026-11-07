@@ -1,7 +1,7 @@
 //! The app's commands are listed here so Tauri enforces its ACL on them.
-//! Each one also needs granting in `capabilities/`; a window with no grant,
-//! like a future reader window, can't call it. `lib.rs` tests that this list
-//! matches `generate_handler!` and the main capability.
+//! Each one also needs granting in `capabilities/`; a window with no grant
+//! can't call it. `lib.rs` tests that this list matches `generate_handler!`
+//! and that each command goes to the main window or reader windows, not both.
 
 const COMMANDS: &[&str] = &[
     "show_main_window",
@@ -65,6 +65,11 @@ const COMMANDS: &[&str] = &[
     "cover_upscale_apply",
     "cover_upscale_cancel",
     "cover_colors",
+    "reader_open",
+    "reader_book",
+    "reader_entry",
+    "reader_save_position",
+    "reader_save_settings",
 ];
 
 fn main() {
