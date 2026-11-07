@@ -72,7 +72,7 @@ impl KoboDevice {
         self.write_file(src, dest)
     }
 
-    fn write_file(&self, src: &Path, dest: &str) -> Result<SentBook> {
+    pub(crate) fn write_file(&self, src: &Path, dest: &str) -> Result<SentBook> {
         let target = self.mount().join(dest);
         let parent = target.parent().unwrap_or(self.mount());
         let mut created_dirs: Vec<&Path> = parent

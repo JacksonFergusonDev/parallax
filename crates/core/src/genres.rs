@@ -149,6 +149,7 @@ pub fn apply_tidy(
         .map(|(from, to)| (from.as_str(), to.as_str()))
         .collect();
     if !renames.is_empty() {
+        library.snapshot("tidy", None).map_err(|e| e.to_string())?;
         for book in library.books().map_err(|e| e.to_string())? {
             if !book.tags.iter().any(|t| renames.contains_key(t.as_str())) {
                 continue;

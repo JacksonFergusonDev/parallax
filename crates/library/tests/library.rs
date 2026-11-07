@@ -477,3 +477,155 @@ fn length_and_publication_date_are_stored_and_backfilled() {
     assert_eq!(book.words, Some(600));
     assert_eq!(book.pages, Some(2));
 }
+
+mod snapshots {
+    use super::*;
+
+    fn add(lib: &mut Library, dir: &Path, title: &str) -> i64 {
+        let file = format!("{title}.epub");
+        let path = epub(dir, &file, title, "An Author", None, title);
+        added(lib.import(&path).unwrap()).0.id
+    }
+
+    fn titles(lib: &Library) -> Vec<String> {
+        let mut titles: Vec<String> = lib.books().unwrap().into_iter().map(|b| b.title).collect();
+        titles.sort();
+        titles
+    }
+
+    #[test]
+    fn going_back_brings_a_removed_book_back_with_its_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut lib = Library::open(dir.path().join("lib")).unwrap();
+        let id = add(&mut lib, dir.path(), "Dune");
+        let bytes = fs::read(lib.book_file(id)).unwrap();
+
+        lib.snapshot("remove", Some("Dune")).unwrap();
+        lib.remove(id).unwrap();
+        assert!(lib.books().unwrap().is_empty());
+        assert!(!lib.book_file(id).exists());
+
+        let snapshot = lib.snapshots()[0].clone();
+        assert_eq!(snapshot.op, "remove");
+        assert_eq!(snapshot.detail.as_deref(), Some("Dune"));
+        assert_eq!(snapshot.books, 1);
+
+        let outcome = lib.restore_snapshot(&snapshot.file).unwrap();
+        assert_eq!(outcome.restored, 1);
+        assert_eq!(titles(&lib), ["Dune"]);
+        assert_eq!(fs::read(lib.book_file(id)).unwrap(), bytes);
+    }
+
+    #[test]
+    fn going_back_undoes_edits_and_can_itself_be_undone() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut lib = Library::open(dir.path().join("lib")).unwrap();
+        let id = add(&mut lib, dir.path(), "Dune");
+        let snapshot = lib.snapshot("tidy", None).unwrap();
+        let file = snapshot.file_name().unwrap().to_string_lossy().into_owned();
+
+        let mut edit = lib.book(id).unwrap().edit();
+        edit.title = "Edited".into();
+        lib.update(id, &edit).unwrap();
+
+        let outcome = lib.restore_snapshot(&file).unwrap();
+        assert_eq!(titles(&lib), ["Dune"]);
+        lib.restore_snapshot(&outcome.safety_snapshot).unwrap();
+        assert_eq!(titles(&lib), ["Edited"]);
+    }
+
+    #[test]
+    fn books_added_since_are_set_aside_and_can_come_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut lib = Library::open(dir.path().join("lib")).unwrap();
+        add(&mut lib, dir.path(), "Dune");
+        let file = lib.snapshot("calibre", None).unwrap();
+        let file = file.file_name().unwrap().to_string_lossy().into_owned();
+        let later = add(&mut lib, dir.path(), "Hyperion");
+
+        let outcome = lib.restore_snapshot(&file).unwrap();
+        assert_eq!(outcome.set_aside, 1);
+        assert_eq!(titles(&lib), ["Dune"]);
+        assert!(!lib.book_file(later).exists());
+
+        let undone = lib.restore_snapshot(&outcome.safety_snapshot).unwrap();
+        assert_eq!(undone.restored, 1);
+        assert_eq!(titles(&lib), ["Dune", "Hyperion"]);
+        assert!(lib.book_file(later).exists());
+    }
+
+    #[test]
+    fn a_reused_id_gets_each_book_its_own_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut lib = Library::open(dir.path().join("lib")).unwrap();
+        let id = add(&mut lib, dir.path(), "Dune");
+        let bytes = fs::read(lib.book_file(id)).unwrap();
+        let file = lib.snapshot("remove", None).unwrap();
+        let file = file.file_name().unwrap().to_string_lossy().into_owned();
+        lib.remove(id).unwrap();
+        let reused = add(&mut lib, dir.path(), "A much longer title than the first");
+        assert_eq!(reused, id);
+
+        lib.restore_snapshot(&file).unwrap();
+        assert_eq!(titles(&lib), ["Dune"]);
+        assert_eq!(fs::read(lib.book_file(id)).unwrap(), bytes);
+    }
+
+    #[test]
+    fn settings_survive_going_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut lib = Library::open(dir.path().join("lib")).unwrap();
+        let file = lib.snapshot("tidy", None).unwrap();
+        let file = file.file_name().unwrap().to_string_lossy().into_owned();
+        lib.set_setting("key", Some("value")).unwrap();
+
+        lib.restore_snapshot(&file).unwrap();
+        assert_eq!(lib.setting("key").unwrap().as_deref(), Some("value"));
+    }
+
+    #[test]
+    fn a_book_whose_files_are_gone_is_reported_not_left_broken() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("lib");
+        let mut lib = Library::open(&root).unwrap();
+        let id = add(&mut lib, dir.path(), "Dune");
+        let file = lib.snapshot("remove", None).unwrap();
+        let file = file.file_name().unwrap().to_string_lossy().into_owned();
+        lib.remove(id).unwrap();
+        fs::remove_dir_all(root.join("removed")).unwrap();
+
+        let outcome = lib.restore_snapshot(&file).unwrap();
+        assert_eq!(outcome.lost, ["Dune"]);
+        assert!(lib.books().unwrap().is_empty());
+    }
+
+    #[test]
+    fn refuses_damaged_or_unknown_snapshots_and_changes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("lib");
+        let mut lib = Library::open(&root).unwrap();
+        add(&mut lib, dir.path(), "Dune");
+        let path = lib.snapshot("tidy", None).unwrap();
+        let file = path.file_name().unwrap().to_string_lossy().into_owned();
+        fs::write(&path, b"not a database").unwrap();
+
+        assert!(lib.snapshots()[0].blocked.is_some());
+        for name in [file.as_str(), "library-none.sqlite", "../library.sqlite"] {
+            assert!(matches!(
+                lib.restore_snapshot(name),
+                Err(Error::CannotRestore(_))
+            ));
+        }
+        assert_eq!(titles(&lib), ["Dune"]);
+    }
+
+    #[test]
+    fn keeps_a_limited_number_of_snapshots() {
+        let dir = tempfile::tempdir().unwrap();
+        let lib = Library::open(dir.path().join("lib")).unwrap();
+        for _ in 0..erc_library::SNAPSHOTS_KEPT + 3 {
+            lib.snapshot("tidy", None).unwrap();
+        }
+        assert_eq!(lib.snapshots().len(), erc_library::SNAPSHOTS_KEPT);
+    }
+}

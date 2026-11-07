@@ -8,12 +8,15 @@
 //! books/<id>/book.epub     original file, byte for byte
 //! books/<id>/cover.jpg     thumbnail for the grid (optional)
 //! books/<id>/custom-cover.jpg  user-chosen cover, applied on export (optional)
+//! snapshots/                the database before big changes (see `snapshots`)
+//! removed/<stamp>-<id>/     removed books' folders, held for 30 days
 //! ```
 
 mod authors;
 mod color;
 mod rules;
 mod schema;
+mod snapshots;
 mod stores;
 
 use std::fs;
@@ -30,6 +33,7 @@ use sha2::{Digest, Sha256};
 pub use authors::normalize_authors;
 pub use color::{dominant_color, dominant_colors};
 pub use rules::{Rule, RuleKind};
+pub use snapshots::{REMOVED_KEPT_DAYS, SNAPSHOTS_KEPT, Snapshot, SnapshotRestore};
 pub use stores::{Annotation, Reading};
 
 #[derive(Debug, thiserror::Error)]
@@ -46,6 +50,8 @@ pub enum Error {
     EmptyTitle,
     #[error("not a supported image: {0}")]
     BadImage(String),
+    #[error("can't go back to that snapshot: {0}")]
+    CannotRestore(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -488,12 +494,17 @@ impl Library {
         self.book(id)
     }
 
+    /// Removes a book. Its files are held for [`REMOVED_KEPT_DAYS`], so going
+    /// back to a snapshot from before this brings it back.
     pub fn remove(&mut self, id: i64) -> Result<()> {
-        if self.conn.execute("DELETE FROM books WHERE id = ?1", [id])? == 0 {
-            return Err(Error::NotFound(id));
-        }
-        let dir = self.book_dir(id);
-        fs::remove_dir_all(&dir).map_err(|e| io_err(&dir, e))
+        let book = self.book(id)?;
+        let hash: String =
+            self.conn
+                .query_row("SELECT file_hash FROM books WHERE id = ?1", [id], |r| {
+                    r.get(0)
+                })?;
+        self.conn.execute("DELETE FROM books WHERE id = ?1", [id])?;
+        self.hold_book_dir(id, &hash, &book.title)
     }
 
     /// The unmodified original.

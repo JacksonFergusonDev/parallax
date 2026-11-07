@@ -20,10 +20,13 @@ use erc_core::rules::Trigger;
 use erc_core::send::{SendOutcome, send_library_books, update_on_device};
 use erc_covers::{Candidate, CoverQuery};
 use erc_device::{Collection, DeviceBook, DeviceInfo};
-use erc_device_kobo::{BookCheck, ErcState, KoboDevice, MACOS_VOLUMES, tidy_apple_double};
+use erc_device_kobo::{
+    BackupInfo, BookCheck, ErcState, KoboDevice, MACOS_VOLUMES, RestoreOutcome, tidy_apple_double,
+};
 use erc_epub::MetadataEdit;
 use erc_library::{
-    Book, CUSTOM_COVER_MAX_HEIGHT, CoverQuality, ImportOutcome, Library, Reading, Rule,
+    Book, CUSTOM_COVER_MAX_HEIGHT, CoverQuality, ImportOutcome, Library, Reading, Rule, Snapshot,
+    SnapshotRestore,
 };
 use erc_upscale::CoreMl;
 use serde::Serialize;
@@ -223,9 +226,51 @@ fn library_update(state: State<AppState>, id: i64, edit: MetadataEdit) -> CmdRes
 #[tauri::command]
 fn library_remove(state: State<AppState>, ids: Vec<i64>) -> CmdResult<()> {
     let mut lib = state.library();
+    let detail = match ids.as_slice() {
+        [id] => lib.book(*id).map_err(err)?.title,
+        _ => format!("{} books", ids.len()),
+    };
+    lib.snapshot("remove", Some(&detail)).map_err(err)?;
     ids.into_iter()
         .try_for_each(|id| lib.remove(id))
         .map_err(err)
+}
+
+/// Points the library can go back to, newest first.
+#[tauri::command]
+fn library_snapshots(state: State<AppState>) -> Vec<Snapshot> {
+    state.library().snapshots()
+}
+
+#[tauri::command]
+fn library_restore(state: State<AppState>, file: String) -> CmdResult<SnapshotRestore> {
+    state.library().restore_snapshot(&file).map_err(err)
+}
+
+/// Database backups of a Kobo, newest first.
+#[tauri::command]
+async fn device_backups(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<Vec<BackupInfo>> {
+    let backups = state.backup_root.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(KoboDevice::open(&mount).map_err(err)?.backups(&backups))
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
+async fn device_restore(
+    state: State<'_, AppState>,
+    mount: PathBuf,
+    file: String,
+) -> CmdResult<RestoreOutcome> {
+    let backups = state.backup_root.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        kobo.restore_backup(&backups, Path::new(&file)).map_err(err)
+    })
+    .await
+    .map_err(err)?
 }
 
 /// Library books whose recorded copy is present on the mounted device.
@@ -1309,6 +1354,10 @@ pub fn run() {
             library_review,
             library_update,
             library_remove,
+            library_snapshots,
+            library_restore,
+            device_backups,
+            device_restore,
             books_on_device,
             device_books,
             remove_from_device,

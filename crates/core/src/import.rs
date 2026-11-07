@@ -54,6 +54,10 @@ pub fn import_from_device(
     let serial = device.version().serial.clone();
     let erc = device.erc_state();
     let total = books.len();
+    // Only adds books, so worth doing without a snapshot if one can't be made.
+    if total > 0 {
+        let _ = library.snapshot("kobo-import", Some(&format!("{total} books")));
+    }
     Ok(books
         .into_iter()
         .enumerate()

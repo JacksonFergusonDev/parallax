@@ -346,6 +346,10 @@ pub fn import(
     mut on_progress: impl FnMut(usize, usize, &str),
 ) -> Vec<CalibreImportOutcome> {
     let total = books.len();
+    // Only adds books, so worth doing without a snapshot if one can't be made.
+    if total > 0 {
+        let _ = library.snapshot("calibre", Some(&format!("{total} books")));
+    }
     books
         .iter()
         .enumerate()

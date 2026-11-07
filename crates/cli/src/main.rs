@@ -28,8 +28,8 @@ use erc_core::rules;
 use erc_core::send::{SendOutcome, send_books, send_library_books, update_on_device};
 use erc_device::{DeviceBook, ReadStatus};
 use erc_device_kobo::{
-    BookCheck, KoboDb, KoboDevice, LogEntry, MACOS_VOLUMES, ONBOARD_PREFIX, Record,
-    remove_orphaned_images, restore, tidy_apple_double,
+    BookCheck, KoboDb, KoboDevice, MACOS_VOLUMES, ONBOARD_PREFIX, remove_orphaned_images,
+    tidy_apple_double,
 };
 use erc_epub::{Contributor, MetadataEdit};
 use erc_library::{ImportOutcome, Library, Rule, RuleKind};
@@ -183,8 +183,16 @@ enum LibraryCommand {
         #[arg(long = "contributor")]
         contributors: Vec<String>,
     },
-    /// Remove a book from the library (not from devices).
+    /// Remove a book from the library (not from devices). Can be undone with
+    /// `restore`.
     Rm { id: i64 },
+    /// List the points the library can go back to.
+    Snapshots,
+    /// Go back to a snapshot. How the library is now is saved as one first.
+    Restore {
+        /// Snapshot file name, from `snapshots`.
+        file: String,
+    },
     /// Search online for covers for a book.
     Covers { id: i64 },
     /// Upscale a book's cover into an image file, leaving the book alone.
@@ -323,22 +331,6 @@ fn default_library_root() -> Result<PathBuf> {
 /// Shared with the desktop app so backups from either show up together.
 fn backup_root() -> Result<PathBuf> {
     Ok(app_data_dir()?.join("device-backups"))
-}
-
-fn device_backups(kobo: &KoboDevice) -> Result<Vec<PathBuf>> {
-    let serial: String = kobo
-        .version()
-        .serial
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-        .collect();
-    let dir = backup_root()?.join(serial);
-    let mut found: Vec<PathBuf> = std::fs::read_dir(&dir)
-        .map(|entries| entries.flatten().map(|e| e.path()).collect())
-        .unwrap_or_default();
-    found.retain(|p| p.extension().is_some_and(|e| e == "sqlite"));
-    found.sort();
-    Ok(found)
 }
 
 #[derive(Subcommand)]
@@ -855,32 +847,43 @@ fn main() -> Result<()> {
             }
         }
         Command::Kobo(KoboCommand::Backups { mount }) => {
-            for b in device_backups(&find_kobo(mount.as_deref())?)? {
-                println!("{}", b.display());
+            let backups = find_kobo(mount.as_deref())?.backups(&backup_root()?);
+            if cli.json {
+                return print_json(&backups);
+            }
+            for b in backups {
+                let ops: Vec<&str> = b.entries.iter().map(|e| e.op.as_str()).collect();
+                let blocked = b.blocked.map(|why| format!(" (can't restore: {why})"));
+                println!(
+                    "{}  before {}{}",
+                    b.file,
+                    if ops.is_empty() {
+                        "?".to_owned()
+                    } else {
+                        ops.join(", ")
+                    },
+                    blocked.unwrap_or_default()
+                );
             }
         }
         Command::Kobo(KoboCommand::Restore { backup, mount }) => {
             let kobo = find_kobo(mount.as_deref())?;
+            let root = backup_root()?;
             let backup = match backup {
                 Some(b) => b,
-                None => device_backups(&kobo)?
-                    .pop()
+                None => kobo
+                    .backups(&root)
+                    .first()
+                    .map(|b| PathBuf::from(&b.file))
                     .context("no backups for this device")?,
             };
-            restore(&kobo.db_path(), &backup)?;
-            kobo.record(Record {
-                entries: vec![
-                    LogEntry::new("restore").detail(
-                        backup
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .into_owned(),
-                    ),
-                ],
-                books: Vec::new(),
-            });
-            println!("restored {}", backup.display());
+            let outcome = kobo.restore_backup(&root, &backup)?;
+            println!(
+                "restored {}, with {} book files; the Kobo as it was is saved as {}",
+                backup.display(),
+                outcome.files_restored,
+                outcome.safety_backup
+            );
         }
         Command::Kobo(KoboCommand::Collections(source)) => {
             let collections = source.open()?.collections()?;
@@ -1052,8 +1055,36 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             println!("exported #{} {} to {}", book.id, book.title, out.display());
         }
         LibraryCommand::Rm { id } => {
+            let title = lib.book(id)?.title;
+            lib.snapshot("remove", Some(&title))?;
             lib.remove(id)?;
             println!("{} #{id}", success("removed"));
+        }
+        LibraryCommand::Snapshots => {
+            for s in lib.snapshots() {
+                let blocked = s.blocked.map(|why| format!(" (can't restore: {why})"));
+                println!(
+                    "{}  before {} {}: {} books{}",
+                    s.file,
+                    s.op,
+                    s.detail.unwrap_or_default(),
+                    s.books,
+                    blocked.unwrap_or_default()
+                );
+            }
+        }
+        LibraryCommand::Restore { file } => {
+            let outcome = lib.restore_snapshot(&file)?;
+            println!(
+                "{} {file}: {} books brought back, {} set aside; the library as it was is saved as {}",
+                success("restored"),
+                outcome.restored,
+                outcome.set_aside,
+                outcome.safety_snapshot
+            );
+            for title in outcome.lost {
+                println!("files gone for good: {title}");
+            }
         }
         LibraryCommand::Update {
             ids,

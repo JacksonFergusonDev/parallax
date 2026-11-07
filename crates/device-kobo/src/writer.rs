@@ -5,7 +5,7 @@
 //!    handed over) or ERC doesn't support changing this Kobo
 //!    ([`crate::support`]);
 //! 2. runs `PRAGMA quick_check` and backs the database up with SQLite's online
-//!    backup API, keeping the newest [`BACKUPS_KEPT`] per device;
+//!    backup API ([`crate::backups`] has what's kept and how to go back);
 //! 3. applies changes in immediate transactions;
 //! 4. on close runs `PRAGMA integrity_check`, restoring the backup if it fails,
 //!    then checkpoints the WAL and closes so no side files are left beside the
@@ -14,16 +14,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::Utc;
-use rusqlite::backup::Backup;
 use rusqlite::{Connection, OpenFlags, Transaction, TransactionBehavior};
 
 use crate::KoboDevice;
+use crate::backups::{hold_removed, prune, sanitize, take_backup};
 use crate::error::{Error, Result};
 use crate::state::{BookChange, LogEntry, Record};
-
-/// Backups kept per device; older ones are deleted.
-pub const BACKUPS_KEPT: usize = 10;
 
 const SIDE_FILES: [&str; 3] = ["-wal", "-shm", "-journal"];
 
@@ -63,7 +59,9 @@ impl KoboDevice {
         if check != "ok" {
             return Err(Error::CorruptBefore(check));
         }
-        let backup = backup_to(&conn, &backup_root.join(sanitize(&self.version().serial)))?;
+        let dir = backup_root.join(sanitize(&self.version().serial));
+        let backup = take_backup(&conn, &dir)?;
+        prune(&dir);
         Ok(DeviceWriter {
             device: self,
             conn: Some(conn),
@@ -81,6 +79,12 @@ impl<'a> DeviceWriter<'a> {
     /// Where this session's pre-change backup is.
     pub fn backup_path(&self) -> &Path {
         &self.backup
+    }
+
+    /// Keeps a copy of a book file on this computer before it's removed, so
+    /// going back to this session's backup can bring it back too.
+    pub(crate) fn hold_removed(&self, path: &Path, device_path: &str) -> Result<()> {
+        hold_removed(&self.backup, path, device_path)
     }
 
     /// Adds an operation to this session's entry in `/.erc/log.jsonl`.
@@ -124,6 +128,7 @@ impl<'a> DeviceWriter<'a> {
                 entry.error = Some(e.to_string());
             }
         }
+        self.device.write_sidecar(&self.backup, &record.entries);
         self.device.record(record);
         result
     }
@@ -157,70 +162,35 @@ impl Drop for DeviceWriter<'_> {
 }
 
 /// Copies a backup over the device database. Only call with no connection
-/// open to it.
+/// open to it. The database and its side files stay as they were until the
+/// whole backup is on the device.
 pub fn restore(db_path: &Path, backup: &Path) -> Result<()> {
+    let tmp = db_path.with_extension("sqlite.erc-restore");
+    let _ = fs::remove_file(&tmp);
+    let bytes = crate::transfer::copy_plain(backup, &tmp).inspect_err(|_| {
+        let _ = fs::remove_file(&tmp);
+    })?;
+    let expected = fs::metadata(backup).map_err(|e| io_err(backup, e))?.len();
+    if bytes != expected {
+        let _ = fs::remove_file(&tmp);
+        return Err(Error::IncompleteCopy {
+            path: db_path.to_path_buf(),
+            expected,
+            written: bytes,
+        });
+    }
     for suffix in SIDE_FILES {
         let _ = fs::remove_file(side_file(db_path, suffix));
     }
-    let tmp = db_path.with_extension("sqlite.erc-restore");
-    let _ = fs::remove_file(&tmp);
-    crate::transfer::copy_plain(backup, &tmp)?;
     fs::rename(&tmp, db_path).map_err(|e| io_err(db_path, e))?;
     crate::transfer::remove_apple_double(db_path);
     Ok(())
-}
-
-fn backup_to(conn: &Connection, dir: &Path) -> Result<PathBuf> {
-    fs::create_dir_all(dir).map_err(|e| io_err(dir, e))?;
-    let stamp = Utc::now().format("%Y%m%d-%H%M%S%.3f");
-    let path = dir.join(format!("KoboReader-{stamp}.sqlite"));
-    {
-        let mut dest = Connection::open(&path)?;
-        let backup = Backup::new(conn, &mut dest)?;
-        backup.run_to_completion(256, std::time::Duration::ZERO, None)?;
-    }
-    let check: String =
-        Connection::open(&path)?.query_row("PRAGMA quick_check", [], |r| r.get(0))?;
-    if check != "ok" {
-        let _ = fs::remove_file(&path);
-        return Err(Error::CorruptBefore(format!(
-            "backup failed verification: {check}"
-        )));
-    }
-    prune(dir);
-    Ok(path)
-}
-
-fn prune(dir: &Path) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    let mut backups: Vec<PathBuf> = entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| {
-            let name = p.file_name().unwrap_or_default().to_string_lossy();
-            name.starts_with("KoboReader-") && name.ends_with(".sqlite")
-        })
-        .collect();
-    // Timestamped names sort chronologically.
-    backups.sort();
-    let excess = backups.len().saturating_sub(BACKUPS_KEPT);
-    for old in &backups[..excess] {
-        let _ = fs::remove_file(old);
-    }
 }
 
 fn side_file(db_path: &Path, suffix: &str) -> PathBuf {
     let mut name = db_path.as_os_str().to_owned();
     name.push(suffix);
     PathBuf::from(name)
-}
-
-fn sanitize(s: &str) -> String {
-    s.chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-        .collect()
 }
 
 fn io_err(path: &Path, source: std::io::Error) -> Error {

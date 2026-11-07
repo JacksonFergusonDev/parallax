@@ -1708,6 +1708,66 @@ select:focus-visible {
   color: var(--danger);
 }
 
+/* Revert changes */
+
+.modal.revert {
+  width: min(560px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.modal.revert .segmented {
+  align-self: flex-start;
+}
+.revert-points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  max-height: 340px;
+  border-top: 1px solid var(--border);
+}
+.revert-points li {
+  border-bottom: 1px solid var(--border);
+}
+.revert-point {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  column-gap: 10px;
+  width: 100%;
+  padding: 8px;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+}
+.revert-point:not(:disabled):hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.revert-point[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.revert-point:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.revert-what {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.revert-note {
+  grid-column: 2;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* Duplicate review */
 
 .modal.duplicates {

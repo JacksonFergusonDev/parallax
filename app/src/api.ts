@@ -248,6 +248,30 @@ export interface LogEntry {
   error?: string;
 }
 
+/** A database backup of a Kobo, taken just before a change. */
+export interface BackupInfo {
+  file: string;
+  at: string;
+  /** The change it was taken before. */
+  entries: LogEntry[];
+  /** Book files that change removed, still held on this computer. */
+  removed_files: number;
+  db_version: number | null;
+  /** Why it can't be put back. */
+  blocked: string | null;
+}
+
+/** A copy of the library's database, taken just before a big change. */
+export interface Snapshot {
+  file: string;
+  at: string;
+  op: string;
+  detail: string | null;
+  books: number;
+  /** Why it can't be used. */
+  blocked?: string;
+}
+
 /** ERC's own records on the device, from `/.erc/`. */
 export interface DeviceHistory {
   device: {
@@ -483,6 +507,22 @@ export const removeBooks = (ids: number[]) =>
     "plans",
     ...ids.map(coverSearchTag),
   ]);
+export const librarySnapshots = () => invoke<Snapshot[]>("library_snapshots");
+export const libraryRestore = (file: string) =>
+  write<{
+    safety_snapshot: string;
+    restored: number;
+    set_aside: number;
+    lost: string[];
+  }>("library_restore", { file }, ["library", "plans"]);
+export const deviceBackups = (mount: string) =>
+  invoke<BackupInfo[]>("device_backups", { mount });
+export const deviceRestore = (mount: string, file: string) =>
+  write<{ safety_backup: string; files_restored: number }>(
+    "device_restore",
+    { mount, file },
+    [deviceTag(mount)],
+  );
 export const booksOnDevice = (mount: string) =>
   read<OnDevice[]>("books_on_device", { mount }, [deviceTag(mount), "library"]);
 export const deviceBooks = (mount: string) =>

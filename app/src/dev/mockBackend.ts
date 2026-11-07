@@ -445,6 +445,77 @@ export function installMockBackend() {
           );
           return books.find((b) => b.id === a.id);
         }
+        case "library_snapshots":
+          return [
+            {
+              file: "library-20261105-181200.000.sqlite",
+              at: "2026-11-05T18:12:00Z",
+              op: "remove",
+              detail: "Dune",
+              books: books.length + 1,
+            },
+            {
+              file: "library-20261103-091500.000.sqlite",
+              at: "2026-11-03T09:15:00Z",
+              op: "tidy",
+              detail: null,
+              books: books.length + 1,
+            },
+          ];
+        case "library_restore":
+          return {
+            safety_snapshot: "library-20261106-120000.000.sqlite",
+            restored: 1,
+            set_aside: 0,
+            lost: [],
+          };
+        case "device_backups":
+          return [
+            {
+              file: "KoboReader-20261105-120000.000.sqlite",
+              at: "2026-11-05T12:00:00Z",
+              entries: [
+                {
+                  at: "2026-11-05T12:00:01Z",
+                  erc_version: "0.1.0",
+                  op: "remove",
+                  content_ids: [contentId(1), contentId(5)],
+                },
+              ],
+              removed_files: 2,
+              db_version: 174,
+              blocked: null,
+            },
+            {
+              file: "KoboReader-20261031-140200.000.sqlite",
+              at: "2026-10-31T14:02:00Z",
+              entries: [
+                {
+                  at: "2026-10-31T14:02:00Z",
+                  erc_version: "0.1.0",
+                  op: "collection",
+                  content_ids: [contentId(1)],
+                },
+              ],
+              removed_files: 0,
+              db_version: 174,
+              blocked: null,
+            },
+            {
+              file: "KoboReader-20260901-100000.000.sqlite",
+              at: "2026-09-01T10:00:00Z",
+              entries: [],
+              removed_files: 0,
+              db_version: 170,
+              blocked:
+                "this backup is from database version 170, and the Kobo is now on 174",
+            },
+          ];
+        case "device_restore":
+          return {
+            safety_backup: "KoboReader-20261106-120000.000.sqlite",
+            files_restored: 2,
+          };
         case "library_remove":
           books = books.filter((b) => !(a.ids as number[]).includes(b.id));
           return null;

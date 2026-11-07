@@ -108,6 +108,11 @@ const MIGRATIONS: &[&str] = &[
      ALTER TABLE books ADD COLUMN pages_estimated INTEGER NOT NULL DEFAULT 1;",
 ];
 
+/// The schema version this build creates.
+pub fn latest() -> usize {
+    MIGRATIONS.len()
+}
+
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     conn.pragma_update(None, "foreign_keys", true)?;
     conn.pragma_update(None, "journal_mode", "wal")?;

@@ -13,6 +13,7 @@ import {
   Tags,
   Trash2,
   WandSparkles,
+  History,
 } from "lucide-react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { ask, open } from "@tauri-apps/plugin-dialog";
@@ -77,6 +78,7 @@ import { DeviceView } from "./components/DeviceView";
 import { EnhanceReview } from "./components/EnhanceReview";
 import { ImportReview, REVIEW_SETTING } from "./components/ImportReview";
 import { LibraryCheck } from "./components/LibraryCheck";
+import { RevertChanges, type RevertScope } from "./components/RevertChanges";
 import {
   DuplicateReview,
   type ReviewGroup,
@@ -167,6 +169,7 @@ export default function App() {
   /** Books being looked up for series and genres. */
   const [enhancing, setEnhancing] = useState<number[] | null>(null);
   const [checking, setChecking] = useState(false);
+  const [reverting, setReverting] = useState<RevertScope | null>(null);
   const [upscaling, setUpscaling] = useState<number[] | null>(null);
   const [canUpscale, setCanUpscale] = useState(false);
   useEffect(() => {
@@ -783,6 +786,7 @@ export default function App() {
             }}
             about={aboutOpen}
             onAboutChange={setAboutOpen}
+            onRevert={() => setReverting("kobo")}
             onChanged={() => {
               refreshOnDevice(device);
               listCollections(device.mount)
@@ -837,6 +841,13 @@ export default function App() {
                 <button className="link" onClick={() => setChecking(true)}>
                   <ShieldCheck />
                   Check library…
+                </button>
+                <button
+                  className="link"
+                  onClick={() => setReverting("library")}
+                >
+                  <History />
+                  Revert changes…
                 </button>
                 <button className="link" onClick={() => setFromCalibre(true)}>
                   <Import />
@@ -1165,6 +1176,25 @@ export default function App() {
             void refresh().then(() => reviewAdded(ids, [], "calibre"));
           }}
           onClose={() => setFromCalibre(false)}
+        />
+      )}
+      {reverting && (
+        <RevertChanges
+          device={device}
+          start={reverting}
+          onReverted={(scope, text) => {
+            setReverting(null);
+            setSelected(new Set());
+            setNotice({ kind: "info", text });
+            if (scope === "library") void refresh();
+            if (device) {
+              refreshOnDevice(device);
+              listCollections(device.mount)
+                .then(setCollections)
+                .catch(() => {});
+            }
+          }}
+          onClose={() => setReverting(null)}
         />
       )}
       {checking && (

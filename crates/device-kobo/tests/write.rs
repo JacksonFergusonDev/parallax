@@ -285,6 +285,7 @@ fn restores_backup_and_prunes_old_ones() {
         writer.close().unwrap();
         p
     };
+    let first_name = first.file_name().unwrap().to_string_lossy().into_owned();
     Connection::open(&db)
         .unwrap()
         .execute("DELETE FROM content", [])
@@ -298,8 +299,198 @@ fn restores_backup_and_prunes_old_ones() {
     for _ in 0..BACKUPS_KEPT + 2 {
         kobo.open_writer(&backups).unwrap().close().unwrap();
     }
-    let kept = fs::read_dir(backups.join("N000000000001")).unwrap().count();
-    assert_eq!(kept, BACKUPS_KEPT);
+    // The newest ones, plus the day's earliest.
+    assert_eq!(kobo.backups(&backups).len(), BACKUPS_KEPT + 1);
+    assert_eq!(kobo.backups(&backups).last().unwrap().file, first_name);
+}
+
+/// The backup taken for a session that removes `path`.
+fn remove_with_backup(kobo: &KoboDevice, backups: &Path, path: &str) -> String {
+    let mut writer = kobo.open_writer(backups).unwrap();
+    let name = writer.backup_path().file_name().unwrap().to_owned();
+    remove_book(&mut writer, &cid(path)).unwrap();
+    writer.close().unwrap();
+    name.to_string_lossy().into_owned()
+}
+
+#[test]
+fn going_back_brings_removed_books_back_with_their_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    let file = kobo.mount().join(BOOK);
+    let bytes = fs::read(&file).unwrap();
+
+    let backup = remove_with_backup(&kobo, &backups, BOOK);
+    remove_with_backup(&kobo, &backups, OTHER);
+    assert!(!file.exists());
+
+    let listed = kobo.backups(&backups);
+    let entry = listed.iter().find(|b| b.file == backup).unwrap();
+    assert_eq!(entry.entries[0].op, "remove");
+    assert_eq!(entry.removed_files, 1);
+    assert_eq!(entry.blocked, None);
+
+    let outcome = kobo.restore_backup(&backups, Path::new(&backup)).unwrap();
+    // This change's file and the later one's.
+    assert_eq!(outcome.files_restored, 2);
+    assert_eq!(fs::read(&file).unwrap(), bytes);
+    assert!(kobo.mount().join(OTHER).exists());
+    assert_eq!(
+        count(&db, "SELECT count(*) FROM content WHERE BookID IS NULL"),
+        2
+    );
+    assert_eq!(count(&db, "SELECT count(*) FROM Bookmark"), 2);
+    assert_eq!(kobo.erc_state().log[0].op, "restore");
+}
+
+#[test]
+fn going_back_can_be_undone() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    let backup = remove_with_backup(&kobo, &backups, BOOK);
+
+    let outcome = kobo.restore_backup(&backups, Path::new(&backup)).unwrap();
+    assert_eq!(
+        count(&db, "SELECT count(*) FROM content WHERE BookID IS NULL"),
+        2
+    );
+    let safety = kobo
+        .backups(&backups)
+        .into_iter()
+        .find(|b| b.file == outcome.safety_backup)
+        .unwrap();
+    assert_eq!(safety.entries[0].op, "restore");
+
+    kobo.restore_backup(&backups, Path::new(&outcome.safety_backup))
+        .unwrap();
+    assert_eq!(
+        count(&db, "SELECT count(*) FROM content WHERE BookID IS NULL"),
+        1
+    );
+}
+
+#[test]
+fn going_back_leaves_a_book_sent_again_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, _db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    let backup = remove_with_backup(&kobo, &backups, BOOK);
+    let file = kobo.mount().join(BOOK);
+    fs::create_dir_all(file.parent().unwrap()).unwrap();
+    fs::write(&file, b"newer copy").unwrap();
+
+    let outcome = kobo.restore_backup(&backups, Path::new(&backup)).unwrap();
+    assert_eq!(outcome.files_restored, 0);
+    assert_eq!(fs::read(&file).unwrap(), b"newer copy");
+}
+
+#[test]
+fn refuses_a_backup_from_another_database_version() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    let backup = remove_with_backup(&kobo, &backups, BOOK);
+    Connection::open(&db)
+        .unwrap()
+        .execute("UPDATE DbVersion SET version = version + 1", [])
+        .unwrap();
+    let before = fs::read(&db).unwrap();
+
+    assert!(kobo.backups(&backups)[0].blocked.is_some());
+    let result = kobo.restore_backup(&backups, Path::new(&backup));
+    assert!(matches!(result, Err(Error::CannotRestore(_))));
+    assert_eq!(fs::read(&db).unwrap(), before);
+    assert!(!kobo.mount().join(BOOK).exists());
+}
+
+#[test]
+fn refuses_a_backup_from_another_kobo_and_other_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, _db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    let backup = remove_with_backup(&kobo, &backups, BOOK);
+
+    let elsewhere = backups.join("N999999999999");
+    fs::create_dir_all(&elsewhere).unwrap();
+    let foreign = elsewhere.join(&backup);
+    fs::copy(backups.join("N000000000001").join(&backup), &foreign).unwrap();
+    for path in [
+        foreign.as_path(),
+        Path::new("KoboReader-none.sqlite"),
+        Path::new("notes.txt"),
+    ] {
+        assert!(matches!(
+            kobo.restore_backup(&backups, path),
+            Err(Error::CannotRestore(_))
+        ));
+    }
+}
+
+#[test]
+fn refuses_a_damaged_backup_without_touching_the_kobo() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    let backup = remove_with_backup(&kobo, &backups, BOOK);
+    fs::write(
+        backups.join("N000000000001").join(&backup),
+        b"not a database",
+    )
+    .unwrap();
+    let before = fs::read(&db).unwrap();
+
+    assert!(kobo.restore_backup(&backups, Path::new(&backup)).is_err());
+    assert_eq!(fs::read(&db).unwrap(), before);
+}
+
+#[test]
+fn going_back_repairs_a_damaged_database_and_keeps_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    let backup = remove_with_backup(&kobo, &backups, BOOK);
+    fs::write(&db, b"this database was damaged").unwrap();
+
+    let outcome = kobo.restore_backup(&backups, Path::new(&backup)).unwrap();
+    assert_eq!(
+        count(&db, "SELECT count(*) FROM content WHERE BookID IS NULL"),
+        2
+    );
+    let kept = backups.join("N000000000001").join(&outcome.safety_backup);
+    assert_eq!(fs::read(kept).unwrap(), b"this database was damaged");
+}
+
+#[test]
+fn a_failed_copy_leaves_the_database_and_its_side_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_kobo, db) = fake_kobo(dir.path());
+    let wal = db.with_extension("sqlite-wal");
+    fs::write(&wal, b"unapplied changes").unwrap();
+
+    assert!(restore(&db, &dir.path().join("missing.sqlite")).is_err());
+    assert!(wal.exists());
+    assert!(!db.with_extension("sqlite.erc-restore").exists());
+}
+
+#[test]
+fn keeps_backups_from_before_a_removal_past_the_recent_ones() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, _db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    // Not the day's earliest, which is kept anyway.
+    kobo.open_writer(&backups).unwrap().close().unwrap();
+    let removal = remove_with_backup(&kobo, &backups, BOOK);
+    for _ in 0..BACKUPS_KEPT + 3 {
+        let mut writer = kobo.open_writer(&backups).unwrap();
+        writer.log(LogEntry::new("collection"));
+        writer.close().unwrap();
+    }
+
+    let listed = kobo.backups(&backups);
+    assert!(listed.iter().any(|b| b.file == removal));
+    assert_eq!(listed.len(), BACKUPS_KEPT + 2);
 }
 
 #[test]
@@ -418,7 +609,9 @@ fn writes_cleanly_on_fat32() {
 
         let src = dir.path().join("new.kepub.epub");
         fs::write(&src, b"replacement").unwrap();
-        let mut writer = kobo.open_writer(&dir.path().join("backups")).unwrap();
+        let backups = dir.path().join("backups");
+        let mut writer = kobo.open_writer(&backups).unwrap();
+        let backup = writer.backup_path().file_name().unwrap().to_owned();
         replace_book(
             &mut writer,
             &src,
@@ -434,6 +627,20 @@ fn writes_cleanly_on_fat32() {
 
         assert_eq!(fs::read(mnt.join(OTHER)).unwrap(), b"replacement");
         assert_no_side_files(&db);
+
+        // Going back replaces the database by rename and puts the book back.
+        let outcome = kobo.restore_backup(&backups, Path::new(&backup)).unwrap();
+        assert_eq!(outcome.files_restored, 1);
+        assert!(mnt.join(BOOK).is_file());
+        // On a copy: opening it here would itself create a `._` companion.
+        let copy = dir.path().join("restored.sqlite");
+        fs::write(&copy, fs::read(&db).unwrap()).unwrap();
+        assert_eq!(
+            count(&copy, "SELECT count(*) FROM content WHERE BookID IS NULL"),
+            2
+        );
+        assert_no_side_files(&db);
+
         let mut leftovers = Vec::new();
         for sub in ["", ".kobo", "KEpub"] {
             for e in fs::read_dir(mnt.join(sub)).unwrap().flatten() {

@@ -86,6 +86,11 @@ pub fn remove_book(writer: &mut DeviceWriter, content_id: &str) -> Result<()> {
             "only sideloaded books can be removed",
         ),
     })?;
+    if path.is_file()
+        && let Some(rel) = content_id.strip_prefix(ONBOARD_PREFIX)
+    {
+        writer.hold_removed(&path, rel)?;
+    }
     let image_id = writer.transaction(|tx| {
         let image_id: Option<String> = tx
             .query_row(

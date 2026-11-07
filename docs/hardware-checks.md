@@ -111,6 +111,10 @@ Batched so you can do several in one sitting when Claude asks:
 - M16: highlight a passage and add a note in a sideloaded book on the Kobo, then reconnect. In the Library tab, select that book: the edit panel shows "Highlights and notes (2)…" with the chapter named as in the Kobo's contents; export Markdown and open it.
 - Device support: with the Kobo connected, About this Kobo shows "Changes: Allowed, with a backup first"; Save device report… writes a JSON file, and the Kobo shows no change afterwards (no new books, no import screen).
 
+## Revert changes (not yet checked)
+
+- On Kobo: make a test collection, eject and check it shows on the Kobo, then reconnect. Remove one small book you've finished, eject, and check it's gone. Reconnect, open "Revert changes…" and choose the point before the removal: the book and its reading progress should be back after ejecting, with its cover. The test collection is back as it was at that point. Choose "Before: Reverting changes" to undo the revert.
+
 ## calibre import and reading stats (2026-11-04)
 
 - calibre: Library → "Import from calibre…" finds your calibre library, shows 3 books to import, and imports them with calibre's series (Commonwealth Universe 1, Hyperion Cantos 1) and covers. Running it again says nothing to import. calibre still opens its library normally afterwards.

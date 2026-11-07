@@ -1,6 +1,7 @@
 //! Kobo e-reader backend.
 
 mod annotations;
+mod backups;
 mod collections;
 mod covers;
 mod db;
@@ -21,6 +22,10 @@ use std::path::{Path, PathBuf};
 use erc_device::{Capabilities, DeviceInfo, DeviceKind};
 
 pub use annotations::{Annotation, AnnotationKind};
+pub use backups::{
+    BACKUPS_KEPT, BackupInfo, DAILY_BACKUPS_KEPT, REMOVAL_BACKUPS_KEPT, REMOVED_KEPT_DAYS,
+    RestoreOutcome,
+};
 pub use collections::{
     add_to_collection, create_collection, delete_collection, remove_from_collection,
     rename_collection,
@@ -46,7 +51,7 @@ pub use stats::FinishedEvent;
 pub use support::{MAX_WRITE_FIRMWARE_MAJOR, Support};
 pub use transfer::{BOOKS_DIR, SentBook, device_file_name};
 pub use version::{FirmwareVersion, VersionInfo};
-pub use writer::{BACKUPS_KEPT, DeviceWriter, restore};
+pub use writer::{DeviceWriter, restore};
 
 /// Where macOS mounts removable volumes.
 pub const MACOS_VOLUMES: &str = "/Volumes";

@@ -37,6 +37,8 @@ pub enum Error {
         "the change was undone because the database failed its integrity check afterwards: {0}"
     )]
     RolledBack(String),
+    #[error("can't go back to that backup: {0}")]
+    CannotRestore(String),
     #[error("{0}")]
     InvalidCollection(String),
     #[error("ERC only reads this Kobo: {0}")]

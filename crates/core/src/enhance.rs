@@ -252,6 +252,9 @@ pub fn propose(
 
 /// Applies accepted changes; returns the updated books.
 pub fn apply(library: &mut Library, accepted: &[Accepted]) -> erc_library::Result<Vec<Book>> {
+    if !accepted.is_empty() {
+        library.snapshot("enhance", Some(&format!("{} books", accepted.len())))?;
+    }
     let mut updated = Vec::new();
     for a in accepted {
         if a.series.is_none() && a.genres.is_empty() {

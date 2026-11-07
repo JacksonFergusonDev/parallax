@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Trash2,
   WandSparkles,
+  History,
 } from "lucide-react";
 import {
   colorColumn,
@@ -90,6 +91,8 @@ interface Props {
   /** About this Kobo is open; the top bar's device badge opens it too. */
   about: boolean;
   onAboutChange: (open: boolean) => void;
+  /** Opens Revert changes for this Kobo. */
+  onRevert: () => void;
 }
 
 type Dialog =
@@ -112,6 +115,7 @@ export function DeviceView({
   onLibraryChanged,
   onBooksAdded,
   onEjected,
+  onRevert,
   about,
   onAboutChange,
 }: Props) {
@@ -480,6 +484,14 @@ export function DeviceView({
             >
               <Copy />
               Find duplicates…
+            </button>
+            <button
+              className="link"
+              onClick={onRevert}
+              disabled={busy !== null}
+            >
+              <History />
+              Revert changes…
             </button>
             <button
               className="link"
