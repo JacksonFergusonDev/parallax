@@ -10,6 +10,7 @@ use std::io::Read;
 use std::time::Duration;
 
 use reqwest::blocking::Client;
+use reqwest::header::USER_AGENT;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -17,6 +18,8 @@ use serde_json::Value;
 pub enum Error {
     #[error("network error: {0}")]
     Http(#[from] reqwest::Error),
+    #[error(transparent)]
+    Limited(#[from] erc_metadata::FetchError),
     #[error("{0}")]
     NotAnImage(String),
 }
@@ -51,11 +54,10 @@ pub struct Listing {
 
 /// Images larger than this are refused when downloading.
 const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
-const USER_AGENT: &str = concat!("E-Reader-Companion/", env!("CARGO_PKG_VERSION"));
 
 fn client() -> Result<Client> {
     Ok(Client::builder()
-        .user_agent(USER_AGENT)
+        .user_agent(erc_metadata::USER_AGENT)
         .timeout(Duration::from_secs(12))
         .build()?)
 }
@@ -89,7 +91,11 @@ pub fn search(query: &CoverQuery) -> Vec<Candidate> {
 
 /// Downloads a chosen cover, refusing non-images and oversized responses.
 pub fn download(url: &str) -> Result<Vec<u8>> {
-    let response = client()?.get(url).send()?.error_for_status()?;
+    let response = client()?
+        .get(url)
+        .header(USER_AGENT, erc_metadata::user_agent(url))
+        .send()?
+        .error_for_status()?;
     let is_image = response
         .headers()
         .get(reqwest::header::CONTENT_TYPE)
@@ -109,13 +115,17 @@ pub fn download(url: &str) -> Result<Vec<u8>> {
     Ok(data)
 }
 
+/// A search request, taking its turn with the metadata lookups that share
+/// these services' limits.
 fn get_json(client: &Client, url: &str, params: &[(&str, &str)]) -> Result<Value> {
-    Ok(client
+    erc_metadata::wait_turn(url)?;
+    let response = client
         .get(url)
         .query(params)
-        .send()?
-        .error_for_status()?
-        .json()?)
+        .header(USER_AGENT, erc_metadata::user_agent(url))
+        .send()?;
+    erc_metadata::check_limited(url, &response)?;
+    Ok(response.error_for_status()?.json()?)
 }
 
 fn search_terms(q: &CoverQuery) -> String {

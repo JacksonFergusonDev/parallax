@@ -21,7 +21,9 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 use serde_json::Value;
 
-pub use fetch::{CachedFetcher, Fetch, FetchError, HttpFetcher};
+pub use fetch::{
+    CachedFetcher, Fetch, FetchError, HttpFetcher, USER_AGENT, check_limited, user_agent, wait_turn,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct Query {
