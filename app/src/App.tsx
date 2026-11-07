@@ -75,7 +75,12 @@ import { EditPanel } from "./components/EditPanel";
 import { usePanelBook } from "./panelBook";
 import { UpscaleReview } from "./components/UpscaleReview";
 import { useGridReflow } from "./reflow";
-import { colorColumn, generatedColor, useCoverColors } from "./coverColor";
+import {
+  colorColumn,
+  generatedColor,
+  useCoverColors,
+  useSettledSort,
+} from "./coverColor";
 import { LibraryRow } from "./components/LibraryRow";
 import {
   SortHeader,
@@ -404,9 +409,15 @@ export default function App() {
     ],
     [columns, colorOf],
   );
+  const shownSort = useSettledSort(sort, colorsLoading);
   const visible = useMemo(
-    () => applySort(defaultOrder(filterBooks(books, query)), sort, sortColumns),
-    [books, query, sort, sortColumns],
+    () =>
+      applySort(
+        defaultOrder(filterBooks(books, query)),
+        shownSort,
+        sortColumns,
+      ),
+    [books, query, shownSort, sortColumns],
   );
   const selectedBooks = useMemo(
     () => books.filter((b) => selected.has(b.id)),

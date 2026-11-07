@@ -13,7 +13,12 @@ import {
   Trash2,
   WandSparkles,
 } from "lucide-react";
-import { colorColumn, generatedColor, useCoverColors } from "../coverColor";
+import {
+  colorColumn,
+  generatedColor,
+  useCoverColors,
+  useSettledSort,
+} from "../coverColor";
 import { ShelfArt } from "./ShelfArt";
 import { GeneratedCover } from "./GeneratedCover";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -190,9 +195,10 @@ export function DeviceView({
     ],
     [colorOf, libraryByContentId],
   );
+  const shownSort = useSettledSort(sort, colorsLoading);
   const visible = useMemo(
-    () => applySort(filterDeviceBooks(inShelf, query), sort, sortColumns),
-    [inShelf, query, sort, sortColumns],
+    () => applySort(filterDeviceBooks(inShelf, query), shownSort, sortColumns),
+    [inShelf, query, shownSort, sortColumns],
   );
   // A dialog left open when the Kobo goes away shouldn't return with it.
   useEffect(() => () => onAboutChange(false), [onAboutChange]);

@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { coverColors } from "./api";
 import { coverArt } from "./coverArt";
-import type { Column, SortValue } from "./sort";
+import type { Column, Sort, SortValue } from "./sort";
 
 export type Rgb = [number, number, number];
 
@@ -139,4 +139,18 @@ export function useCoverColors(enabled: boolean, covers: CoverRef[]) {
     [revision],
   );
   return { colorOf, loading: missing.length > 0 };
+}
+
+/**
+ * The sort to show: `sort`, except that while colours are `loading` the shelf
+ * stays in the order it was already in. Sorting straight away would put every
+ * unread cover last, then reorder when the colours arrive.
+ */
+export function useSettledSort<K extends string>(
+  sort: Sort<K>,
+  loading: boolean,
+): Sort<K> {
+  const [settled, setSettled] = useState(sort);
+  if (!loading && settled !== sort) setSettled(sort);
+  return loading ? settled : sort;
 }
