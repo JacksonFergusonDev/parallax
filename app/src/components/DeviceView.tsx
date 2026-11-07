@@ -441,88 +441,101 @@ export function DeviceView({
               </button>
             ))}
           </div>
-          <div className="sidebar-foot">
-            <button
-              className="link"
-              onClick={organise}
-              disabled={locked}
-              title="Add this Kobo's books to your library, fill in series and genres, then make collections from them"
+          <div className="sidebar-foot" aria-label="Kobo tools">
+            <section
+              className="sidebar-tool-group"
+              aria-labelledby="kobo-book-tools"
             >
-              <WandSparkles />
-              Enhance and organise…
-            </button>
-            <button
-              className="link"
-              onClick={() => setDialog({ kind: "rules" })}
-              disabled={readOnly !== null}
-            >
-              <ListChecks />
-              Automatic collections…
-            </button>
-            <button
-              className="link"
-              onClick={() => setDialog({ kind: "folders" })}
-              disabled={locked}
-            >
-              <FolderTree />
-              Folders → collections…
-            </button>
-            <button
-              className="link"
-              onClick={() => {
-                const byId = new Map((books ?? []).map((b) => [b.id, b]));
-                setDialog({
-                  kind: "duplicates",
-                  groups: deviceDuplicates(device.mount).then((groups) =>
-                    deviceReviewGroups(groups, byId, (b) =>
-                      deviceCoverSrc(b, libraryByContentId.get(b.id)),
+              <h3 id="kobo-book-tools">Books & collections</h3>
+              <button
+                className="link"
+                onClick={() => addToLibrary(null)}
+                disabled={busy !== null}
+                title="Copy every book you added yourself into your library, as plain EPUBs. Store books are skipped."
+              >
+                <LibraryBig />
+                Add all to library
+              </button>
+
+              <button
+                className="link"
+                onClick={organise}
+                disabled={locked}
+                title="Add this Kobo's books to your library, fill in series and genres, then make collections from them"
+              >
+                <WandSparkles />
+                Enhance and organise…
+              </button>
+              <button
+                className="link"
+                onClick={() => setDialog({ kind: "rules" })}
+                disabled={readOnly !== null}
+              >
+                <ListChecks />
+                Automatic collections…
+              </button>
+              <button
+                className="link"
+                onClick={() => setDialog({ kind: "folders" })}
+                disabled={locked}
+              >
+                <FolderTree />
+                Folders → collections…
+              </button>
+              <button
+                className="link"
+                onClick={() => {
+                  const byId = new Map((books ?? []).map((b) => [b.id, b]));
+                  setDialog({
+                    kind: "duplicates",
+                    groups: deviceDuplicates(device.mount).then((groups) =>
+                      deviceReviewGroups(groups, byId, (b) =>
+                        deviceCoverSrc(b, libraryByContentId.get(b.id)),
+                      ),
                     ),
-                  ),
-                });
-              }}
-              disabled={busy !== null}
+                  });
+                }}
+                disabled={busy !== null}
+              >
+                <Copy />
+                Find duplicates…
+              </button>
+            </section>
+            <section
+              className="sidebar-tool-group"
+              aria-labelledby="kobo-device-tools"
             >
-              <Copy />
-              Find duplicates…
-            </button>
-            <button
-              className="link"
-              onClick={onRevert}
-              disabled={busy !== null}
-            >
-              <History />
-              Revert changes…
-            </button>
-            <button
-              className="link"
-              onClick={() => addToLibrary(null)}
-              disabled={busy !== null}
-              title="Copy every book you added yourself into your library, as plain EPUBs. Store books are skipped."
-            >
-              <LibraryBig />
-              Add all to library
-            </button>
-            <button
-              className="link"
-              onClick={tidy}
-              disabled={busy !== null}
-              title="Delete hidden ._ files macOS leaves on the Kobo"
-            >
-              <Eraser />
-              Remove macOS clutter
-            </button>
-            <button
-              className="link"
-              onClick={() => setDialog({ kind: "check" })}
-              disabled={busy !== null}
-            >
-              <ShieldCheck />
-              Check this Kobo…
-            </button>
-            <button className="link" onClick={() => onAboutChange(true)}>
-              <Info />
-              About this Kobo…
-            </button>
+              <h3 id="kobo-device-tools">Device care</h3>
+              <button
+                className="link"
+                onClick={onRevert}
+                disabled={busy !== null}
+              >
+                <History />
+                Revert changes…
+              </button>
+              <button
+                className="link"
+                onClick={tidy}
+                disabled={busy !== null}
+                title="Delete hidden ._ files macOS leaves on the Kobo"
+              >
+                <Eraser />
+                Remove macOS clutter
+              </button>
+              <button
+                className="link"
+                onClick={() => setDialog({ kind: "check" })}
+                disabled={busy !== null}
+              >
+                <ShieldCheck />
+                Check this Kobo…
+              </button>
+              <button className="link" onClick={() => onAboutChange(true)}>
+                <Info />
+                About this Kobo…
+              </button>
+            </section>
           </div>
         </nav>
 
