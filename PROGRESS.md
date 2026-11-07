@@ -61,8 +61,8 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 ## Unresolved
 
-- boko fixes not released: the link bug is in open upstream PR #37, the combo fix is ready to submit, and the MOBI contents fix isn't reported yet. Drop `vendor/boko` and the patch entry once a release has all three.
-- Amazon real-file checks (2026-11-06): 11 real books (KindleGen and calibre AZW3, HUFF/CDIC, old MOBI, Gutenberg) convert with 100% text recall against calibre and no broken in-book links beyond those in the source files. Still untested: a KindleGen combo file, real KFX and real encrypted KFX. Books with no cover record, like one test AZW3, arrive without a cover.
+- boko fixes not released: the link bug is in open upstream PR #37, the combo fix is in open upstream PR #39, and the MOBI contents fix isn't reported yet. Drop `vendor/boko` and the patch entry once a release has all three.
+- Amazon real-file checks (2026-11-06): 11 real books (KindleGen and calibre AZW3, HUFF/CDIC, old MOBI, Gutenberg) convert with 100% text recall against calibre and no broken in-book links beyond those in the source files. Still untested: a KindleGen combo file, real KFX and real encrypted KFX. Kindle Previewer 4 bundles `kindlegen`, but its tools are Intel-only and need Rosetta on this Mac. Books with no cover record, like one test AZW3, arrive without a cover.
 - Hardcover (optional series source, PLAN §7.4) not implemented: needs your API token to build and verify against the real API.
 
 ## Next
