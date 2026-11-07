@@ -1,0 +1,1 @@
+{"identifier": "main", "windows": ["main"], "permissions": ["core:default", "allow-device-restore", "allow-reader-list", "allow-reader-entry", "allow-reader-file", "allow-reader-config", "allow-reader-save-position", "allow-report", "allow-reader-books", "allow-reader-close", "allow-spike-input", "allow-spike-snapshot"]}
