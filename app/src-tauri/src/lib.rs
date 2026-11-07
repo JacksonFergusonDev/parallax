@@ -1426,4 +1426,81 @@ mod tests {
     fn first_window_stops_growing_on_large_displays() {
         assert_eq!(first_window_size(3840.0, 2160.0), (1680.0, 1080.0));
     }
+
+    #[test]
+    fn every_command_is_declared_and_granted_to_the_main_window() {
+        fn names(text: &str, open: &str, close: char) -> Vec<String> {
+            let (_, rest) = text.split_once(open).unwrap();
+            let (list, _) = rest.split_once(close).unwrap();
+            list.split(',')
+                .map(|name| name.trim().trim_matches('"').to_string())
+                .filter(|name| !name.is_empty())
+                .collect()
+        }
+
+        let handled = names(include_str!("lib.rs"), "generate_handler![\n", ']');
+        let declared = names(include_str!("../build.rs"), "&[&str] = &[\n", ']');
+        assert_eq!(handled, declared, "build.rs differs from generate_handler!");
+
+        let capability: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
+        let granted = capability["permissions"].as_array().unwrap();
+        for command in handled {
+            let permission = format!("allow-{}", command.replace('_', "-"));
+            assert!(
+                granted.iter().any(|p| p == permission.as_str()),
+                "{permission} isn't granted to the main window"
+            );
+        }
+    }
+
+    /// A stub handler, because the real commands run on the Wry runtime. The
+    /// ACL it sits behind is the app's own.
+    mod acl {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        use serde_json::Value;
+        use tauri::ipc::{CallbackFn, InvokeBody};
+        use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder};
+        use tauri::webview::InvokeRequest;
+        use tauri::{WebviewUrl, WebviewWindowBuilder};
+
+        static RAN: AtomicBool = AtomicBool::new(false);
+
+        fn call(label: &str) -> Result<tauri::ipc::InvokeResponseBody, Value> {
+            let app = mock_builder()
+                .invoke_handler(|invoke| {
+                    RAN.store(true, Ordering::SeqCst);
+                    invoke.resolver.resolve(());
+                    true
+                })
+                .build(tauri::generate_context!(test = true))
+                .unwrap();
+            let window = WebviewWindowBuilder::new(&app, label, WebviewUrl::default())
+                .build()
+                .unwrap();
+            get_ipc_response(
+                &window,
+                InvokeRequest {
+                    cmd: "device_restore".into(),
+                    callback: CallbackFn(0),
+                    error: CallbackFn(1),
+                    url: "tauri://localhost".parse().unwrap(),
+                    body: InvokeBody::default(),
+                    headers: tauri::http::HeaderMap::default(),
+                    invoke_key: INVOKE_KEY.to_string(),
+                },
+            )
+        }
+
+        #[test]
+        fn only_the_main_window_reaches_device_commands() {
+            let refused = call("reader-1").unwrap_err();
+            assert!(refused.to_string().contains("not allowed"), "{refused}");
+            assert!(!RAN.load(Ordering::SeqCst), "the command ran");
+
+            assert!(call("main").is_ok());
+            assert!(RAN.load(Ordering::SeqCst), "the command didn't run");
+        }
+    }
 }

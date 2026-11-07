@@ -29,5 +29,8 @@ erc-upscale.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
+[dev-dependencies]
+tauri = { version = "2", features = ["protocol-asset", "test"] }
+
 [lints]
 workspace = true

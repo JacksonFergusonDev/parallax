@@ -1,3 +1,76 @@
+//! The app's commands are listed here so Tauri enforces its ACL on them.
+//! Each one also needs granting in `capabilities/`; a window with no grant,
+//! like a future reader window, can't call it. `lib.rs` tests that this list
+//! matches `generate_handler!` and the main capability.
+
+const COMMANDS: &[&str] = &[
+    "show_main_window",
+    "list_devices",
+    "library_list",
+    "library_import",
+    "library_review",
+    "library_update",
+    "library_remove",
+    "library_snapshots",
+    "library_restore",
+    "device_backups",
+    "device_restore",
+    "books_on_device",
+    "device_books",
+    "remove_from_device",
+    "update_books",
+    "tidy_device",
+    "device_history",
+    "send_books",
+    "import_from_device",
+    "calibre_default_library",
+    "reading_stats",
+    "genres_plan",
+    "genres_apply",
+    "calibre_preview",
+    "calibre_import",
+    "library_duplicates",
+    "enhance_propose",
+    "kobo_health",
+    "library_check",
+    "annotations_list",
+    "annotations_export",
+    "device_report",
+    "clean_images",
+    "merge_collections",
+    "set_reading_status",
+    "enhance_apply",
+    "setting_get",
+    "setting_set",
+    "device_duplicates",
+    "dismiss_duplicates",
+    "list_collections",
+    "change_collections",
+    "folder_groups",
+    "reconcile_device",
+    "rules_list",
+    "rules_save",
+    "rules_delete",
+    "rules_preview",
+    "rules_apply",
+    "eject_device",
+    "cover_search",
+    "cover_set_url",
+    "cover_set_file",
+    "cover_reset",
+    "cover_info",
+    "cover_upscale_available",
+    "cover_upscale_tiles",
+    "cover_upscale_preview",
+    "cover_upscale_apply",
+    "cover_upscale_cancel",
+    "cover_colors",
+];
+
 fn main() {
-    tauri_build::build();
+    tauri_build::try_build(
+        tauri_build::Attributes::new()
+            .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS)),
+    )
+    .expect("failed to run the Tauri build script");
 }

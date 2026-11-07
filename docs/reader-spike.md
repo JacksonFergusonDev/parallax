@@ -2,13 +2,13 @@
 
 Run on 2026-11-07 against a minimal release build (Tauri 2.12.5, wry 0.57.1, Vite 8.3.5, macOS 27.0.1) with the `readest/foliate-js` fork at `b34a0aa`. It tests the design in [the research report](../reports/EPUB%20reader%20library%20landscape.md). Source and fixtures are in [spikes/reader](../spikes/reader/README.md).
 
-**Verdict: the design holds, so go ahead.** Both gating questions passed in real Tauri, with positive controls. Stub commands stood in for the real ones, and nothing touched a Kobo. The real app has not been changed.
+**Verdict: the design holds, so go ahead.** Both gating questions passed in real Tauri, with positive controls. Stub commands stood in for the real ones, and nothing touched a Kobo. The app's manifest was added afterwards; no reader code is in the app.
 
 ## Results
 
 | Question | Result | Evidence |
 | --- | --- | --- |
-| 1. Does the manifest enforce labels? | **Pass** | `device_restore` ran from `main` and was refused from `reader-1`. Control without a manifest: it ran from a window with no capabilities. Not covered: the real 61 commands in `main`. |
+| 1. Does the manifest enforce labels? | **Pass** | `device_restore` ran from `main` and was refused from `reader-1`. Control without a manifest: it ran from a window with no capabilities. The real app now has this manifest for all 61 commands. |
 | 2. Does CSP compose? | **Pass** | Strict: 0 scripts ran, 0 server hits, cover host and `asset:` images blocked, the book's own image loaded. Control with the CSP loosened: 16 script vectors and 40 network endpoints fired. Tauri's header alone let the cover host and `asset:` through, so the `reader.html` meta policy is needed. |
 | 3. Does the fork build and render? | **Pass** | Builds on Vite 8.3.5 with `pdf.js` aliased to a stub and `construct-style-sheets-polyfill` added. Engine styles, book CSS, images and fonts all work under the strict CSP. |
 | 4. Do engine events work? | **Pass, wheel untested** | Native click, double-click, drag selection, keyboard, highlights, click on a highlight, footnotes, internal and external links all work with book scripts blocked. |
@@ -59,7 +59,6 @@ Filtered CFIs work because foliate-js can skip `koboSpan`, `book-columns` and `b
 
 ## Not tested
 
-- The real app's 61 commands under a manifest. The manifest is the next step, and it needs a full regression check of `main`.
 - Wheel and trackpad. Synthetic wheel events never reached the page, so this needs a hand check.
 - Highlight offsets (`StartContainerPath`, `StartOffset`). The fixture and the latest backup have no `Bookmark` rows because this Kobo has no highlights.
 - KEPUBs from the device. Only local conversions were read.
