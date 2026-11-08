@@ -35,6 +35,8 @@
   },
   "bundle": {
     "active": true,
+    "copyright": "© 2026 Jackson Ferguson",
+    "category": "Productivity",
     "targets": [
       "app",
       "dmg"

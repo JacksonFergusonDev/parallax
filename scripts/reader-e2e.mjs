@@ -260,3 +260,19 @@ test("a reader on Auto shows the app's theme", async () => {
   ]);
   assert.match(readerSettings() ?? "", /"fontSize":110/, "the reader wasn't sepia");
 });
+
+test("menu commands reach the reader in front", async () => {
+  const db = new DatabaseSync(libraryFile());
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('reader', ?)").run(
+    JSON.stringify({ fontSize: 100, theme: "light" }),
+  );
+  db.close();
+  // View › Larger Text twice, then Book › Contents, which a step checks.
+  await read(ids.Long, [
+    "menu:book.larger",
+    "menu:book.larger",
+    "menu:book.contents",
+    `if (!document.getElementById("toc").hidden) document.getElementById("larger").click()`,
+  ]);
+  assert.match(readerSettings() ?? "", /"fontSize":135/, "the menu didn't reach the reader");
+});

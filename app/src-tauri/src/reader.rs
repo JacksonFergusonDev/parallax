@@ -18,7 +18,7 @@ use tauri::{
 use crate::settings::{self, AppTheme};
 use crate::{AppState, CmdResult, err};
 
-const LABEL_PREFIX: &str = "reader-";
+pub const LABEL_PREFIX: &str = "reader-";
 const SETTINGS_KEY: &str = "reader";
 
 /// Books open in reader windows, by book id.
@@ -174,6 +174,30 @@ pub async fn store_settings(
 pub fn push_app_theme(app: &AppHandle, theme: AppTheme) {
     if let Ok(json) = serde_json::to_string(&theme) {
         push(app, "appTheme", &json, None);
+    }
+}
+
+/// The reader commands the menu sends, as the reader knows them.
+pub(crate) const COMMANDS: [&str; 8] = [
+    "edit.find",
+    "book.larger",
+    "book.smaller",
+    "book.contents",
+    "book.notes",
+    "book.listen",
+    "book.back",
+    "book.forward",
+];
+
+/// Runs a menu command in the reader `label`. Only known commands are sent.
+pub fn push_command(app: &AppHandle, label: &str, command: &str) {
+    if !COMMANDS.contains(&command) || !label.starts_with(LABEL_PREFIX) {
+        return;
+    }
+    if let Some(window) = app.get_webview_window(label) {
+        let _ = window.eval(format!(
+            "window.dispatchEvent(new CustomEvent('parallax-command', {{ detail: '{command}' }}))"
+        ));
     }
 }
 

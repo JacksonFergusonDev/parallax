@@ -34,6 +34,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 #[cfg(feature = "e2e")]
 mod e2e;
+mod menu;
 mod reader;
 mod settings;
 
@@ -1346,8 +1347,9 @@ pub fn run() {
             });
             app.manage(reader::OpenBooks::default());
             settings::apply_theme(app.handle(), settings::AppTheme::saved(&app.state()));
-            app.set_menu(settings::menu(app.handle())?)?;
-            app.on_menu_event(settings::on_menu_event);
+            app.manage(menu::MenuState::default());
+            app.set_menu(menu::build(app.handle())?)?;
+            app.on_menu_event(menu::on_event);
             #[cfg(feature = "e2e")]
             e2e::start(app);
             size_first_window(app)?;
@@ -1400,6 +1402,7 @@ pub fn run() {
             settings::show_folder,
             settings::reader_settings_get,
             settings::reader_settings_set,
+            menu::menu_state,
             device_duplicates,
             dismiss_duplicates,
             list_collections,
@@ -1432,8 +1435,19 @@ pub fn run() {
             reader::reader_save_highlight,
             reader::reader_delete_highlight
         ])
-        .run(context)
-        .expect("error while running tauri application");
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::Focused(true) => menu::focused(window.app_handle(), window.label()),
+            tauri::WindowEvent::Destroyed => menu::closed(window.app_handle(), window.label()),
+            _ => {}
+        })
+        .build(context)
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // The Dock icon brings the library back when only readers are open.
+            if let tauri::RunEvent::Reopen { .. } = event {
+                let _ = menu::show_library(app);
+            }
+        });
 }
 
 #[cfg(test)]

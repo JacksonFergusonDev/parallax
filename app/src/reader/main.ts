@@ -22,8 +22,10 @@ import {
   bookLoader,
   deleteHighlight,
   highlights as loadHighlights,
+  onMenuCommand,
   onSettingsPush,
   openedBook,
+  type MenuCommand,
   saveHighlight,
   savePosition,
   saveSettings,
@@ -903,6 +905,20 @@ async function read(opened: OpenedBook) {
   marks.current = highlights;
 
   window.addEventListener("keydown", onKey);
+  // Menu bar commands, sent by the app to the reader in front.
+  onMenuCommand((command) => {
+    const run: Record<MenuCommand, () => void> = {
+      "edit.find": finder.find,
+      "book.larger": () => appearance.resize(1),
+      "book.smaller": () => appearance.resize(-1),
+      "book.contents": () => panels.open("contents"),
+      "book.notes": () => panels.open("notes"),
+      "book.listen": () => element("listen").click(),
+      "book.back": footer.back,
+      "book.forward": footer.forward,
+    };
+    run[command]?.();
+  });
   window.addEventListener("wheel", onWheel, { passive: true });
   element("prev").addEventListener("click", () =>
     turnWith(() => view.goLeft()),

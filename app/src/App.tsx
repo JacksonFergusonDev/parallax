@@ -111,6 +111,7 @@ import {
 } from "./importReview";
 import { usePresentation } from "./presentation";
 import { rememberView, usePreferences, type View } from "./preferences";
+import { sortCommands, useMenuCommands } from "./menu";
 import "./styles.css";
 
 const DEVICE_POLL_MS = 2000;
@@ -710,6 +711,92 @@ export default function App() {
     }
   };
 
+  const findDuplicates = () => {
+    const byId = new Map(books.map((b) => [b.id, b]));
+    setDuplicates(
+      libraryDuplicates().then((groups) =>
+        libraryReviewGroups(groups, byId, (id) => onDevice.has(id), coverSrc),
+      ),
+    );
+  };
+  const enhance = () =>
+    setEnhancing(selected.size ? [...selected] : visible.map((b) => b.id));
+
+  const canSend =
+    !!device && device.read_only === null && toSend.length > 0 && busy === null;
+  const inLibrary = activeView === "library";
+  /** Runs `run` in the library view, where its results show. */
+  const fromLibrary = (run: () => void) => () => {
+    setView("library");
+    run();
+  };
+  useMenuCommands({
+    "file.add": { run: () => void chooseFiles() },
+    "file.calibre": { run: () => setFromCalibre(true) },
+    "edit.find": {
+      run: () => {
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      },
+    },
+    "view.library": {
+      run: () => setView("library"),
+      checked: activeView === "library",
+    },
+    "view.device": {
+      run: () => setView("device"),
+      enabled: device !== null,
+      checked: activeView === "device",
+    },
+    "view.reading": {
+      run: () => setView("reading"),
+      checked: activeView === "reading",
+    },
+    ...(inLibrary && {
+      "view.grid": { run: () => setMode("grid"), checked: mode === "grid" },
+      "view.list": { run: () => setMode("list"), checked: mode === "list" },
+      ...sortCommands(sort, setSort, LIBRARY_KEYS),
+    }),
+    "library.enhance": {
+      run: fromLibrary(enhance),
+      enabled: books.length > 0,
+    },
+    "library.duplicates": {
+      run: fromLibrary(findDuplicates),
+      enabled: books.length > 1,
+    },
+    "library.check": {
+      run: () => setChecking(true),
+      enabled: books.length > 0,
+    },
+    "library.tidy": { run: () => setTidying(true), enabled: books.length > 0 },
+    "library.remove": {
+      run: () => void remove(),
+      enabled: inLibrary && selected.size > 0 && busy === null,
+    },
+    "library.revert": { run: () => setReverting("library") },
+    "kobo.send": {
+      run: () =>
+        void transfer(
+          "sending",
+          toSend.map((b) => b.id),
+        ),
+      enabled: canSend,
+    },
+    "kobo.update": {
+      run: () =>
+        void transfer(
+          "updating",
+          toUpdate.map((b) => b.id),
+        ),
+      enabled: !!device && toUpdate.length > 0 && busy === null,
+    },
+    "kobo.eject": {
+      run: () => void eject(),
+      enabled: device !== null && busy === null,
+    },
+  });
+
   const sentThisSession = Object.values(statuses).some(
     (s) => s.stage === "sent",
   );
@@ -802,6 +889,8 @@ export default function App() {
             about={aboutOpen}
             onAboutChange={setAboutOpen}
             onRevert={() => setReverting("kobo")}
+            active={activeView === "device"}
+            onShow={() => setView("device")}
             onChanged={() => {
               refreshOnDevice(device);
               listCollections(device.mount)
@@ -844,19 +933,7 @@ export default function App() {
                     items={[
                       {
                         label: "Find duplicates…",
-                        onPick: () => {
-                          const byId = new Map(books.map((b) => [b.id, b]));
-                          setDuplicates(
-                            libraryDuplicates().then((groups) =>
-                              libraryReviewGroups(
-                                groups,
-                                byId,
-                                (id) => onDevice.has(id),
-                                coverSrc,
-                              ),
-                            ),
-                          );
-                        },
+                        onPick: findDuplicates,
                       },
                       {
                         label: "Check library…",
@@ -875,12 +952,7 @@ export default function App() {
                         label: selected.size
                           ? `Find series & genres for ${selected.size}…`
                           : "Find series & genres…",
-                        onPick: () =>
-                          setEnhancing(
-                            selected.size
-                              ? [...selected]
-                              : visible.map((b) => b.id),
-                          ),
+                        onPick: enhance,
                       },
                     ]}
                   />

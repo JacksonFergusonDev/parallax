@@ -64,6 +64,7 @@ import { EnhanceReview } from "./EnhanceReview";
 import { CollectionMenu } from "./CollectionMenu";
 import { DeviceCard } from "./DeviceCard";
 import { FolderImport } from "./FolderImport";
+import { sortCommands, useMenuCommands } from "../menu";
 import { NameDialog } from "./NameDialog";
 import { RulesDialog } from "./RulesDialog";
 import {
@@ -93,6 +94,10 @@ interface Props {
   onAboutChange: (open: boolean) => void;
   /** Opens Revert changes for this Kobo. */
   onRevert: () => void;
+  /** This is the view on screen, so View menu commands are its own. */
+  active: boolean;
+  /** Brings this view on screen, for a Kobo menu command. */
+  onShow: () => void;
 }
 
 type Dialog =
@@ -118,6 +123,8 @@ export function DeviceView({
   onRevert,
   about,
   onAboutChange,
+  active,
+  onShow,
 }: Props) {
   const [books, setBooks] = useState<DeviceBook[] | null>(null);
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -400,6 +407,43 @@ export function DeviceView({
     }
   };
 
+  const findDuplicates = () => {
+    const byId = new Map((books ?? []).map((b) => [b.id, b]));
+    setDialog({
+      kind: "duplicates",
+      groups: deviceDuplicates(device.mount).then((groups) =>
+        deviceReviewGroups(groups, byId, (b) =>
+          deviceCoverSrc(b, libraryByContentId.get(b.id)),
+        ),
+      ),
+    });
+  };
+
+  /** A Kobo menu command: shows this view, then does what its button does. */
+  const shown = (run: () => void, enabled: boolean) => ({
+    run: () => {
+      onShow();
+      run();
+    },
+    enabled,
+  });
+  useMenuCommands({
+    "kobo.addAll": shown(() => void addToLibrary(null), busy === null),
+    "kobo.organise": shown(() => void organise(), !locked),
+    "kobo.rules": shown(() => setDialog({ kind: "rules" }), readOnly === null),
+    "kobo.folders": shown(() => setDialog({ kind: "folders" }), !locked),
+    "kobo.duplicates": shown(findDuplicates, busy === null),
+    "kobo.revert": shown(onRevert, busy === null),
+    "kobo.tidy": shown(() => void tidy(), busy === null),
+    "kobo.check": shown(() => setDialog({ kind: "check" }), busy === null),
+    "kobo.about": shown(() => onAboutChange(true), true),
+    ...(active && {
+      "view.grid": { run: () => setMode("grid"), checked: mode === "grid" },
+      "view.list": { run: () => setMode("list"), checked: mode === "list" },
+      ...sortCommands(sort, setSort, DEVICE_KEYS),
+    }),
+  });
+
   return (
     <>
       <div className="body">
@@ -484,17 +528,7 @@ export function DeviceView({
               </button>
               <button
                 className="link"
-                onClick={() => {
-                  const byId = new Map((books ?? []).map((b) => [b.id, b]));
-                  setDialog({
-                    kind: "duplicates",
-                    groups: deviceDuplicates(device.mount).then((groups) =>
-                      deviceReviewGroups(groups, byId, (b) =>
-                        deviceCoverSrc(b, libraryByContentId.get(b.id)),
-                      ),
-                    ),
-                  });
-                }}
+                onClick={findDuplicates}
                 disabled={busy !== null}
               >
                 <Copy />

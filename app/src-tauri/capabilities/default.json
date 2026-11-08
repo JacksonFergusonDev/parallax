@@ -57,6 +57,7 @@
     "allow-show-folder",
     "allow-reader-settings-get",
     "allow-reader-settings-set",
+    "allow-menu-state",
     "allow-device-duplicates",
     "allow-dismiss-duplicates",
     "allow-list-collections",

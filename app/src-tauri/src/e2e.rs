@@ -4,7 +4,8 @@
 //!   main window writes to a connected Kobo by itself, which a test must not.
 //! - `ERC_E2E_SETTINGS=1`: open the Settings window instead, also alone.
 //! - `ERC_E2E_STEPS`: scripts to run in that window, separated by `@@`, two
-//!   seconds apart. They stand in for a person turning pages.
+//!   seconds apart. They stand in for a person turning pages. A step
+//!   `menu:<id>` chooses that menu command instead.
 //! - `ERC_E2E_SECS`: how long to wait after the last step before quitting.
 //! - `ERC_E2E_LOOSE=1`: serve the reader page without its CSP and with a loose
 //!   one in its place, so the test can show its detector catches scripts.
@@ -58,7 +59,10 @@ pub fn start(app: &App) {
         tauri::async_runtime::spawn_blocking(move || {
             sleep(Duration::from_secs(4));
             for step in steps.split("@@").filter(|s| !s.is_empty()) {
-                if let Some(window) = app.get_webview_window(&label) {
+                if let Some(id) = step.strip_prefix("menu:") {
+                    crate::menu::run(&app, id);
+                    eprintln!("e2e: menu {id}");
+                } else if let Some(window) = app.get_webview_window(&label) {
                     eprintln!("e2e: step {:?}", window.eval(step).is_ok());
                 }
                 sleep(Duration::from_secs(2));

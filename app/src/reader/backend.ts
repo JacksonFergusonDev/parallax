@@ -88,6 +88,24 @@ export interface SettingsPush {
   appTheme?: string;
 }
 
+/** The menu bar commands a reader runs; see `COMMANDS` in reader.rs. */
+export type MenuCommand =
+  | "edit.find"
+  | "book.larger"
+  | "book.smaller"
+  | "book.contents"
+  | "book.notes"
+  | "book.listen"
+  | "book.back"
+  | "book.forward";
+
+/** Calls `handler` with each menu command the app sends this window. */
+export function onMenuCommand(handler: (command: MenuCommand) => void) {
+  window.addEventListener("parallax-command", (event) =>
+    handler((event as CustomEvent<MenuCommand>).detail),
+  );
+}
+
 /** Calls `handler` with each change the app sends this window. */
 export function onSettingsPush(handler: (push: SettingsPush) => void) {
   window.addEventListener("parallax-settings", (event) =>

@@ -7,7 +7,6 @@ use std::path::PathBuf;
 
 use erc_device_kobo::{BackupPolicy, backups_size, delete_all_backups};
 use serde::{Deserialize, Serialize};
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::{AppHandle, Emitter, EventTarget, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 use crate::reader::{self, ReaderSettings};
@@ -32,7 +31,6 @@ const CHANGED: &str = "setting-changed";
 /// The windows that may hear about settings: never a reader.
 const TRUSTED: [&str; 2] = ["main", SETTINGS_LABEL];
 const SETTINGS_LABEL: &str = "settings";
-const MENU_ID: &str = "settings";
 
 enum Allowed {
     /// Free text up to this many characters.
@@ -313,26 +311,6 @@ pub fn open_window(app: &AppHandle) -> tauri::Result<()> {
         .visible(false)
         .build()?;
     Ok(())
-}
-
-/// The standard menus, with Settings… (⌘,) after About in the app menu.
-pub fn menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
-    let menu = Menu::default(app)?;
-    let item = MenuItem::with_id(app, MENU_ID, "Settings…", true, Some("CmdOrCtrl+,"))?;
-    if let Some(first) = menu.items()?.first()
-        && let Some(app_menu) = first.as_submenu()
-    {
-        // After About and its separator.
-        app_menu.insert_items(&[&item, &PredefinedMenuItem::separator(app)?], 2)?;
-    }
-    Ok(menu)
-}
-
-#[allow(clippy::needless_pass_by_value)]
-pub fn on_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
-    if event.id() == MENU_ID {
-        let _ = open_window(app);
-    }
 }
 
 /// Whether `key` is set to `value`; an unreadable setting is its default.
