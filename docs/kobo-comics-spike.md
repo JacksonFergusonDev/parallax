@@ -2,7 +2,7 @@
 
 Question: is it worth converting manga to KEPUB for the Kobo, and should pages be processed for the screen, or is copying the CBZ as it is already the best option? Source is in [spikes/kobo-comics](../spikes/kobo-comics/README.md). It is outside the Cargo workspace and isn't part of the product.
 
-**Status: the files are made and checked on the desktop. The device comparison hasn't been done yet.** Nothing has been copied to a Kobo.
+**Verdict: processing for the screen is the clear win, for page-turn speed rather than picture quality.** The user compared all four on their Libra 2 on 2026-11-08 (see Device results).
 
 ## The four versions
 
@@ -38,6 +38,21 @@ Measured on this Mac (release build, 4.3 cores busy). The whole run, three volum
 - **Lossless repackaging works.** B is the original bytes in a different zip, so its image quality can't be worse than A's. The quality loss you saw with calibre came from its image processing, not from KEPUB.
 - **Processing is fast enough to do when sending.** About 8 s per 470 MB volume means converting at send time, with no permanent cache, is realistic.
 - **Processed pages looked the same on the desktop.** A 400 px crop of a page at device size looked the same as macOS's own downscale of the original. Spreads split in the right order: the title half of the opening spread comes first. Whether 16 levels look right on e-ink is for the device test.
+
+## Device results
+
+The user's Libra 2 (firmware 4.38), 2026-11-08:
+
+- **Quality:** the user could barely tell the four apart. The processed versions may look slightly better, and none looked noticeably worse.
+- **Page turns:** the original CBZ (A) and the lossless KEPUB (B) both take about 2 seconds a page. The processed versions (C and D) turn almost immediately. So the full-size 1810 × 2560 JPEGs, not the container, make the Kobo slow.
+- **Spreads:** A and B show the opening spread whole, on one screen. C and D show it as two separate pages, because processing splits it.
+- **Not reported:** titles, series grouping, right-to-left page turns, ComicInfo in C, progress and stats. Without those, the case for KEPUB over CBZ is still open.
+
+What it means:
+
+- **Process pages by default:** greyscale, sized to the model's screen, 16 levels. This alone fixes the slow page turns, and it saves about 75% of the space on the device.
+- **Spreads need a choice:** split them (fast, readable, but the whole picture is never seen at once), keep them whole sized to the screen, or show both (the whole spread, then its halves, as KCC can). This should be a setting.
+- **Container:** still to decide, from the unreported metadata and RTL checks.
 
 ## Device checklist
 
