@@ -171,5 +171,32 @@ test("searching for a line goes to it", async () => {
   await read(ids.Long, searchFor("Paragraph 4.7."));
   const found = position(ids.Long);
   assert.equal(found?.href, "c3.xhtml", "search didn't go to chapter 4");
-  assert.match(found.quote ?? "", /Paragraph 4\.7\./);
+  // The saved place is the page shown, as a range of the body's children.
+  // Paragraph 7 is child 8 after the heading, so step 16 in a CFI.
+  const [, from, to] = found.cfi.match(/!\/4,\/(\d+)[^,]*,\/(\d+)/) ?? [];
+  assert.ok(Number(from) <= 16 && 16 <= Number(to), `page ${found.cfi} doesn't show the line`);
+});
+
+test("a highlight with a note is kept for its book", async () => {
+  const page = `${view}.renderer.getContents()[0].doc`;
+  await read(ids.Long, [
+    // Select the first paragraph the way a mouse would, and let go.
+    `const d = ${page}; const r = d.createRange();` +
+      `r.selectNodeContents(d.querySelector('p'));` +
+      `d.getSelection().removeAllRanges(); d.getSelection().addRange(r);` +
+      `d.dispatchEvent(new PointerEvent('pointerup'))`,
+    `document.getElementById('marker-note').click()`,
+    `document.getElementById('note').value = 'Check this';` +
+      `document.getElementById('note-form').requestSubmit()`,
+  ]);
+  const saved = query("SELECT * FROM reader_highlights WHERE book_id = ?", ids.Long);
+  assert.equal(saved.length, 1, "no highlight was saved");
+  assert.match(saved[0].text, /^Paragraph \d+\.\d+\./);
+  assert.equal(saved[0].note, "Check this");
+  assert.equal(saved[0].color, "yellow");
+  assert.match(saved[0].cfi, /^epubcfi\(/);
+  assert.equal(
+    query("SELECT id FROM reader_highlights WHERE book_id = ?", ids.Hostile).length,
+    0,
+  );
 });

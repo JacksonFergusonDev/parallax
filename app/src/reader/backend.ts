@@ -5,9 +5,48 @@ import type { BookLoader } from "foliate-js/epub.js";
 
 export type Theme = "auto" | "light" | "sepia" | "dark";
 
+export type Flow = "paginated" | "scrolled";
+export type Measure = "narrow" | "medium" | "wide";
+export type Spread = "auto" | "single";
+export type Spacing = "book" | "relaxed" | "loose";
+
 export interface Settings {
   fontSize: number;
   theme: Theme;
+  flow: Flow;
+  /** How long a line may get. */
+  width: Measure;
+  margins: Measure;
+  spread: Spread;
+  spacing: Spacing;
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  fontSize: 100,
+  theme: "auto",
+  flow: "paginated",
+  width: "medium",
+  margins: "medium",
+  spread: "auto",
+  spacing: "book",
+};
+
+export type HighlightColor = "yellow" | "green" | "blue" | "pink";
+
+/** A highlight as the reader makes it. */
+export interface HighlightDraft {
+  cfi: string;
+  href: string;
+  fraction: number;
+  text: string;
+  note: string | null;
+  color: HighlightColor;
+}
+
+export interface Highlight extends HighlightDraft {
+  id: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Position {
@@ -24,13 +63,54 @@ export interface OpenedBook {
   settings: Settings;
 }
 
-export const openedBook = () => invoke<OpenedBook>("reader_book");
+export const openedBook = async (): Promise<OpenedBook> => {
+  const book = await invoke<OpenedBook>("reader_book");
+  return { ...book, settings: { ...DEFAULT_SETTINGS, ...book.settings } };
+};
 
 export const savePosition = (position: Position) =>
   invoke<void>("reader_save_position", { position });
 
 export const saveSettings = (settings: Settings) =>
   invoke<void>("reader_save_settings", { settings });
+
+interface StoredHighlight extends Omit<HighlightDraft, "color"> {
+  id: number;
+  color: string;
+  created_at: string;
+  updated_at: string;
+}
+
+const COLORS: HighlightColor[] = ["yellow", "green", "blue", "pink"];
+
+const fromStored = ({
+  created_at,
+  updated_at,
+  color,
+  ...rest
+}: StoredHighlight): Highlight => ({
+  ...rest,
+  color: COLORS.includes(color as HighlightColor)
+    ? (color as HighlightColor)
+    : "yellow",
+  createdAt: created_at,
+  updatedAt: updated_at,
+});
+
+export const highlights = async () =>
+  (await invoke<StoredHighlight[]>("reader_highlights")).map(fromStored);
+
+/** Adds `highlight`, or with `id` changes that one. */
+export const saveHighlight = async (
+  highlight: HighlightDraft,
+  id: number | null = null,
+) =>
+  fromStored(
+    await invoke<StoredHighlight>("reader_save_highlight", { id, highlight }),
+  );
+
+export const deleteHighlight = (id: number) =>
+  invoke<void>("reader_delete_highlight", { id });
 
 /** Feeds the engine one file at a time, as it asks for them. */
 export function bookLoader(entries: OpenedBook["entries"]): BookLoader {

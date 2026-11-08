@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use erc_epub::{BookFile, Entry, has_drm};
-use erc_library::ReaderPosition;
+use erc_library::{HighlightDraft, ReaderHighlight, ReaderPosition};
 use serde::{Deserialize, Serialize};
 use tauri::ipc::Response;
 use tauri::utils::config::BackgroundThrottlingPolicy;
@@ -38,12 +38,56 @@ enum Theme {
     Dark,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum Flow {
+    #[default]
+    Paginated,
+    Scrolled,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum Measure {
+    Narrow,
+    #[default]
+    Medium,
+    Wide,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum Spread {
+    /// Two pages side by side when the window is wide enough.
+    #[default]
+    Auto,
+    Single,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum Spacing {
+    /// The publisher's line height.
+    #[default]
+    Book,
+    Relaxed,
+    Loose,
+}
+
+/// Each field falls back to its default, so settings saved by an older build
+/// still load. Unknown values are refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct ReaderSettings {
     /// Percent of the book's own text size.
     font_size: u16,
     theme: Theme,
+    flow: Flow,
+    /// How long a line may get.
+    width: Measure,
+    margins: Measure,
+    spread: Spread,
+    spacing: Spacing,
 }
 
 impl Default for ReaderSettings {
@@ -51,7 +95,74 @@ impl Default for ReaderSettings {
         Self {
             font_size: 100,
             theme: Theme::Auto,
+            flow: Flow::default(),
+            width: Measure::default(),
+            margins: Measure::default(),
+            spread: Spread::default(),
+            spacing: Spacing::default(),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum HighlightColor {
+    Yellow,
+    Green,
+    Blue,
+    Pink,
+}
+
+impl HighlightColor {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Yellow => "yellow",
+            Self::Green => "green",
+            Self::Blue => "blue",
+            Self::Pink => "pink",
+        }
+    }
+}
+
+/// A highlight as the reader sends it: typed and bounded, as it comes from
+/// the same window as the book.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct HighlightInput {
+    cfi: String,
+    href: String,
+    fraction: f64,
+    text: String,
+    note: Option<String>,
+    color: HighlightColor,
+}
+
+const MAX_CFI: usize = 4_096;
+const MAX_HIGHLIGHT_TEXT: usize = 20_000;
+const MAX_NOTE: usize = 50_000;
+
+impl HighlightInput {
+    fn draft(self) -> CmdResult<HighlightDraft> {
+        let too_long = self.cfi.len() > MAX_CFI
+            || self.href.len() > MAX_CFI
+            || self.text.chars().count() > MAX_HIGHLIGHT_TEXT
+            || self
+                .note
+                .as_ref()
+                .is_some_and(|n| n.chars().count() > MAX_NOTE);
+        if too_long {
+            return Err("that highlight is too long to keep".to_owned());
+        }
+        if !self.cfi.starts_with("epubcfi(") || !self.fraction.is_finite() {
+            return Err("that isn't a place in the book".to_owned());
+        }
+        Ok(HighlightDraft {
+            cfi: self.cfi,
+            href: self.href,
+            fraction: self.fraction,
+            text: self.text,
+            note: self.note,
+            color: self.color.name().to_owned(),
+        })
     }
 }
 
@@ -239,6 +350,66 @@ pub async fn reader_save_settings(
     .map_err(err)?
 }
 
+/// The window's book's highlights, in reading order.
+#[tauri::command]
+pub async fn reader_highlights(
+    webview: Webview,
+    state: State<'_, AppState>,
+) -> CmdResult<Vec<ReaderHighlight>> {
+    let id = book_id(webview.label())?;
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        library
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .reader_highlights(id)
+            .map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Adds a highlight, or with `id` changes one, in the window's book only.
+#[tauri::command]
+pub async fn reader_save_highlight(
+    webview: Webview,
+    state: State<'_, AppState>,
+    id: Option<i64>,
+    highlight: HighlightInput,
+) -> CmdResult<ReaderHighlight> {
+    let book = book_id(webview.label())?;
+    let draft = highlight.draft()?;
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        library
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .save_reader_highlight(book, id, &draft)
+            .map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
+pub async fn reader_delete_highlight(
+    webview: Webview,
+    state: State<'_, AppState>,
+    id: i64,
+) -> CmdResult<()> {
+    let book = book_id(webview.label())?;
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        library
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .delete_reader_highlight(book, id)
+            .map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -273,5 +444,34 @@ mod tests {
             serde_json::from_str::<ReaderSettings>(r#"{"fontSize":120,"theme":"dark"}"#).is_ok()
         );
         assert!(serde_json::from_str::<ReaderSettings>(r#"{"fontSize":120,"theme":"x"}"#).is_err());
+        assert!(serde_json::from_str::<ReaderSettings>(r#"{"flow":"sideways"}"#).is_err());
+    }
+
+    #[test]
+    fn settings_from_an_older_build_still_load() {
+        let old: ReaderSettings =
+            serde_json::from_str(r#"{"fontSize":120,"theme":"dark"}"#).unwrap();
+        assert_eq!(old.font_size, 120);
+        assert_eq!(old.flow, Flow::Paginated);
+        assert_eq!(old.width, Measure::Medium);
+        let all = r#"{"fontSize":90,"theme":"sepia","flow":"scrolled","width":"wide","margins":"narrow","spread":"single","spacing":"loose"}"#;
+        let new: ReaderSettings = serde_json::from_str(all).unwrap();
+        assert_eq!(serde_json::to_string(&new).unwrap(), all);
+    }
+
+    #[test]
+    fn highlights_are_checked_before_they_are_kept() {
+        let input = |json: &str| serde_json::from_str::<HighlightInput>(json);
+        let good = r#"{"cfi":"epubcfi(/6/2!/4/2,/1:0,/1:5)","href":"c1.xhtml","fraction":0.2,"text":"Hello","note":null,"color":"green"}"#;
+        assert_eq!(input(good).unwrap().draft().unwrap().color, "green");
+        assert!(input(&good.replace("green", "red")).is_err());
+        assert!(
+            input(&good.replace("epubcfi(", "javascript:("))
+                .unwrap()
+                .draft()
+                .is_err()
+        );
+        let huge = good.replace("Hello", &"x".repeat(MAX_HIGHLIGHT_TEXT + 1));
+        assert!(input(&huge).unwrap().draft().is_err());
     }
 }

@@ -11,7 +11,7 @@ Licensed under GPLv3. Device logic is ported from [calibre](https://calibre-eboo
 1. Drop EPUB files or DRM-free Kindle books (AZW3, MOBI, AZW, PRC, KFX, converted to EPUB) onto the window (or **Add books…**, ⌘O). Edit title, authors, series, tags and cover in the side panel. Your original files are never modified.
 2. Connect your Kobo by USB and tap **Connect** on its screen.
 3. Select books and **Send to Kobo**, optionally straight into a collection. Then **Eject Kobo** and unplug it so it imports them.
-4. **Read** in the side panel opens a book in its own window and remembers where you stopped. **Search** (⌘F) finds a word or line in it. Books are shown with their scripts blocked and no internet access.
+4. **Read** in the side panel opens a book in its own window and remembers where you stopped. **Search** (⌘F) finds a word or line in it. Select text to highlight it or add a note, listed under the pen button with **Copy all**; footnotes open over the page; **Back** (⌘[) returns after a jump; the speaker button reads aloud; **Aa** sets theme, size, pages or scrolling, line length, margins and spacing. Books are shown with their scripts blocked and no internet access.
 5. The **On Kobo** tab (⌘2) shows what's on the device, with reading progress, and lets you manage collections, remove books, and turn folders into collections.
 
 Every change to the Kobo's database is backed up first, compressed, to `~/Library/Application Support/dev.erc.companion/device-backups/`. Removed books are held on your Mac for 30 days, and the library is saved before removals and bulk changes. **Revert changes…**, in both the Library and On Kobo tabs, lists these points by time and goes back to one. How things are now is saved first, so a revert can be undone too.

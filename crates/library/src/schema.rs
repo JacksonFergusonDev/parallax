@@ -115,6 +115,21 @@ const MIGRATIONS: &[&str] = &[
         quote      TEXT,
         updated_at TEXT NOT NULL
     );",
+    // 14: highlights and notes made in the in-app reader. Kept apart from
+    // `annotations`, which mirrors what devices report.
+    "CREATE TABLE reader_highlights (
+        id         INTEGER PRIMARY KEY,
+        book_id    INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+        cfi        TEXT NOT NULL,
+        href       TEXT NOT NULL,
+        fraction   REAL NOT NULL,
+        text       TEXT NOT NULL,
+        note       TEXT,
+        color      TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    CREATE INDEX reader_highlights_book ON reader_highlights(book_id, fraction);",
 ];
 
 /// The schema version this build creates.

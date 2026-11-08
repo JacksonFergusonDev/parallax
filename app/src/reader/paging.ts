@@ -42,7 +42,9 @@ export type Key =
   | "close"
   | "find"
   | "findNext"
-  | "findPrevious";
+  | "findPrevious"
+  | "back"
+  | "forward";
 
 interface KeyPress {
   key: string;
@@ -61,6 +63,8 @@ export function keyAction(event: KeyPress): Key | null {
     if (event.key === "-") return "smaller";
     if (event.key === "f") return "find";
     if (event.key === "g") return event.shiftKey ? "findPrevious" : "findNext";
+    if (event.key === "[" && !event.typing) return "back";
+    if (event.key === "]" && !event.typing) return "forward";
     return null;
   }
   if (event.typing) return event.key === "Escape" ? "close" : null;

@@ -56,6 +56,48 @@ pub struct ReaderPosition {
     pub quote: Option<String>,
 }
 
+/// A highlight, with an optional note, made in the in-app reader.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReaderHighlight {
+    pub id: i64,
+    pub cfi: String,
+    /// The section, as a path inside the EPUB.
+    pub href: String,
+    /// How far through the book, from 0 to 1, for reading order.
+    pub fraction: f64,
+    /// The highlighted text.
+    pub text: String,
+    pub note: Option<String>,
+    pub color: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// What the reader sends to make or change a highlight.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HighlightDraft {
+    pub cfi: String,
+    pub href: String,
+    pub fraction: f64,
+    pub text: String,
+    pub note: Option<String>,
+    pub color: String,
+}
+
+fn highlight_row(r: &rusqlite::Row) -> rusqlite::Result<ReaderHighlight> {
+    Ok(ReaderHighlight {
+        id: r.get(0)?,
+        cfi: r.get(1)?,
+        href: r.get(2)?,
+        fraction: r.get(3)?,
+        text: r.get(4)?,
+        note: r.get(5)?,
+        color: r.get(6)?,
+        created_at: r.get(7)?,
+        updated_at: r.get(8)?,
+    })
+}
+
 impl Library {
     /// Ids of books with a copy on any device.
     pub fn books_on_any_device(&self) -> Result<HashSet<i64>> {
@@ -130,6 +172,84 @@ impl Library {
                 position.quote,
                 now(),
             ],
+        )?;
+        Ok(())
+    }
+
+    /// A book's reader highlights, in reading order.
+    pub fn reader_highlights(&self, book_id: i64) -> Result<Vec<ReaderHighlight>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, cfi, href, fraction, text, note, color, created_at, updated_at
+             FROM reader_highlights WHERE book_id = ?1 ORDER BY fraction, id",
+        )?;
+        let rows = stmt.query_map([book_id], highlight_row)?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// Adds a highlight to `book_id`, or with `id` changes one of its own.
+    /// An empty note is stored as none.
+    pub fn save_reader_highlight(
+        &self,
+        book_id: i64,
+        id: Option<i64>,
+        draft: &HighlightDraft,
+    ) -> Result<ReaderHighlight> {
+        let note = draft.note.as_deref().filter(|n| !n.trim().is_empty());
+        let fraction = draft.fraction.clamp(0.0, 1.0);
+        let now = now();
+        let id = if let Some(id) = id {
+            let changed = self.conn.execute(
+                "UPDATE reader_highlights
+                     SET cfi = ?3, href = ?4, fraction = ?5, text = ?6, note = ?7,
+                         color = ?8, updated_at = ?9
+                     WHERE id = ?1 AND book_id = ?2",
+                params![
+                    id,
+                    book_id,
+                    draft.cfi,
+                    draft.href,
+                    fraction,
+                    draft.text,
+                    note,
+                    draft.color,
+                    now
+                ],
+            )?;
+            if changed == 0 {
+                return Err(crate::Error::NotFound(id));
+            }
+            id
+        } else {
+            self.conn.execute(
+                "INSERT INTO reader_highlights
+                         (book_id, cfi, href, fraction, text, note, color, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+                params![
+                    book_id,
+                    draft.cfi,
+                    draft.href,
+                    fraction,
+                    draft.text,
+                    note,
+                    draft.color,
+                    now
+                ],
+            )?;
+            self.conn.last_insert_rowid()
+        };
+        Ok(self.conn.query_row(
+            "SELECT id, cfi, href, fraction, text, note, color, created_at, updated_at
+             FROM reader_highlights WHERE id = ?1",
+            [id],
+            highlight_row,
+        )?)
+    }
+
+    /// Removes one of `book_id`'s highlights. Removing one already gone is fine.
+    pub fn delete_reader_highlight(&self, book_id: i64, id: i64) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM reader_highlights WHERE id = ?1 AND book_id = ?2",
+            params![id, book_id],
         )?;
         Ok(())
     }

@@ -32,6 +32,21 @@ export function stepFontSize(size: number, direction: 1 | -1): number {
   return FONT_SIZES[Math.min(Math.max(next, 0), FONT_SIZES.length - 1)];
 }
 
+const LINE_WIDTHS = { narrow: "520px", medium: "640px", wide: "820px" };
+/** The space beside the text, as a share of the page. */
+const MARGINS = { narrow: "3%", medium: "6%", wide: "10%" };
+const LINE_HEIGHTS = { book: null, relaxed: 1.55, loose: 1.85 };
+
+/** The engine's page layout, as attributes on its renderer. */
+export function layoutAttributes(settings: Settings): Record<string, string> {
+  return {
+    flow: settings.flow,
+    "max-inline-size": LINE_WIDTHS[settings.width],
+    gap: MARGINS[settings.margins],
+    "max-column-count": settings.spread === "single" ? "1" : "2",
+  };
+}
+
 /**
  * CSS for the book's pages. Light keeps the publisher's colours; the others
  * override them, because dark text on a dark page is unreadable. Images keep
@@ -41,9 +56,13 @@ export function bookStyles(settings: Settings, theme: ShownTheme): string {
   const { background, text, link } = PALETTES[theme];
   const size = `html { font-size: ${settings.fontSize}% !important; }`;
   const page = `html, body { background: ${background} !important; color: ${text}; }`;
-  if (theme === "light") return `${size}\n${page}`;
+  const lineHeight = LINE_HEIGHTS[settings.spacing];
+  const spacing = lineHeight
+    ? `\np, li, blockquote, dd, div { line-height: ${lineHeight} !important; }`
+    : "";
+  if (theme === "light") return `${size}\n${page}${spacing}`;
   return `${size}
-${page}
+${page}${spacing}
 body, body :not(a, a *, img, svg, svg *, video) {
   color: ${text} !important;
   background-color: transparent !important;

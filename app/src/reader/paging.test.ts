@@ -65,6 +65,12 @@ describe("keyAction", () => {
     );
   });
 
+  it("goes back and forward with ⌘[ and ⌘], but not while typing", () => {
+    expect(keyAction(press("[", { metaKey: true }))).toBe("back");
+    expect(keyAction(press("]", { metaKey: true }))).toBe("forward");
+    expect(keyAction(press("[", { metaKey: true, typing: true }))).toBeNull();
+  });
+
   it("lets typing in a field through", () => {
     expect(keyAction(press(" ", { typing: true }))).toBeNull();
     expect(keyAction(press("ArrowRight", { typing: true }))).toBeNull();

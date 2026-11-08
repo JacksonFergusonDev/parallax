@@ -655,3 +655,65 @@ fn reader_positions_are_kept_clamped_and_go_with_the_book() {
     lib.remove(id).unwrap();
     assert_eq!(lib.reader_position(id).unwrap(), None);
 }
+
+#[test]
+fn reader_highlights_stay_with_their_own_book() {
+    use erc_library::HighlightDraft;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut lib = Library::open(dir.path().join("lib")).unwrap();
+    let a = epub(dir.path(), "a.epub", "Emma", "Jane Austen", None, "a");
+    let b = epub(dir.path(), "b.epub", "Persuasion", "Jane Austen", None, "b");
+    let (a, _) = added(lib.import(&a).unwrap());
+    let (b, _) = added(lib.import(&b).unwrap());
+    let draft = |fraction: f64, text: &str| HighlightDraft {
+        cfi: format!("epubcfi(/6/2!/4/{text})"),
+        href: "one.xhtml".into(),
+        fraction,
+        text: text.into(),
+        note: Some("  ".into()),
+        color: "yellow".into(),
+    };
+
+    let later = lib
+        .save_reader_highlight(a.id, None, &draft(0.6, "later"))
+        .unwrap();
+    let earlier = lib
+        .save_reader_highlight(a.id, None, &draft(2.0, "end"))
+        .unwrap();
+    lib.save_reader_highlight(a.id, None, &draft(0.1, "start"))
+        .unwrap();
+    assert_eq!(later.note, None, "a blank note is no note");
+    assert_eq!(earlier.fraction, 1.0);
+    let texts = |lib: &Library, id| -> Vec<String> {
+        lib.reader_highlights(id)
+            .unwrap()
+            .into_iter()
+            .map(|h| h.text)
+            .collect()
+    };
+    assert_eq!(texts(&lib, a.id), ["start", "later", "end"]);
+
+    let mut edit = draft(0.6, "later");
+    edit.note = Some("Remember this".into());
+    edit.color = "blue".into();
+    let edited = lib
+        .save_reader_highlight(a.id, Some(later.id), &edit)
+        .unwrap();
+    assert_eq!(edited.note.as_deref(), Some("Remember this"));
+    assert_eq!(edited.created_at, later.created_at);
+
+    // Another book's window can't change or remove it.
+    assert!(matches!(
+        lib.save_reader_highlight(b.id, Some(later.id), &edit),
+        Err(Error::NotFound(_))
+    ));
+    lib.delete_reader_highlight(b.id, later.id).unwrap();
+    assert_eq!(texts(&lib, a.id).len(), 3);
+    assert!(texts(&lib, b.id).is_empty());
+
+    lib.delete_reader_highlight(a.id, later.id).unwrap();
+    assert_eq!(texts(&lib, a.id), ["start", "end"]);
+    lib.remove(a.id).unwrap();
+    assert!(texts(&lib, a.id).is_empty());
+}

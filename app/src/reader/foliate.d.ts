@@ -17,7 +17,8 @@ declare module "foliate-js/epub.js" {
   }
   export interface Book {
     toc?: TocItem[];
-    sections: { id: string; linear?: string | null }[];
+    pageList?: TocItem[];
+    sections: { id: string; linear?: string | null; size?: number }[];
   }
 }
 
@@ -29,11 +30,52 @@ declare module "foliate-js/view.js" {
     fraction: number;
     range?: Range;
     section?: { current: number; total: number };
+    location?: { current: number; next: number; total: number };
+    /** Minutes, roughly, from the size of the text. */
+    time?: { section: number; total: number };
     tocItem?: TocItem | null;
+    pageItem?: TocItem | null;
   }
   export interface Renderer extends HTMLElement {
     setStyles?(styles: string): void;
     getContents?(): { doc: Document; index: number }[];
+    primaryIndex: number;
+    nextSection(): Promise<void>;
+    scrollToAnchor(anchor: Range, select?: boolean): Promise<void>;
+  }
+  export interface History extends EventTarget {
+    back(): void;
+    forward(): void;
+    readonly canGoBack: boolean;
+    readonly canGoForward: boolean;
+  }
+  /** What `addAnnotation` draws; `value` is the highlight's CFI. */
+  export interface Annotation {
+    value: string;
+    [key: string]: unknown;
+  }
+  export interface DrawAnnotation {
+    draw(func: unknown, options?: Record<string, unknown>): void;
+    annotation: Annotation;
+    doc: Document;
+    range: Range;
+  }
+  export interface ShowAnnotation {
+    value: string;
+    index: number;
+    range: Range;
+  }
+  export interface LinkEvent {
+    a: HTMLAnchorElement;
+    href: string;
+  }
+  export interface TTS {
+    doc: Document;
+    start(): string | undefined;
+    resume(): string | undefined;
+    next(paused?: boolean): string | undefined;
+    from(range: Range): string | undefined;
+    setMark(mark: string): Range | undefined;
   }
   export class View extends HTMLElement {
     book: Book;
@@ -53,6 +95,21 @@ declare module "foliate-js/view.js" {
     goRight(): Promise<void>;
     search(options: SearchOptions): AsyncGenerator<SearchResult | "done">;
     clearSearch(): void;
+    history: History;
+    tts?: TTS;
+    initTTS(
+      granularity?: "word" | "sentence",
+      nodeFilter?: unknown,
+      highlighter?: (range: Range) => void,
+    ): Promise<void>;
+    addAnnotation(annotation: Annotation): Promise<unknown>;
+    deleteAnnotation(annotation: Annotation): Promise<unknown>;
+    getCFI(index: number, range?: Range): string;
+    resolveCFI(cfi: string): { index: number };
+    resolveNavigation(
+      target: string | number,
+    ): { index: number } | null | undefined;
+    getSectionFractions(): number[];
   }
   export interface SearchOptions {
     query: string;
@@ -67,4 +124,27 @@ declare module "foliate-js/view.js" {
   export type SearchResult =
     | { progress: number }
     | { index: number; label: string; subitems: SearchMatch[] };
+}
+
+declare module "foliate-js/overlayer.js" {
+  export class Overlayer {
+    static highlight: unknown;
+    static underline: unknown;
+  }
+}
+
+declare module "foliate-js/footnotes.js" {
+  import type { Book } from "foliate-js/epub.js";
+  import type { View } from "foliate-js/view.js";
+
+  export interface FootnoteRender {
+    view: View;
+    href: string;
+    type: string | null;
+    hidden: boolean;
+  }
+  export class FootnoteHandler extends EventTarget {
+    detectFootnotes: boolean;
+    handle(book: Book, event: Event): Promise<void> | undefined;
+  }
 }

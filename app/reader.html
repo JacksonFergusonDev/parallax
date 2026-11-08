@@ -15,17 +15,55 @@
         Contents
       </button>
       <h1 id="title"></h1>
-      <button
-        id="find"
-        aria-expanded="false"
-        aria-controls="search"
-        title="Search (⌘F)"
-      >
-        Search
-      </button>
-      <button id="appearance" aria-expanded="false" aria-controls="settings">
-        Aa
-      </button>
+      <div class="tools">
+        <button
+          id="notes-button"
+          class="icon"
+          aria-expanded="false"
+          aria-controls="notes"
+          aria-label="Highlights and notes"
+          title="Highlights and notes"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M10.5 2.5l3 3-7 7H3.5v-3z" />
+            <path d="M2 14.5h12" />
+          </svg>
+        </button>
+        <button
+          id="find"
+          class="icon"
+          aria-expanded="false"
+          aria-controls="search"
+          aria-label="Search"
+          title="Search (⌘F)"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.5" />
+            <path d="M10.5 10.5L14 14" />
+          </svg>
+        </button>
+        <button
+          id="listen"
+          class="icon"
+          aria-pressed="false"
+          aria-label="Read aloud"
+          title="Read aloud"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M2.5 6v4h2.5l3.5 3V3L5 6z" />
+            <path d="M11 5.5a3.5 3.5 0 010 5M12.8 3.5a6.3 6.3 0 010 9" />
+          </svg>
+        </button>
+        <button
+          id="appearance"
+          aria-expanded="false"
+          aria-controls="settings"
+          aria-label="Appearance"
+          title="Appearance"
+        >
+          Aa
+        </button>
+      </div>
     </header>
     <main id="stage">
       <button id="prev" class="turn" aria-label="Previous page">‹</button>
@@ -33,10 +71,40 @@
       <button id="next" class="turn" aria-label="Next page">›</button>
     </main>
     <footer class="bar">
-      <span id="chapter"></span>
+      <div class="where">
+        <button id="back" hidden title="Back to where you were (⌘[)">
+          ‹ Back
+        </button>
+        <span id="chapter"></span>
+      </div>
       <span id="progress"></span>
+      <div class="slider">
+        <input
+          id="slider"
+          type="range"
+          min="0"
+          max="1000"
+          step="1"
+          value="0"
+          aria-label="Position in the book"
+        />
+        <div id="marks" aria-hidden="true"></div>
+      </div>
     </footer>
     <nav id="toc" aria-label="Contents" hidden></nav>
+    <section id="notes" aria-label="Highlights and notes" hidden>
+      <div class="panel-head">
+        <h2>Highlights</h2>
+        <button
+          id="copy-notes"
+          title="Copy every highlight and note as Markdown"
+        >
+          Copy all
+        </button>
+      </div>
+      <p id="notes-status" aria-live="polite"></p>
+      <div id="notes-list"></div>
+    </section>
     <section id="search" aria-label="Search" hidden>
       <form role="search">
         <input
@@ -50,6 +118,9 @@
         <div class="options">
           <label><input id="whole-words" type="checkbox" /> Whole words</label>
           <label><input id="match-case" type="checkbox" /> Match case</label>
+          <label
+            ><input id="match-accents" type="checkbox" /> Match accents</label
+          >
         </div>
       </form>
       <p id="search-status" aria-live="polite"></p>
@@ -64,13 +135,141 @@
           <button id="larger" aria-label="Larger text">A+</button>
         </div>
       </div>
-      <div class="row themes" role="radiogroup" aria-label="Theme">
-        <button data-theme="auto" role="radio">Auto</button>
-        <button data-theme="light" role="radio">Light</button>
-        <button data-theme="sepia" role="radio">Sepia</button>
-        <button data-theme="dark" role="radio">Dark</button>
+      <div class="row choices" role="radiogroup" aria-label="Theme">
+        <button data-setting="theme" data-value="auto" role="radio">
+          Auto
+        </button>
+        <button data-setting="theme" data-value="light" role="radio">
+          Light
+        </button>
+        <button data-setting="theme" data-value="sepia" role="radio">
+          Sepia
+        </button>
+        <button data-setting="theme" data-value="dark" role="radio">
+          Dark
+        </button>
+      </div>
+      <div class="field">
+        <span id="flow-label">Layout</span>
+        <div class="row choices" role="radiogroup" aria-labelledby="flow-label">
+          <button data-setting="flow" data-value="paginated" role="radio">
+            Pages
+          </button>
+          <button data-setting="flow" data-value="scrolled" role="radio">
+            Scroll
+          </button>
+        </div>
+      </div>
+      <div class="field">
+        <span id="spread-label">Pages side by side</span>
+        <div
+          class="row choices"
+          role="radiogroup"
+          aria-labelledby="spread-label"
+        >
+          <button data-setting="spread" data-value="auto" role="radio">
+            When wide
+          </button>
+          <button data-setting="spread" data-value="single" role="radio">
+            Never
+          </button>
+        </div>
+      </div>
+      <div class="field">
+        <span id="width-label">Line length</span>
+        <div
+          class="row choices"
+          role="radiogroup"
+          aria-labelledby="width-label"
+        >
+          <button data-setting="width" data-value="narrow" role="radio">
+            Short
+          </button>
+          <button data-setting="width" data-value="medium" role="radio">
+            Medium
+          </button>
+          <button data-setting="width" data-value="wide" role="radio">
+            Long
+          </button>
+        </div>
+      </div>
+      <div class="field">
+        <span id="margins-label">Margins</span>
+        <div
+          class="row choices"
+          role="radiogroup"
+          aria-labelledby="margins-label"
+        >
+          <button data-setting="margins" data-value="narrow" role="radio">
+            Narrow
+          </button>
+          <button data-setting="margins" data-value="medium" role="radio">
+            Medium
+          </button>
+          <button data-setting="margins" data-value="wide" role="radio">
+            Wide
+          </button>
+        </div>
+      </div>
+      <div class="field">
+        <span id="spacing-label">Line spacing</span>
+        <div
+          class="row choices"
+          role="radiogroup"
+          aria-labelledby="spacing-label"
+        >
+          <button data-setting="spacing" data-value="book" role="radio">
+            Book
+          </button>
+          <button data-setting="spacing" data-value="relaxed" role="radio">
+            Relaxed
+          </button>
+          <button data-setting="spacing" data-value="loose" role="radio">
+            Loose
+          </button>
+        </div>
       </div>
     </section>
+    <div id="marker" role="dialog" aria-label="Highlight" hidden>
+      <div class="row">
+        <div class="swatches" role="radiogroup" aria-label="Highlight colour">
+          <button data-color="yellow" role="radio" aria-label="Yellow"></button>
+          <button data-color="green" role="radio" aria-label="Green"></button>
+          <button data-color="blue" role="radio" aria-label="Blue"></button>
+          <button data-color="pink" role="radio" aria-label="Pink"></button>
+        </div>
+        <button id="marker-note">Note</button>
+        <button id="marker-speak" title="Read aloud from here">Read</button>
+        <button id="marker-remove">Remove</button>
+      </div>
+      <form id="note-form" hidden>
+        <textarea
+          id="note"
+          rows="4"
+          aria-label="Note"
+          placeholder="Add a note"
+        ></textarea>
+        <div class="actions">
+          <button type="button" id="note-cancel">Cancel</button>
+          <button type="submit" class="primary">Save</button>
+        </div>
+      </form>
+    </div>
+    <section id="footnote" aria-label="Note" hidden>
+      <div class="panel-head">
+        <h2 id="footnote-title">Note</h2>
+        <div>
+          <button id="footnote-go">Go to note</button>
+          <button id="footnote-close" aria-label="Close note">×</button>
+        </div>
+      </div>
+      <div id="footnote-body"></div>
+    </section>
+    <div id="speech" role="toolbar" aria-label="Reading aloud" hidden>
+      <button id="speech-toggle">Pause</button>
+      <button id="speech-rate" title="Speed">1×</button>
+      <button id="speech-stop">Stop</button>
+    </div>
     <p id="message" role="alert" hidden></p>
     <script type="module" src="/src/reader/main.ts"></script>
   </body>

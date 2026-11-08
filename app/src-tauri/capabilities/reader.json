@@ -9,6 +9,9 @@
     "allow-reader-book",
     "allow-reader-entry",
     "allow-reader-save-position",
-    "allow-reader-save-settings"
+    "allow-reader-save-settings",
+    "allow-reader-highlights",
+    "allow-reader-save-highlight",
+    "allow-reader-delete-highlight"
   ]
 }

@@ -70,6 +70,9 @@ const COMMANDS: &[&str] = &[
     "reader_entry",
     "reader_save_position",
     "reader_save_settings",
+    "reader_highlights",
+    "reader_save_highlight",
+    "reader_delete_highlight",
 ];
 
 fn main() {

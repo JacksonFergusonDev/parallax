@@ -47,6 +47,37 @@ button:focus-visible {
   outline-offset: 1px;
 }
 
+.tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+button.icon {
+  display: grid;
+  place-items: center;
+  min-width: var(--control-compact);
+  min-height: var(--control-compact);
+  padding: 0;
+}
+
+button.icon svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+button[aria-pressed="true"],
+button[aria-expanded="true"] {
+  background: var(--line);
+  color: var(--ink);
+}
+
 .bar {
   display: flex;
   align-items: center;
@@ -66,6 +97,35 @@ button:focus-visible {
   white-space: nowrap;
 }
 
+footer.bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: 2px;
+  padding-top: 0;
+}
+
+/* A fixed height, so showing Back never resizes the page mid-turn: the
+   engine can lose its place when the page changes size during a jump. */
+.where {
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-compact);
+  min-width: 0;
+}
+
+#back {
+  flex: none;
+  max-height: 100%;
+  padding-inline: var(--space-2);
+  color: var(--link);
+}
+
+#back[hidden] {
+  display: none;
+}
+
 #chapter {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -73,8 +133,45 @@ button:focus-visible {
 }
 
 #progress {
-  flex: none;
+  grid-row: 2;
+  overflow: hidden;
   font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slider {
+  position: relative;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  height: 16px;
+}
+
+#slider {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  background: none;
+  accent-color: var(--link);
+  cursor: pointer;
+}
+
+#marks {
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 0;
+  pointer-events: none;
+}
+
+#marks span {
+  position: absolute;
+  top: -4px;
+  width: 1px;
+  height: 8px;
+  background: var(--faint);
+  opacity: 0.6;
 }
 
 #stage {
@@ -107,8 +204,12 @@ foliate-view {
 }
 
 #toc,
+#notes,
 #search,
-#settings {
+#settings,
+#footnote,
+#marker,
+#speech {
   position: fixed;
   z-index: 2;
   top: 52px;
@@ -119,8 +220,13 @@ foliate-view {
 }
 
 #toc[hidden],
+#notes[hidden],
 #search[hidden],
 #settings[hidden],
+#footnote[hidden],
+#marker[hidden],
+#note-form[hidden],
+#speech[hidden],
 #message[hidden] {
   display: none;
 }
@@ -157,9 +263,11 @@ foliate-view {
 #settings {
   right: 10px;
   display: grid;
-  gap: 10px;
-  width: 260px;
-  padding: 12px;
+  overflow-y: auto;
+  gap: var(--space-3);
+  width: min(300px, calc(100vw - 20px));
+  max-height: calc(100vh - 80px);
+  padding: var(--space-3);
 }
 
 .row {
@@ -181,14 +289,23 @@ foliate-view {
   font-variant-numeric: tabular-nums;
 }
 
-.themes button {
+.choices button {
   flex: 1;
-  padding-inline: 4px;
+  padding-inline: var(--space-1);
 }
 
-.themes button[aria-checked="true"] {
+.choices button[aria-checked="true"] {
   background: var(--line);
   font-weight: 600;
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.field > span {
+  color: var(--faint);
 }
 
 #message {
@@ -284,4 +401,204 @@ foliate-view {
   border-radius: 2px;
   background: color-mix(in srgb, var(--link) 28%, transparent);
   color: inherit;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.panel-head h2 {
+  margin: 0;
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+
+#notes {
+  left: var(--space-3);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: var(--space-2);
+  width: min(380px, calc(100vw - 20px));
+  max-height: calc(100vh - 80px);
+  padding: var(--space-3);
+}
+
+#notes-status {
+  margin: 0;
+  color: var(--faint);
+}
+
+#notes-list {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+#notes-list ol {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#notes-list button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-2);
+  border-left: 3px solid var(--swatch);
+  border-radius: 0 var(--radius-small) var(--radius-small) 0;
+  color: var(--ink);
+  text-align: left;
+}
+
+#notes-list .chapter {
+  color: var(--faint);
+  font-size: var(--text-small);
+}
+
+#notes-list .note {
+  color: var(--faint);
+  white-space: pre-wrap;
+}
+
+[data-color="yellow"] {
+  --swatch: #f2c200;
+}
+
+[data-color="green"] {
+  --swatch: #3fb950;
+}
+
+[data-color="blue"] {
+  --swatch: #3d8bfd;
+}
+
+[data-color="pink"] {
+  --swatch: #ec5f9a;
+}
+
+#marker {
+  z-index: 3;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-1);
+}
+
+#marker .row {
+  justify-content: flex-start;
+  gap: var(--space-1);
+}
+
+.swatches {
+  display: flex;
+  gap: 2px;
+  padding-right: var(--space-1);
+  border-right: 1px solid var(--line);
+}
+
+.swatches button {
+  display: grid;
+  place-items: center;
+  min-width: var(--control-compact);
+  min-height: var(--control-compact);
+  padding: 0;
+}
+
+.swatches button::before {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  border-radius: 50%;
+  background: var(--swatch);
+  content: "";
+}
+
+.swatches button[aria-checked="true"]::before {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+#note-form {
+  display: grid;
+  gap: var(--space-2);
+  width: min(320px, calc(100vw - 32px));
+  padding: 0 var(--space-1) var(--space-1);
+}
+
+#note {
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--page);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+
+#note:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 0;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+button.primary {
+  background: var(--link);
+  color: var(--page);
+  font-weight: 600;
+}
+
+button.primary:hover {
+  background: color-mix(in srgb, var(--link) 86%, var(--ink));
+}
+
+#footnote {
+  right: var(--space-3);
+  bottom: 64px;
+  left: var(--space-3);
+  top: auto;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-1);
+  max-width: 640px;
+  height: min(320px, 45vh);
+  margin-inline: auto;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+#footnote-body,
+#footnote-body foliate-view {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+#speech {
+  top: auto;
+  bottom: 64px;
+  left: 50%;
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  transform: translateX(-50%);
+}
+
+#speech-rate {
+  min-width: 48px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn {
+    transition: none;
+  }
 }

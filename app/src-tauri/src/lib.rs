@@ -1429,7 +1429,10 @@ pub fn run() {
             reader::reader_book,
             reader::reader_entry,
             reader::reader_save_position,
-            reader::reader_save_settings
+            reader::reader_save_settings,
+            reader::reader_highlights,
+            reader::reader_save_highlight,
+            reader::reader_delete_highlight
         ])
         .run(context)
         .expect("error while running tauri application");
@@ -1500,6 +1503,9 @@ mod tests {
                 "allow-reader-entry",
                 "allow-reader-save-position",
                 "allow-reader-save-settings",
+                "allow-reader-highlights",
+                "allow-reader-save-highlight",
+                "allow-reader-delete-highlight",
             ]
         );
     }
