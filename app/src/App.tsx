@@ -699,6 +699,10 @@ export default function App() {
   return (
     <div ref={appRef} className={`app ${dragging ? "dragging" : ""}`}>
       <header className="topbar">
+        <div className="brand" aria-label="Parallax">
+          <img src="/parallax.svg" alt="" />
+          <span>Parallax</span>
+        </div>
         <div className="tabs" role="tablist">
           <button
             role="tab"

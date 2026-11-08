@@ -1,6 +1,6 @@
 [package]
 name = "erc-cli"
-description = "Developer CLI over the E-Reader Companion core"
+description = "Developer CLI over the Parallax core"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true

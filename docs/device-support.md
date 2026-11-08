@@ -1,6 +1,6 @@
 # Device support
 
-Which Kobos E-Reader Companion (ERC) changes, how that is enforced, and how a Kobo it doesn't know yet gets added.
+Which Kobos Parallax changes, how that is enforced, and how a Kobo it doesn't know yet gets added.
 
 ## What decides support
 

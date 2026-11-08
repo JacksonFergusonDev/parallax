@@ -90,6 +90,8 @@ function setUpAppearance(view: View, initial: Settings) {
     style.setProperty("--page", background);
     style.setProperty("--ink", text);
     style.setProperty("--link", link);
+    style.setProperty("--accent", link);
+    style.colorScheme = theme === "dark" ? "dark" : "light";
     document.documentElement.dataset.theme = theme;
     view.renderer.setStyles?.(bookStyles(settings, theme));
     element("size").textContent = `${settings.fontSize}%`;

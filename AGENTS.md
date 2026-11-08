@@ -22,3 +22,9 @@
 ## Writing conventions
 
 - Never hard-wrap Markdown. Write each paragraph and list item as a single line and let the editor soft-wrap. rumdl enforces this (`.rumdl.toml`) and its pre-commit hook joins wrapped lines automatically.
+
+## UI design
+
+- Follow [the Parallax design system](docs/design-system.md) and use `app/src/design/tokens.css` for shared type, color, spacing, control dimensions, radii, and motion. Do not introduce literal UI font sizes or inline typography overrides.
+- Keep the main window and reader controls cohesive; publisher content and cover artwork retain the documented exceptions.
+- Verify presentation at default and minimum window sizes; adapt layout instead of shrinking text. Keep the design contract tests in the standard verification path.

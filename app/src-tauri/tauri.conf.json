@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "E-Reader Companion",
+  "productName": "Parallax",
   "version": "0.1.0",
   "identifier": "dev.erc.companion",
   "build": {
@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "E-Reader Companion",
+        "title": "Parallax",
         "visible": false,
-        "width": 1353,
+        "width": 1280,
         "height": 900,
         "center": true,
         "minWidth": 800,

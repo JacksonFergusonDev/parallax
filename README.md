@@ -1,4 +1,6 @@
-# E-Reader Companion
+# Parallax
+
+![Parallax icon](app/src-tauri/icons/64x64.png)
 
 A focused desktop app for getting EPUBs onto a Kobo and keeping them organised there: import, fix metadata and covers, convert to KEPUB, send, and manage the Kobo's own collections. Kindle support is planned.
 
@@ -13,6 +15,8 @@ Licensed under GPLv3. Device logic is ported from [calibre](https://calibre-eboo
 5. The **On Kobo** tab (⌘2) shows what's on the device, with reading progress, and lets you manage collections, remove books, and turn folders into collections.
 
 Every change to the Kobo's database is backed up first, compressed, to `~/Library/Application Support/dev.erc.companion/device-backups/`. Removed books are held on your Mac for 30 days, and the library is saved before removals and bulk changes. **Revert changes…**, in both the Library and On Kobo tabs, lists these points by time and goes back to one. How things are now is saved first, so a revert can be undone too.
+
+Brand and UI rules: [Parallax design system](docs/design-system.md).
 
 ## Development
 

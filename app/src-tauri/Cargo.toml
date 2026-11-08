@@ -1,10 +1,14 @@
 [package]
 name = "erc-app"
-description = "E-Reader Companion desktop app"
+description = "Parallax desktop app"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 license.workspace = true
+
+[[bin]]
+name = "Parallax"
+path = "src/main.rs"
 
 [lib]
 # The `_lib` suffix avoids a name clash with the bin target on Windows (cargo#8519).

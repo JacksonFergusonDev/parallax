@@ -1,0 +1,122 @@
+/* Parallax's shared UI contract. See docs/design-system.md. Book content and
+   cover artwork have independent typography; these tokens describe the UI. */
+:root {
+  --art-type-9: 9px;
+  --art-type-7: 7px;
+  --art-type-6-5: 6.5px;
+  --art-type-19: 19px;
+  --art-type-13: 13px;
+  --art-type-10: 10px;
+  --text-small: 0.928571rem;
+  --text-body: 1rem;
+  --text-label: 1.142857rem;
+  --text-heading: 1.428571rem;
+  --text-display: 1.714286rem;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  --serif: "Fraunces Variable", "Iowan Old Style", Georgia, serif;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --control-height: 36px;
+  --control-compact: 32px;
+  --icon-size: 16px;
+  --icon-large: 20px;
+  --radius-small: 6px;
+  --radius: 10px;
+  --radius-large: 14px;
+  --panel-width: 320px;
+  --sidebar-width: 224px;
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --bg: #f6f3ec;
+  --surface: #fffdf8;
+  --sunken: #eee9de;
+  --fg: #29271f;
+  --muted: #6c6659;
+  --border: #ded8ca;
+  --accent: #856015;
+  --accent-fg: #fffdf8;
+  --status-fg: #fffdf8;
+  --ok: #356c51;
+  --warn: #885b16;
+  --danger: #ad392e;
+  --brand-navy: #0f172a;
+  --brand-gold: #f5c568;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #191c21;
+    --surface: #22262d;
+    --sunken: #1d2026;
+    --fg: #f1ede4;
+    --muted: #b2ad9f;
+    --border: #3b4049;
+    --accent: #f5c568;
+    --accent-fg: #29200f;
+    --status-fg: #191c21;
+    --ok: #83c5a1;
+    --warn: #ebbc6b;
+    --danger: #ee9388;
+    color-scheme: dark;
+  }
+}
+
+/* Shared control primitives, used by both application windows. */
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  line-height: 1.4;
+}
+button,
+select,
+input:not([type="checkbox"], [type="radio"], [type="range"]) {
+  min-height: var(--control-height);
+}
+button {
+  min-width: var(--control-compact);
+}
+input[type="checkbox"],
+input[type="radio"] {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  accent-color: var(--accent);
+}
+:where(button, input, select, textarea, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+h1,
+h2 {
+  font-size: var(--text-heading);
+}
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--text-label);
+}
+small {
+  font-size: var(--text-small);
+}

@@ -4,6 +4,8 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 ## Completed
 
+- Parallax branding and design system: navy and gold mark, padded Dock icon, Parallax desktop executable, and shared light and dark styling across the main window and reader. The existing application identifier and library paths preserve access to user data. Shared tokens cover UI typography (13–24 px at default scale), control sizing, spacing, radii, colors, focus, and motion. Toolbars and footer actions wrap at narrow widths. Contributor rules and `docs/design-system.md` document the contract, and seven checks guard typography, palettes, and icon consistency.
+- Parallax verification: the owner approved the design and confirmed the Dock icon size and app name. `just check` passes with 226 frontend tests. The macOS bundle includes the updated icon, Parallax executable, and upscaling model. Browser mock checks covered both appearances, minimum window size, and enlarged UI text.
 - Kobo sidebar tools: replaced the stack of individually boxed buttons with one shared surface, quieter icon rows and Books & collections / Device care groups separated by a divider. All nine actions and their disabled states remain; Add all to library sits with the book actions. Visually checked in the browser mock, including opening About this Kobo; `just check` passes. No real-device operations were exercised.
 - Library toolbar: one shared surface with count and Library tools on the left, sort/view controls on the right, and filters below. Maintenance actions retain their behavior in the menu; Escape closes it and restores focus. Opening width now fits whole 148 px cover columns with 18 px gaps, shelf padding, scrollbar allowance and the permanent 320 px detail panel; window-state v3 applies this once to existing installs, then remembers user resizing. Browser mock visually checked at 1187 and 1353 px, with unchanged book positions on selection. Automated coverage checks menu actions and window sizing; native startup sizing has not been visually checked. All formatting, lint, type, Rust and UI checks pass.
 - Permanent Library detail panel: reserves the same 320 px before selection, while editing and after clearing, so selecting books no longer changes shelf columns or list width. A quiet “Select a book” placeholder becomes a selection count for multiple books; close returns to the placeholder. Removed the obsolete panel entrance and grid reflow animations. Regression coverage exercises selection, switching, multiple selection and clearing; `just check` passes. Desktop visual verification remains outstanding.
@@ -77,7 +79,7 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 - Kobo improvements (phase 1.5 skip list still applies: Goodreads, Kobo-Metadata scraping, Kobo settings/firmware-specific writes).
 - Deferred: phase 2 Kindle research spike (2024+ models use MTP; older ones USB mass storage), only if the user asks.
-- Optional: app name decision (working name "E-Reader Companion"); Google Books API key and optional Hardcover token settings arrive with M13 (PLAN §7.4).
+- Google Books API key and optional Hardcover token settings arrive with M13 (PLAN §7.4).
 
 ## Notes for agents
 

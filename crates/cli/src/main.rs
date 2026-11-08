@@ -36,7 +36,7 @@ use erc_library::{ImportOutcome, Library, Rule, RuleKind};
 use serde::Serialize;
 
 #[derive(Parser)]
-#[command(name = "erc", version, about = "E-Reader Companion developer CLI")]
+#[command(name = "erc", version, about = "Parallax developer CLI")]
 struct Cli {
     /// Print JSON instead of a table.
     #[arg(long, global = true)]

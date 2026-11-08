@@ -9,9 +9,9 @@ interface Palette {
 }
 
 const PALETTES: Record<Exclude<Theme, "auto">, Palette> = {
-  light: { background: "#fffcf6", text: "#2a2118", link: "#b4532a" },
+  light: { background: "#fffdf8", text: "#29271f", link: "#856015" },
   sepia: { background: "#f1e4cc", text: "#43341f", link: "#94431f" },
-  dark: { background: "#1b1612", text: "#e6dccd", link: "#e3895c" },
+  dark: { background: "#191c21", text: "#f1ede4", link: "#f5c568" },
 };
 
 export type ShownTheme = keyof typeof PALETTES;

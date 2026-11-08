@@ -23,13 +23,13 @@ describe("themes", () => {
 
   it("keeps the publisher's colours in light", () => {
     const css = bookStyles({ fontSize: 100, theme: "light" }, "light");
-    expect(css).not.toContain("color: #2a2118 !important");
+    expect(css).not.toContain("color: #29271f !important");
   });
 
   it("overrides text colour in dark, leaving images alone", () => {
     const css = bookStyles({ fontSize: 120, theme: "dark" }, "dark");
     expect(css).toContain("font-size: 120%");
-    expect(css).toContain("color: #e6dccd !important");
+    expect(css).toContain("color: #f1ede4 !important");
     expect(css).toContain(":not(a, a *, img, svg, svg *, video)");
   });
 });

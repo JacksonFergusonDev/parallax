@@ -92,8 +92,8 @@ export function AboutKobo({ device, titles, onClose }: Props) {
           <div>
             <h2>About this Kobo</h2>
             <p className="muted">
-              E-Reader Companion keeps a record of its changes in a hidden .erc
-              folder on the Kobo.
+              Parallax keeps a record of its changes in a hidden .erc folder on
+              the Kobo.
             </p>
           </div>
         </div>
@@ -126,7 +126,7 @@ export function AboutKobo({ device, titles, onClose }: Props) {
           )}
           {history && (
             <>
-              <dt>Books from ERC</dt>
+              <dt>Books from Parallax</dt>
               <dd>
                 {history.books.length}
                 {history.changed.length > 0 &&
@@ -138,9 +138,7 @@ export function AboutKobo({ device, titles, onClose }: Props) {
           )}
         </dl>
         {history && !d && (
-          <p className="muted">
-            E-Reader Companion hasn't changed this Kobo yet.
-          </p>
+          <p className="muted">Parallax hasn't changed this Kobo yet.</p>
         )}
         {error && <p className="notice notice-error">{error}</p>}
         {history?.problems.map((p) => (
@@ -179,9 +177,9 @@ export function AboutKobo({ device, titles, onClose }: Props) {
         <h3 className="about-heading">Device report</h3>
         <p className="muted">
           A file describing this Kobo's model, firmware and database layout, for
-          adding support for Kobos E-Reader Companion doesn't know yet. It has
-          no book titles, serial number, reading data or highlights, and saving
-          it only reads the Kobo.
+          adding support for Kobos Parallax doesn't know yet. It has no book
+          titles, serial number, reading data or highlights, and saving it only
+          reads the Kobo.
         </p>
         {report && (
           <p className={`notice notice-${report.error ? "error" : "info"}`}>

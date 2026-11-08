@@ -1,15 +1,13 @@
+@import "../design/tokens.css";
+
 :root {
-  --page: #fffcf6;
-  --ink: #2a2118;
-  --link: #b4532a;
+  --page: var(--surface);
+  --ink: var(--fg);
+  --link: var(--accent);
   --line: color-mix(in srgb, var(--ink) 14%, transparent);
-  --faint: color-mix(in srgb, var(--ink) 62%, transparent);
+  --faint: color-mix(in srgb, var(--ink) 72%, transparent);
   --raised: color-mix(in srgb, var(--page) 94%, var(--ink));
-  font:
-    13px/1.4 -apple-system,
-    BlinkMacSystemFont,
-    "Helvetica Neue",
-    sans-serif;
+  font-family: var(--font-ui);
 }
 
 * {
@@ -33,7 +31,7 @@ body {
 button {
   padding: 4px 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   background: none;
   color: inherit;
   font: inherit;
@@ -97,9 +95,9 @@ foliate-view {
   padding: 0;
   border-radius: 0;
   color: var(--faint);
-  font-size: 24px;
+  font-size: var(--text-display);
   opacity: 0;
-  transition: opacity 120ms;
+  transition: opacity var(--duration-fast);
 }
 
 .turn:hover,
@@ -112,9 +110,9 @@ foliate-view {
 #settings {
   position: fixed;
   z-index: 2;
-  top: 38px;
+  top: 52px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--raised);
   box-shadow: 0 8px 28px rgb(0 0 0 / 22%);
 }

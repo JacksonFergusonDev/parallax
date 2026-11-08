@@ -542,9 +542,9 @@ export function DeviceView({
         <main className="content">
           {readOnly && (
             <p className="notice notice-info read-only-banner">
-              E-Reader Companion only reads this Kobo: {readOnly}. You can
-              browse it and add its books to your library. To help add support,
-              save a device report from About this Kobo.
+              Parallax only reads this Kobo: {readOnly}. You can browse it and
+              add its books to your library. To help add support, save a device
+              report from About this Kobo.
             </p>
           )}
           <div className="device-toolbar">

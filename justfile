@@ -39,7 +39,7 @@ dev: setup upscale-model
 # Build and run the app exactly as a release behaves. No hot reload.
 dev-optimized: setup upscale-model
     cd app && pnpm tauri build --no-bundle --config src-tauri/tauri.upscale.conf.json
-    target/release/erc-app
+    target/release/Parallax
 
 # Opt-in tests that mount FAT32 disk images to check the device write path.
 test-fat:
