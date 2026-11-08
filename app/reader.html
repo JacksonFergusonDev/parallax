@@ -135,19 +135,39 @@
           <button id="larger" aria-label="Larger text">A+</button>
         </div>
       </div>
-      <div class="row choices" role="radiogroup" aria-label="Theme">
-        <button data-setting="theme" data-value="auto" role="radio">
-          Auto
-        </button>
-        <button data-setting="theme" data-value="light" role="radio">
-          Light
-        </button>
-        <button data-setting="theme" data-value="sepia" role="radio">
-          Sepia
-        </button>
-        <button data-setting="theme" data-value="dark" role="radio">
-          Dark
-        </button>
+      <div class="field">
+        <span id="theme-label">Theme</span>
+        <div
+          class="row choices"
+          role="radiogroup"
+          aria-labelledby="theme-label"
+        >
+          <button
+            data-setting="theme"
+            data-value="auto"
+            role="radio"
+            title="As the app is, in Settings"
+          >
+            Auto
+          </button>
+          <button data-setting="theme" data-value="light" role="radio">
+            Light
+          </button>
+          <button data-setting="theme" data-value="sepia" role="radio">
+            Sepia
+          </button>
+          <button data-setting="theme" data-value="dark" role="radio">
+            Dark
+          </button>
+          <button
+            data-setting="theme"
+            data-value="contrast"
+            role="radio"
+            title="High contrast"
+          >
+            Contrast
+          </button>
+        </div>
       </div>
       <div class="field">
         <span id="flow-label">Layout</span>

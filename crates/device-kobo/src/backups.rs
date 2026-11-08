@@ -17,6 +17,9 @@
 //! file here first. Going back to a backup puts back the files removed by it
 //! and every later change, then the database, after saving the current state
 //! as one more backup so that going back can itself be undone.
+//!
+//! How much is kept is the user's [`BackupPolicy`], saved beside the backups
+//! as `policy.json` so every write session applies it.
 
 use std::collections::{BTreeMap, HashSet};
 use std::fs::{self, File};
@@ -45,6 +48,9 @@ pub const REMOVAL_BACKUPS_KEPT: usize = 5;
 /// How long removed book files, and the backups kept for them, are held.
 pub const REMOVED_KEPT_DAYS: i64 = 30;
 
+/// The whole backup folder's default size limit.
+pub const DEFAULT_MAX_BYTES: u64 = 500_000_000;
+
 const PREFIX: &str = "KoboReader-";
 const EXTENSION: &str = ".sqlite";
 const PACKED: &str = ".sqlite.zst";
@@ -56,6 +62,104 @@ const STALE_SECS: u64 = 3600;
 const REMOVED_DIR: &str = "removed";
 const MANIFEST: &str = "manifest.json";
 const STAMP: &str = "%Y%m%d-%H%M%S%.3f";
+const POLICY_FILE: &str = "policy.json";
+
+/// Which backups each Kobo keeps.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Keep {
+    /// Recent changes, each day's first, and removals: see the constants.
+    #[default]
+    History,
+    /// Only how the Kobo was before the newest change.
+    Latest,
+}
+
+/// How much of the Kobo's history is kept on this computer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BackupPolicy {
+    pub keep: Keep,
+    /// The most the whole backup folder may take, or `None` for no limit.
+    /// The oldest backups go first, but each Kobo's newest one always stays,
+    /// so the folder can be over the limit when that alone is bigger.
+    pub max_bytes: Option<u64>,
+}
+
+impl Default for BackupPolicy {
+    fn default() -> Self {
+        Self {
+            keep: Keep::default(),
+            max_bytes: Some(DEFAULT_MAX_BYTES),
+        }
+    }
+}
+
+impl BackupPolicy {
+    /// The policy saved under `root`, or the default.
+    pub fn load(root: &Path) -> Self {
+        fs::read(root.join(POLICY_FILE))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default()
+    }
+
+    /// Saves the policy under `root` and applies it to every Kobo's backups.
+    pub fn save(&self, root: &Path) -> Result<()> {
+        fs::create_dir_all(root).map_err(|e| io_err(root, e))?;
+        let path = root.join(POLICY_FILE);
+        let tmp = path.with_extension("json.tmp");
+        let json = serde_json::to_vec_pretty(self).map_err(|e| io_err(&path, e.into()))?;
+        fs::write(&tmp, json)
+            .and_then(|()| fs::rename(&tmp, &path))
+            .map_err(|e| io_err(&path, e))?;
+        for dir in device_dirs(root) {
+            prune_dir(&dir, self);
+        }
+        limit_size(root, self);
+        Ok(())
+    }
+}
+
+/// Bytes every Kobo's backups take, removed book files included.
+pub fn backups_size(root: &Path) -> u64 {
+    fn walk(path: &Path) -> u64 {
+        let Ok(entries) = fs::read_dir(path) else {
+            return 0;
+        };
+        entries
+            .flatten()
+            .map(|entry| match entry.file_type() {
+                Ok(t) if t.is_dir() => walk(&entry.path()),
+                Ok(t) if t.is_file() => entry.metadata().map_or(0, |m| m.len()),
+                _ => 0,
+            })
+            .sum()
+    }
+    device_dirs(root).iter().map(|dir| walk(dir)).sum()
+}
+
+/// Deletes every Kobo's backups and held book files, keeping the policy.
+/// Nothing can be gone back to afterwards.
+pub fn delete_all_backups(root: &Path) -> Result<()> {
+    for dir in device_dirs(root) {
+        fs::remove_dir_all(&dir).map_err(|e| io_err(&dir, e))?;
+    }
+    Ok(())
+}
+
+/// One folder per Kobo, by serial.
+fn device_dirs(root: &Path) -> Vec<PathBuf> {
+    fs::read_dir(root)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+                .map(|e| e.path())
+                .collect()
+        })
+        .unwrap_or_default()
+}
 
 /// What's known about a backup, newest first in [`KoboDevice::backups`].
 #[derive(Debug, Clone, Serialize)]
@@ -259,7 +363,7 @@ impl KoboDevice {
             entries: vec![entry],
             books,
         });
-        prune(&dir);
+        prune(root, &dir);
         Ok(RestoreOutcome {
             safety_backup: safety_name,
             files_restored,
@@ -483,9 +587,16 @@ fn remove_stale(dir: &Path) {
     }
 }
 
-/// Applies the retention rules (see the constants) and forgets removed book
-/// files past [`REMOVED_KEPT_DAYS`].
-pub(crate) fn prune(dir: &Path) {
+/// Applies the saved [`BackupPolicy`] after a backup of the Kobo in `dir`.
+pub(crate) fn prune(root: &Path, dir: &Path) {
+    let policy = BackupPolicy::load(root);
+    prune_dir(dir, &policy);
+    limit_size(root, &policy);
+}
+
+/// Applies `policy.keep` to one Kobo's backups, and forgets removed book
+/// files past [`REMOVED_KEPT_DAYS`] or older than every backup left.
+fn prune_dir(dir: &Path, policy: &BackupPolicy) {
     compress_existing(dir);
     remove_stale(dir);
     let names = backup_names(dir);
@@ -493,39 +604,91 @@ pub(crate) fn prune(dir: &Path) {
         "{PREFIX}{}",
         (Utc::now() - Duration::days(REMOVED_KEPT_DAYS)).format(STAMP)
     );
-    let mut keep: HashSet<&str> = names
-        .iter()
-        .rev()
-        .take(BACKUPS_KEPT)
-        .map(String::as_str)
-        .collect();
-    let mut days: BTreeMap<&str, &str> = BTreeMap::new();
-    for name in &names {
-        // Timestamped names sort chronologically, so the first seen is earliest.
-        days.entry(day(name)).or_insert(name);
-    }
-    keep.extend(days.values().rev().take(DAILY_BACKUPS_KEPT));
-    keep.extend(
-        names
-            .iter()
-            .rev()
-            .filter(|n| **n >= cutoff && was_removal(&dir.join(n)))
-            .take(REMOVAL_BACKUPS_KEPT)
-            .map(String::as_str),
-    );
+    let keep: HashSet<&str> = match policy.keep {
+        Keep::Latest => names.last().map(String::as_str).into_iter().collect(),
+        Keep::History => {
+            let mut keep: HashSet<&str> = names
+                .iter()
+                .rev()
+                .take(BACKUPS_KEPT)
+                .map(String::as_str)
+                .collect();
+            let mut days: BTreeMap<&str, &str> = BTreeMap::new();
+            for name in &names {
+                // Timestamped names sort chronologically, so the first seen is earliest.
+                days.entry(day(name)).or_insert(name);
+            }
+            keep.extend(days.values().rev().take(DAILY_BACKUPS_KEPT));
+            keep.extend(
+                names
+                    .iter()
+                    .rev()
+                    .filter(|n| **n >= cutoff && was_removal(&dir.join(n)))
+                    .take(REMOVAL_BACKUPS_KEPT)
+                    .map(String::as_str),
+            );
+            keep
+        }
+    };
     for name in names.iter().filter(|n| !keep.contains(n.as_str())) {
-        let path = dir.join(name);
-        let _ = fs::remove_file(sidecar_path(&path));
-        let _ = fs::remove_file(path);
+        delete_backup(&dir.join(name));
     }
+    forget_held(dir, stem(&cutoff));
+}
 
+/// Removes one backup and its record of what changed.
+fn delete_backup(path: &Path) {
+    let _ = fs::remove_file(sidecar_path(path));
+    let _ = fs::remove_file(path);
+}
+
+/// Forgets removed book files from before `cutoff`, and those no backup left
+/// can bring back: going back to a backup puts back what it and later
+/// changes removed, so files older than the oldest backup have no use.
+fn forget_held(dir: &Path, cutoff: &str) {
+    let names = backup_names(dir);
+    let oldest = names.first().map(|n| stem(n));
     let Ok(held) = fs::read_dir(dir.join(REMOVED_DIR)) else {
         return;
     };
     for entry in held.flatten() {
-        if entry.file_name().to_string_lossy().as_ref() < stem(&cutoff) {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.as_str() < cutoff || oldest.is_none_or(|oldest| name.as_str() < oldest) {
             let _ = fs::remove_dir_all(entry.path());
         }
+    }
+}
+
+/// Deletes the oldest backups, across every Kobo, until the folder fits
+/// `policy.max_bytes`. Each Kobo's newest backup stays regardless.
+fn limit_size(root: &Path, policy: &BackupPolicy) {
+    let Some(max) = policy.max_bytes else {
+        return;
+    };
+    let cutoff = format!(
+        "{PREFIX}{}",
+        (Utc::now() - Duration::days(REMOVED_KEPT_DAYS)).format(STAMP)
+    );
+    while backups_size(root) > max {
+        let oldest = device_dirs(root)
+            .into_iter()
+            .filter_map(|dir| {
+                let names = backup_names(&dir);
+                // The newest is never a candidate.
+                let first = names.split_last()?.1.first()?.clone();
+                Some((first, dir))
+            })
+            .min_by(|a, b| a.0.cmp(&b.0));
+        let Some((name, dir)) = oldest else {
+            return;
+        };
+        let path = dir.join(&name);
+        delete_backup(&path);
+        if path.exists() {
+            // Can't be deleted; trying again would never end.
+            return;
+        }
+        forget_held(&dir, stem(&cutoff));
     }
 }
 

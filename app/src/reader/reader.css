@@ -265,7 +265,7 @@ foliate-view {
   display: grid;
   overflow-y: auto;
   gap: var(--space-3);
-  width: min(300px, calc(100vw - 20px));
+  width: min(360px, calc(100vw - 20px));
   max-height: calc(100vh - 80px);
   padding: var(--space-3);
 }

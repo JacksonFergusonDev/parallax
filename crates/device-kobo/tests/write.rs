@@ -3,8 +3,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use erc_device_kobo::{
-    BACKUPS_KEPT, BookCheck, DisplayMetadata, ERC_VERSION, Error, KoboDevice, LOG_KEPT, LogEntry,
-    Record, image_id_for, qhash, remove_book, replace_book, restore, tidy_apple_double,
+    BACKUPS_KEPT, BackupPolicy, BookCheck, DisplayMetadata, ERC_VERSION, Error, Keep, KoboDevice,
+    LOG_KEPT, LogEntry, Record, backups_size, delete_all_backups, image_id_for, qhash, remove_book,
+    replace_book, restore, tidy_apple_double,
 };
 use rusqlite::Connection;
 
@@ -628,6 +629,93 @@ fn keeps_backups_from_before_a_removal_past_the_recent_ones() {
     let listed = kobo.backups(&backups);
     assert!(listed.iter().any(|b| b.file == removal));
     assert_eq!(listed.len(), BACKUPS_KEPT + 2);
+}
+
+#[test]
+fn keeping_only_the_latest_leaves_one_backup_and_no_unreachable_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, _db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    remove_with_backup(&kobo, &backups, BOOK);
+    for _ in 0..3 {
+        kobo.open_writer(&backups).unwrap().close().unwrap();
+    }
+    assert!(kobo.backups(&backups).len() > 1);
+    let held = backups.join("N000000000001/removed");
+    assert_eq!(fs::read_dir(&held).unwrap().count(), 1);
+
+    // Saving applies at once, without a write session.
+    let latest = BackupPolicy {
+        keep: Keep::Latest,
+        max_bytes: None,
+    };
+    latest.save(&backups).unwrap();
+    assert_eq!(BackupPolicy::load(&backups), latest);
+    assert_eq!(kobo.backups(&backups).len(), 1);
+    // The removal is older than every backup left, so it can't come back.
+    assert_eq!(fs::read_dir(&held).unwrap().count(), 0);
+
+    kobo.open_writer(&backups).unwrap().close().unwrap();
+    assert_eq!(kobo.backups(&backups).len(), 1);
+}
+
+#[test]
+fn a_size_limit_drops_the_oldest_backups_but_never_the_newest() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, _db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    for _ in 0..4 {
+        kobo.open_writer(&backups).unwrap().close().unwrap();
+    }
+    let listed = kobo.backups(&backups);
+    assert_eq!(listed.len(), 4);
+    let newest = listed[0].file.clone();
+    let one = backups_size(&backups) / 4;
+
+    // Room for about two: the oldest go first.
+    BackupPolicy {
+        keep: Keep::History,
+        max_bytes: Some(one * 2 + one / 2),
+    }
+    .save(&backups)
+    .unwrap();
+    let names: Vec<String> = kobo.backups(&backups).into_iter().map(|b| b.file).collect();
+    assert_eq!(
+        names,
+        listed[..2]
+            .iter()
+            .map(|b| b.file.clone())
+            .collect::<Vec<_>>()
+    );
+    assert!(backups_size(&backups) <= one * 2 + one / 2);
+
+    // Even a limit nothing fits under keeps the newest.
+    BackupPolicy {
+        keep: Keep::History,
+        max_bytes: Some(1),
+    }
+    .save(&backups)
+    .unwrap();
+    let left = kobo.backups(&backups);
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].file, newest);
+}
+
+#[test]
+fn deleting_every_backup_keeps_the_policy() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, _db) = fake_kobo(dir.path());
+    let backups = dir.path().join("backups");
+    let policy = BackupPolicy {
+        keep: Keep::Latest,
+        max_bytes: Some(1_000_000_000),
+    };
+    policy.save(&backups).unwrap();
+    remove_with_backup(&kobo, &backups, BOOK);
+    delete_all_backups(&backups).unwrap();
+    assert!(kobo.backups(&backups).is_empty());
+    assert!(!backups.join("N000000000001").exists());
+    assert_eq!(BackupPolicy::load(&backups), policy);
 }
 
 #[test]

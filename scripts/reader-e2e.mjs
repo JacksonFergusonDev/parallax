@@ -1,13 +1,14 @@
-// Runs the reader in a real build of the app against books in
-// tests/fixtures/reader, in an empty library under a temporary HOME. Run it
-// with `just test-reader`. Windows open on screen while it runs.
+// Runs the reader, and the Settings window, in a real build of the app
+// against books in tests/fixtures/reader, in an empty library under a
+// temporary HOME. Run it with `just test-reader`. Windows open on screen
+// while it runs.
 //
 // The hostile book's scripts save reader settings, which a reader window may
 // do, so any script that runs leaves a mark. A control run with the reader's
 // CSP loosened must leave that mark, or the test can't see anything.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -60,8 +61,9 @@ function query(sql, ...params) {
   }
 }
 
-const readerSettings = () =>
-  query("SELECT value FROM settings WHERE key = 'reader'")[0]?.value ?? null;
+const setting = (key) =>
+  query("SELECT value FROM settings WHERE key = ?", key)[0]?.value ?? null;
+const readerSettings = () => setting("reader");
 const position = (id) =>
   query("SELECT * FROM reader_positions WHERE book_id = ?", id)[0] ?? null;
 
@@ -78,6 +80,24 @@ function read(id, steps = [], env = {}) {
     },
   });
 }
+
+/** Opens the Settings window alone, runs `steps` in it, and waits for it to quit. */
+function inSettings(steps) {
+  return run(join(bin, "Parallax"), [], {
+    timeout: RUN_TIMEOUT_MS,
+    env: {
+      HOME: home,
+      ERC_E2E_SETTINGS: "1",
+      ERC_E2E_STEPS: steps.join("@@"),
+      ERC_E2E_SECS: "2",
+    },
+  });
+}
+
+/** A script that clicks the button or tab whose text is `text`. */
+const clickText = (selector, text) =>
+  `[...document.querySelectorAll(${JSON.stringify(selector)})]` +
+  `.find((e) => e.textContent.trim() === ${JSON.stringify(text)}).click()`;
 
 const everySection = [0, 1, 2, 3].map((i) => `${view}.goTo(${i})`);
 
@@ -199,4 +219,44 @@ test("a highlight with a note is kept for its book", async () => {
     query("SELECT id FROM reader_highlights WHERE book_id = ?", ids.Hostile).length,
     0,
   );
+});
+
+test("the Settings window changes settings, and backups at once", async () => {
+  await inSettings([
+    // The window reopens on the tab it was last left on.
+    clickText('[role="tab"]', "General"),
+    clickText(".theme-option", "Sepia"),
+    clickText('[role="tab"]', "Kobo"),
+    `[...document.querySelectorAll("label")].find((l) =>` +
+      ` l.textContent.includes("Apply grouping rules")).click()`,
+    clickText('[role="tab"]', "Backups"),
+    // React listens for a change event after the value is set natively.
+    `const s = document.querySelector(".settings-pane select");` +
+      `Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")` +
+      `.set.call(s, "none"); s.dispatchEvent(new Event("change", { bubbles: true }))`,
+  ]);
+  assert.equal(setting("theme"), "sepia");
+  assert.equal(setting("kobo_rules"), "off");
+  const policy = JSON.parse(
+    await readFile(
+      join(home, "Library/Application Support/dev.erc.companion/device-backups/policy.json"),
+      "utf8",
+    ),
+  );
+  assert.deepEqual(policy, { keep: "history", max_bytes: null });
+});
+
+test("a reader on Auto shows the app's theme", async () => {
+  const db = new DatabaseSync(libraryFile());
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('theme', 'sepia')").run();
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('reader', ?)").run(
+    JSON.stringify({ fontSize: 100, theme: "auto" }),
+  );
+  db.close();
+  // Only a sepia page makes the text larger, which saves the settings.
+  await read(ids.Long, [
+    `if (document.documentElement.dataset.theme === "sepia")` +
+      ` document.getElementById("larger").click()`,
+  ]);
+  assert.match(readerSettings() ?? "", /"fontSize":110/, "the reader wasn't sepia");
 });

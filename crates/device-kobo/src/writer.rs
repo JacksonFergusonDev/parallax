@@ -66,7 +66,7 @@ impl KoboDevice {
             .query_row("SELECT version FROM DbVersion", [], |r| r.get(0))
             .ok();
         self.write_sidecar(&backup, &[], db_version);
-        prune(&dir);
+        prune(backup_root, &dir);
         Ok(DeviceWriter {
             device: self,
             conn: Some(conn),

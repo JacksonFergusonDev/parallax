@@ -38,16 +38,22 @@ The initial main window is 1280 × 900, with an 800 × 560 minimum. Existing sav
 
 ## Color and interaction
 
-Both windows import `tokens.css`. Use semantic roles (`--bg`, `--surface`, `--sunken`, `--fg`, `--muted`, `--border`, `--accent`, `--accent-fg`, `--ok`, `--warn`, `--danger`, `--status-fg`), not isolated hex colors in new controls. Gold is darker in light mode so text and primary buttons remain legible; dark mode uses luminous gold against cool ink surfaces. Error and warning messages must include text or an icon, not color alone. Book artwork and charts can have their own palettes.
+Every window (main, Settings and reader) imports `tokens.css`. Use semantic roles (`--bg`, `--surface`, `--sunken`, `--fg`, `--muted`, `--border`, `--accent`, `--accent-fg`, `--ok`, `--warn`, `--danger`, `--status-fg`), not isolated hex colors in new controls. Gold is darker in light mode so text and primary buttons remain legible; dark mode uses luminous gold against cool ink surfaces. Error and warning messages must include text or an icon, not color alone. Book artwork and charts can have their own palettes.
 
 Normal UI text and semantic status colors must maintain at least 4.5:1 contrast on their base surfaces. The palette test checks this in both themes, including primary button text and text on solid status badges. Color mixes, opacity, overlaid cover badges, and focus rings still require visual review; passing the base palette test is not a complete accessibility audit. Avoid reducing the opacity of readable metadata.
 
-Shared control primitives live in `tokens.css`; main-window component styles live in `styles.css`, and reader-specific layout lives in `reader/reader.css`. Reader page palettes are in `reader/appearance.ts` because publisher content runs in isolated documents. Its light/dark paper, ink, and link colors track the application palette; sepia is a reading-only theme.
+Shared control primitives live in `tokens.css`; main-window component styles live in `styles.css`, and reader-specific layout lives in `reader/reader.css`. Reader page palettes are in `reader/appearance.ts` because publisher content runs in isolated documents. Its paper, ink, and link colors track each application theme (see Themes).
 
 Use visible keyboard focus, consistent hover/pressed/disabled states, and a stable primary action location. Standard UI feedback uses the 120 ms or 200 ms motion tokens. Existing cover-lift motion is a deliberate artwork exception. Respect reduced motion in both windows. Preserve the existing focus, keyboard shortcuts, selection, and safe device-operation behavior when changing presentation.
+
+## Themes
+
+The Settings window offers System, Light, Dark, Sepia and High contrast. Each window shows one palette through `data-theme` on its root (`light`, `dark`, `sepia`, `contrast` or `contrast-dark`), chosen by `app/src/design/theme.ts`: System and High contrast follow macOS between light and dark. Every palette in `tokens.css` defines the same colour roles, and a `[data-theme]` element anywhere previews that palette, which is how the Settings window draws its theme swatches. Before a window sets its theme, `:root:not([data-theme])` follows the system; the contract test keeps that fallback identical to Dark.
+
+Sepia is warm paper for long reading, built around the reader's sepia page. High contrast keeps every text colour, status colour and primary button at 7:1 or better and uses stronger borders; the palette test enforces it. The gold accent stays in every theme. Reader page palettes in `reader/appearance.ts` mirror each theme (the page is the surface in light themes, the background in dark ones), and a reader on Auto follows the app. New UI must work in all five palettes: use the colour roles, never a colour chosen for one theme.
 
 ## Verification and future changes
 
 `app/src/design/design.test.ts` scans authored CSS for unapproved type sizes, restricts artwork exceptions, rejects alternative common control radii, verifies the type range, and checks palette contrast. It runs through the ordinary `pnpm test` / `just check` workflow. New tokens need a role and a corresponding update here; do not add a token merely to preserve an arbitrary local value. Inline font sizes and local font shorthands are not permitted for new UI.
 
-Before accepting visual changes, inspect Library (covers and list), selected book details, On Kobo, Reading, menus, a large review dialog, and the reader. Check both appearances, the default and minimum window sizes, long metadata, increased text scale, keyboard focus, and reduced motion. Browser mock data is appropriate for presentation checks; it does not verify actual hardware behavior.
+Before accepting visual changes, inspect Library (covers and list), selected book details, On Kobo, Reading, menus, a large review dialog, and the reader. Check every theme (at least Light, Dark and High contrast), the default and minimum window sizes, long metadata, increased text scale, keyboard focus, and reduced motion. Browser mock data is appropriate for presentation checks; it does not verify actual hardware behavior.

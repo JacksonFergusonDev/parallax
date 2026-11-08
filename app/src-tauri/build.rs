@@ -4,7 +4,7 @@
 //! and that each command goes to the main window or reader windows, not both.
 
 const COMMANDS: &[&str] = &[
-    "show_main_window",
+    "show_window",
     "list_devices",
     "library_list",
     "library_import",
@@ -42,6 +42,14 @@ const COMMANDS: &[&str] = &[
     "enhance_apply",
     "setting_get",
     "setting_set",
+    "settings_all",
+    "settings_reset",
+    "backup_settings",
+    "backup_settings_set",
+    "backup_delete_all",
+    "show_folder",
+    "reader_settings_get",
+    "reader_settings_set",
     "device_duplicates",
     "dismiss_duplicates",
     "list_collections",

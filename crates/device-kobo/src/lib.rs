@@ -23,8 +23,8 @@ use erc_device::{Capabilities, DeviceInfo, DeviceKind};
 
 pub use annotations::{Annotation, AnnotationKind};
 pub use backups::{
-    BACKUPS_KEPT, BackupInfo, DAILY_BACKUPS_KEPT, REMOVAL_BACKUPS_KEPT, REMOVED_KEPT_DAYS,
-    RestoreOutcome,
+    BACKUPS_KEPT, BackupInfo, BackupPolicy, DAILY_BACKUPS_KEPT, DEFAULT_MAX_BYTES, Keep,
+    REMOVAL_BACKUPS_KEPT, REMOVED_KEPT_DAYS, RestoreOutcome, backups_size, delete_all_backups,
 };
 pub use collections::{
     add_to_collection, create_collection, delete_collection, remove_from_collection,

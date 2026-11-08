@@ -1,16 +1,17 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
+  "description": "Capability for the main and Settings windows, which show only the app's own pages",
   "windows": [
-    "main"
+    "main",
+    "settings"
   ],
   "permissions": [
     "core:default",
     "dialog:allow-open",
     "dialog:allow-message",
     "dialog:allow-save",
-    "allow-show-main-window",
+    "allow-show-window",
     "allow-list-devices",
     "allow-library-list",
     "allow-library-import",
@@ -48,6 +49,14 @@
     "allow-enhance-apply",
     "allow-setting-get",
     "allow-setting-set",
+    "allow-settings-all",
+    "allow-settings-reset",
+    "allow-backup-settings",
+    "allow-backup-settings-set",
+    "allow-backup-delete-all",
+    "allow-show-folder",
+    "allow-reader-settings-get",
+    "allow-reader-settings-set",
     "allow-device-duplicates",
     "allow-dismiss-duplicates",
     "allow-list-collections",

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { paletteOf } from "../reader/appearance";
+import { APP_THEMES, isDark, shownTheme, type ShownTheme } from "./theme";
 // @ts-expect-error Node types are not part of the browser application.
 import { readFileSync, readdirSync } from "node:fs";
 const tokens: string = readFileSync(
@@ -99,23 +100,52 @@ describe("Parallax design contract", () => {
     }
   });
 
-  it("keeps reader light and dark palettes aligned with the shell", () => {
-    const blocks = [...tokens.matchAll(/:root\s*\{([^}]+)\}/g)];
-    for (const [index, theme] of (["light", "dark"] as const).entries()) {
-      const palette = Object.fromEntries(
-        [...blocks[index][1].matchAll(/--([\w-]+):\s*(#[a-f\d]{6})/g)].map(
-          (m) => [m[1], m[2]],
-        ),
-      );
-      expect(paletteOf(theme)).toEqual({
-        background: theme === "light" ? palette.surface : palette.bg,
+  const colours = (block: string): Record<string, string> =>
+    Object.fromEntries(
+      [...block.matchAll(/--([\w-]+):\s*(#[a-f\d]{6})/g)].map((m) => [
+        m[1],
+        m[2],
+      ]),
+    );
+  const themes = Object.fromEntries(
+    [
+      ...tokens.matchAll(
+        /^(?::root,\s*)?\[data-theme="([\w-]+)"\]\s*\{([^}]+)\}/gm,
+      ),
+    ].map((m) => [m[1], colours(m[2])]),
+  ) as Record<ShownTheme, Record<string, string>>;
+  const shown = [
+    ...new Set(
+      APP_THEMES.flatMap(({ value }) => [
+        shownTheme(value, false),
+        shownTheme(value, true),
+      ]),
+    ),
+  ];
+
+  it("defines every colour role in every theme", () => {
+    expect(Object.keys(themes).sort()).toEqual([...shown].sort());
+    const roles = Object.keys(themes.light).sort();
+    expect(roles).toHaveLength(12);
+    for (const [name, palette] of Object.entries(themes))
+      expect(Object.keys(palette).sort(), name).toEqual(roles);
+    // Before a window picks its theme, the system's dark is the Dark theme.
+    const fallback = tokens.match(/:root:not\(\[data-theme\]\)\s*\{([^}]+)\}/)!;
+    expect(colours(fallback[1])).toEqual(themes.dark);
+  });
+
+  it("keeps reader palettes aligned with the shell", () => {
+    for (const theme of shown) {
+      const palette = themes[theme];
+      expect(paletteOf(theme), theme).toEqual({
+        background: isDark(theme) ? palette.bg : palette.surface,
         text: palette.fg,
         link: palette.accent,
       });
     }
   });
 
-  it("maintains readable palette contrast in both appearances", () => {
+  it("maintains readable palette contrast in every theme", () => {
     const luminance = (hex: string) => {
       const channels = hex.match(/[a-f\d]{2}/gi)!.map((s) => {
         const n = parseInt(s, 16) / 255;
@@ -123,14 +153,13 @@ describe("Parallax design contract", () => {
       });
       return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
     };
-    expect([...tokens.matchAll(/:root\s*\{/g)]).toHaveLength(2);
-    for (const block of tokens.matchAll(/:root\s*\{([^}]+)\}/g)) {
-      const palette = Object.fromEntries(
-        [...block[1].matchAll(/--([\w-]+):\s*(#[a-f\d]{6})/g)].map((m) => [
-          m[1],
-          m[2],
-        ]),
-      );
+    const ratio = (a: string, b: string) => {
+      const values = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (values[0] + 0.05) / (values[1] + 0.05);
+    };
+    for (const [name, palette] of Object.entries(themes)) {
+      // High contrast means at least 7:1 for every colour of text.
+      const least = name.startsWith("contrast") ? 7 : 4.5;
       for (const foreground of [
         "fg",
         "muted",
@@ -140,33 +169,22 @@ describe("Parallax design contract", () => {
         "danger",
       ]) {
         for (const background of ["bg", "surface", "sunken"]) {
-          const values = [
-            luminance(palette[foreground]),
-            luminance(palette[background]),
-          ].sort((a, b) => b - a);
           expect(
-            (values[0] + 0.05) / (values[1] + 0.05),
-            `${foreground} on ${background}`,
-          ).toBeGreaterThanOrEqual(4.5);
+            ratio(palette[foreground], palette[background]),
+            `${name}: ${foreground} on ${background}`,
+          ).toBeGreaterThanOrEqual(least);
         }
       }
       for (const status of ["ok", "warn", "danger"]) {
-        const values = [
-          luminance(palette["status-fg"]),
-          luminance(palette[status]),
-        ].sort((a, b) => b - a);
         expect(
-          (values[0] + 0.05) / (values[1] + 0.05),
-          `text on ${status}`,
-        ).toBeGreaterThanOrEqual(4.5);
+          ratio(palette["status-fg"], palette[status]),
+          `${name}: text on ${status}`,
+        ).toBeGreaterThanOrEqual(least);
       }
-      const values = [
-        luminance(palette["accent-fg"]),
-        luminance(palette.accent),
-      ].sort((a, b) => b - a);
-      expect((values[0] + 0.05) / (values[1] + 0.05)).toBeGreaterThanOrEqual(
-        4.5,
-      );
+      expect(
+        ratio(palette["accent-fg"], palette.accent),
+        `${name}: primary button text`,
+      ).toBeGreaterThanOrEqual(least);
     }
   });
 });

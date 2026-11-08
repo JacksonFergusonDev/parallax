@@ -110,6 +110,7 @@ import {
   type ReviewBatch,
 } from "./importReview";
 import { usePresentation } from "./presentation";
+import { rememberView, usePreferences, type View } from "./preferences";
 import "./styles.css";
 
 const DEVICE_POLL_MS = 2000;
@@ -128,10 +129,21 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const appRef = useRef<HTMLDivElement>(null);
   const [detected, setDetected] = useState(false);
-  usePresentation(appRef, loaded && detected);
+  const [view, setView] = useState<View>("library");
+  // Opens on the view Settings says, once it's known.
+  const themed = usePreferences(setView);
+  usePresentation(appRef, loaded && detected && themed);
   const [device, setDevice] = useState<DeviceInfo | null>(null);
   const [onDevice, setOnDevice] = useState<Map<number, OnDevice>>(new Map());
-  const [view, setView] = useState<"library" | "device" | "reading">("library");
+  const shownOnce = useRef(false);
+  useEffect(() => {
+    // The first render is the default view, not one the user chose.
+    if (!shownOnce.current) {
+      shownOnce.current = true;
+      return;
+    }
+    rememberView(view);
+  }, [view]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [deviceRevision, setDeviceRevision] = useState(0);
   /** Collection to put sent books in: "" none, NEW_COLLECTION, or a name. */
@@ -572,6 +584,7 @@ export default function App() {
 
   const transfer = async (kind: "sending" | "updating", ids: number[]) => {
     if (!device || ids.length === 0) return;
+    let thenEject = false;
     batch.current = ids;
     setStatuses(Object.fromEntries(ids.map((id) => [id, { stage: "queued" }])));
     setBusy(kind);
@@ -603,6 +616,10 @@ export default function App() {
         setNewCollection("");
       }
       const failed = outcomes.filter((o) => "Err" in o.result).length;
+      thenEject =
+        kind === "sending" &&
+        failed === 0 &&
+        (await getSetting("eject_after_send").catch(() => null)) === "on";
       setNotice(
         failed
           ? {
@@ -628,6 +645,7 @@ export default function App() {
         .catch(() => {});
       setBusy(null);
     }
+    if (thenEject) await eject();
   };
 
   /** Puts selected books that are already on the Kobo into a collection. */

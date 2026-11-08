@@ -21,19 +21,19 @@
   -webkit-font-smoothing: antialiased;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --shadow-book:
-      0 1px 1px rgb(0 0 0 / 30%), 0 4px 8px rgb(0 0 0 / 30%),
-      0 12px 26px -6px rgb(0 0 0 / 45%);
-    --shadow-book-lift:
-      0 2px 2px rgb(0 0 0 / 28%), 0 14px 20px rgb(0 0 0 / 35%),
-      0 30px 48px -12px rgb(0 0 0 / 58%);
-    --drop-book: drop-shadow(0 1px 1px rgb(0 0 0 / 40%))
-      drop-shadow(0 6px 9px rgb(0 0 0 / 45%));
-    --drop-book-lift: drop-shadow(0 2px 2px rgb(0 0 0 / 35%))
-      drop-shadow(0 20px 18px rgb(0 0 0 / 55%));
-  }
+/* The main window always has a data-theme before it is shown. */
+[data-theme="dark"],
+[data-theme="contrast-dark"] {
+  --shadow-book:
+    0 1px 1px rgb(0 0 0 / 30%), 0 4px 8px rgb(0 0 0 / 30%),
+    0 12px 26px -6px rgb(0 0 0 / 45%);
+  --shadow-book-lift:
+    0 2px 2px rgb(0 0 0 / 28%), 0 14px 20px rgb(0 0 0 / 35%),
+    0 30px 48px -12px rgb(0 0 0 / 58%);
+  --drop-book: drop-shadow(0 1px 1px rgb(0 0 0 / 40%))
+    drop-shadow(0 6px 9px rgb(0 0 0 / 45%));
+  --drop-book-lift: drop-shadow(0 2px 2px rgb(0 0 0 / 35%))
+    drop-shadow(0 20px 18px rgb(0 0 0 / 55%));
 }
 
 @media (prefers-reduced-motion: reduce) {

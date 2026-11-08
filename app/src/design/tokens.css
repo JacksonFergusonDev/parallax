@@ -31,6 +31,20 @@
   --sidebar-width: 224px;
   --duration-fast: 120ms;
   --duration-normal: 200ms;
+  --brand-navy: #0f172a;
+  --brand-gold: #f5c568;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* Themes. Every window sets data-theme from the Settings choice (see
+   theme.ts); before it does, the system's appearance decides. A theme can
+   also be set on one element, to preview it. Each theme defines every
+   colour role, and the palette test checks their contrast. */
+:root,
+[data-theme="light"] {
   --bg: #f6f3ec;
   --surface: #fffdf8;
   --sunken: #eee9de;
@@ -43,17 +57,11 @@
   --ok: #356c51;
   --warn: #885b16;
   --danger: #ad392e;
-  --brand-navy: #0f172a;
-  --brand-gold: #f5c568;
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --bg: #191c21;
     --surface: #22262d;
     --sunken: #1d2026;
@@ -68,6 +76,72 @@
     --danger: #ee9388;
     color-scheme: dark;
   }
+}
+
+[data-theme="dark"] {
+  --bg: #191c21;
+  --surface: #22262d;
+  --sunken: #1d2026;
+  --fg: #f1ede4;
+  --muted: #b2ad9f;
+  --border: #3b4049;
+  --accent: #f5c568;
+  --accent-fg: #29200f;
+  --status-fg: #191c21;
+  --ok: #83c5a1;
+  --warn: #ebbc6b;
+  --danger: #ee9388;
+  color-scheme: dark;
+}
+
+/* Warm paper for long sessions; the reader's sepia page is its surface. */
+[data-theme="sepia"] {
+  --bg: #e9dabd;
+  --surface: #f1e4cc;
+  --sunken: #e1cfae;
+  --fg: #43341f;
+  --muted: #5f4b30;
+  --border: #cdb994;
+  --accent: #8a3c1b;
+  --accent-fg: #f1e4cc;
+  --status-fg: #f1e4cc;
+  --ok: #2e5a3b;
+  --warn: #7a4710;
+  --danger: #9c2d20;
+  color-scheme: light;
+}
+
+/* High contrast: at least 7:1 for text, and borders that stand out. */
+[data-theme="contrast"] {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --sunken: #ececec;
+  --fg: #000000;
+  --muted: #2e2e2e;
+  --border: #5a5a5a;
+  --accent: #5c3f00;
+  --accent-fg: #ffffff;
+  --status-fg: #ffffff;
+  --ok: #0a5229;
+  --warn: #5c3a00;
+  --danger: #9b0f07;
+  color-scheme: light;
+}
+
+[data-theme="contrast-dark"] {
+  --bg: #000000;
+  --surface: #0f0f0f;
+  --sunken: #000000;
+  --fg: #ffffff;
+  --muted: #dcdcdc;
+  --border: #9a9a9a;
+  --accent: #ffd479;
+  --accent-fg: #000000;
+  --status-fg: #000000;
+  --ok: #7fe3a9;
+  --warn: #ffcf70;
+  --danger: #ffa196;
+  color-scheme: dark;
 }
 
 /* Shared control primitives, used by both application windows. */

@@ -2,8 +2,9 @@
 // Rust, so nothing here can ask for another one.
 import { invoke } from "@tauri-apps/api/core";
 import type { BookLoader } from "foliate-js/epub.js";
+import { appTheme, type AppTheme } from "../design/theme";
 
-export type Theme = "auto" | "light" | "sepia" | "dark";
+export type Theme = "auto" | "light" | "sepia" | "dark" | "contrast";
 
 export type Flow = "paginated" | "scrolled";
 export type Measure = "narrow" | "medium" | "wide";
@@ -19,6 +20,10 @@ export interface Settings {
   margins: Measure;
   spread: Spread;
   spacing: Spacing;
+  /** Read-aloud speed, as a percent of normal. */
+  speechRate: number;
+  /** The system voice's URI; null for the default voice. */
+  voice: string | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -29,6 +34,8 @@ export const DEFAULT_SETTINGS: Settings = {
   margins: "medium",
   spread: "auto",
   spacing: "book",
+  speechRate: 100,
+  voice: null,
 };
 
 export type HighlightColor = "yellow" | "green" | "blue" | "pink";
@@ -61,12 +68,32 @@ export interface OpenedBook {
   entries: { name: string; size: number }[];
   position: Position | null;
   settings: Settings;
+  appTheme: AppTheme;
 }
 
 export const openedBook = async (): Promise<OpenedBook> => {
-  const book = await invoke<OpenedBook>("reader_book");
-  return { ...book, settings: { ...DEFAULT_SETTINGS, ...book.settings } };
+  const { app_theme, ...book } = await invoke<
+    Omit<OpenedBook, "appTheme"> & { app_theme?: string }
+  >("reader_book");
+  return {
+    ...book,
+    settings: { ...DEFAULT_SETTINGS, ...book.settings },
+    appTheme: appTheme(app_theme),
+  };
 };
+
+/** What the app sends an open reader when Settings change. */
+export interface SettingsPush {
+  settings?: Settings;
+  appTheme?: string;
+}
+
+/** Calls `handler` with each change the app sends this window. */
+export function onSettingsPush(handler: (push: SettingsPush) => void) {
+  window.addEventListener("parallax-settings", (event) =>
+    handler((event as CustomEvent<SettingsPush>).detail ?? {}),
+  );
+}
 
 export const savePosition = (position: Position) =>
   invoke<void>("reader_save_position", { position });

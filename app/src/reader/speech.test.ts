@@ -5,6 +5,7 @@ import {
   markAt,
   nextRate,
   ssmlToText,
+  voiceFor,
   type SpeechSource,
   type Voice,
 } from "./speech";
@@ -77,6 +78,25 @@ function source(blocks: string[]) {
   };
   return { src, marks };
 }
+
+describe("voiceFor", () => {
+  const voices = [
+    { voiceURI: "ava", lang: "en-US" },
+    { voiceURI: "thomas", lang: "fr_FR" },
+  ] as SpeechSynthesisVoice[];
+
+  it("uses the chosen voice for books in its language", () => {
+    expect(voiceFor(voices, "ava", "en-GB")?.voiceURI).toBe("ava");
+    expect(voiceFor(voices, "thomas", "fr")?.voiceURI).toBe("thomas");
+    expect(voiceFor(voices, "ava", undefined)?.voiceURI).toBe("ava");
+  });
+
+  it("leaves other languages, and missing voices, to the system", () => {
+    expect(voiceFor(voices, "ava", "fr")).toBeNull();
+    expect(voiceFor(voices, "gone", "en")).toBeNull();
+    expect(voiceFor(voices, null, "en")).toBeNull();
+  });
+});
 
 describe("Speaker", () => {
   it("reads block after block, lighting each sentence, and stops at the end", async () => {

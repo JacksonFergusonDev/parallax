@@ -17,10 +17,12 @@ import {
   shownTheme,
   stepFontSize,
 } from "./appearance";
+import { appTheme, isDark } from "../design/theme";
 import {
   bookLoader,
   deleteHighlight,
   highlights as loadHighlights,
+  onSettingsPush,
   openedBook,
   saveHighlight,
   savePosition,
@@ -112,13 +114,15 @@ function positionSaver(sections: { id: string }[]) {
   };
 }
 
-/** Text size, theme and layout, kept on the page and saved as they change. */
-function setUpAppearance(view: View, initial: Settings) {
-  let settings = initial;
+/** Text size, theme and layout, kept on the page and saved as they change.
+ * Settings and other readers can change them too, and the app's theme. */
+function setUpAppearance(view: View, opened: OpenedBook) {
+  let settings = opened.settings;
+  let app = opened.appTheme;
   const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
   const choices = document.querySelectorAll<HTMLElement>("[data-setting]");
   const listeners: (() => void)[] = [];
-  const theme = () => shownTheme(settings.theme, systemDark.matches);
+  const theme = () => shownTheme(settings.theme, app, systemDark.matches);
   const styles = () => bookStyles(settings, theme());
   const apply = () => {
     const { background, text, link } = paletteOf(theme());
@@ -127,7 +131,7 @@ function setUpAppearance(view: View, initial: Settings) {
     style.setProperty("--ink", text);
     style.setProperty("--link", link);
     style.setProperty("--accent", link);
-    style.colorScheme = theme() === "dark" ? "dark" : "light";
+    style.colorScheme = isDark(theme()) ? "dark" : "light";
     document.documentElement.dataset.theme = theme();
     for (const [name, value] of Object.entries(layoutAttributes(settings))) {
       if (view.renderer.getAttribute(name) !== value)
@@ -151,6 +155,11 @@ function setUpAppearance(view: View, initial: Settings) {
     change({ fontSize: stepFontSize(settings.fontSize, direction) });
 
   systemDark.addEventListener("change", apply);
+  onSettingsPush((push) => {
+    if (push.settings) settings = { ...settings, ...push.settings };
+    if (push.appTheme) app = appTheme(push.appTheme);
+    apply();
+  });
   element("smaller").addEventListener("click", () => resize(-1));
   element("larger").addEventListener("click", () => resize(1));
   for (const choice of choices) {
@@ -162,6 +171,8 @@ function setUpAppearance(view: View, initial: Settings) {
   return {
     resize,
     styles,
+    settings: () => settings,
+    change,
     scrolled: () => settings.flow === "scrolled",
     /** Calls `listener` whenever the appearance changes. */
     onChange: (listener: () => void) => listeners.push(listener),
@@ -717,8 +728,12 @@ async function copy(text: string) {
   }
 }
 
-/** Read aloud, following along on the page. */
-function setUpSpeech(view: View, book: Book) {
+/** Read aloud, following along on the page, at the saved voice and speed. */
+function setUpSpeech(
+  view: View,
+  book: Book,
+  appearance: ReturnType<typeof setUpAppearance>,
+) {
   const listen = element("listen");
   const bar = element("speech");
   const toggle = element("speech-toggle");
@@ -772,6 +787,14 @@ function setUpSpeech(view: View, book: Book) {
     bar.hidden = state === "stopped";
     toggle.textContent = state === "playing" ? "Pause" : "Play";
   });
+  const applySaved = () => {
+    const { speechRate, voice } = appearance.settings();
+    if (speaker.rate !== speechRate / 100) speaker.setRate(speechRate / 100);
+    speaker.voiceURI = voice;
+    rate.textContent = `${speaker.rate}×`;
+  };
+  applySaved();
+  appearance.onChange(applySaved);
   listen.addEventListener("click", () => {
     if (speaker.state === "stopped") void speaker.play();
     else speaker.stop();
@@ -781,8 +804,9 @@ function setUpSpeech(view: View, book: Book) {
     else void speaker.play();
   });
   rate.addEventListener("click", () => {
-    speaker.setRate(nextRate(speaker.rate));
-    rate.textContent = `${speaker.rate}×`;
+    appearance.change({
+      speechRate: Math.round(nextRate(speaker.rate) * 100),
+    });
   });
   element("speech-stop").addEventListener("click", () => speaker.stop());
   window.addEventListener("pagehide", () => speaker.stop());
@@ -815,14 +839,14 @@ async function read(opened: OpenedBook) {
   const next = () => turnWith(() => view.next());
   const previous = () => turnWith(() => view.prev());
 
-  const appearance = setUpAppearance(view, opened.settings);
+  const appearance = setUpAppearance(view, opened);
   const panels = setUpPanels((name) => {
     if (name === "search") element("query").focus();
     if (name === "notes") marks.current?.renderList();
   });
   const finder = setUpSearch(view, panels, go);
   const footer = setUpFooter(view, book, turnWith);
-  const speech = setUpSpeech(view, book);
+  const speech = setUpSpeech(view, book, appearance);
 
   const closeAll = () => {
     panels.close();

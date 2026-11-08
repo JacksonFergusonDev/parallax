@@ -22,9 +22,14 @@ describe("text size", () => {
 
 describe("themes", () => {
   it("follows the system on auto", () => {
-    expect(shownTheme("auto", true)).toBe("dark");
-    expect(shownTheme("auto", false)).toBe("light");
-    expect(shownTheme("sepia", true)).toBe("sepia");
+    expect(shownTheme("auto", "system", true)).toBe("dark");
+    expect(shownTheme("auto", "system", false)).toBe("light");
+    expect(shownTheme("sepia", "system", true)).toBe("sepia");
+    // Auto is the app's theme, whatever macOS is.
+    expect(shownTheme("auto", "sepia", true)).toBe("sepia");
+    expect(shownTheme("auto", "light", true)).toBe("light");
+    expect(shownTheme("auto", "contrast", true)).toBe("contrast-dark");
+    expect(shownTheme("contrast", "light", false)).toBe("contrast");
   });
 
   it("keeps the publisher's colours in light", () => {

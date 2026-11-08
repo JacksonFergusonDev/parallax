@@ -1,6 +1,7 @@
 // Typed wrappers over the Tauri commands in src-tauri/src/lib.rs. Shapes
 // mirror the serde output of the Rust types.
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import type { Settings as ReaderSettings } from "./reader/backend";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { readCache } from "./readCache";
 
@@ -582,11 +583,64 @@ export const enhancePropose = (ids: number[], mount: string | null) =>
   invoke<Proposal[]>("enhance_propose", { ids, mount });
 export const enhanceApply = (accepted: Accepted[]) =>
   write<Book[]>("enhance_apply", { accepted }, ["library", "plans"]);
-export type SettingKey = "google_books_key" | "review_on_add";
+/** Settings kept in the library; a missing value is the default. See
+ * src-tauri/src/settings.rs for what each may hold. */
+export type SettingKey =
+  | "google_books_key"
+  | "review_on_add"
+  | "theme"
+  | "open_view"
+  | "last_view"
+  | "reader_windows"
+  | "kobo_series"
+  | "kobo_rules"
+  | "eject_after_send";
 export const getSetting = (key: SettingKey) =>
   invoke<string | null>("setting_get", { key });
 export const setSetting = (key: SettingKey, value: string | null) =>
   invoke<void>("setting_set", { key, value });
+export const allSettings = () =>
+  invoke<Partial<Record<SettingKey, string | null>>>("settings_all");
+/** Puts preferences back to their defaults; keeps the Google Books key. */
+export const resetSettings = () => invoke<void>("settings_reset");
+export interface SettingChange {
+  key: SettingKey;
+  value: string | null;
+}
+/** Each setting change, from whichever window made it. */
+export const onSettingChange = (
+  handler: (change: SettingChange) => void,
+): Promise<UnlistenFn> =>
+  listen<SettingChange>("setting-changed", (e) => handler(e.payload));
+
+export interface BackupPolicy {
+  keep: "history" | "latest";
+  /** The most the backup folder may take; null for no limit. */
+  max_bytes: number | null;
+}
+export interface BackupSettings {
+  policy: BackupPolicy;
+  used_bytes: number;
+}
+export const backupSettings = () => invoke<BackupSettings>("backup_settings");
+/** Saves the policy and applies it at once. */
+export const setBackupSettings = (policy: BackupPolicy) =>
+  invoke<BackupSettings>("backup_settings_set", { policy });
+export const deleteAllBackups = () =>
+  invoke<BackupSettings>("backup_delete_all");
+export const showFolder = (folder: "library" | "backups" | "data") =>
+  invoke<void>("show_folder", { folder });
+
+export type { Settings as ReaderSettings } from "./reader/backend";
+export const readerSettings = () =>
+  invoke<ReaderSettings>("reader_settings_get");
+export const setReaderSettings = (settings: ReaderSettings) =>
+  invoke<void>("reader_settings_set", { settings });
+/** Reader appearance changes, including those made in a reader. */
+export const onReaderSettingsChange = (
+  handler: (settings: ReaderSettings) => void,
+): Promise<UnlistenFn> =>
+  listen<ReaderSettings>("reader-settings-changed", (e) => handler(e.payload));
 export const onEnhanceProgress = (
   handler: (p: ImportProgress) => void,
 ): Promise<UnlistenFn> =>

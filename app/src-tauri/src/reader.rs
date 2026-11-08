@@ -11,9 +11,11 @@ use tauri::ipc::Response;
 use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::webview::NewWindowResponse;
 use tauri::{
-    AppHandle, Manager, State, Url, Webview, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    AppHandle, Emitter, EventTarget, Manager, State, Url, Webview, WebviewUrl,
+    WebviewWindowBuilder, WindowEvent,
 };
 
+use crate::settings::{self, AppTheme};
 use crate::{AppState, CmdResult, err};
 
 const LABEL_PREFIX: &str = "reader-";
@@ -32,10 +34,12 @@ impl OpenBooks {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum Theme {
+    /// As the app is.
     Auto,
     Light,
     Sepia,
     Dark,
+    Contrast,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,7 +80,7 @@ enum Spacing {
 
 /// Each field falls back to its default, so settings saved by an older build
 /// still load. Unknown values are refused.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ReaderSettings {
     /// Percent of the book's own text size.
@@ -88,6 +92,10 @@ pub struct ReaderSettings {
     margins: Measure,
     spread: Spread,
     spacing: Spacing,
+    /// Read-aloud speed, as a percent of normal.
+    speech_rate: u16,
+    /// The system voice to read aloud with, by its URI; `None` for the default.
+    voice: Option<String>,
 }
 
 impl Default for ReaderSettings {
@@ -100,6 +108,85 @@ impl Default for ReaderSettings {
             margins: Measure::default(),
             spread: Spread::default(),
             spacing: Spacing::default(),
+            speech_rate: 100,
+            voice: None,
+        }
+    }
+}
+
+const FONT_SIZES: std::ops::RangeInclusive<u16> = 80..=200;
+const SPEECH_RATES: std::ops::RangeInclusive<u16> = 50..=300;
+const MAX_VOICE: usize = 512;
+
+impl ReaderSettings {
+    fn check(&self) -> CmdResult<()> {
+        let fits = FONT_SIZES.contains(&self.font_size)
+            && SPEECH_RATES.contains(&self.speech_rate)
+            && self.voice.as_ref().is_none_or(|v| v.len() <= MAX_VOICE);
+        if fits {
+            Ok(())
+        } else {
+            Err("those reader settings are out of range".to_owned())
+        }
+    }
+}
+
+/// The saved reader appearance, or the default.
+pub fn saved_settings(lib: &erc_library::Library) -> ReaderSettings {
+    lib.setting(SETTINGS_KEY)
+        .ok()
+        .flatten()
+        .and_then(|json| serde_json::from_str(&json).ok())
+        .unwrap_or_default()
+}
+
+/// Saves the reader appearance and shows it in every reader but `from`, and
+/// in the Settings window.
+pub async fn store_settings(
+    app: &AppHandle,
+    state: &AppState,
+    settings: ReaderSettings,
+    from: Option<&str>,
+) -> CmdResult<()> {
+    settings.check()?;
+    let library = state.library.clone();
+    let json = serde_json::to_string(&settings).map_err(err)?;
+    let saved = json.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        library
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .set_setting(SETTINGS_KEY, Some(&saved))
+            .map_err(err)
+    })
+    .await
+    .map_err(err)??;
+    let _ = app.emit_to(
+        EventTarget::webview_window("settings"),
+        "reader-settings-changed",
+        &settings,
+    );
+    push(app, "settings", &json, from);
+    Ok(())
+}
+
+/// Tells open readers the app's theme changed.
+pub fn push_app_theme(app: &AppHandle, theme: AppTheme) {
+    if let Ok(json) = serde_json::to_string(&theme) {
+        push(app, "appTheme", &json, None);
+    }
+}
+
+/// Readers can't listen for events (a book could too), so the app sends
+/// them `{ [name]: json }` as a DOM event. `json` is serialised from a typed
+/// value, so it is data and nothing else.
+fn push(app: &AppHandle, name: &str, json: &str, except: Option<&str>) {
+    let script = format!(
+        "window.dispatchEvent(new CustomEvent('parallax-settings', {{ detail: {{ {name}: {json} }} }}))"
+    );
+    for (label, window) in app.webview_windows() {
+        if label.starts_with(LABEL_PREFIX) && Some(label.as_str()) != except {
+            let _ = window.eval(&script);
         }
     }
 }
@@ -172,6 +259,7 @@ pub struct ReaderBook {
     entries: Vec<Entry>,
     position: Option<ReaderPosition>,
     settings: ReaderSettings,
+    app_theme: AppTheme,
 }
 
 fn book_id(label: &str) -> CmdResult<i64> {
@@ -216,6 +304,14 @@ pub async fn reader_open(app: AppHandle, state: State<'_, AppState>, id: i64) ->
     .await
     .map_err(err)??;
 
+    if settings::is(&state, settings::READER_WINDOWS, "one") {
+        // One reader: this book takes the place of any other.
+        for (other, window) in app.webview_windows() {
+            if other.starts_with(LABEL_PREFIX) {
+                window.close().map_err(err)?;
+            }
+        }
+    }
     let builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("reader.html".into()))
         .title(title)
         .inner_size(860.0, 1000.0)
@@ -247,13 +343,10 @@ pub async fn reader_book(
 ) -> CmdResult<ReaderBook> {
     let id = book_id(webview.label())?;
     let library = state.library.clone();
+    let app_theme = AppTheme::saved(&state);
     let (path, title, position, settings) = tauri::async_runtime::spawn_blocking(move || {
         let lib = library.lock().unwrap_or_else(PoisonError::into_inner);
-        let settings = lib
-            .setting(SETTINGS_KEY)
-            .map_err(err)?
-            .and_then(|json| serde_json::from_str(&json).ok())
-            .unwrap_or_default();
+        let settings = saved_settings(&lib);
         CmdResult::Ok((
             lib.book_file(id),
             lib.book(id).map_err(err)?.title,
@@ -285,6 +378,7 @@ pub async fn reader_book(
         entries,
         position,
         settings,
+        app_theme,
     })
 }
 
@@ -334,20 +428,13 @@ pub async fn reader_save_position(
 /// Takes a typed value, so a book can only ever store valid settings.
 #[tauri::command]
 pub async fn reader_save_settings(
+    app: AppHandle,
+    webview: Webview,
     state: State<'_, AppState>,
     settings: ReaderSettings,
 ) -> CmdResult<()> {
-    let library = state.library.clone();
-    let json = serde_json::to_string(&settings).map_err(err)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        library
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .set_setting(SETTINGS_KEY, Some(&json))
-            .map_err(err)
-    })
-    .await
-    .map_err(err)?
+    book_id(webview.label())?;
+    store_settings(&app, &state, settings, Some(webview.label())).await
 }
 
 /// The window's book's highlights, in reading order.
@@ -454,9 +541,24 @@ mod tests {
         assert_eq!(old.font_size, 120);
         assert_eq!(old.flow, Flow::Paginated);
         assert_eq!(old.width, Measure::Medium);
-        let all = r#"{"fontSize":90,"theme":"sepia","flow":"scrolled","width":"wide","margins":"narrow","spread":"single","spacing":"loose"}"#;
+        assert_eq!(old.speech_rate, 100);
+        assert_eq!(old.voice, None);
+        let all = r#"{"fontSize":90,"theme":"contrast","flow":"scrolled","width":"wide","margins":"narrow","spread":"single","spacing":"loose","speechRate":125,"voice":"com.apple.voice.Ava"}"#;
         let new: ReaderSettings = serde_json::from_str(all).unwrap();
         assert_eq!(serde_json::to_string(&new).unwrap(), all);
+    }
+
+    #[test]
+    fn settings_out_of_range_are_refused() {
+        let with = |json: &str| {
+            serde_json::from_str::<ReaderSettings>(json)
+                .unwrap()
+                .check()
+        };
+        assert!(with("{}").is_ok());
+        assert!(with(r#"{"fontSize":1000}"#).is_err());
+        assert!(with(r#"{"speechRate":0}"#).is_err());
+        assert!(with(&format!(r#"{{"voice":"{}"}}"#, "v".repeat(600))).is_err());
     }
 
     #[test]

@@ -95,9 +95,28 @@ export interface Voice {
 
 export type SpeakerState = "stopped" | "playing" | "paused";
 
+/** The system voices, where speech has them. */
+const systemVoices = (): SpeechSynthesisVoice[] =>
+  window.speechSynthesis?.getVoices?.() ?? [];
+
+/** The chosen voice, if it can read `lang`: a voice for another language
+ * would mangle the book, so the system's own pick for it reads instead. */
+export function voiceFor(
+  voices: SpeechSynthesisVoice[],
+  uri: string | null,
+  lang: string | null | undefined,
+): SpeechSynthesisVoice | null {
+  const voice = uri ? voices.find((v) => v.voiceURI === uri) : undefined;
+  if (!voice) return null;
+  const primary = (code: string) => code.toLowerCase().split(/[-_]/)[0];
+  return !lang || primary(voice.lang) === primary(lang) ? voice : null;
+}
+
 export class Speaker {
   state: SpeakerState = "stopped";
   rate = 1;
+  /** The voice to read with; null for the system's default. */
+  voiceURI: string | null = null;
   /** Each utterance belongs to one run; cancelling starts another. */
   #run = 0;
 
@@ -106,6 +125,7 @@ export class Speaker {
     private onState: (state: SpeakerState) => void,
     private voice: Voice = window.speechSynthesis,
     private utterance = (text: string) => new SpeechSynthesisUtterance(text),
+    private voices = systemVoices,
   ) {}
 
   #set(state: SpeakerState) {
@@ -161,6 +181,8 @@ export class Speaker {
     const utterance = this.utterance(text);
     utterance.rate = this.rate;
     if (lang) utterance.lang = lang;
+    const voice = voiceFor(this.voices(), this.voiceURI, lang);
+    if (voice) utterance.voice = voice;
     if (marks[0]) this.source.mark(marks[0].name);
     let current = marks[0]?.name ?? null;
     utterance.onboundary = ({ charIndex }) => {

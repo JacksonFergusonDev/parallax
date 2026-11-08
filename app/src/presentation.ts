@@ -105,7 +105,7 @@ export function usePresentation(
     let cancelled = false;
     void prepareWindow(root.current).then(() => {
       if (!cancelled) {
-        void invoke("show_main_window").catch(console.error);
+        void invoke("show_window").catch(console.error);
       }
     });
     return () => {

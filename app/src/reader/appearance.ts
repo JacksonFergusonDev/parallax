@@ -1,4 +1,11 @@
+import {
+  shownTheme as appShownTheme,
+  type AppTheme,
+  type ShownTheme,
+} from "../design/theme";
 import type { Settings, Theme } from "./backend";
+
+export type { ShownTheme };
 
 export const FONT_SIZES = [80, 90, 100, 110, 120, 135, 150, 175, 200];
 
@@ -8,16 +15,26 @@ interface Palette {
   link: string;
 }
 
-const PALETTES: Record<Exclude<Theme, "auto">, Palette> = {
+/** Each matches its app theme in tokens.css: the page is the surface in
+ * light themes and the background in dark ones. */
+const PALETTES: Record<ShownTheme, Palette> = {
   light: { background: "#fffdf8", text: "#29271f", link: "#856015" },
-  sepia: { background: "#f1e4cc", text: "#43341f", link: "#94431f" },
+  sepia: { background: "#f1e4cc", text: "#43341f", link: "#8a3c1b" },
   dark: { background: "#191c21", text: "#f1ede4", link: "#f5c568" },
+  contrast: { background: "#ffffff", text: "#000000", link: "#5c3f00" },
+  "contrast-dark": { background: "#000000", text: "#ffffff", link: "#ffd479" },
 };
 
-export type ShownTheme = keyof typeof PALETTES;
-
-export const shownTheme = (theme: Theme, systemDark: boolean): ShownTheme =>
-  theme === "auto" ? (systemDark ? "dark" : "light") : theme;
+/** Auto is whatever the app shows; High contrast follows macOS. */
+export function shownTheme(
+  theme: Theme,
+  app: AppTheme,
+  systemDark: boolean,
+): ShownTheme {
+  if (theme === "auto") return appShownTheme(app, systemDark);
+  if (theme === "contrast") return appShownTheme("contrast", systemDark);
+  return theme;
+}
 
 export const paletteOf = (theme: ShownTheme) => PALETTES[theme];
 
@@ -31,6 +48,12 @@ export function stepFontSize(size: number, direction: 1 | -1): number {
   const next = nearest + direction;
   return FONT_SIZES[Math.min(Math.max(next, 0), FONT_SIZES.length - 1)];
 }
+
+/** `settings` a text size up or down. */
+export const resized = (settings: Settings, direction: 1 | -1): Settings => ({
+  ...settings,
+  fontSize: stepFontSize(settings.fontSize, direction),
+});
 
 const LINE_WIDTHS = { narrow: "520px", medium: "640px", wide: "820px" };
 /** The space beside the text, as a share of the page. */

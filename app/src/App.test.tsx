@@ -554,13 +554,13 @@ it("reveals the native window once the initial library has settled and painted",
   await act(async () => {
     await vi.advanceTimersByTimeAsync(500);
   });
-  expect(calls("show_main_window")).toHaveLength(0);
+  expect(calls("show_window")).toHaveLength(0);
   await act(async () => {
     finish([localBook]);
   });
   await act(async () => {
     await vi.advanceTimersByTimeAsync(150);
   });
-  expect(calls("show_main_window")).toHaveLength(1);
+  expect(calls("show_window")).toHaveLength(1);
   expect(panel("Library").textContent).toContain("Local book");
 });

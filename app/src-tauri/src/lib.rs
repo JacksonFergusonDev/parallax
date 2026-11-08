@@ -35,6 +35,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 #[cfg(feature = "e2e")]
 mod e2e;
 mod reader;
+mod settings;
 
 /// Event carrying [`erc_core::send::Progress`] while books are sent.
 const SEND_PROGRESS: &str = "send-progress";
@@ -443,6 +444,7 @@ async fn send_books(
 ) -> CmdResult<Vec<SendOutcome>> {
     let library = state.library.clone();
     let backups = state.backup_root.clone();
+    let rules = !settings::is(&state, settings::KOBO_RULES, "off");
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let converter = Kepubify::locate().map_err(err)?;
@@ -468,8 +470,10 @@ async fn send_books(
             }
         }
         // Enabled grouping rules file the new books into existing collections
-        // too (no-op otherwise).
-        erc_core::rules::run(&lib, &kobo, &backups, Trigger::Automatic).map_err(err)?;
+        // too (no-op otherwise), unless turned off in Settings.
+        if rules {
+            erc_core::rules::run(&lib, &kobo, &backups, Trigger::Automatic).map_err(err)?;
+        }
         Ok(outcomes)
     })
     .await
@@ -678,32 +682,6 @@ fn enhance_apply(state: State<AppState>, accepted: Vec<Accepted>) -> CmdResult<V
     let mut lib = state.library();
     let books = erc_core::enhance::apply(&mut lib, &accepted).map_err(err)?;
     Ok(books.into_iter().map(|b| with_cover(&lib, b)).collect())
-}
-
-/// Settings the app may read and change.
-const SETTINGS: [&str; 2] = [
-    erc_core::enhance::GOOGLE_BOOKS_KEY,
-    erc_core::review::REVIEW_ON_ADD,
-];
-
-#[tauri::command]
-fn setting_get(state: State<AppState>, key: String) -> CmdResult<Option<String>> {
-    if !SETTINGS.contains(&key.as_str()) {
-        return Err(format!("unknown setting {key}"));
-    }
-    state.library().setting(&key).map_err(err)
-}
-
-#[tauri::command]
-fn setting_set(state: State<AppState>, key: String, value: Option<String>) -> CmdResult<()> {
-    if !SETTINGS.contains(&key.as_str()) {
-        return Err(format!("unknown setting {key}"));
-    }
-    let value = value.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty());
-    state
-        .library()
-        .set_setting(&key, value.as_deref())
-        .map_err(err)
 }
 
 /// Probable duplicates in the library.
@@ -994,21 +972,30 @@ struct Reconciled {
 }
 
 /// On connect: applies series to books Nickel has imported since they were
-/// sent, then runs enabled grouping rules. Opens no write session when
-/// there's nothing to do.
+/// sent, then runs enabled grouping rules, each unless turned off in
+/// Settings. Opens no write session when there's nothing to do.
 #[tauri::command]
 async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<Reconciled> {
     let library = state.library.clone();
     let backups = state.backup_root.clone();
+    let series = !settings::is(&state, settings::KOBO_SERIES, "off");
+    let rules = !settings::is(&state, settings::KOBO_RULES, "off");
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let mut lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         Ok(Reconciled {
-            series: erc_core::collections::reconcile_series(&lib, &kobo, &backups).map_err(err)?,
-            grouped: erc_core::rules::run(&lib, &kobo, &backups, Trigger::Automatic)
-                .map_err(err)?,
+            series: if series {
+                erc_core::collections::reconcile_series(&lib, &kobo, &backups).map_err(err)?
+            } else {
+                0
+            },
+            grouped: if rules {
+                erc_core::rules::run(&lib, &kobo, &backups, Trigger::Automatic).map_err(err)?
+            } else {
+                0
+            },
             reading: erc_core::device::sync_reading(&lib, &kobo).map_err(err)?,
             annotations: erc_core::device::sync_annotations(&mut lib, &kobo).map_err(err)?,
         })
@@ -1276,9 +1263,9 @@ async fn cover_colors(app: AppHandle, paths: Vec<PathBuf>) -> CmdResult<Vec<Opti
     .map_err(err)
 }
 
-/// The frontend calls this after its initial layout and covers are ready.
+/// The main and Settings windows call this once their first layout is ready.
 #[tauri::command]
-fn show_main_window(window: tauri::WebviewWindow) -> tauri::Result<()> {
+fn show_window(window: tauri::WebviewWindow) -> tauri::Result<()> {
     window.show()?;
     window.set_focus()
 }
@@ -1358,13 +1345,16 @@ pub fn run() {
                 upscaler: Arc::new(Upscaler::new(model, previews)),
             });
             app.manage(reader::OpenBooks::default());
+            settings::apply_theme(app.handle(), settings::AppTheme::saved(&app.state()));
+            app.set_menu(settings::menu(app.handle())?)?;
+            app.on_menu_event(settings::on_menu_event);
             #[cfg(feature = "e2e")]
             e2e::start(app);
             size_first_window(app)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            show_main_window,
+            show_window,
             list_devices,
             library_list,
             library_import,
@@ -1400,8 +1390,16 @@ pub fn run() {
             merge_collections,
             set_reading_status,
             enhance_apply,
-            setting_get,
-            setting_set,
+            settings::setting_get,
+            settings::setting_set,
+            settings::settings_all,
+            settings::settings_reset,
+            settings::backup_settings,
+            settings::backup_settings_set,
+            settings::backup_delete_all,
+            settings::show_folder,
+            settings::reader_settings_get,
+            settings::reader_settings_set,
             device_duplicates,
             dismiss_duplicates,
             list_collections,

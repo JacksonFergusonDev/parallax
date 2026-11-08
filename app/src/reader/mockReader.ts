@@ -54,6 +54,9 @@ export function installMockReader() {
           })),
           position: null,
           settings: { fontSize: 100, theme: "auto" },
+          // ?appTheme=sepia previews the reader under another app theme.
+          app_theme:
+            new URLSearchParams(location.search).get("appTheme") ?? "system",
         };
       case "reader_entry": {
         const { name } = args as { name: string };

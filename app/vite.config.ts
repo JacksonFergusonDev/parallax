@@ -41,7 +41,7 @@ export default defineConfig(() => ({
     // The reader's engine uses top-level await and private fields.
     target: "esnext",
     rollupOptions: {
-      input: [root("index.html"), root("reader.html")],
+      input: [root("index.html"), root("reader.html"), root("settings.html")],
     },
   },
 

@@ -3,7 +3,15 @@
 // when not running inside Tauri; never part of the app bundle.
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
-import type { Book, DeviceBook, DeviceInfo, MetadataEdit, Rule } from "../api";
+import type {
+  Book,
+  DeviceBook,
+  DeviceInfo,
+  MetadataEdit,
+  ReaderSettings,
+  Rule,
+} from "../api";
+import { DEFAULT_SETTINGS } from "../reader/backend";
 
 const PALETTE = [
   "#2f6f5e",
@@ -246,8 +254,30 @@ let storeBooks: DeviceBook[] = [
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let upscaleCancelled = false;
 
-export function installMockBackend() {
-  mockWindows("main");
+let backupPolicy = { keep: "history", max_bytes: 500_000_000 as number | null };
+let backupBytes = 23_400_000;
+let readerAppearance: ReaderSettings = { ...DEFAULT_SETTINGS };
+const SETTING_KEYS = [
+  "google_books_key",
+  "review_on_add",
+  "theme",
+  "open_view",
+  "last_view",
+  "reader_windows",
+  "kobo_series",
+  "kobo_rules",
+  "eject_after_send",
+];
+
+/** `?theme=sepia` in the URL starts the mock with that theme. */
+function seedSettings() {
+  const theme = new URLSearchParams(location.search).get("theme");
+  if (theme) settings.set("theme", theme);
+}
+
+export function installMockBackend(label = "main") {
+  mockWindows(label);
+  seedSettings();
   // Cover "paths" are already data URLs here.
   (
     window as unknown as {
@@ -1056,6 +1086,39 @@ export function installMockBackend() {
         case "setting_set":
           if (a.value) settings.set(a.key as string, a.value as string);
           else settings.delete(a.key as string);
+          await emit("setting-changed", { key: a.key, value: a.value ?? null });
+          return null;
+        case "settings_all":
+          return Object.fromEntries(
+            SETTING_KEYS.map((key) => [key, settings.get(key) ?? null]),
+          );
+        case "settings_reset":
+          for (const key of SETTING_KEYS)
+            if (key !== "google_books_key") {
+              settings.delete(key);
+              await emit("setting-changed", { key, value: null });
+            }
+          backupPolicy = { keep: "history", max_bytes: 500_000_000 };
+          return null;
+        case "backup_settings":
+          return { policy: backupPolicy, used_bytes: backupBytes };
+        case "backup_settings_set":
+          backupPolicy = a.policy as typeof backupPolicy;
+          if (backupPolicy.keep === "latest")
+            backupBytes = Math.min(backupBytes, 2_100_000);
+          if (backupPolicy.max_bytes !== null)
+            backupBytes = Math.min(backupBytes, backupPolicy.max_bytes);
+          return { policy: backupPolicy, used_bytes: backupBytes };
+        case "backup_delete_all":
+          backupBytes = 0;
+          return { policy: backupPolicy, used_bytes: backupBytes };
+        case "show_folder":
+          return null;
+        case "reader_settings_get":
+          return readerAppearance;
+        case "reader_settings_set":
+          readerAppearance = a.settings as typeof readerAppearance;
+          await emit("reader-settings-changed", readerAppearance);
           return null;
         case "library_duplicates": {
           const key = (b: Book) => b.title.split(":")[0].toLowerCase();

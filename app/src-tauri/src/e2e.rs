@@ -2,7 +2,8 @@
 //!
 //! - `ERC_E2E_OPEN=<id>`: open that book in a reader and no main window. The
 //!   main window writes to a connected Kobo by itself, which a test must not.
-//! - `ERC_E2E_STEPS`: scripts to run in the reader, separated by `@@`, two
+//! - `ERC_E2E_SETTINGS=1`: open the Settings window instead, also alone.
+//! - `ERC_E2E_STEPS`: scripts to run in that window, separated by `@@`, two
 //!   seconds apart. They stand in for a person turning pages.
 //! - `ERC_E2E_SECS`: how long to wait after the last step before quitting.
 //! - `ERC_E2E_LOOSE=1`: serve the reader page without its CSP and with a loose
@@ -14,7 +15,7 @@ use std::time::Duration;
 
 use tauri::{App, Context, Manager, Runtime, WebviewWindowBuilder};
 
-use crate::{AppState, reader};
+use crate::{AppState, reader, settings};
 
 const LOOSE_CSP: &str = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: ipc:; \
     script-src * 'unsafe-inline' 'unsafe-eval' data: blob:; \
@@ -24,24 +25,36 @@ fn book() -> Option<i64> {
     std::env::var("ERC_E2E_OPEN").ok()?.parse().ok()
 }
 
+fn settings_window() -> bool {
+    std::env::var_os("ERC_E2E_SETTINGS").is_some()
+}
+
 pub fn prepare<R: Runtime>(context: &mut Context<R>) {
-    if book().is_some() {
+    if book().is_some() || settings_window() {
         context.config_mut().app.windows.clear();
     }
 }
 
 pub fn start(app: &App) {
-    let Some(id) = book() else { return };
+    let book = book();
+    if book.is_none() && !settings_window() {
+        return;
+    }
     let app = app.handle().clone();
     tauri::async_runtime::spawn(async move {
-        let opened = reader::reader_open(app.clone(), app.state::<AppState>(), id).await;
-        eprintln!("e2e: reader_open {opened:?}");
+        let label = if let Some(id) = book {
+            let opened = reader::reader_open(app.clone(), app.state::<AppState>(), id).await;
+            eprintln!("e2e: reader_open {opened:?}");
+            format!("reader-{id}")
+        } else {
+            eprintln!("e2e: settings {:?}", settings::open_window(&app));
+            "settings".to_owned()
+        };
         let steps = std::env::var("ERC_E2E_STEPS").unwrap_or_default();
         let secs = std::env::var("ERC_E2E_SECS")
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(5);
-        let label = format!("reader-{id}");
         tauri::async_runtime::spawn_blocking(move || {
             sleep(Duration::from_secs(4));
             for step in steps.split("@@").filter(|s| !s.is_empty()) {
