@@ -57,6 +57,23 @@ describe("keyAction", () => {
     expect(keyAction(press("Escape"))).toBe("close");
   });
 
+  it("finds with ⌘F and ⌘G", () => {
+    expect(keyAction(press("f", { metaKey: true }))).toBe("find");
+    expect(keyAction(press("g", { metaKey: true }))).toBe("findNext");
+    expect(keyAction(press("g", { metaKey: true, shiftKey: true }))).toBe(
+      "findPrevious",
+    );
+  });
+
+  it("lets typing in a field through", () => {
+    expect(keyAction(press(" ", { typing: true }))).toBeNull();
+    expect(keyAction(press("ArrowRight", { typing: true }))).toBeNull();
+    expect(keyAction(press("Escape", { typing: true }))).toBe("close");
+    expect(keyAction(press("g", { typing: true, metaKey: true }))).toBe(
+      "findNext",
+    );
+  });
+
   it("leaves system shortcuts alone", () => {
     expect(keyAction(press("w", { metaKey: true }))).toBeNull();
     expect(keyAction(press("ArrowLeft", { metaKey: true }))).toBeNull();

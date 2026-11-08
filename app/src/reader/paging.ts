@@ -33,10 +33,21 @@ export function wheelPager(turn: (direction: 1 | -1) => void) {
 }
 
 export type Key =
-  "left" | "right" | "next" | "previous" | "larger" | "smaller" | "close";
+  | "left"
+  | "right"
+  | "next"
+  | "previous"
+  | "larger"
+  | "smaller"
+  | "close"
+  | "find"
+  | "findNext"
+  | "findPrevious";
 
 interface KeyPress {
   key: string;
+  /** Typing in a field: only shortcuts and Escape apply there. */
+  typing?: boolean;
   shiftKey: boolean;
   metaKey: boolean;
   ctrlKey: boolean;
@@ -48,8 +59,11 @@ export function keyAction(event: KeyPress): Key | null {
   if (event.metaKey) {
     if (event.key === "=" || event.key === "+") return "larger";
     if (event.key === "-") return "smaller";
+    if (event.key === "f") return "find";
+    if (event.key === "g") return event.shiftKey ? "findPrevious" : "findNext";
     return null;
   }
+  if (event.typing) return event.key === "Escape" ? "close" : null;
   switch (event.key) {
     case "ArrowLeft":
       return "left";

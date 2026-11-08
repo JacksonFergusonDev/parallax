@@ -51,5 +51,20 @@ declare module "foliate-js/view.js" {
     next(): Promise<void>;
     goLeft(): Promise<void>;
     goRight(): Promise<void>;
+    search(options: SearchOptions): AsyncGenerator<SearchResult | "done">;
+    clearSearch(): void;
   }
+  export interface SearchOptions {
+    query: string;
+    matchCase?: boolean;
+    matchWholeWords?: boolean;
+    matchDiacritics?: boolean;
+  }
+  export interface SearchMatch {
+    cfi: string;
+    excerpt: { pre: string; match: string; post: string };
+  }
+  export type SearchResult =
+    | { progress: number }
+    | { index: number; label: string; subitems: SearchMatch[] };
 }

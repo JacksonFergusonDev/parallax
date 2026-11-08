@@ -15,6 +15,10 @@ path = "src/main.rs"
 name = "erc_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# Test hooks for scripts/reader-e2e.mjs. Never in a normal or release build.
+e2e = ["tauri/custom-protocol"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

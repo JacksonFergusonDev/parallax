@@ -15,6 +15,14 @@
         Contents
       </button>
       <h1 id="title"></h1>
+      <button
+        id="find"
+        aria-expanded="false"
+        aria-controls="search"
+        title="Search (⌘F)"
+      >
+        Search
+      </button>
       <button id="appearance" aria-expanded="false" aria-controls="settings">
         Aa
       </button>
@@ -29,6 +37,24 @@
       <span id="progress"></span>
     </footer>
     <nav id="toc" aria-label="Contents" hidden></nav>
+    <section id="search" aria-label="Search" hidden>
+      <form role="search">
+        <input
+          id="query"
+          type="search"
+          placeholder="Search this book"
+          aria-label="Search this book"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <div class="options">
+          <label><input id="whole-words" type="checkbox" /> Whole words</label>
+          <label><input id="match-case" type="checkbox" /> Match case</label>
+        </div>
+      </form>
+      <p id="search-status" aria-live="polite"></p>
+      <ol id="results"></ol>
+    </section>
     <section id="settings" aria-label="Appearance" hidden>
       <div class="row">
         <span>Text size</span>

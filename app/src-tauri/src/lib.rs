@@ -32,6 +32,8 @@ use erc_upscale::CoreMl;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+#[cfg(feature = "e2e")]
+mod e2e;
 mod reader;
 
 /// Event carrying [`erc_core::send::Progress`] while books are sent.
@@ -1329,6 +1331,10 @@ fn size_first_window(app: &tauri::App) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[allow(unused_mut)]
+    let mut context = tauri::generate_context!();
+    #[cfg(feature = "e2e")]
+    e2e::prepare(&mut context);
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         // Reopens the window where and how big it was last time.
@@ -1352,6 +1358,8 @@ pub fn run() {
                 upscaler: Arc::new(Upscaler::new(model, previews)),
             });
             app.manage(reader::OpenBooks::default());
+            #[cfg(feature = "e2e")]
+            e2e::start(app);
             size_first_window(app)?;
             Ok(())
         })
@@ -1423,7 +1431,7 @@ pub fn run() {
             reader::reader_save_position,
             reader::reader_save_settings
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 }
 

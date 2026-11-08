@@ -15,6 +15,7 @@ import {
 } from "./backend";
 import { contentsList, markCurrent } from "./contents";
 import { keyAction, percent, wheelPager, within } from "./paging";
+import { groupItem, searcher, statusText, stepMatch } from "./search";
 import "./reader.css";
 
 const OPEN_TIMEOUT_MS = 15_000;
@@ -125,25 +126,110 @@ function setUpAppearance(view: View, initial: Settings) {
 }
 
 function setUpPanels() {
-  const panels = [
-    { button: element("contents"), panel: element("toc") },
-    { button: element("appearance"), panel: element("settings") },
-  ];
+  const panels = {
+    contents: { button: element("contents"), panel: element("toc") },
+    search: { button: element("find"), panel: element("search") },
+    appearance: { button: element("appearance"), panel: element("settings") },
+  };
+  type Name = keyof typeof panels;
   const close = () => {
-    for (const { button, panel } of panels) {
+    for (const { button, panel } of Object.values(panels)) {
       panel.hidden = true;
       button.setAttribute("aria-expanded", "false");
     }
   };
-  for (const { button, panel } of panels) {
+  const open = (name: Name) => {
+    close();
+    panels[name].panel.hidden = false;
+    panels[name].button.setAttribute("aria-expanded", "true");
+  };
+  const anyOpen = () =>
+    Object.values(panels).some(({ panel }) => !panel.hidden);
+  for (const [name, { button, panel }] of Object.entries(panels)) {
     button.addEventListener("click", () => {
-      const opening = panel.hidden;
-      close();
-      panel.hidden = !opening;
-      button.setAttribute("aria-expanded", String(opening));
+      if (panel.hidden) open(name as Name);
+      else close();
+      if (name === "search" && !panel.hidden) element("query").focus();
     });
   }
-  return { close };
+  return { close, open, anyOpen };
+}
+
+/** The search panel, and stepping through its matches with ⌘G. */
+function setUpSearch(view: View, panels: ReturnType<typeof setUpPanels>) {
+  const query = element<HTMLInputElement>("query");
+  const wholeWords = element<HTMLInputElement>("whole-words");
+  const matchCase = element<HTMLInputElement>("match-case");
+  const status = element("search-status");
+  const results = element("results");
+  let buttons: HTMLButtonElement[] = [];
+  let current = -1;
+
+  const show = (index: number) => {
+    if (index < 0) return;
+    buttons[current]?.classList.remove("current");
+    current = index;
+    const button = buttons[index];
+    button.classList.add("current");
+    button.scrollIntoView({ block: "nearest" });
+    within(view.goTo(button.dataset.cfi!), TURN_TIMEOUT_MS).catch(
+      console.error,
+    );
+  };
+  const search = searcher(view, {
+    progress: (fraction) =>
+      (status.textContent = `Searching… ${percent(fraction)}`),
+    group: (group) => {
+      const item = groupItem(group, (_, button) => {
+        show(buttons.indexOf(button));
+        panels.close();
+      });
+      buttons.push(...item.querySelectorAll("button"));
+      results.append(item);
+    },
+    done: (count, capped) => (status.textContent = statusText(count, capped)),
+  });
+  const start = () => {
+    results.replaceChildren();
+    buttons = [];
+    current = -1;
+    status.textContent = "";
+    search
+      .search(query.value, {
+        matchWholeWords: wholeWords.checked,
+        matchCase: matchCase.checked,
+      })
+      .catch((error) => (status.textContent = `Search failed. ${error}`));
+  };
+
+  element("search")
+    .querySelector("form")!
+    .addEventListener("submit", (event) => {
+      event.preventDefault();
+      start();
+    });
+  wholeWords.addEventListener("change", start);
+  matchCase.addEventListener("change", start);
+  // Clearing the field, by hand or with its × button, clears the highlights.
+  query.addEventListener("input", () => {
+    if (!query.value) {
+      search.clear();
+      results.replaceChildren();
+      buttons = [];
+      current = -1;
+      status.textContent = "";
+    }
+  });
+
+  return {
+    find: () => {
+      panels.open("search");
+      query.focus();
+      query.select();
+    },
+    step: (direction: 1 | -1) =>
+      show(stepMatch(buttons.length, current, direction)),
+  };
 }
 
 async function read(opened: OpenedBook) {
@@ -160,6 +246,7 @@ async function read(opened: OpenedBook) {
 
   const panels = setUpPanels();
   const { resize } = setUpAppearance(view, opened.settings);
+  const finder = setUpSearch(view, panels);
 
   const turnWith = (turn: () => Promise<unknown>) => {
     within(turn(), TURN_TIMEOUT_MS).catch(console.error);
@@ -175,8 +262,20 @@ async function read(opened: OpenedBook) {
       larger: () => resize(1),
       smaller: () => resize(-1),
       close: panels.close,
+      find: finder.find,
+      findNext: () => finder.step(1),
+      findPrevious: () => finder.step(-1),
     };
-    const action = keyAction(event);
+    const target = event.target as HTMLElement | null;
+    const typing = !!target?.closest?.("input, textarea, select");
+    const action = keyAction({
+      key: event.key,
+      shiftKey: event.shiftKey,
+      metaKey: event.metaKey,
+      ctrlKey: event.ctrlKey,
+      altKey: event.altKey,
+      typing,
+    });
     if (!action) return;
     event.preventDefault();
     actions[action]();

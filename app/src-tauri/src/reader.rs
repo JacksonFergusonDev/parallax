@@ -105,7 +105,7 @@ pub async fn reader_open(app: AppHandle, state: State<'_, AppState>, id: i64) ->
     .await
     .map_err(err)??;
 
-    let window = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("reader.html".into()))
+    let builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("reader.html".into()))
         .title(title)
         .inner_size(860.0, 1000.0)
         .min_inner_size(420.0, 520.0)
@@ -114,9 +114,10 @@ pub async fn reader_open(app: AppHandle, state: State<'_, AppState>, id: i64) ->
         // A covered window otherwise stalls, and can stop altogether.
         .background_throttling(BackgroundThrottlingPolicy::Disabled)
         .on_navigation(may_navigate)
-        .on_new_window(|_, _| NewWindowResponse::Deny)
-        .build()
-        .map_err(err)?;
+        .on_new_window(|_, _| NewWindowResponse::Deny);
+    #[cfg(feature = "e2e")]
+    let builder = crate::e2e::reader_window(builder);
+    let window = builder.build().map_err(err)?;
     let handle = app.clone();
     window.on_window_event(move |event| {
         if matches!(event, WindowEvent::Destroyed) {

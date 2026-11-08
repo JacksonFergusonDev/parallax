@@ -45,6 +45,10 @@ dev-optimized: setup upscale-model
 test-fat:
     cargo test -p erc-device-kobo -- --ignored
 
+# Opt-in: the reader in a real build, with a hostile book. Opens windows.
+test-reader:
+    node --test scripts/reader-e2e.mjs
+
 # Build the macOS app bundle (target/release/bundle/macos/).
 build: setup upscale-model
     cd app && pnpm tauri build --bundles app --config src-tauri/tauri.upscale.conf.json

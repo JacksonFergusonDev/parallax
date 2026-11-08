@@ -2,7 +2,7 @@
 
 Throwaway Tauri app that tested the reader design. Results are in [docs/reader-spike.md](../../docs/reader-spike.md). It is outside the Cargo workspace and isn't part of the product. Its commands are stubs, so `device_restore` only writes a log line.
 
-The hostile EPUB fixture (`tools/mk_hostile.py`) is the part worth keeping: port it into the regression test for the real reader.
+Its hostile EPUB now lives on as `tests/fixtures/reader/hostile.epub`, which `just test-reader` runs against the real app.
 
 ## Running it
 
