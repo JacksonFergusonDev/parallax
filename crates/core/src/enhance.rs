@@ -1,4 +1,4 @@
-//! "Enhance and organise": proposing series and genres for library books,
+//! "Enhance and organise": proposing metadata for library books,
 //! and applying the ones the user accepts.
 //!
 //! Proposals only fill gaps: a series when the book has none (or its number
@@ -9,21 +9,28 @@
 //! ("Science Fiction", never "Sci-Fi"), so every source fills the same tag
 //! and collections made from them don't split.
 
+mod comic;
+
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use erc_device::DeviceBook;
 use erc_device_kobo::KoboDevice;
-use erc_library::{Book, Library};
+use erc_epub::{Contributor, Identifier};
+use erc_library::{Book, Kind, Library};
+use erc_metadata::comics::{Catalog, CatalogRecord, IssueChoice, MatchError};
 use erc_metadata::genres;
 
 use crate::genres::folder_genre;
-use erc_metadata::{CachedFetcher, Confidence, Fetch, HttpFetcher, Lookup, Options, Query};
+use erc_metadata::{CachedFetcher, Confidence, Fetch, HttpFetcher, Lookup, Query};
 use serde::{Deserialize, Serialize};
 
 /// Library setting holding the user's Google Books API key.
 pub const GOOGLE_BOOKS_KEY: &str = "google_books_key";
+/// Library setting holding the user's Metron API token.
+pub const METRON_TOKEN: &str = "metron_token";
 /// Lookups run for this many books at once; each service is paced anyway.
 const WORKERS: usize = 4;
 
@@ -49,14 +56,47 @@ pub struct Proposal {
     pub book_id: i64,
     pub series: Option<ProposedSeries>,
     pub genres: Vec<ProposedGenre>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<ProposedDetails>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub record: Option<CatalogRecord>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub issues: Vec<IssueChoice>,
     /// Sources that couldn't be asked.
     pub problems: Vec<String>,
 }
 
 impl Proposal {
     pub fn is_empty(&self) -> bool {
-        self.series.is_none() && self.genres.is_empty()
+        self.series.is_none()
+            && self.genres.is_empty()
+            && self.details.is_none()
+            && self.issues.is_empty()
     }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Details {
+    pub authors: Vec<String>,
+    pub contributors: Vec<Contributor>,
+    pub description: Option<String>,
+    pub publisher: Option<String>,
+}
+
+impl Details {
+    fn is_empty(&self) -> bool {
+        self.authors.is_empty()
+            && self.contributors.is_empty()
+            && self.description.is_none()
+            && self.publisher.is_none()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ProposedDetails {
+    #[serde(flatten)]
+    pub values: Details,
+    pub confident: bool,
 }
 
 /// What the user accepted for one book.
@@ -65,6 +105,10 @@ pub struct Accepted {
     pub book_id: i64,
     pub series: Option<(String, Option<String>)>,
     pub genres: Vec<String>,
+    #[serde(default)]
+    pub details: Option<Details>,
+    #[serde(default)]
+    pub record: Option<CatalogRecord>,
 }
 
 /// What a connected Kobo knows about library books, by library id.
@@ -127,6 +171,9 @@ pub fn proposal(book: &Book, clues: &DeviceClues, lookup: Option<&Lookup>) -> Pr
         book_id: book.id,
         series: None,
         genres: Vec::new(),
+        details: None,
+        record: None,
+        issues: Vec::new(),
         problems: lookup.map(|l| l.problems.clone()).unwrap_or_default(),
     };
 
@@ -187,17 +234,171 @@ pub fn has_genre(book: &Book) -> bool {
     book.tags.iter().any(|t| genres::from_label(t).is_some())
 }
 
-/// Whether a book still needs looking up online: it lacks a series or any
-/// genre tag.
+/// Whether there are still gaps an online lookup might fill.
 fn needs_lookup(book: &Book) -> bool {
-    book.series.is_none() || book.series_index.is_none() || !has_genre(book)
+    book.series.is_none()
+        || book.series_index.is_none()
+        || !has_genre(book)
+        || (book.kind != Kind::Book
+            && (book.authors.is_empty()
+                || book.description.is_none()
+                || (book.publisher.is_none()
+                    && (book.kind == Kind::Comic || book.isbn().is_some()))
+                || (book.kind == Kind::Comic
+                    && book.contributors.as_ref().is_none_or(Vec::is_empty))))
+}
+
+pub struct Options {
+    general: erc_metadata::Options,
+    metron_token: Option<String>,
+    comic_files: HashMap<i64, PathBuf>,
+    selected_issue: Option<(i64, u64)>,
+}
+
+impl Options {
+    pub fn select_metron_issue(&mut self, book_id: i64, issue_id: u64) {
+        self.selected_issue = Some((book_id, issue_id));
+    }
 }
 
 /// Lookup options from the library's settings.
-pub fn options(library: &Library) -> Options {
+pub fn options(library: &Library, books: &[Book]) -> Options {
     Options {
-        google_books_key: library.setting(GOOGLE_BOOKS_KEY).ok().flatten(),
+        general: erc_metadata::Options {
+            google_books_key: library.setting(GOOGLE_BOOKS_KEY).ok().flatten(),
+        },
+        metron_token: library
+            .setting(METRON_TOKEN)
+            .ok()
+            .flatten()
+            .filter(|s| !s.trim().is_empty()),
+        comic_files: books
+            .iter()
+            .filter(|book| book.kind != Kind::Book)
+            .map(|book| (book.id, library.book_file(book.id)))
+            .collect(),
+        selected_issue: None,
     }
+}
+
+fn propose_book(
+    book: &Book,
+    options: &Options,
+    fetch: &dyn Fetch,
+    clues: &DeviceClues,
+) -> Proposal {
+    if !needs_lookup(book) {
+        return proposal(book, clues, None);
+    }
+    let mut problem = None;
+    if book.kind != Kind::Book {
+        let file = options.comic_files.get(&book.id).map(PathBuf::as_path);
+        let selected = options
+            .selected_issue
+            .filter(|(id, _)| *id == book.id)
+            .map(|(_, issue)| issue);
+        match comic::lookup(fetch, book, file, options.metron_token.as_deref(), selected) {
+            Ok(Some(found)) => {
+                let mut lookup = found.lookup();
+                if let Some(series) = &mut lookup.series
+                    && series.index.is_some()
+                    && let Some(local) = &book.series
+                {
+                    // An edition match can fill the number while preserving a local alias.
+                    series.name.clone_from(local);
+                }
+                let mut result = proposal(book, clues, Some(&lookup));
+                let details = Details {
+                    authors: if book.authors.is_empty() {
+                        found.authors
+                    } else {
+                        Vec::new()
+                    },
+                    contributors: if book.contributors.as_ref().is_none_or(Vec::is_empty) {
+                        found
+                            .contributors
+                            .into_iter()
+                            .map(|c| Contributor {
+                                name: c.name,
+                                role: c.role,
+                            })
+                            .collect()
+                    } else {
+                        Vec::new()
+                    },
+                    description: book
+                        .description
+                        .is_none()
+                        .then_some(found.description)
+                        .flatten(),
+                    publisher: book
+                        .publisher
+                        .is_none()
+                        .then_some(found.publisher)
+                        .flatten(),
+                };
+                if !details.is_empty() {
+                    result.details = Some(ProposedDetails {
+                        values: details,
+                        // Manga credits and synopses describe the series. Review
+                        // them before applying them to an individual volume.
+                        confident: found.confidence == Confidence::High && book.kind == Kind::Comic,
+                    });
+                }
+                if result.details.is_some()
+                    || result
+                        .series
+                        .as_ref()
+                        .is_some_and(|s| s.source == found.record.catalog.label())
+                    || result
+                        .genres
+                        .iter()
+                        .any(|g| g.sources.iter().any(|s| s == found.record.catalog.label()))
+                {
+                    result.record = Some(found.record);
+                }
+                return result;
+            }
+            Ok(None) if selected.is_some() => {
+                let mut result = proposal(book, clues, None);
+                result
+                    .problems
+                    .push("Metron could not find the selected issue".into());
+                return result;
+            }
+            Ok(None) => {}
+            Err(MatchError::Ambiguous(issues)) => {
+                let mut result = proposal(book, clues, None);
+                result.issues = issues;
+                return result;
+            }
+            Err(error) => {
+                let label = if book.kind == Kind::Manga {
+                    "Mangainfo"
+                } else {
+                    "Metron"
+                };
+                problem = Some(format!("{label}: {error}"));
+            }
+        }
+    }
+    let isbn = book
+        .isbn()
+        .filter(|isbn| book.kind == Kind::Book || erc_metadata::comics::isbn(isbn).is_some());
+    let lookup = (book.kind == Kind::Book || isbn.is_some()).then(|| {
+        erc_metadata::lookup(
+            fetch,
+            &Query {
+                title: book.title.clone(),
+                authors: book.authors.clone(),
+                isbn: isbn.map(str::to_owned),
+            },
+            &options.general,
+        )
+    });
+    let mut result = proposal(book, clues, lookup.as_ref());
+    result.problems.extend(problem);
+    result
 }
 
 /// Proposals for `books`, looked up a few at a time. Takes copies of the
@@ -221,18 +422,7 @@ pub fn propose(
                     let Some(book) = books.get(i) else {
                         break;
                     };
-                    let lookup = needs_lookup(book).then(|| {
-                        erc_metadata::lookup(
-                            fetch,
-                            &Query {
-                                title: book.title.clone(),
-                                authors: book.authors.clone(),
-                                isbn: book.isbn().map(str::to_owned),
-                            },
-                            options,
-                        )
-                    });
-                    let p = proposal(book, clues, lookup.as_ref());
+                    let p = propose_book(book, options, fetch, clues);
                     results
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner)[i] = Some(p);
@@ -257,12 +447,19 @@ pub fn apply(library: &mut Library, accepted: &[Accepted]) -> erc_library::Resul
     }
     let mut updated = Vec::new();
     for a in accepted {
-        if a.series.is_none() && a.genres.is_empty() {
+        if a.series.is_none() && a.genres.is_empty() && a.details.is_none() {
             continue;
         }
         let book = library.book(a.book_id)?;
         let mut edit = book.edit();
-        if let Some((name, index)) = &a.series {
+        if let Some((name, index)) = &a.series
+            && (book.series.is_none()
+                || (book.series_index.is_none()
+                    && book
+                        .series
+                        .as_ref()
+                        .is_some_and(|series| series.eq_ignore_ascii_case(name))))
+        {
             edit.series = Some(name.clone());
             edit.series_index.clone_from(index);
         }
@@ -271,7 +468,45 @@ pub fn apply(library: &mut Library, accepted: &[Accepted]) -> erc_library::Resul
                 edit.tags.push(g.clone());
             }
         }
-        updated.push(library.update(a.book_id, &edit)?);
+        if book.kind == Kind::Book {
+            updated.push(library.update(a.book_id, &edit)?);
+            continue;
+        }
+        let details = a.details.as_ref();
+        if let Some(details) = details {
+            if edit.authors.is_empty() {
+                edit.authors.clone_from(&details.authors);
+            }
+            if edit.contributors.as_ref().is_none_or(Vec::is_empty)
+                && !details.contributors.is_empty()
+            {
+                edit.contributors = Some(details.contributors.clone());
+            }
+        }
+        let mut identifiers = Vec::new();
+        if let Some(record) = &a.record
+            && record.catalog.allows_url(&record.url)
+        {
+            identifiers.push(Identifier {
+                scheme: Some(record.catalog.scheme().into()),
+                value: record.url.clone(),
+            });
+            if record.catalog == Catalog::Metron
+                && let Some(id) = record.issue_id
+            {
+                identifiers.push(Identifier {
+                    scheme: Some("metron".into()),
+                    value: id.to_string(),
+                });
+            }
+        }
+        updated.push(library.update_with_details(
+            a.book_id,
+            &edit,
+            &identifiers,
+            details.and_then(|d| d.publisher.as_deref()),
+            details.and_then(|d| d.description.as_deref()),
+        )?);
     }
     Ok(updated)
 }

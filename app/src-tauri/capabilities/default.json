@@ -41,6 +41,7 @@
     "allow-calibre-import",
     "allow-library-duplicates",
     "allow-enhance-propose",
+    "allow-open-metadata-source",
     "allow-kobo-health",
     "allow-library-check",
     "allow-annotations-list",

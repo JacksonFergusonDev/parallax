@@ -13,6 +13,7 @@
 //! first author's surname. Response parsing is in pure functions tested
 //! against recorded responses; nothing here touches a library or device.
 
+pub mod comics;
 mod fetch;
 pub mod genres;
 
@@ -46,6 +47,8 @@ pub enum Source {
     OpenLibrary,
     GoogleBooks,
     AppleBooks,
+    Mangainfo,
+    Metron,
 }
 
 impl Source {
@@ -55,6 +58,8 @@ impl Source {
             Source::OpenLibrary => "Open Library",
             Source::GoogleBooks => "Google Books",
             Source::AppleBooks => "Apple Books",
+            Source::Mangainfo => "Mangainfo",
+            Source::Metron => "Metron",
         }
     }
 }
@@ -116,6 +121,7 @@ pub fn lookup(fetch: &dyn Fetch, query: &Query, options: &Options) -> Lookup {
                 None => Ok(Vec::new()),
             },
             Source::AppleBooks => apple_books(fetch, query),
+            Source::Mangainfo | Source::Metron => Ok(Vec::new()),
         }
     };
     let first = [Source::Wikidata, Source::OpenLibrary, Source::GoogleBooks];

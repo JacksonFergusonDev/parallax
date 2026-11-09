@@ -123,6 +123,16 @@ impl ComicTarget {
             series_index: book.series_index.as_deref(),
             language: book.language.as_deref(),
             description: book.description.as_deref(),
+            source: book.identifiers.iter().find_map(|identifier| {
+                let catalog = match identifier.scheme.as_deref()? {
+                    "mangainfo-url" => erc_metadata::comics::Catalog::Mangainfo,
+                    "metron-url" => erc_metadata::comics::Catalog::Metron,
+                    _ => return None,
+                };
+                catalog
+                    .allows_url(&identifier.value)
+                    .then_some(identifier.value.as_str())
+            }),
             modified: &modified,
             custom_cover: custom_cover.as_deref(),
         };

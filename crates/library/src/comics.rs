@@ -375,6 +375,14 @@ fn apply_to_comic_info(book: &Book, info: &mut ComicInfo) {
         }
     }
     info.set("Summary", book.description.as_deref());
+    if info.get("Web").is_none()
+        && let Some(source) = book
+            .identifiers
+            .iter()
+            .find(|i| matches!(i.scheme.as_deref(), Some("metron-url" | "mangainfo-url")))
+    {
+        info.set("Web", Some(&source.value));
+    }
     info.set("Publisher", book.publisher.as_deref());
     info.set("LanguageISO", book.language.as_deref());
     info.set(

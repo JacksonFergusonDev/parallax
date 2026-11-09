@@ -34,6 +34,7 @@ const COMMANDS: &[&str] = &[
     "calibre_import",
     "library_duplicates",
     "enhance_propose",
+    "open_metadata_source",
     "kobo_health",
     "library_check",
     "annotations_list",

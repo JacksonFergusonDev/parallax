@@ -178,6 +178,9 @@ fn metadata(book: &Metadata<'_>) -> String {
             xml(description)
         );
     }
+    if let Some(source) = book.source {
+        let _ = writeln!(fields, "<dc:source>{}</dc:source>", xml(source));
+    }
     for (i, (name, role)) in book.credits.iter().enumerate() {
         let _ = writeln!(
             fields,

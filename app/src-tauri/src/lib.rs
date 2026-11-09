@@ -768,7 +768,7 @@ async fn library_review(
     .map_err(err)?
 }
 
-/// Series and genre proposals for `ids`, using a connected Kobo's series and
+/// Metadata proposals for `ids`, using a connected Kobo's series and
 /// folders too when `mount` is given. Holds the library only to read the
 /// books, not during lookups.
 #[tauri::command]
@@ -777,7 +777,11 @@ async fn enhance_propose(
     state: State<'_, AppState>,
     ids: Vec<i64>,
     mount: Option<PathBuf>,
+    metron_issue: Option<u64>,
 ) -> CmdResult<Vec<Proposal>> {
+    if metron_issue.is_some() && ids.len() != 1 {
+        return Err("Select an issue for one book at a time".into());
+    }
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let (books, options, clues, fetch) = {
@@ -796,7 +800,11 @@ async fn enhance_propose(
                 None => DeviceClues::default(),
             };
             let fetch = erc_core::enhance::fetcher(&lib)?;
-            (books, erc_core::enhance::options(&lib), clues, fetch)
+            let mut options = erc_core::enhance::options(&lib, &books);
+            if let Some(issue) = metron_issue {
+                options.select_metron_issue(ids[0], issue);
+            }
+            (books, options, clues, fetch)
         };
         Ok(erc_core::enhance::propose(
             &books,
@@ -804,6 +812,9 @@ async fn enhance_propose(
             &fetch,
             &clues,
             |index, total, title| {
+                if metron_issue.is_some() {
+                    return;
+                }
                 let _ = app.emit(
                     ENHANCE_PROGRESS,
                     ImportProgress {
@@ -819,12 +830,34 @@ async fn enhance_propose(
     .map_err(err)?
 }
 
-/// Saves accepted series and genres; returns the updated books.
+/// Saves accepted metadata; returns the updated books.
 #[tauri::command]
 fn enhance_apply(state: State<AppState>, accepted: Vec<Accepted>) -> CmdResult<Vec<LibraryBook>> {
     let mut lib = state.library();
     let books = erc_core::enhance::apply(&mut lib, &accepted).map_err(err)?;
     Ok(books.into_iter().map(|b| with_cover(&lib, b)).collect())
+}
+
+#[tauri::command]
+fn open_metadata_source(url: String) -> CmdResult<()> {
+    use erc_metadata::comics::Catalog;
+
+    if ![Catalog::Mangainfo, Catalog::Metron]
+        .iter()
+        .any(|catalog| catalog.allows_url(&url))
+        && url != "https://creativecommons.org/licenses/by-sa/4.0/"
+    {
+        return Err("Unknown metadata source".into());
+    }
+    let status = std::process::Command::new("/usr/bin/open")
+        .arg(url)
+        .status()
+        .map_err(err)?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Could not open the metadata source".into())
+    }
 }
 
 /// Probable duplicates in the library.
@@ -1518,6 +1551,7 @@ pub fn run() {
             calibre_import,
             library_duplicates,
             enhance_propose,
+            open_metadata_source,
             kobo_health,
             library_check,
             annotations_list,

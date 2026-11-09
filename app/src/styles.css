@@ -2067,6 +2067,31 @@ select:focus-visible {
 .enhance-change .muted {
   font-size: var(--text-small);
 }
+.enhance-details {
+  overflow-wrap: anywhere;
+}
+.enhance-details > div,
+.enhance-details > p {
+  margin: var(--space-1) 0;
+}
+.metadata-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.enhance-issue {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.enhance-issue select {
+  max-width: 100%;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  background: var(--surface);
+  color: var(--fg);
+}
 .unsure {
   font-size: var(--text-small);
   padding: 0 var(--space-2);

@@ -407,6 +407,26 @@ impl Library {
     }
 
     pub fn update(&mut self, id: i64, edit: &MetadataEdit) -> Result<Book> {
+        self.write_metadata(id, edit)
+    }
+
+    /// Applies an enrichment and its source in the same transaction.
+    pub fn update_with_details(
+        &mut self,
+        id: i64,
+        edit: &MetadataEdit,
+        identifiers: &[Identifier],
+        publisher: Option<&str>,
+        description: Option<&str>,
+    ) -> Result<Book> {
+        let tx = self.conn.unchecked_transaction()?;
+        self.write_metadata(id, edit)?;
+        let book = self.write_details(id, identifiers, publisher, description, None)?;
+        tx.commit()?;
+        Ok(book)
+    }
+
+    fn write_metadata(&self, id: i64, edit: &MetadataEdit) -> Result<Book> {
         let title = edit.title.trim();
         if title.is_empty() {
             return Err(Error::EmptyTitle);
@@ -477,6 +497,17 @@ impl Library {
     /// already has is replaced.
     pub fn fill_details(
         &mut self,
+        id: i64,
+        identifiers: &[Identifier],
+        publisher: Option<&str>,
+        description: Option<&str>,
+        language: Option<&str>,
+    ) -> Result<Book> {
+        self.write_details(id, identifiers, publisher, description, language)
+    }
+
+    fn write_details(
+        &self,
         id: i64,
         identifiers: &[Identifier],
         publisher: Option<&str>,

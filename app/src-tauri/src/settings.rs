@@ -44,8 +44,9 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 18] = [
+const SETTINGS: [(&str, Allowed); 19] = [
     (erc_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
+    (erc_core::enhance::METRON_TOKEN, Allowed::Text(256)),
     (erc_core::review::REVIEW_ON_ADD, Allowed::OneOf(&["off"])),
     (
         THEME,
@@ -71,8 +72,7 @@ const SETTINGS: [(&str, Allowed); 18] = [
     (COMIC_MIDTONE_DARKENING, Allowed::OneOf(&COMIC_STRENGTHS)),
 ];
 
-/// Settings that are preferences, which Reset puts back. The Google Books
-/// key is the user's own credential, so it stays.
+/// Settings that are preferences, which Reset puts back. Credentials stay.
 const PREFERENCES: [&str; 17] = [
     erc_core::review::REVIEW_ON_ADD,
     THEME,
@@ -178,7 +178,19 @@ fn announce(app: &AppHandle, key: &str, value: Option<&str>) {
 #[tauri::command]
 pub fn setting_get(state: State<AppState>, key: String) -> CmdResult<Option<String>> {
     checked(&key, None)?;
-    state.library().setting(&key).map_err(err)
+    state
+        .library()
+        .setting(&key)
+        .map(|value| visible_setting(&key, value))
+        .map_err(err)
+}
+
+fn visible_setting(key: &str, value: Option<String>) -> Option<String> {
+    if key == erc_core::enhance::METRON_TOKEN {
+        value.map(|_| "configured".to_owned())
+    } else {
+        value
+    }
 }
 
 #[tauri::command]
@@ -193,7 +205,7 @@ pub fn setting_set(
         .library()
         .set_setting(&key, value.as_deref())
         .map_err(err)?;
-    announce(&app, &key, value.as_deref());
+    announce(&app, &key, visible_setting(&key, value).as_deref());
     Ok(())
 }
 
@@ -203,12 +215,17 @@ pub fn settings_all(state: State<AppState>) -> CmdResult<BTreeMap<String, Option
     let lib = state.library();
     SETTINGS
         .iter()
-        .map(|(key, _)| Ok(((*key).to_owned(), lib.setting(key).map_err(err)?)))
+        .map(|(key, _)| {
+            Ok((
+                (*key).to_owned(),
+                visible_setting(key, lib.setting(key).map_err(err)?),
+            ))
+        })
         .collect()
 }
 
 /// Puts every preference back to its default: the reader's appearance and
-/// the backup policy too. The Google Books key stays.
+/// the backup policy too. Credentials stay.
 #[tauri::command]
 pub async fn settings_reset(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
     {

@@ -247,8 +247,8 @@ enum LibraryCommand {
     Check,
     /// What the app would raise about these books if they had just been added.
     Review { ids: Vec<i64> },
-    /// Look up series and genres online (and on a connected Kobo) for books
-    /// that lack them. Shows proposals; --apply saves the confident ones.
+    /// Look up missing metadata online, using clues from a connected Kobo
+    /// when available. Shows proposals; --apply saves the confident ones.
     Enhance {
         /// Library book ids; all books if none.
         ids: Vec<i64>,
@@ -258,7 +258,7 @@ enum LibraryCommand {
         #[arg(long)]
         apply: bool,
     },
-    /// Show or change a setting (google_books_key).
+    /// Show or change a setting (google_books_key, metron_token).
     Setting {
         key: String,
         value: Option<String>,
@@ -1123,7 +1123,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             let progress = Reporter::new(json);
             let proposals = enhance::propose(
                 &books,
-                &enhance::options(lib),
+                &enhance::options(lib, &books),
                 &fetch,
                 &clues,
                 |n, total, title| progress.update(n, total, title),
@@ -1160,9 +1160,53 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                         g.sources.join(", ")
                     );
                 }
+                if let Some(details) = &p.details {
+                    let detail_mark = mark(details.confident);
+                    let values = &details.values;
+                    if !values.authors.is_empty() {
+                        println!("  {detail_mark} authors  {}", values.authors.join(", "));
+                    }
+                    if !values.contributors.is_empty() {
+                        println!(
+                            "  {detail_mark} contributors  {}",
+                            values
+                                .contributors
+                                .iter()
+                                .map(|c| c.name.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
+                    }
+                    if let Some(publisher) = &values.publisher {
+                        println!("  {detail_mark} publisher  {publisher}");
+                    }
+                    if let Some(description) = &values.description {
+                        println!("  {detail_mark} synopsis  {description}");
+                    }
+                }
+                if let Some(record) = &p.record {
+                    println!("  Data: {} ({})", record.catalog.label(), record.url);
+                }
+                for issue in &p.issues {
+                    println!("  ? Metron candidate: {}", issue.title);
+                }
                 for problem in &p.problems {
                     println!("  ! {problem}");
                 }
+                let catalog = p.record.as_ref().map(|r| r.catalog.label());
+                let record = p
+                    .record
+                    .as_ref()
+                    .filter(|_| {
+                        p.details.as_ref().is_some_and(|d| d.confident)
+                            || p.series
+                                .as_ref()
+                                .is_some_and(|s| s.confident && Some(s.source.as_str()) == catalog)
+                            || p.genres.iter().any(|g| {
+                                g.confident && g.sources.iter().any(|s| Some(s.as_str()) == catalog)
+                            })
+                    })
+                    .cloned();
                 accepted.push(enhance::Accepted {
                     book_id: p.book_id,
                     series: p
@@ -1176,6 +1220,12 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                         .filter(|g| g.confident)
                         .map(|g| g.name.clone())
                         .collect(),
+                    details: p
+                        .details
+                        .as_ref()
+                        .filter(|d| d.confident)
+                        .map(|d| d.values.clone()),
+                    record,
                 });
             }
             let with = proposals.iter().filter(|p| !p.is_empty()).count();
@@ -1196,7 +1246,12 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             } else if let Some(v) = value {
                 lib.set_setting(&key, Some(&v))?;
             } else {
-                println!("{}", lib.setting(&key)?.unwrap_or_default());
+                let value = lib.setting(&key)?;
+                if key == enhance::METRON_TOKEN && value.is_some() {
+                    println!("configured");
+                } else {
+                    println!("{}", value.unwrap_or_default());
+                }
             }
         }
         LibraryCommand::Check => {

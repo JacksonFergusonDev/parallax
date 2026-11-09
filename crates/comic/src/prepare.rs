@@ -105,6 +105,7 @@ pub struct Metadata<'a> {
     pub series_index: Option<&'a str>,
     pub language: Option<&'a str>,
     pub description: Option<&'a str>,
+    pub source: Option<&'a str>,
     /// EPUB's dcterms:modified timestamp, in UTC.
     pub modified: &'a str,
     pub custom_cover: Option<&'a [u8]>,

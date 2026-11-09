@@ -30,6 +30,7 @@ import {
 import { AnnotationsDialog } from "./AnnotationsDialog";
 import { CoverPicker } from "./CoverPicker";
 import { UpscaleReview } from "./UpscaleReview";
+import { MetadataSource } from "./MetadataSource";
 
 interface Props {
   book: Book;
@@ -40,7 +41,7 @@ interface Props {
   onSave: (id: number, edit: MetadataEdit) => Promise<void>;
   /** Called with the updated book after a cover change. */
   onChanged: (book: Book) => void;
-  /** Look up this book's series and genres online. */
+  /** Look up this book's metadata online. */
   onEnhance: (id: number) => void;
   onClose: () => void;
 }
@@ -506,7 +507,7 @@ export function EditPanel({
           className="link find-online"
           onClick={() => onEnhance(book.id)}
         >
-          Find series and genres online…
+          Find metadata online…
         </button>
         {(book.annotations ?? 0) > 0 && (
           <button
@@ -541,6 +542,19 @@ export function EditPanel({
         </div>
       </form>
       {book.description && <Description html={book.description} />}
+      {book.identifiers.map(({ scheme, value }) => {
+        const catalog =
+          scheme === "mangainfo-url"
+            ? "mangainfo"
+            : scheme === "metron-url"
+              ? "metron"
+              : null;
+        return (
+          catalog && (
+            <MetadataSource key={scheme} catalog={catalog} url={value} />
+          )
+        );
+      })}
       <Facts book={book} />
     </aside>
   );

@@ -91,3 +91,82 @@ fn check_library_reads_comics_as_comics() {
         .unwrap();
     assert_eq!(damaged.detail, "02.png");
 }
+
+#[test]
+fn comic_enrichment_uses_the_embedded_issue_and_preserves_local_details() {
+    use erc_core::enhance::{self, Accepted, Details, DeviceClues, METRON_TOKEN};
+    use erc_metadata::{Fetch, FetchError};
+
+    struct Metron;
+    impl Fetch for Metron {
+        fn get(&self, url: &str, _: &[(&str, &str)]) -> Result<String, FetchError> {
+            panic!("unexpected anonymous request {url}")
+        }
+
+        fn get_authenticated(
+            &self,
+            url: &str,
+            params: &[(&str, &str)],
+            token: &str,
+        ) -> Result<String, FetchError> {
+            assert_eq!(token, "test");
+            Ok(match url {
+                "https://metron.cloud/api/issue/" => {
+                    assert!(params.contains(&("series_name", "Example")));
+                    assert!(params.contains(&("number", "12")));
+                    assert!(params.contains(&("series_volume", "2")));
+                    r#"{"next":null,"results":[{"id":41,"issue":"Example (2018) #12","series":{"name":"Example"}}]}"#
+                }
+                "https://metron.cloud/api/issue/41/" => r#"{"id":41,"series":{"name":"Example","genres":[{"name":"Fantasy"}]},"number":"12","publisher":{"name":"Online Press"},"desc":"Online summary","desc_is_solicitation":false,"resource_url":"https://metron.cloud/issue/example-2/12/"}"#,
+                _ => panic!("unexpected request {url}"),
+            }.into())
+        }
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut library = Library::open(dir.path().join("lib")).unwrap();
+    library.set_setting(METRON_TOKEN, Some("test")).unwrap();
+    let path = dir.path().join("Example v2 #12.cbz");
+    write_zip(&path, &[
+        ("1.png", &png(10, 20)),
+        ("ComicInfo.xml", b"<ComicInfo><Series>Example</Series><Volume>2</Volume><Number>12</Number><Manga>No</Manga><Writer>Local Author</Writer><Publisher>Local Press</Publisher></ComicInfo>"),
+    ]);
+    let ImportOutcome::Added { book, .. } = library.import(&path).unwrap() else {
+        panic!("expected a comic");
+    };
+    let books = [book];
+    let options = enhance::options(&library, &books);
+    let proposed = enhance::propose(
+        &books,
+        &options,
+        &Metron,
+        &DeviceClues::default(),
+        |_, _, _| {},
+    );
+    let proposed = &proposed[0];
+    let details = proposed.details.as_ref().unwrap();
+    assert!(!details.confident);
+    assert!(details.values.authors.is_empty());
+    assert!(details.values.publisher.is_none());
+
+    let accepted = [Accepted {
+        book_id: books[0].id,
+        details: Some(Details {
+            authors: vec!["Must not replace a saved author".into()],
+            publisher: Some("Must not replace a saved publisher".into()),
+            ..details.values.clone()
+        }),
+        record: proposed.record.clone(),
+        ..Accepted::default()
+    }];
+    let applied = enhance::apply(&mut library, &accepted).unwrap();
+    assert_eq!(applied[0].authors, ["Local Author"]);
+    assert_eq!(applied[0].publisher.as_deref(), Some("Local Press"));
+    assert_eq!(applied[0].description.as_deref(), Some("Online summary"));
+    assert!(
+        applied[0]
+            .identifiers
+            .iter()
+            .any(|i| i.scheme.as_deref() == Some("metron") && i.value == "41")
+    );
+}

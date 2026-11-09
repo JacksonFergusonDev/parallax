@@ -570,7 +570,7 @@ describe("library toolbar", () => {
       "Revert changes…",
       "Import from calibre…",
       "Tidy genres…",
-      "Find series & genres…",
+      "Find metadata…",
     ]);
     await act(async () => {
       tools.dispatchEvent(

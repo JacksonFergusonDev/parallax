@@ -370,10 +370,26 @@ export interface ProposedGenre {
   confident: boolean;
 }
 
+export interface CatalogRecord {
+  catalog: "mangainfo" | "metron";
+  url: string;
+  issue_id: number | null;
+}
+
+export interface ComicDetails {
+  authors: string[];
+  contributors: Contributor[];
+  description: string | null;
+  publisher: string | null;
+}
+
 export interface Proposal {
   book_id: number;
   series: ProposedSeries | null;
   genres: ProposedGenre[];
+  details?: ComicDetails & { confident: boolean };
+  record?: CatalogRecord;
+  issues?: { id: number; title: string }[];
   /** Sources that couldn't be asked. */
   problems: string[];
 }
@@ -382,6 +398,8 @@ export interface Accepted {
   book_id: number;
   series: [string, string | null] | null;
   genres: string[];
+  details?: ComicDetails;
+  record?: CatalogRecord;
 }
 
 export type DeviceImport =
@@ -690,15 +708,21 @@ export const calibreImport = (path: string, report?: ReportBookProgress) =>
     { path, ...progressArgs(report) },
     ["library", "plans"],
   );
-/** Looks up series and genres; `mount` adds a connected Kobo's clues. */
-export const enhancePropose = (ids: number[], mount: string | null) =>
-  invoke<Proposal[]>("enhance_propose", { ids, mount });
+/** Looks up book metadata; `mount` adds a connected Kobo's clues. */
+export const enhancePropose = (
+  ids: number[],
+  mount: string | null,
+  metronIssue?: number,
+) => invoke<Proposal[]>("enhance_propose", { ids, mount, metronIssue });
 export const enhanceApply = (accepted: Accepted[]) =>
   write<Book[]>("enhance_apply", { accepted }, ["library", "plans"]);
+export const openMetadataSource = (url: string) =>
+  invoke<void>("open_metadata_source", { url });
 /** Settings kept in the library; a missing value is the default. See
  * src-tauri/src/settings.rs for what each may hold. */
 export type SettingKey =
   | "google_books_key"
+  | "metron_token"
   | "review_on_add"
   | "theme"
   | "open_view"

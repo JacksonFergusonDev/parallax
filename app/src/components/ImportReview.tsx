@@ -24,10 +24,13 @@ import { BookProgressBar } from "./BookProgressBar";
 import { useBookProgress, type PrepareRemoval } from "../bookProgress";
 import { libraryReviewGroups } from "../duplicates";
 import {
+  chooseResolved,
   countChanges,
   initialSelection,
+  resolveIssue,
   toAccepted,
   toggleGenre,
+  toggleDetails,
   toggleSeries,
   type Selection,
 } from "../enhance";
@@ -623,6 +626,36 @@ export function ImportReview({
                           onToggleGenre={(g) =>
                             setSelection((s) => toggleGenre(s, id, g))
                           }
+                          onToggleDetails={() =>
+                            setSelection((s) => toggleDetails(s, id))
+                          }
+                          onResolveIssue={async (issue) => {
+                            const [resolved] = reviewProposals(
+                              [await resolveIssue(id, issue, mount)],
+                              review,
+                              removed,
+                            );
+                            if (!resolved)
+                              throw new Error(
+                                "No new metadata found for this issue.",
+                              );
+                            setSelection((current) =>
+                              chooseResolved(current, resolved),
+                            );
+                            setLookup((current) =>
+                              current.kind === "done"
+                                ? {
+                                    ...current,
+                                    proposals: current.proposals.map(
+                                      (candidate) =>
+                                        candidate.book_id === id
+                                          ? resolved
+                                          : candidate,
+                                    ),
+                                  }
+                                : current,
+                            );
+                          }}
                         />
                       )}
                       {has("title_from_file") && (

@@ -1273,8 +1273,8 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
                       { label: "Tidy genres…", onPick: () => setTidying(true) },
                       {
                         label: selected.size
-                          ? `Find series & genres for ${selected.size}…`
-                          : "Find series & genres…",
+                          ? `Find metadata for ${selected.size}…`
+                          : "Find metadata…",
                         onPick: enhance,
                       },
                     ]}

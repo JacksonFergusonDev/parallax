@@ -220,21 +220,28 @@ export function GeneralPane({ values, set }: PaneProps) {
   );
 }
 
-/** The optional Google Books key, which is never shown once saved. */
-function GoogleKey({ values, set }: PaneProps) {
-  const saved = !!values.google_books_key;
+/** Credentials are entered in a password field and replaced as a whole. */
+function Credential({
+  values,
+  set,
+  setting,
+  label,
+  placeholder,
+}: PaneProps & {
+  setting: "google_books_key" | "metron_token";
+  label: string;
+  placeholder: string;
+}) {
+  const saved = !!values[setting];
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const id = useId();
   if (saved && !editing)
     return (
       <div className="settings-inline">
-        <span>A key is saved.</span>
+        <span>Saved</span>
         <button onClick={() => setEditing(true)}>Change…</button>
-        <button
-          className="danger"
-          onClick={() => set("google_books_key", null)}
-        >
+        <button className="danger" onClick={() => set(setting, null)}>
           Remove
         </button>
       </div>
@@ -245,7 +252,7 @@ function GoogleKey({ values, set }: PaneProps) {
       onSubmit={(e) => {
         e.preventDefault();
         if (!draft.trim()) return;
-        set("google_books_key", draft);
+        set(setting, draft);
         setDraft("");
         setEditing(false);
       }}
@@ -253,8 +260,8 @@ function GoogleKey({ values, set }: PaneProps) {
       <input
         id={id}
         type="password"
-        aria-label="Google Books API key"
-        placeholder="API key"
+        aria-label={label}
+        placeholder={placeholder}
         autoComplete="off"
         spellCheck={false}
         value={draft}
@@ -288,7 +295,12 @@ export function LibraryPane(props: PaneProps) {
         label="Google Books"
         hint="Optional. A free API key lets Look up details find genres for more books."
       >
-        <GoogleKey {...props} />
+        <Credential
+          {...props}
+          setting="google_books_key"
+          label="Google Books API key"
+          placeholder="API key"
+        />
       </Row>
       <Row label="Library folder">
         <div className="settings-inline">
@@ -447,6 +459,17 @@ export function ComicsPane(props: PaneProps) {
           <option value="manga">Manga</option>
           <option value="comic">Comics</option>
         </select>
+      </Row>
+      <Row
+        label="Metron API token"
+        hint="Create a token in your Metron account settings to look up Western comic issues. Manga lookups use Mangainfo and need no account."
+      >
+        <Credential
+          {...props}
+          setting="metron_token"
+          label="Metron API token"
+          placeholder="API token"
+        />
       </Row>
       <Row
         label="Spreads"

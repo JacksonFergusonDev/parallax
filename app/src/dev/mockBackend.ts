@@ -5,12 +5,14 @@ import { emit } from "@tauri-apps/api/event";
 import type { Channel } from "@tauri-apps/api/core";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type {
+  Accepted,
   Book,
   BookProgress,
   Progress,
   DeviceBook,
   DeviceInfo,
   MetadataEdit,
+  Proposal,
   ReaderSettings,
   Rule,
 } from "../api";
@@ -296,6 +298,7 @@ let backupBytes = 23_400_000;
 let readerAppearance: ReaderSettings = { ...DEFAULT_SETTINGS };
 const SETTING_KEYS = [
   "google_books_key",
+  "metron_token",
   "review_on_add",
   "theme",
   "open_view",
@@ -1150,16 +1153,81 @@ export function installMockBackend(label = "main") {
         }
         case "enhance_propose": {
           const ids = a.ids as number[];
-          const out = [];
+          const out: Proposal[] = [];
           for (const [i, id] of ids.entries()) {
             const b = books.find((x) => x.id === id);
             if (!b) continue;
-            await emit("enhance-progress", {
-              index: i + 1,
-              total: ids.length,
-              title: b.title,
-            });
+            if (!a.metronIssue) {
+              await emit("enhance-progress", {
+                index: i + 1,
+                total: ids.length,
+                title: b.title,
+              });
+            }
             await sleep(120);
+            if (b.kind === "comic") {
+              const issue = a.metronIssue as number | undefined;
+              out.push({
+                book_id: id,
+                series: null,
+                genres: [],
+                problems: [],
+                ...(issue
+                  ? {
+                      details: {
+                        authors: [],
+                        contributors: [],
+                        publisher: b.publisher ?? "Sample Press",
+                        description:
+                          "An encrypted transmission lands in the hands of a young radio operator.",
+                        confident: true,
+                      },
+                      record: {
+                        catalog: "metron",
+                        url: "https://metron.cloud/issue/signal-fires-1/",
+                        issue_id: issue,
+                      },
+                    }
+                  : {
+                      issues: [
+                        { id: 1, title: "Signal Fires (2015) #1" },
+                        { id: 2, title: "Signal Fires (2020) #1" },
+                      ],
+                    }),
+              });
+              continue;
+            }
+            if (b.kind === "manga") {
+              out.push({
+                book_id: id,
+                series: null,
+                genres: b.tags.length
+                  ? []
+                  : [
+                      {
+                        name: "Fantasy",
+                        sources: ["Mangainfo"],
+                        confident: true,
+                      },
+                    ],
+                details: {
+                  authors: b.authors.length ? [] : ["Sample creator"],
+                  contributors: [],
+                  description: b.description
+                    ? null
+                    : "An apprentice discovers a city where magic lives in the maps. She sets out to redraw the route home before the last ferry leaves.",
+                  publisher: null,
+                  confident: false,
+                },
+                record: {
+                  catalog: "mangainfo",
+                  url: "https://mangainfo.com/series/berserk",
+                  issue_id: null,
+                },
+                problems: [],
+              });
+              continue;
+            }
             const genres = b.tags.length
               ? []
               : [
@@ -1203,11 +1271,7 @@ export function installMockBackend(label = "main") {
           return out;
         }
         case "enhance_apply": {
-          const accepted = a.accepted as {
-            book_id: number;
-            series: [string, string | null] | null;
-            genres: string[];
-          }[];
+          const accepted = a.accepted as Accepted[];
           const now = new Date().toISOString();
           const updated = [];
           for (const acc of accepted) {
@@ -1217,6 +1281,23 @@ export function installMockBackend(label = "main") {
               series: acc.series ? acc.series[0] : b.series,
               series_index: acc.series ? acc.series[1] : b.series_index,
               tags: [...b.tags, ...acc.genres],
+              authors: b.authors.length
+                ? b.authors
+                : (acc.details?.authors ?? b.authors),
+              contributors: b.contributors?.length
+                ? b.contributors
+                : (acc.details?.contributors ?? b.contributors),
+              description: b.description ?? acc.details?.description ?? null,
+              publisher: b.publisher ?? acc.details?.publisher ?? null,
+              identifiers: acc.record
+                ? [
+                    ...b.identifiers,
+                    {
+                      scheme: `${acc.record.catalog}-url`,
+                      value: acc.record.url,
+                    },
+                  ]
+                : b.identifiers,
               modified_at: now,
             };
             books = books.map((x) => (x.id === b.id ? next : x));
@@ -1224,6 +1305,9 @@ export function installMockBackend(label = "main") {
           }
           return updated;
         }
+        case "open_metadata_source":
+          window.open(a.url as string, "_blank", "noopener,noreferrer");
+          return null;
         case "setting_get":
           return settings.get(a.key as string) ?? null;
         case "setting_set":
@@ -1237,7 +1321,7 @@ export function installMockBackend(label = "main") {
           );
         case "settings_reset":
           for (const key of SETTING_KEYS)
-            if (key !== "google_books_key") {
+            if (key !== "google_books_key" && key !== "metron_token") {
               settings.delete(key);
               await emit("setting-changed", { key, value: null });
             }

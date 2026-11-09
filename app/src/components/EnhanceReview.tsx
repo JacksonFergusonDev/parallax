@@ -12,16 +12,21 @@ import {
   type Proposal,
 } from "../api";
 import {
+  chooseResolved,
   countChanges,
   initialSelection,
+  resolveIssue,
   selectAll,
   toAccepted,
   toggleGenre,
+  toggleDetails,
   toggleSeries,
   withChanges,
   type Choice,
   type Selection,
 } from "../enhance";
+import { plainDescription, ROLES } from "../library";
+import { MetadataSource } from "./MetadataSource";
 
 interface Props {
   ids: number[];
@@ -50,7 +55,7 @@ type Phase =
   | { kind: "done"; updated: Book[] }
   | { kind: "error"; message: string };
 
-/** Looks up series and genres, lets the user pick, and saves the picks. */
+/** Looks up metadata, lets the user pick, and saves the picks. */
 export function EnhanceReview({ ids, mount, onApplied, kobo, onClose }: Props) {
   const [phase, setPhase] = useState<Phase>({
     kind: "looking",
@@ -102,7 +107,7 @@ export function EnhanceReview({ ids, mount, onApplied, kobo, onClose }: Props) {
       <div className="modal enhance" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
-            <h2>Find series and genres</h2>
+            <h2>Find metadata</h2>
             <p className="muted">
               {phase.kind === "looking"
                 ? phase.progress
@@ -111,7 +116,7 @@ export function EnhanceReview({ ids, mount, onApplied, kobo, onClose }: Props) {
                 : phase.kind === "review"
                   ? phase.proposals.length
                     ? `${plural(phase.proposals.length, "book")} can be filled in. Unsure matches aren't ticked.`
-                    : "Nothing to add: these books already have series and genres, or no source knew them."
+                    : "No new metadata found."
                   : phase.kind === "done"
                     ? `Updated ${plural(phase.updated.length, "book")}.`
                     : phase.kind === "saving"
@@ -176,6 +181,37 @@ export function EnhanceReview({ ids, mount, onApplied, kobo, onClose }: Props) {
                         onToggleGenre={(g) =>
                           setSelection((s) => toggleGenre(s, p.book_id, g))
                         }
+                        onToggleDetails={() =>
+                          setSelection((s) => toggleDetails(s, p.book_id))
+                        }
+                        onResolveIssue={async (issue) => {
+                          const resolved = await resolveIssue(
+                            p.book_id,
+                            issue,
+                            mount,
+                          );
+                          if (!withChanges([resolved]).length) {
+                            throw new Error(
+                              "No new metadata found for this issue.",
+                            );
+                          }
+                          setSelection((current) =>
+                            chooseResolved(current, resolved),
+                          );
+                          setPhase((current) =>
+                            current.kind === "review"
+                              ? {
+                                  ...current,
+                                  proposals: current.proposals.map(
+                                    (candidate) =>
+                                      candidate.book_id === p.book_id
+                                        ? resolved
+                                        : candidate,
+                                  ),
+                                }
+                              : current,
+                          );
+                        }}
                       />
                     </div>
                   </li>
@@ -187,7 +223,9 @@ export function EnhanceReview({ ids, mount, onApplied, kobo, onClose }: Props) {
                 Some sources didn't answer: {phase.problems.join("; ")}
               </p>
             )}
-            <GoogleKey />
+            {ids.some((id) => phase.books.get(id)?.kind === "book") && (
+              <GoogleKey />
+            )}
             <div className="form-actions">
               <button className="secondary" onClick={onClose}>
                 Cancel
@@ -218,21 +256,31 @@ export function EnhanceReview({ ids, mount, onApplied, kobo, onClose }: Props) {
   );
 }
 
-/** The ticks for one book's proposed series and genres. */
+/** The ticks for one book's proposed metadata. */
 export function ProposalChanges({
   proposal,
   choice,
   onToggleSeries,
   onToggleGenre,
+  onToggleDetails,
+  onResolveIssue,
 }: {
   proposal: Proposal;
   choice: Choice | undefined;
   onToggleSeries: () => void;
   onToggleGenre: (genre: string) => void;
+  onToggleDetails: () => void;
+  onResolveIssue: (issue: number) => Promise<void>;
 }) {
-  const { series, genres } = proposal;
+  const { series, genres, details, record } = proposal;
+  const [showSynopsis, setShowSynopsis] = useState(false);
+  const description =
+    details?.description && plainDescription(details.description);
   return (
     <>
+      {!!proposal.issues?.length && (
+        <IssuePicker issues={proposal.issues} onResolve={onResolveIssue} />
+      )}
       {series && (
         <label className="enhance-change">
           <input
@@ -262,7 +310,92 @@ export function ProposalChanges({
           {!g.confident && <span className="unsure">unsure</span>}
         </label>
       ))}
+      {details && (
+        <div className="enhance-details">
+          <label className="enhance-change">
+            <input
+              type="checkbox"
+              checked={choice?.details ?? false}
+              onChange={onToggleDetails}
+            />
+            <span className="enhance-field">
+              {record?.catalog === "mangainfo"
+                ? "Manga details"
+                : "Issue details"}
+            </span>
+            {!details.confident && <span className="unsure">Review</span>}
+          </label>
+          {details.authors.length > 0 && (
+            <div>{details.authors.join(", ")}</div>
+          )}
+          {details.contributors.map((c) => (
+            <div key={`${c.name}:${c.role}`}>
+              {c.name} ·{" "}
+              {ROLES.find(([code]) => code === c.role)?.[1] ?? c.role}
+            </div>
+          ))}
+          {details.publisher && <div>{details.publisher}</div>}
+          {description && (
+            <>
+              <button
+                className="link"
+                aria-expanded={showSynopsis}
+                onClick={() => setShowSynopsis(!showSynopsis)}
+              >
+                {showSynopsis ? "Hide synopsis" : "Read synopsis"}
+              </button>
+              {showSynopsis && <p>{description}</p>}
+            </>
+          )}
+        </div>
+      )}
+      {record && <MetadataSource {...record} />}
     </>
+  );
+}
+
+function IssuePicker({
+  issues,
+  onResolve,
+}: {
+  issues: NonNullable<Proposal["issues"]>;
+  onResolve: (issue: number) => Promise<void>;
+}) {
+  const [issue, setIssue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return (
+    <div className="enhance-details">
+      <div className="enhance-issue">
+        <select
+          aria-label="Metron issue"
+          value={issue}
+          onChange={(event) => setIssue(event.target.value)}
+          disabled={busy}
+        >
+          <option value="">Choose a Metron issue</option>
+          {issues.map(({ id, title }) => (
+            <option key={id} value={id}>
+              {title}
+            </option>
+          ))}
+        </select>
+        <button
+          className="secondary"
+          disabled={!issue || busy}
+          onClick={() => {
+            setBusy(true);
+            setError("");
+            onResolve(Number(issue))
+              .catch((reason: unknown) => setError(String(reason)))
+              .finally(() => setBusy(false));
+          }}
+        >
+          {busy ? "Looking up…" : "Look up issue"}
+        </button>
+      </div>
+      {error && <p role="alert">{error}</p>}
+    </div>
   );
 }
 

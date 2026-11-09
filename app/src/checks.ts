@@ -40,7 +40,7 @@ export const CHECKS: Record<CheckKind, CheckInfo> = {
   },
   series_without_number: {
     label: "Series without a number",
-    help: "Select the book to add its number, or use “Find series & genres…”.",
+    help: "Select the book to add its number, or use “Find metadata…”.",
   },
   series_gap: {
     label: "Gaps in series",

@@ -42,6 +42,7 @@ fn metadata() -> Metadata<'static> {
         series_index: Some("1"),
         language: None,
         description: Some("A synopsis with <markup> & punctuation."),
+        source: Some("https://mangainfo.com/series/berserk"),
         modified: "2026-11-08T00:00:00Z",
         custom_cover: None,
     }
@@ -89,6 +90,7 @@ fn kepubify_preserves_layout_direction_and_the_rtl_split() {
     assert!(opf.contains("page-progression-direction=\"rtl\""));
     assert!(opf.contains("Title &amp; subtitle"));
     assert!(opf.contains("belongs-to-collection"));
+    assert!(opf.contains("<dc:source>https://mangainfo.com/series/berserk</dc:source>"));
     assert!(opf.contains(
         "<dc:description>A synopsis with &lt;markup&gt; &amp; punctuation.</dc:description>"
     ));

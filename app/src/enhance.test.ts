@@ -6,6 +6,7 @@ import {
   selectAll,
   toAccepted,
   toggleGenre,
+  toggleDetails,
   toggleSeries,
   withChanges,
 } from "./enhance";
@@ -66,5 +67,33 @@ describe("enhance selection", () => {
 
   it("hides books with nothing to change", () => {
     expect(withChanges(proposals).map((p) => p.book_id)).toEqual([1, 2]);
+  });
+
+  it("accepts a series-level synopsis only after review and carries its source", () => {
+    const record = {
+      catalog: "mangainfo" as const,
+      url: "https://mangainfo.com/series/berserk",
+      issue_id: null,
+    };
+    const details = {
+      authors: [],
+      contributors: [],
+      description: "Sample synopsis",
+      publisher: null,
+      confident: false,
+    };
+    const proposal: Proposal = {
+      book_id: 4,
+      series: null,
+      genres: [],
+      problems: [],
+      record,
+      details,
+    };
+    const selection = initialSelection([proposal]);
+    expect(toAccepted([proposal], selection)).toEqual([]);
+    expect(toAccepted([proposal], toggleDetails(selection, 4))).toEqual([
+      { book_id: 4, series: null, genres: [], record, details },
+    ]);
   });
 });

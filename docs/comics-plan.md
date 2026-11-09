@@ -176,9 +176,14 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
 - **Window access:** the existing reader grants cover the raster and bookmark operations. The pinned grant test still enforces the same scope.
 - **Tests:** `just test-reader` opens generated CBZs, turns pages in both reading directions, checks bookmarks and resume, and exercises vertical scroll. The browser mock was checked at 860 × 1000 and 420 × 520.
 
-### C8. Later
+### C8. Online comic and manga metadata
 
-- Online metadata from AniList (manga, free) and ComicVine (comics, needs a key).
+- Find metadata and import review search Mangainfo for manga series aliases, volumes and ISBNs. Mangainfo needs no account. Its synopsis and creator credits describe the series, so they start unticked in review.
+- Western comic issues use Metron. Add a personal API token in Settings › Comics. Parallax uses known catalog IDs or the series, run and issue clues in ComicInfo and the filename, and compares the archive cover to break ties. If more than one issue still matches, select it in the review before saving.
+- Accepted changes fill gaps and retain the catalog source. Generated KEPUBs include the synopsis and source, and chapter navigation uses embedded chapter bookmarks or chapter folders.
+
+### Later
+
 - Kobo reading progress mapped to pages.
 - KCC's webtoon panel splitter and colour "rainbow" filter.
 - PDF comics.

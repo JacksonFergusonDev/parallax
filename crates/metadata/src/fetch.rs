@@ -6,16 +6,19 @@ use std::path::Path;
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
-use chrono::{Duration as Age, Utc};
+use chrono::{DateTime, Duration as Age, Utc};
 use reqwest::StatusCode;
 use reqwest::blocking::{Client, Response};
 use reqwest::header::{RETRY_AFTER, USER_AGENT as USER_AGENT_HEADER};
 use rusqlite::{Connection, OptionalExtension, params};
+use sha2::{Digest, Sha256};
 
 #[derive(Debug, thiserror::Error)]
 pub enum FetchError {
     #[error("{0}")]
     Http(String),
+    #[error("{host} returned HTTP {status}")]
+    Status { host: String, status: u16 },
     #[error("{host} is limiting requests; try again later")]
     RateLimited { host: String },
 }
@@ -23,6 +26,18 @@ pub enum FetchError {
 /// One GET returning the body as text.
 pub trait Fetch: Sync {
     fn get(&self, url: &str, params: &[(&str, &str)]) -> Result<String, FetchError>;
+
+    fn get_authenticated(
+        &self,
+        url: &str,
+        params: &[(&str, &str)],
+        token: &str,
+    ) -> Result<String, FetchError> {
+        let _ = (url, params, token);
+        Err(FetchError::Http(
+            "authenticated requests are unavailable".into(),
+        ))
+    }
 }
 
 /// Sent to every service.
@@ -65,9 +80,10 @@ fn host_of(url: &str) -> &str {
 /// published limits (Apple's search API allows about 20 a minute).
 fn min_interval(host: &str) -> Duration {
     match host {
-        "itunes.apple.com" => Duration::from_millis(3100),
+        "itunes.apple.com" | "metron.cloud" => Duration::from_millis(3100),
         "query.wikidata.org" => Duration::from_millis(500),
         "openlibrary.org" => Duration::from_millis(350),
+        "mangainfo.com" => Duration::from_millis(1100),
         _ => Duration::from_millis(100),
     }
 }
@@ -190,25 +206,55 @@ impl HttpFetcher {
     }
 }
 
-impl Fetch for HttpFetcher {
-    fn get(&self, url: &str, params: &[(&str, &str)]) -> Result<String, FetchError> {
+impl HttpFetcher {
+    fn request(
+        &self,
+        url: &str,
+        params: &[(&str, &str)],
+        token: Option<&str>,
+    ) -> Result<String, FetchError> {
         wait_turn(url)?;
         let mut request = self
             .client
             .get(url)
             .query(params)
             .header(USER_AGENT_HEADER, user_agent(url));
-        if host_of(url) == "query.wikidata.org" {
-            request = request.header("Accept", "application/sparql-results+json");
+        request = request.header(
+            "Accept",
+            match host_of(url) {
+                "query.wikidata.org" => "application/sparql-results+json",
+                _ => "application/json",
+            },
+        );
+        if let Some(token) = token {
+            request = request.bearer_auth(token);
         }
         let response = request
             .send()
             .map_err(|e| FetchError::Http(e.to_string()))?;
         check_limited(url, &response)?;
-        response
-            .error_for_status()
-            .and_then(reqwest::blocking::Response::text)
-            .map_err(|e| FetchError::Http(e.to_string()))
+        if !response.status().is_success() {
+            return Err(FetchError::Status {
+                host: host_of(url).into(),
+                status: response.status().as_u16(),
+            });
+        }
+        response.text().map_err(|e| FetchError::Http(e.to_string()))
+    }
+}
+
+impl Fetch for HttpFetcher {
+    fn get(&self, url: &str, params: &[(&str, &str)]) -> Result<String, FetchError> {
+        self.request(url, params, None)
+    }
+
+    fn get_authenticated(
+        &self,
+        url: &str,
+        params: &[(&str, &str)],
+        token: &str,
+    ) -> Result<String, FetchError> {
+        self.request(url, params, Some(token))
     }
 }
 
@@ -219,6 +265,7 @@ const CACHE_DAYS: i64 = 30;
 pub struct CachedFetcher<F> {
     inner: F,
     db: Mutex<Connection>,
+    manga: Mutex<HashMap<String, (DateTime<Utc>, String)>>,
 }
 
 impl<F: Fetch> CachedFetcher<F> {
@@ -234,6 +281,7 @@ impl<F: Fetch> CachedFetcher<F> {
         Ok(Self {
             inner,
             db: Mutex::new(db),
+            manga: Mutex::default(),
         })
     }
 
@@ -244,13 +292,43 @@ impl<F: Fetch> CachedFetcher<F> {
     }
 }
 
-impl<F: Fetch> Fetch for CachedFetcher<F> {
-    fn get(&self, url: &str, params: &[(&str, &str)]) -> Result<String, FetchError> {
+impl<F: Fetch> CachedFetcher<F> {
+    fn request(
+        &self,
+        url: &str,
+        params: &[(&str, &str)],
+        token: Option<&str>,
+    ) -> Result<String, FetchError> {
         let mut key = url.to_owned();
+        if let Some(token) = token {
+            use std::fmt::Write as _;
+            key.push_str("\naccount=");
+            for byte in Sha256::digest(token.as_bytes()) {
+                let _ = write!(key, "{byte:02x}");
+            }
+        }
         for (k, v) in params {
             key.push_str(&format!("\n{k}={v}"));
         }
-        let oldest = (Utc::now() - Age::days(CACHE_DAYS)).to_rfc3339();
+        let now = Utc::now();
+        if host_of(url) == "mangainfo.com" {
+            // Mangainfo permits brief caching. Keep responses in memory for
+            // this batch, respecting HTTP max-age and the UTC day boundary.
+            let oldest = (now - Age::minutes(5))
+                .max(now.date_naive().and_time(chrono::NaiveTime::MIN).and_utc());
+            let mut manga = self
+                .manga
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            manga.retain(|_, (fetched, _)| *fetched > oldest);
+            if let Some((_, body)) = manga.get(&key) {
+                return Ok(body.clone());
+            }
+            let body = self.inner.get(url, params)?;
+            manga.insert(key, (Utc::now(), body.clone()));
+            return Ok(body);
+        }
+        let oldest = (now - Age::days(CACHE_DAYS)).to_rfc3339();
         let cached: Option<String> = self
             .db()
             .query_row(
@@ -264,12 +342,30 @@ impl<F: Fetch> Fetch for CachedFetcher<F> {
         if let Some(body) = cached {
             return Ok(body);
         }
-        let body = self.inner.get(url, params)?;
+        let body = match token {
+            Some(token) => self.inner.get_authenticated(url, params, token)?,
+            None => self.inner.get(url, params)?,
+        };
         let _ = self.db().execute(
             "INSERT OR REPLACE INTO responses (key, body, fetched_at) VALUES (?1, ?2, ?3)",
             params![key, body, Utc::now().to_rfc3339()],
         );
         Ok(body)
+    }
+}
+
+impl<F: Fetch> Fetch for CachedFetcher<F> {
+    fn get(&self, url: &str, params: &[(&str, &str)]) -> Result<String, FetchError> {
+        self.request(url, params, None)
+    }
+
+    fn get_authenticated(
+        &self,
+        url: &str,
+        params: &[(&str, &str)],
+        token: &str,
+    ) -> Result<String, FetchError> {
+        self.request(url, params, Some(token))
     }
 }
 
