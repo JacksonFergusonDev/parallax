@@ -47,7 +47,7 @@ pub struct Reading {
 /// and `quote` find the place again if it stops resolving.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReaderPosition {
-    /// The section, as a path inside the EPUB.
+    /// An EPUB section path, or a comic's zero-based `comic-page/<index>`.
     pub href: String,
     pub cfi: String,
     /// How far through the book, from 0 to 1.

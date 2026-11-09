@@ -17,6 +17,17 @@
       <h1 id="title"></h1>
       <div class="tools">
         <button
+          id="comic-bookmark"
+          class="icon"
+          aria-label="Bookmark page"
+          aria-pressed="false"
+          hidden
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M4 2h8v12l-4-3-4 3z" />
+          </svg>
+        </button>
+        <button
           id="notes-button"
           class="icon"
           aria-expanded="false"
@@ -76,6 +87,7 @@
           ‹ Back
         </button>
         <span id="chapter"></span>
+        <span id="comic-status" role="status" hidden></span>
       </div>
       <span id="progress"></span>
       <div class="slider">
@@ -127,6 +139,33 @@
       <ol id="results"></ol>
     </section>
     <section id="settings" aria-label="Appearance" hidden>
+      <div class="comic-controls" hidden>
+        <label class="row"
+          >Layout
+          <select id="comic-layout">
+            <option value="auto">Automatic spreads</option>
+            <option value="single">Single page</option>
+            <option value="scroll">Vertical scroll</option>
+          </select>
+        </label>
+        <label class="row"
+          >Page size
+          <select id="comic-fit">
+            <option value="page">Fit page</option>
+            <option value="width">Fit width</option>
+            <option value="height">Fit height</option>
+          </select>
+        </label>
+        <div class="row">
+          <span>Zoom</span>
+          <div class="stepper">
+            <button id="comic-minus" aria-label="Zoom out">−</button>
+            <output id="comic-zoom">100%</output>
+            <button id="comic-plus" aria-label="Zoom in">+</button>
+            <button id="comic-reset">Reset</button>
+          </div>
+        </div>
+      </div>
       <div class="row">
         <span>Text size</span>
         <div class="stepper">
@@ -135,7 +174,7 @@
           <button id="larger" aria-label="Larger text">A+</button>
         </div>
       </div>
-      <div class="field">
+      <div class="field comic-theme">
         <span id="theme-label">Theme</span>
         <div
           class="row choices"

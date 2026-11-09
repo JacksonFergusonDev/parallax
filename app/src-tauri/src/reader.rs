@@ -4,8 +4,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use erc_comic::Cbz;
 use erc_epub::{BookFile, Entry, has_drm};
-use erc_library::{HighlightDraft, ReaderHighlight, ReaderPosition};
+use erc_library::{Book, Direction, Format, HighlightDraft, ReaderHighlight, ReaderPosition};
 use serde::{Deserialize, Serialize};
 use tauri::ipc::Response;
 use tauri::utils::config::BackgroundThrottlingPolicy;
@@ -21,12 +22,17 @@ use crate::{AppState, CmdResult, err};
 pub const LABEL_PREFIX: &str = "reader-";
 const SETTINGS_KEY: &str = "reader";
 
+enum OpenBook {
+    Epub(Box<BookFile>),
+    Comic(Box<Cbz>),
+}
+
 /// Books open in reader windows, by book id.
 #[derive(Default)]
-pub struct OpenBooks(Mutex<HashMap<i64, Arc<Mutex<BookFile>>>>);
+pub struct OpenBooks(Mutex<HashMap<i64, Arc<Mutex<OpenBook>>>>);
 
 impl OpenBooks {
-    fn lock(&self) -> MutexGuard<'_, HashMap<i64, Arc<Mutex<BookFile>>>> {
+    fn lock(&self) -> MutexGuard<'_, HashMap<i64, Arc<Mutex<OpenBook>>>> {
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
@@ -252,7 +258,7 @@ const MAX_HIGHLIGHT_TEXT: usize = 20_000;
 const MAX_NOTE: usize = 50_000;
 
 impl HighlightInput {
-    fn draft(self) -> CmdResult<HighlightDraft> {
+    fn draft(self, comic: bool) -> CmdResult<HighlightDraft> {
         let too_long = self.cfi.len() > MAX_CFI
             || self.href.len() > MAX_CFI
             || self.text.chars().count() > MAX_HIGHLIGHT_TEXT
@@ -263,7 +269,7 @@ impl HighlightInput {
         if too_long {
             return Err("that highlight is too long to keep".to_owned());
         }
-        if !self.cfi.starts_with("epubcfi(") || !self.fraction.is_finite() {
+        if (!comic && !self.cfi.starts_with("epubcfi(")) || !self.fraction.is_finite() {
             return Err("that isn't a place in the book".to_owned());
         }
         Ok(HighlightDraft {
@@ -281,9 +287,41 @@ impl HighlightInput {
 pub struct ReaderBook {
     title: String,
     entries: Vec<Entry>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    comic: Option<ComicBook>,
     position: Option<ReaderPosition>,
     settings: ReaderSettings,
     app_theme: AppTheme,
+}
+
+#[derive(Serialize)]
+struct ComicBook {
+    direction: Direction,
+    cover: usize,
+    pages: Vec<ComicPage>,
+}
+
+#[derive(Serialize)]
+struct ComicPage {
+    width: u32,
+    height: u32,
+}
+
+fn comic_page_index(reference: &str, count: usize) -> CmdResult<usize> {
+    reference
+        .strip_prefix("comic-page/")
+        .filter(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()))
+        .and_then(|s| s.parse::<usize>().ok())
+        .filter(|&i| i < count)
+        .ok_or_else(|| "that isn't a page in this comic".to_owned())
+}
+
+fn validate_comic_page(book: &Book, reference: &str) -> CmdResult<()> {
+    let count = book
+        .pages
+        .and_then(|n| usize::try_from(n).ok())
+        .unwrap_or(0);
+    comic_page_index(reference, count).map(|_| ())
 }
 
 fn book_id(label: &str) -> CmdResult<i64> {
@@ -317,14 +355,7 @@ pub async fn reader_open(app: AppHandle, state: State<'_, AppState>, id: i64) ->
     let title = tauri::async_runtime::spawn_blocking(move || -> CmdResult<String> {
         let lib = library.lock().unwrap_or_else(PoisonError::into_inner);
         let book = lib.book(id).map_err(err)?;
-        // The comic viewer is comics plan C7.
-        if book.format == erc_library::Format::Cbz {
-            return Err(format!(
-                "{} is a comic, which can't be read here yet",
-                book.title
-            ));
-        }
-        if has_drm(&lib.book_file(id)).map_err(err)? {
+        if book.format == Format::Epub && has_drm(&lib.book_file(id)).map_err(err)? {
             return Err(format!(
                 "{} is DRM-protected, so it can't be read here",
                 book.title
@@ -375,12 +406,12 @@ pub async fn reader_book(
     let id = book_id(webview.label())?;
     let library = state.library.clone();
     let app_theme = AppTheme::saved(&state);
-    let (path, title, position, settings) = tauri::async_runtime::spawn_blocking(move || {
+    let (path, book, position, settings) = tauri::async_runtime::spawn_blocking(move || {
         let lib = library.lock().unwrap_or_else(PoisonError::into_inner);
         let settings = saved_settings(&lib);
         CmdResult::Ok((
             lib.book_file(id),
-            lib.book(id).map_err(err)?.title,
+            lib.book(id).map_err(err)?,
             lib.reader_position(id).map_err(err)?,
             settings,
         ))
@@ -389,17 +420,41 @@ pub async fn reader_book(
     .map_err(err)??;
 
     let existing = open.lock().get(&id).cloned();
-    let (book, entries) = tauri::async_runtime::spawn_blocking(move || {
+    let Book {
+        title,
+        format,
+        direction,
+        ..
+    } = book;
+    let (book, entries, comic) = tauri::async_runtime::spawn_blocking(move || {
         let book = match existing {
             Some(book) => book,
-            None => Arc::new(Mutex::new(BookFile::open(&path).map_err(err)?)),
+            None => Arc::new(Mutex::new(match format {
+                Format::Epub => OpenBook::Epub(Box::new(BookFile::open(&path).map_err(err)?)),
+                Format::Cbz => OpenBook::Comic(Box::new(Cbz::open(&path).map_err(err)?)),
+            })),
         };
-        let entries = book
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .entries()
-            .map_err(err)?;
-        CmdResult::Ok((book, entries))
+        let (entries, comic) = match &mut *book.lock().unwrap_or_else(PoisonError::into_inner) {
+            OpenBook::Epub(epub) => (epub.entries().map_err(err)?, None),
+            OpenBook::Comic(cbz) => {
+                let pages = (0..cbz.pages().len())
+                    .map(|i| {
+                        let (width, height) =
+                            cbz.page_dimensions(i).ok().flatten().unwrap_or((0, 0));
+                        ComicPage { width, height }
+                    })
+                    .collect();
+                (
+                    Vec::new(),
+                    Some(ComicBook {
+                        direction,
+                        cover: cbz.cover_index(),
+                        pages,
+                    }),
+                )
+            }
+        };
+        CmdResult::Ok((book, entries, comic))
     })
     .await
     .map_err(err)??;
@@ -407,6 +462,7 @@ pub async fn reader_book(
     Ok(ReaderBook {
         title,
         entries,
+        comic,
         position,
         settings,
         app_theme,
@@ -427,13 +483,19 @@ pub async fn reader_entry(
         .cloned()
         .ok_or_else(|| "the book isn't open".to_owned())?;
     let data = tauri::async_runtime::spawn_blocking(move || {
-        book.lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .read(&name)
+        match &mut *book.lock().unwrap_or_else(PoisonError::into_inner) {
+            OpenBook::Epub(epub) => epub.read(&name).map_err(err),
+            OpenBook::Comic(cbz) => {
+                let index = comic_page_index(&name, cbz.pages().len())?;
+                let bytes = cbz.read_page(index).map_err(err)?;
+                erc_comic::shape::image_dimensions(&bytes)
+                    .ok_or("this comic page is not a supported image")?;
+                Ok(bytes)
+            }
+        }
     })
     .await
-    .map_err(err)?
-    .map_err(err)?;
+    .map_err(err)??;
     Ok(Response::new(data))
 }
 
@@ -446,11 +508,15 @@ pub async fn reader_save_position(
     let id = book_id(webview.label())?;
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        library
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .set_reader_position(id, &position)
-            .map_err(err)
+        let lib = library.lock().unwrap_or_else(PoisonError::into_inner);
+        let book = lib.book(id).map_err(err)?;
+        if book.format == Format::Cbz {
+            validate_comic_page(&book, &position.href)?;
+            if !position.cfi.is_empty() || !position.fraction.is_finite() {
+                return Err("that isn't a place in the comic".into());
+            }
+        }
+        lib.set_reader_position(id, &position).map_err(err)
     })
     .await
     .map_err(err)?
@@ -496,14 +562,19 @@ pub async fn reader_save_highlight(
     highlight: HighlightInput,
 ) -> CmdResult<ReaderHighlight> {
     let book = book_id(webview.label())?;
-    let draft = highlight.draft()?;
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        library
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .save_reader_highlight(book, id, &draft)
-            .map_err(err)
+        let lib = library.lock().unwrap_or_else(PoisonError::into_inner);
+        let book = lib.book(book).map_err(err)?;
+        let comic = book.format == Format::Cbz;
+        if comic {
+            validate_comic_page(&book, &highlight.href)?;
+            if highlight.cfi != highlight.href {
+                return Err("that isn't a bookmark in this comic".into());
+            }
+        }
+        let draft = highlight.draft(comic)?;
+        lib.save_reader_highlight(book.id, id, &draft).map_err(err)
     })
     .await
     .map_err(err)?
@@ -538,6 +609,21 @@ mod tests {
         assert!(book_id("main").is_err());
         assert!(book_id("reader-").is_err());
         assert!(book_id("reader-1-2").is_err());
+    }
+
+    #[test]
+    fn comic_entries_only_address_pages_in_the_open_book() {
+        assert_eq!(comic_page_index("comic-page/0", 3), Ok(0));
+        assert_eq!(comic_page_index("comic-page/2", 3), Ok(2));
+        for name in [
+            "comic-page/3",
+            "comic-page/-1",
+            "comic-page/../0",
+            "1.jpg",
+            "ComicInfo.xml",
+        ] {
+            assert!(comic_page_index(name, 3).is_err());
+        }
     }
 
     #[test]
@@ -596,15 +682,15 @@ mod tests {
     fn highlights_are_checked_before_they_are_kept() {
         let input = |json: &str| serde_json::from_str::<HighlightInput>(json);
         let good = r#"{"cfi":"epubcfi(/6/2!/4/2,/1:0,/1:5)","href":"c1.xhtml","fraction":0.2,"text":"Hello","note":null,"color":"green"}"#;
-        assert_eq!(input(good).unwrap().draft().unwrap().color, "green");
+        assert_eq!(input(good).unwrap().draft(false).unwrap().color, "green");
         assert!(input(&good.replace("green", "red")).is_err());
         assert!(
             input(&good.replace("epubcfi(", "javascript:("))
                 .unwrap()
-                .draft()
+                .draft(false)
                 .is_err()
         );
         let huge = good.replace("Hello", &"x".repeat(MAX_HIGHLIGHT_TEXT + 1));
-        assert!(input(&huge).unwrap().draft().is_err());
+        assert!(input(&huge).unwrap().draft(false).is_err());
     }
 }

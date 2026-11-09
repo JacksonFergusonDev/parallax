@@ -27,7 +27,7 @@ import {
   openedBook,
   type MenuCommand,
   saveHighlight,
-  savePosition,
+  saveLatestPosition,
   saveSettings,
   type Highlight,
   type HighlightColor,
@@ -93,26 +93,14 @@ async function resume(view: View, position: Position | null) {
   await within(view.goTo(position.cfi), TURN_TIMEOUT_MS).catch(console.error);
 }
 
-/** Sends the latest position, one at a time, skipping any overtaken. */
+/** Saves the EPUB location as a section and CFI. */
 function positionSaver(sections: { id: string }[]) {
-  let waiting: Position | null = null;
-  let saving = false;
-  const flush = async () => {
-    saving = true;
-    while (waiting) {
-      const position = waiting;
-      waiting = null;
-      // A removed book can't be saved, and the reader has nothing to do about it.
-      await savePosition(position).catch(console.error);
-    }
-    saving = false;
-  };
+  const save = saveLatestPosition();
   return ({ cfi, fraction, range, section }: Location) => {
     const href = sections[section?.current ?? 0]?.id;
     if (!cfi || !href) return;
     const quote = range?.toString().trim().slice(0, QUOTE_LENGTH) || null;
-    waiting = { href, cfi, fraction, quote };
-    if (!saving) void flush();
+    save({ href, cfi, fraction, quote });
   };
 }
 
@@ -975,7 +963,13 @@ async function start() {
     installMockReader();
   }
   try {
-    await read(await openedBook());
+    const opened = await openedBook();
+    if (opened.comic) {
+      const { readComic } = await import("./comic");
+      await readComic(opened, opened.comic);
+    } else {
+      await read(opened);
+    }
   } catch (error) {
     console.error(error);
     showMessage(`This book can't be opened. ${error}`);

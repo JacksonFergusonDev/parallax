@@ -1139,6 +1139,7 @@ dependencies = [
 name = "erc-app"
 version = "0.1.0"
 dependencies = [
+ "erc-comic",
  "erc-convert",
  "erc-core",
  "erc-covers",

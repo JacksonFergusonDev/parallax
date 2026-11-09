@@ -38,16 +38,51 @@ interface MockHighlight {
   [key: string]: unknown;
 }
 
+const comicPages = [
+  { width: 560, height: 780 },
+  { width: 560, height: 780 },
+  { width: 560, height: 780 },
+  { width: 1100, height: 780 },
+  { width: 560, height: 780 },
+  { width: 560, height: 1760 },
+];
+
+function comicRaster(index: number) {
+  const { width, height } = comicPages[index];
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#faf3dd";
+  ctx.fillRect(0, 0, width, height);
+  for (let y = 12; y < height - 12; y += 246) {
+    ctx.fillStyle = ["#395e59", "#67455d", "#41638b"][index % 3];
+    ctx.fillRect(12, y, width - 24, Math.min(228, height - y - 12));
+    ctx.fillStyle = "#faf3dd";
+    ctx.beginPath();
+    ctx.arc(width * 0.65, y + 76, 42, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+  return Uint8Array.from(atob(canvas.toDataURL().split(",")[1]), (c) =>
+    c.charCodeAt(0),
+  ).buffer;
+}
+
 export function installMockReader() {
   mockWindows("reader-1");
   let highlights: MockHighlight[] = [];
   let nextId = 1;
+  const params = new URLSearchParams(location.search);
+  const comic = params.has("comic");
   mockIPC((command, args) => {
     const encoder = new TextEncoder();
     switch (command) {
       case "reader_book":
         return {
-          title: "A Sample Book",
+          title: comic ? "The Glass Harbor" : "A Sample Book",
+          comic: comic
+            ? { direction: "rtl", cover: 0, pages: comicPages }
+            : undefined,
           entries: Object.entries(FILES).map(([name, text]) => ({
             name,
             size: text.length,
@@ -55,11 +90,11 @@ export function installMockReader() {
           position: null,
           settings: { fontSize: 100, theme: "auto" },
           // ?appTheme=sepia previews the reader under another app theme.
-          app_theme:
-            new URLSearchParams(location.search).get("appTheme") ?? "system",
+          app_theme: params.get("appTheme") ?? "system",
         };
       case "reader_entry": {
         const { name } = args as { name: string };
+        if (comic) return comicRaster(Number(name.split("/").at(-1)));
         return encoder.encode(FILES[name]).buffer;
       }
       case "reader_highlights":

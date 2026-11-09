@@ -4,6 +4,7 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 ## Completed
 
+- Comics C7 (2026-11-08): a dedicated image reader with RTL and LTR navigation, automatic spreads, fit and zoom controls, drag to pan, vertical scroll, page bookmarks and resume. The viewer reuses the scoped reader commands. All 10 desktop reader tests passed. Browser checks passed at 860 × 1000 and 420 × 520. C1–C7 are implemented. The physical Kobo checklist remains open, and C8 is deferred.
 - Comics C6 (2026-11-08): sends and updates comics through the safe-write path, with per-page progress, a storage estimate and an actual free-space check. Schema 16 records the effective preparation hash for each device copy. Series uses the existing reconciliation after import and reconnect. Three profile fixtures and a mounted FAT32 image passed send and update checks. Next: C7 reader.
 - Comics C5 (2026-11-08): bounded parallel preparation to a temporary fixed-layout KEPUB, including all spread modes, grayscale or colour output, and Settings controls for crop, contrast and upscaling. Real kepubify tests verify layout, page order, dimensions, image depth and cleanup. Landscape pinning is gated pending a hardware check. Next: C6 send and update.
 - Comics C4 (2026-11-08): library kind filter and series grouping in Covers and List, comic detail and editing controls, default kind in Settings, and explicit folder-to-volume import. Checked the library with mock comics at 1280 × 900 and 800 × 560. Next: C5 device preparation.

@@ -63,9 +63,16 @@ export interface Position {
   quote: string | null;
 }
 
+export interface ComicBook {
+  direction: "ltr" | "rtl";
+  cover: number;
+  pages: { width: number; height: number }[];
+}
+
 export interface OpenedBook {
   title: string;
   entries: { name: string; size: number }[];
+  comic?: ComicBook;
   position: Position | null;
   settings: Settings;
   appTheme: AppTheme;
@@ -116,6 +123,25 @@ export function onSettingsPush(handler: (push: SettingsPush) => void) {
 export const savePosition = (position: Position) =>
   invoke<void>("reader_save_position", { position });
 
+/** Sends the latest position, one at a time, skipping any overtaken. */
+export function saveLatestPosition() {
+  let waiting: Position | null = null;
+  let saving = false;
+  const flush = async () => {
+    saving = true;
+    while (waiting) {
+      const position = waiting;
+      waiting = null;
+      await savePosition(position).catch(console.error);
+    }
+    saving = false;
+  };
+  return (position: Position) => {
+    waiting = position;
+    if (!saving) void flush();
+  };
+}
+
 export const saveSettings = (settings: Settings) =>
   invoke<void>("reader_save_settings", { settings });
 
@@ -156,6 +182,12 @@ export const saveHighlight = async (
 
 export const deleteHighlight = (id: number) =>
   invoke<void>("reader_delete_highlight", { id });
+
+/** The reader window can only request raster pages from its own comic. */
+export const comicPage = async (index: number) =>
+  new Blob([
+    await invoke<ArrayBuffer>("reader_entry", { name: `comic-page/${index}` }),
+  ]);
 
 /** Feeds the engine one file at a time, as it asks for them. */
 export function bookLoader(entries: OpenedBook["entries"]): BookLoader {

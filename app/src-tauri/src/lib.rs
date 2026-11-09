@@ -1559,7 +1559,8 @@ mod tests {
                 "{permission} must be granted to exactly one of main and reader"
             );
         }
-        // Nothing but its own book: books can carry hostile scripts.
+        // The comic viewer uses the same scoped commands for its raster
+        // entries and bookmarks. Neither reader can reach other books.
         assert_eq!(
             reader,
             [

@@ -26,6 +26,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-window-state = "2"
+erc-comic.workspace = true
 erc-convert.workspace = true
 erc-core.workspace = true
 erc-covers.workspace = true

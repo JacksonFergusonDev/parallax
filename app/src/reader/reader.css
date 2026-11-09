@@ -602,3 +602,96 @@ button.primary:hover {
     transition: none;
   }
 }
+
+/* Publisher artwork in the dedicated image reader. */
+#comic-bookmark[hidden],
+#comic-status[hidden],
+.comic-controls[hidden],
+.comic-reader [hidden],
+.comic-reader #settings > :not(.comic-controls, .comic-theme) {
+  display: none;
+}
+
+.comic-reader .turn {
+  opacity: 1;
+}
+
+.comic-reader .turn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.comic-reader #book {
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+
+.comic-reader #book.comic-scroll {
+  touch-action: pan-y;
+}
+
+#stage.comic-scroll-stage {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.comic-sheet {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.comic-scroll .comic-sheet {
+  flex-direction: column;
+  justify-content: start;
+  padding-bottom: var(--comic-tail, 0px);
+}
+
+.comic-page {
+  flex: none;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--fg);
+  user-select: none;
+}
+
+.comic-page img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.comic-controls {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.comic-controls select {
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--page);
+  color: var(--ink);
+}
+
+.comic-reader #comic-bookmark[aria-pressed="true"] svg {
+  fill: var(--link);
+}
+
+.comic-reader #comic-status {
+  color: var(--danger);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comic-reader #toc p {
+  margin: var(--space-2);
+}

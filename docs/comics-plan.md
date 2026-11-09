@@ -1,6 +1,6 @@
 # Comics and manga plan
 
-Status: **C1–C6 done** (2026-11-08); C7 next. The plan for first-class comics and manga in Parallax, across the library, sending to any supported Kobo, and the reader. It builds on [the Kobo comics spike](kobo-comics-spike.md) and [the bindery and KCC research](../reports/Bindery%20and%20Kindle%20Comic%20Converter.md).
+Status: **C1–C7 implemented** (2026-11-08). The physical Kobo checklist is open, and C8 is deferred. The plan for first-class comics and manga in Parallax, across the library, sending to any supported Kobo, and the reader. It builds on [the Kobo comics spike](kobo-comics-spike.md) and [the bindery and KCC research](../reports/Bindery%20and%20Kindle%20Comic%20Converter.md).
 
 ## 1. What's already decided
 
@@ -110,7 +110,6 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
   - Hidden files count as clutter, and other non-page files as extra files.
   - A new check, "Damaged pages", covers pages whose size can't be read; the import review counts those as damaged.
   - Comics without ComicInfo get "No author".
-- **Until C6 and C7:** sending or updating a comic on a Kobo fails with "comics can't be sent to a Kobo yet", and Read refuses comics.
 - **Tests:** 8 library tests, 2 core tests and 4 metadata unit tests. A real Berserk volume imports as "Berserk Vol. 1", series Berserk #1, 219 pages, manga read right to left, with a 1810 × 2560 cover, in 0.46 s.
 
 ### C4. Comics in the library UI (done)
@@ -146,7 +145,7 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
   - output images match the processing;
   - kepubify kept fixed layout and direction;
   - page count matches the source plus splits.
-- **Performance:** the spike took about 8 s per volume on Apple silicon. The preparation crate reports progress per input page.
+- **Performance:** the spike took about 8 s per volume. Berserk v01 (219 pages) took about 12 s through preparation and copy to a Libra 2 fixture with the comic crate optimised, and about 39 s in an unoptimised development build. Progress is reported per input page.
 
 ### C6. Sending and updating comics (done)
 
@@ -157,15 +156,14 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
 - **No cache:** nothing converted is kept on the Mac after a send, including after a failure.
 - **Tests:** the FAT32 disk-image tests send and update a CBZ; fixture devices of three screen sizes produce correctly sized pages.
 
-### C7. Reading comics in Parallax (4–5 days)
+### C7. Reading comics in Parallax (done)
 
-- A dedicated image viewer in the reader window, not foliate. Pages load through `reader_entry`, with two pages preloaded.
-- **Single page or spread:** spreads are automatic in wide windows, with the cover shown alone.
-- **Direction:** right to left flips the keys, clicks and spread order.
-- **Viewing:** fit width, height or page, with zoom and pan, and a vertical scroll mode for long strips.
-- **Positions:** a page index in `reader_positions`, with page bookmarks.
-- **Window access:** the reader capability gains only what the viewer needs; the pinned grant-list test is updated.
-- **Tests:** `just test-reader` opens a generated CBZ, turns pages both directions, and reopens where it left off.
+- A dedicated raster viewer uses `reader_entry` to load pages from the open CBZ, with two pages preloaded ahead of the visible ones. The cover and landscape images appear alone, and ordinary portrait pages pair automatically in wide windows.
+- **Direction:** right to left flips horizontal keys, click zones, spread order and the slider.
+- **Viewing:** fit width, height or page, with zoom and drag to pan. Vertical scroll is available for all comics and is the default for mostly long strips.
+- **Positions and bookmarks:** the zero-based page index is saved as `comic-page/<index>` in `reader_positions`. Bookmarks reuse the reader’s book-scoped annotation storage.
+- **Window access:** the existing reader grants cover the raster and bookmark operations. The pinned grant test still enforces the same scope.
+- **Tests:** `just test-reader` opens generated CBZs, turns pages in both reading directions, checks bookmarks and resume, and exercises vertical scroll. The browser mock was checked at 860 × 1000 and 420 × 520.
 
 ### C8. Later
 

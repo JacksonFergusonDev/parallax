@@ -8,13 +8,14 @@
 // CSP loosened must leave that mark, or the test can't see anything.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { crc32, deflateSync } from "node:zlib";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const fixtures = join(root, "tests/fixtures/reader");
@@ -275,4 +276,77 @@ test("menu commands reach the reader in front", async () => {
     `if (!document.getElementById("toc").hidden) document.getElementById("larger").click()`,
   ]);
   assert.match(readerSettings() ?? "", /"fontSize":135/, "the menu didn't reach the reader");
+});
+
+/** Creates a tiny raster-only fixture without checking generated books into Git. */
+async function addComic(title, direction) {
+  const dir = await mkdtemp(join(home, "comic-"));
+  const archive = join(dir, `${title}.cbz`);
+  const width = 40;
+  const height = 60;
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const size = Buffer.alloc(4);
+    size.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([size, body, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  const files = [];
+  for (let i = 0; i < 6; i++) {
+    const path = join(dir, `page${i}.png`);
+    const raster = Buffer.alloc((width + 1) * height, 30 + 30 * i);
+    for (let y = 0; y < height; y++) raster[y * (width + 1)] = 0;
+    await writeFile(path, Buffer.concat([
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+      chunk("IHDR", header),
+      chunk("IDAT", deflateSync(raster)),
+      chunk("IEND", Buffer.alloc(0)),
+    ]));
+    files.push(path);
+  }
+  const info = join(dir, "ComicInfo.xml");
+  await writeFile(info,
+    `<ComicInfo><Title>${title}</Title><Manga>${direction === "rtl" ? "YesAndRightToLeft" : "No"}</Manga></ComicInfo>`);
+  await run("zip", ["-jq", archive, ...files, info]);
+  await run(join(bin, "erc"), ["library", "add", archive], { env: { HOME: home } });
+  return query("SELECT id FROM books WHERE title = ?", title)[0].id;
+}
+
+const atComicPage = (page, action = "") =>
+  `if (document.getElementById('slider').value === '${page}' && document.querySelector('.comic-page img')?.naturalWidth) { ${action} }`;
+const arrow = (key) =>
+  `window.dispatchEvent(new KeyboardEvent('keydown', {key: '${key}'}));`;
+const setComicPage = (page) =>
+  `document.getElementById('slider').value = '${page}'; document.getElementById('slider').dispatchEvent(new Event('change'));`;
+
+test("comic reader turns in RTL, saves bookmarks and resumes the last page", async () => {
+  const id = await addComic("Reader comic RTL", "rtl");
+  await read(id, [
+    atComicPage(0, arrow("ArrowLeft")),
+    atComicPage(1, `document.getElementById('comic-bookmark').click(); ${arrow("ArrowRight")}`),
+    atComicPage(0, setComicPage(4)),
+  ]);
+  assert.equal(position(id)?.href, "comic-page/4");
+  assert.equal(query("SELECT href FROM reader_highlights WHERE book_id = ?", id)[0]?.href, "comic-page/1");
+  await read(id, [
+    atComicPage(4, "document.getElementById('contents').click();"),
+    `document.querySelector('#toc:not([hidden]) button')?.click()`,
+  ]);
+  assert.equal(position(id)?.href, "comic-page/1");
+});
+
+test("comic reader turns in LTR and switches to vertical scroll", async () => {
+  const id = await addComic("Reader comic LTR", "ltr");
+  await read(id, [
+    atComicPage(0, arrow("ArrowRight")),
+    atComicPage(1, `${arrow("ArrowLeft")}`),
+    atComicPage(0, `const layout = document.getElementById('comic-layout'); layout.value = 'scroll'; layout.dispatchEvent(new Event('change'));`),
+    `if (document.querySelector('#book.comic-scroll')) { ${setComicPage(3)} }`,
+  ]);
+  assert.equal(position(id)?.href, "comic-page/3");
 });
