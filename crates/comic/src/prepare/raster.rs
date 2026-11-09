@@ -144,7 +144,14 @@ fn encode(
             height,
             fast_image_resize::PixelType::U8,
         )?;
-        png_4bit(width, height, &gray).map_err(|e| e.to_string())?
+        let levels = if options.dither {
+            dithered_levels(&gray, width as usize)
+        } else {
+            gray.iter()
+                .map(|&value| nearest_level(f32::from(value)))
+                .collect()
+        };
+        png_4bit(width, height, &levels).map_err(|e| e.to_string())?
     };
     Ok(Raster {
         width,
@@ -188,12 +195,52 @@ fn resized(
     Ok(dst.into_vec())
 }
 
-fn png_4bit(width: u32, height: u32, gray: &[u8]) -> Result<Vec<u8>, png::EncodingError> {
+/// The nearest of the 16 even greys (0, 17, …, 255) the Kobo shows.
+fn nearest_level(value: f32) -> u8 {
+    // Clamped to 0–15 first, so the cast can't truncate.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let level = ((value + 8.5) / 17.0).floor().clamp(0.0, 15.0) as u8;
+    level
+}
+
+/// Floyd–Steinberg error diffusion to 16 levels, on the stored grey values
+/// as Pillow (and so KCC) does, scanning rows alternately left and right
+/// so the error doesn't drift into diagonal streaks.
+fn dithered_levels(gray: &[u8], width: usize) -> Vec<u8> {
+    let mut levels = vec![0; gray.len()];
+    if width == 0 {
+        return levels;
+    }
+    // Error carried into this row and the next, padded by one on each side.
+    let mut this_row = vec![0.0_f32; width + 2];
+    let mut next_row = vec![0.0_f32; width + 2];
+    for (y, row) in gray.chunks_exact(width).enumerate() {
+        let forward = y % 2 == 0;
+        for i in 0..width {
+            let x = if forward { i } else { width - 1 - i };
+            let wanted = f32::from(row[x]) + this_row[x + 1];
+            let level = nearest_level(wanted);
+            levels[y * width + x] = level;
+            let error = wanted - f32::from(level) * 17.0;
+            // Ahead and behind, in this row's scan direction.
+            let (ahead, behind) = if forward { (x + 2, x) } else { (x, x + 2) };
+            this_row[ahead] += error * 7.0 / 16.0;
+            next_row[behind] += error * 3.0 / 16.0;
+            next_row[x + 1] += error * 5.0 / 16.0;
+            next_row[ahead] += error / 16.0;
+        }
+        std::mem::swap(&mut this_row, &mut next_row);
+        next_row.fill(0.0);
+    }
+    levels
+}
+
+/// Packs 4-bit levels two to a byte as a greyscale PNG.
+fn png_4bit(width: u32, height: u32, levels: &[u8]) -> Result<Vec<u8>, png::EncodingError> {
     let row_bytes = width.div_ceil(2) as usize;
     let mut packed = vec![0; row_bytes * height as usize];
-    for (y, row) in gray.chunks_exact(width as usize).enumerate() {
-        for (x, pixel) in row.iter().enumerate() {
-            let level = u8::try_from((u16::from(*pixel) + 8) / 17).unwrap_or(15);
+    for (y, row) in levels.chunks_exact(width as usize).enumerate() {
+        for (x, &level) in row.iter().enumerate() {
             packed[y * row_bytes + x / 2] |= if x % 2 == 0 { level << 4 } else { level };
         }
     }
@@ -332,6 +379,35 @@ fn crop_margins(rgb: RgbImage) -> RgbImage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rounding_picks_the_nearest_of_16_greys() {
+        assert_eq!(nearest_level(0.0), 0);
+        assert_eq!(nearest_level(8.0), 0);
+        assert_eq!(nearest_level(9.0), 1);
+        assert_eq!(nearest_level(255.0), 15);
+        assert_eq!(nearest_level(300.0), 15);
+        assert_eq!(nearest_level(-40.0), 0);
+        for level in 0..16_u8 {
+            assert_eq!(nearest_level(f32::from(level) * 17.0), level);
+        }
+    }
+
+    #[test]
+    fn dithering_keeps_the_average_tone_between_levels() {
+        // A flat grey of 8 sits halfway between level 0 (0) and level 1 (17).
+        let (width, height) = (64, 64);
+        let gray = vec![8_u8; width * height];
+        let plain: Vec<u8> = gray.iter().map(|&v| nearest_level(f32::from(v))).collect();
+        assert!(plain.iter().all(|&l| l == 0), "rounding loses the tone");
+        let dithered = dithered_levels(&gray, width);
+        let mean =
+            dithered.iter().map(|&l| f64::from(l) * 17.0).sum::<f64>() / dithered.len() as f64;
+        assert!((mean - 8.0).abs() < 0.5, "mean {mean}");
+        // Exact levels pass through untouched.
+        let exact = vec![34_u8; width * height];
+        assert!(dithered_levels(&exact, width).iter().all(|&l| l == 2));
+    }
 
     #[test]
     fn autocontrast_ignores_specks_and_flat_pages() {

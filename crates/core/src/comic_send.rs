@@ -44,6 +44,7 @@ impl ComicTarget {
                 autocontrast: on(COMIC_AUTOCONTRAST)?,
                 upscale: on(COMIC_UPSCALE)?,
                 rtl: false,
+                dither: false,
             },
             source,
         })
@@ -200,4 +201,26 @@ pub(crate) fn check_space(device: &KoboDevice, path: &std::path::Path) -> Result
         ));
     }
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use erc_comic::prepare::Options;
+
+    #[test]
+    fn options_added_while_off_keep_fingerprints_of_existing_copies() {
+        // The serialised form fingerprints were made from before `dither`.
+        let before =
+            r#"{"spreads":"split","crop":false,"autocontrast":false,"upscale":false,"rtl":true}"#;
+        let options = Options {
+            rtl: true,
+            ..Options::default()
+        };
+        assert_eq!(serde_json::to_string(&options).unwrap(), before);
+        let dithered = Options {
+            dither: true,
+            ..options
+        };
+        assert_ne!(serde_json::to_string(&dithered).unwrap(), before);
+    }
 }

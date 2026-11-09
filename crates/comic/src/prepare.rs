@@ -35,6 +35,11 @@ pub struct Options {
     pub autocontrast: bool,
     pub upscale: bool,
     pub rtl: bool,
+    /// Floyd–Steinberg error diffusion when reducing greys to 16 levels.
+    /// Left out of the serialised form while off, so update fingerprints
+    /// of copies made before it existed still match.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub dither: bool,
 }
 
 #[derive(Debug)]
