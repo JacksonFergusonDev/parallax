@@ -57,9 +57,11 @@ export function statusLabel(b: DeviceBook): string {
 export function summarize(books: DeviceBook[]): string {
   const reading = books.filter((b) => b.read_status === "reading").length;
   const finished = books.filter((b) => b.read_status === "finished").length;
+  const pending = books.filter((b) => b.pending_import).length;
   const parts = [`${books.length} ${books.length === 1 ? "book" : "books"}`];
   if (reading) parts.push(`${reading} in progress`);
   if (finished) parts.push(`${finished} finished`);
+  if (pending) parts.push(`${pending} waiting to import`);
   return parts.join(" · ");
 }
 

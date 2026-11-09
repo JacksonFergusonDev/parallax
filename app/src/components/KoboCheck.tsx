@@ -4,13 +4,18 @@ import {
   cleanImages,
   koboHealth,
   mergeCollections,
-  removeFromDevice,
   type KoboHealth,
+  type RemoveOutcome,
+  type ReportBookProgress,
 } from "../api";
 import { formatSize } from "../duplicates";
 
 interface Props {
   mount: string;
+  onRemove: (
+    ids: string[],
+    report?: ReportBookProgress,
+  ) => Promise<RemoveOutcome[]>;
   onChanged: () => void;
   onClose: () => void;
 }
@@ -22,7 +27,7 @@ const plural = (n: number, word: string, many = `${word}s`) =>
   `${n} ${n === 1 ? word : many}`;
 
 /** Finds and fixes the small problems Kobo Utilities users check for. */
-export function KoboCheck({ mount, onChanged, onClose }: Props) {
+export function KoboCheck({ mount, onRemove, onChanged, onClose }: Props) {
   const [health, setHealth] = useState<KoboHealth | null>(null);
   const [busy, setBusy] = useState(false);
   const [operation, runBookOperation] = useBookProgress();
@@ -73,16 +78,19 @@ export function KoboCheck({ mount, onChanged, onClose }: Props) {
       const outcomes = await runBookOperation(
         "Removing",
         (report) =>
-          removeFromDevice(
-            mount,
+          onRemove(
             health.missing_files.map((m) => m.content_id),
             report,
           ),
         "Backing up Kobo…",
       );
       const failed = outcomes.filter((o) => "Err" in o.result).length;
-      if (failed) throw new Error(`${failed} could not be removed.`);
-      return `Removed ${plural(n, "entry", "entries")}.`;
+      if (failed) {
+        onChanged();
+        await load();
+        throw new Error(`${failed} could not be removed.`);
+      }
+      return `Removed ${plural(n, "entry", "entries")}. Eject to let your Kobo refresh its library.`;
     });
   };
 
@@ -171,7 +179,7 @@ export function KoboCheck({ mount, onChanged, onClose }: Props) {
                   onClick={() =>
                     fix(async () => {
                       const n = await mergeCollections(mount);
-                      return `Merged: removed ${plural(n, "extra copy", "extra copies")}.`;
+                      return `Removed ${plural(n, "extra copy", "extra copies")}. Eject to see the changes on your Kobo.`;
                     })
                   }
                 >

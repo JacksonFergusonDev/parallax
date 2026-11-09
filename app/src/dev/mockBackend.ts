@@ -182,6 +182,7 @@ const onDevice = new Map<number, string>([
   [3, "2026-10-01T00:00:00Z"],
   [5, "2026-10-01T00:00:00Z"],
 ]);
+const pendingImport = new Set<number>();
 const shelves = new Map<string, Set<string>>([["Favourites", new Set()]]);
 // `?shelves=N` adds N collections, some with long names, to check the sidebar.
 for (
@@ -356,6 +357,7 @@ export function installMockBackend(label = "main") {
             ...books
               .filter((b) => onDevice.has(b.id))
               .map((b): DeviceBook => ({
+                pending_import: pendingImport.has(b.id),
                 id: contentId(b.id),
                 title: b.title,
                 author: b.authors.join(", "),
@@ -397,10 +399,19 @@ export function installMockBackend(label = "main") {
           });
           if (ids.some((id) => id.includes("Old Book"))) health.missing = false;
           storeBooks = storeBooks.filter((b) => !ids.includes(b.id));
-          for (const id of [...onDevice.keys()])
-            if (ids.includes(contentId(id))) onDevice.delete(id);
+          const linked = new Map(
+            [...onDevice.keys()].map((id) => [contentId(id), id]),
+          );
+          for (const content of ids) {
+            const id = linked.get(content);
+            if (id !== undefined) {
+              onDevice.delete(id);
+              pendingImport.delete(id);
+            }
+          }
           return ids.map((content_id) => ({
             content_id,
+            book_id: linked.get(content_id) ?? null,
             result: { Ok: null },
           }));
         }
@@ -532,7 +543,7 @@ export function installMockBackend(label = "main") {
             result: {
               Ok: {
                 device_path: "KEpub/x.kepub.epub",
-                content_id: `mock-${id}`,
+                content_id: contentId(id),
                 bytes: 1_000_000,
                 skipped_pages: [],
               },
@@ -743,6 +754,7 @@ export function installMockBackend(label = "main") {
               device_path: "KEpub/x.kepub.epub",
             });
             onDevice.set(id, new Date().toISOString());
+            pendingImport.add(id);
           }
           return ids.map((id) => ({
             source: String(id),
@@ -750,7 +762,7 @@ export function installMockBackend(label = "main") {
             result: {
               Ok: {
                 device_path: "KEpub/x.kepub.epub",
-                content_id: `mock-${id}`,
+                content_id: contentId(id),
                 bytes: 1_000_000,
                 skipped_pages: [],
               },
@@ -1261,6 +1273,7 @@ export function installMockBackend(label = "main") {
           dismissed.add(a.key as string);
           return null;
         case "eject_device":
+          pendingImport.clear();
           return null;
         case "cover_colors":
           return (a.paths as string[]).map((path) => {

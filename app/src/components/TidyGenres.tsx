@@ -64,7 +64,9 @@ export function TidyGenres({ mount, onDone, onClose }: Props) {
             `${plural(result.collections, "collection")} on your Kobo renamed or merged`,
         ]
           .filter(Boolean)
-          .join(", ") + ".",
+          .join(", ") +
+          "." +
+          (result.collections ? " Eject to see the changes on your Kobo." : ""),
       );
       onDone();
     } catch (e) {

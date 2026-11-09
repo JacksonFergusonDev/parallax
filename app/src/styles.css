@@ -545,6 +545,13 @@ button.badge.connected:hover {
   color: var(--status-fg);
 }
 
+.on-device {
+  max-width: calc(100% - var(--space-3));
+  box-sizing: border-box;
+  text-align: center;
+  text-wrap: balance;
+}
+
 .overlay-failed {
   background: var(--danger);
   color: var(--status-fg);
@@ -1205,6 +1212,45 @@ button.link {
   cursor: default;
 }
 
+.book-list {
+  container-type: inline-size;
+}
+
+@container (max-width: 700px) {
+  .library-list .list-row {
+    grid-template-columns:
+      32px minmax(0, 2fr) repeat(2, minmax(0, 1fr))
+      80px 92px;
+    gap: var(--space-2);
+  }
+  .library-list
+    :is([data-column="tags"], [data-column="pages"], [data-column="added"]) {
+    display: none;
+  }
+  .library-list .col-head:not(.sorted) .sort-arrow {
+    display: none;
+  }
+}
+
+@container (max-width: 520px) {
+  .library-list .list-row {
+    grid-template-columns: 32px minmax(0, 2fr) minmax(0, 1.2fr) 80px 92px;
+  }
+  .library-list [data-column="series"] {
+    display: none;
+  }
+}
+
+@container (max-width: 620px) {
+  .device-list .list-row {
+    grid-template-columns: 32px minmax(0, 2fr) repeat(2, minmax(0, 1fr)) 76px;
+    gap: var(--space-2);
+  }
+  .device-list :is([data-column="last_read"], [data-column="added"]) {
+    display: none;
+  }
+}
+
 .list-row:hover {
   background: var(--sunken);
 }
@@ -1272,9 +1318,16 @@ button.link {
   color: var(--muted);
 }
 
-.on-device.stale {
+.on-device.stale,
+.on-device.pending_import,
+.on-device.updated {
   background: var(--warn);
   color: var(--status-fg);
+}
+
+.on-device.removed {
+  background: var(--surface);
+  color: var(--fg);
 }
 
 button.danger-fill {
@@ -1300,6 +1353,7 @@ button.danger-fill {
   align-items: center;
   gap: 3px;
   min-width: 0;
+  overflow: hidden;
   font-size: var(--text-small);
   color: var(--muted);
   text-transform: uppercase;
@@ -1340,8 +1394,17 @@ button.danger-fill {
 .send-sent {
   color: var(--ok);
 }
-.kobo-stale {
+.kobo-stale,
+.kobo-pending_import,
+.kobo-updated {
   color: var(--warn);
+}
+.cell.kobo-status {
+  white-space: normal;
+}
+.row-sub.kobo-status {
+  color: var(--warn);
+  white-space: normal;
 }
 .send-failed {
   color: var(--danger);

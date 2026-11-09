@@ -132,6 +132,8 @@ export function SortHeader<T, K extends string>({
           <button
             key={c.key}
             role="columnheader"
+            data-column={c.key}
+            title={c.label}
             aria-sort={
               dir === "desc"
                 ? "descending"

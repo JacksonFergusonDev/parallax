@@ -232,15 +232,28 @@ describe("book operation progress", () => {
     expect(view.textContent).toContain("Removed 2 books");
   });
 
-  it("shows byte progress on a sending cover and clears it at completion", async () => {
+  it("replaces transfer progress with an import badge until the Kobo imports the book", async () => {
     let finish!: (result: SendOutcome[]) => void;
     const pending = new Promise<SendOutcome[]>((resolve) => {
       finish = resolve;
     });
     const normal = vi.mocked(invoke).getMockImplementation()!;
-    vi.mocked(invoke).mockImplementation(async (command, args) =>
-      command === "send_books" ? pending : normal(command, args),
-    );
+    let copied = false;
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === "send_books") return pending;
+      if (command === "books_on_device" && copied)
+        return [
+          {
+            book_id: localBook.id,
+            device_path: koboBook.path,
+            content_id: koboBook.id,
+            sent_at: "2026-11-01",
+            stale: false,
+          },
+        ];
+      if (command === "eject_device") connected = [];
+      return normal(command, args);
+    });
 
     await render();
     const card =
@@ -254,6 +267,10 @@ describe("book operation progress", () => {
     await act(async () => channel.onmessage({ stage: "converting", ...base }));
     const sheen = card.querySelector(".cover-sheen");
     expect(sheen).not.toBeNull();
+    copied = true;
+    currentBooks = [
+      { ...koboBook, title: localBook.title, pending_import: true },
+    ];
     await act(async () =>
       channel.onmessage({
         stage: "copying",
@@ -286,7 +303,125 @@ describe("book operation progress", () => {
     );
     expect(card.querySelector("progress")).toBeNull();
     expect(card.querySelector(".cover-sheen")).toBeNull();
-    expect(card.textContent).toContain("Sent");
+    expect(card.textContent).toContain("Eject to import");
+    expect(button("On Kobo 1")).toBeTruthy();
+
+    await click(button("On Kobo"));
+    const view = panel("On Kobo");
+    expect(view.querySelector(".card")?.textContent).toContain(
+      "Eject to import",
+    );
+    await click(view.querySelector<HTMLButtonElement>(".card")!);
+    expect(button("Mark as ▾").disabled).toBe(true);
+    expect(button("Remove 1 from Kobo").disabled).toBe(false);
+    await click(
+      [...view.querySelectorAll("button")].find(
+        (b) => b.textContent === "Eject Kobo",
+      )!,
+    );
+    expect(panel("On Kobo")).toBeNull();
+    expect(card.textContent).not.toContain("Eject to import");
+
+    currentBooks = [{ ...koboBook, title: localBook.title }];
+    connected = [device];
+    await act(async () => vi.advanceTimersByTimeAsync(2000));
+    expect(panel("On Kobo").querySelector(".card")?.textContent).not.toContain(
+      "Eject to import",
+    );
+    expect(card.querySelector(".on-device")?.textContent).toBe("On Kobo");
+  });
+
+  it("marks a removed copy in Library and counts it as off the Kobo", async () => {
+    const normal = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === "books_on_device")
+        return currentBooks.length
+          ? [
+              {
+                book_id: localBook.id,
+                device_path: koboBook.path,
+                content_id: koboBook.id,
+                sent_at: "2026-11-01",
+                stale: false,
+              },
+            ]
+          : [];
+      if (command === "remove_from_device") {
+        currentBooks = [];
+        return [
+          {
+            content_id: koboBook.id,
+            book_id: localBook.id,
+            result: { Ok: null },
+          },
+        ];
+      }
+      return normal(command, args);
+    });
+    vi.mocked(ask).mockResolvedValueOnce(true);
+    await render();
+    await click(button("On Kobo"));
+    const view = panel("On Kobo");
+    await click(view.querySelector<HTMLButtonElement>(".card")!);
+    await click(button("Remove 1 from Kobo"));
+    expect(view.querySelector(".card")).toBeNull();
+    await click(button("Library"));
+    await click(button("Not on Kobo 1"));
+    expect(panel("Library").textContent).toContain("Removed 1 book from Kobo");
+    const card = panel("Library").querySelector<HTMLButtonElement>(".card")!;
+    expect(card.querySelector(".on-device")?.textContent).toBe(
+      "Removed from Kobo",
+    );
+    await click(card);
+    expect(button("Send 1 to Kobo").disabled).toBe(false);
+  });
+
+  it("shows an eject badge on an updated copy in both views", async () => {
+    let stale = true;
+    const normal = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === "books_on_device")
+        return [
+          {
+            book_id: localBook.id,
+            device_path: koboBook.path,
+            content_id: koboBook.id,
+            sent_at: "2026-11-01",
+            stale,
+          },
+        ];
+      if (command === "update_books") {
+        stale = false;
+        return [
+          {
+            source: localBook.title,
+            book_id: localBook.id,
+            result: {
+              Ok: {
+                device_path: koboBook.path,
+                content_id: koboBook.id,
+                bytes: 100,
+                skipped_pages: [],
+              },
+            },
+          },
+        ];
+      }
+      return normal(command, args);
+    });
+    await render();
+    const card = panel("Library").querySelector<HTMLButtonElement>(".card")!;
+    await click(card);
+    await click(button("Update 1 on Kobo"));
+    expect(card.querySelector(".on-device")?.textContent).toBe(
+      "Eject to see update",
+    );
+    expect(button("On Kobo 1")).toBeTruthy();
+    expect(panel("Library").textContent).not.toContain("Update available");
+    await click(button("On Kobo"));
+    expect(panel("On Kobo").querySelector(".on-device")?.textContent).toBe(
+      "Eject to see update",
+    );
   });
 });
 

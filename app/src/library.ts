@@ -235,11 +235,22 @@ export function seriesGroups(books: Book[]) {
   }));
 }
 
-/** On the Kobo: "stale" when edited since it was sent. */
-export type DeviceState = "on" | "stale" | undefined;
+/** Whether a copy exists and needs updating, independent of its import status. */
+export type DeviceCopyState = "on" | "stale" | undefined;
+/** The status shown next to a book for the connected Kobo. */
+export type DeviceState =
+  DeviceCopyState | "pending_import" | "updated" | "removed";
+
+export const deviceStateLabel = {
+  on: "On Kobo",
+  stale: "Update available",
+  pending_import: "Eject to import",
+  updated: "Eject to see update",
+  removed: "Removed from Kobo",
+};
 
 export const libraryColumns = (
-  deviceState: (b: Book) => DeviceState,
+  deviceState: (b: Book) => DeviceCopyState,
 ): Column<Book, LibraryKey>[] => [
   {
     key: "title",

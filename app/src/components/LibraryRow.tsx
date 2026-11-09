@@ -4,6 +4,7 @@ import { memo } from "react";
 import { coverSrc, type Book } from "../api";
 import { shortDate } from "../device";
 import {
+  deviceStateLabel,
   progressLabel,
   sendStatusLabel,
   type DeviceState,
@@ -50,14 +51,17 @@ export const LibraryRow = memo(function LibraryRow({
       <span className="cell muted">
         {book.authors.join(", ") || "Unknown author"}
       </span>
-      <span className="cell muted">
+      <span className="cell muted" data-column="series">
         {book.series
           ? `${book.series}${book.series_index ? ` #${book.series_index}` : ""}`
           : ""}
       </span>
-      <span className="cell muted">{book.tags.join(", ")}</span>
+      <span className="cell muted" data-column="tags">
+        {book.tags.join(", ")}
+      </span>
       <span
         className="cell end muted"
+        data-column="pages"
         title={
           book.pages_estimated ? "Estimated from the word count" : undefined
         }
@@ -80,11 +84,13 @@ export const LibraryRow = memo(function LibraryRow({
           {status.stage === "copying" && <TransferProgress status={status} />}
         </span>
       ) : (
-        <span className={`cell end kobo-${deviceState ?? "none"}`}>
-          {deviceState === "stale" ? "Update" : deviceState ? "On Kobo" : ""}
+        <span className={`cell end kobo-status kobo-${deviceState ?? "none"}`}>
+          {deviceState && deviceStateLabel[deviceState]}
         </span>
       )}
-      <span className="cell end muted">{shortDate(book.added_at)}</span>
+      <span className="cell end muted" data-column="added">
+        {shortDate(book.added_at)}
+      </span>
     </button>
   );
 });

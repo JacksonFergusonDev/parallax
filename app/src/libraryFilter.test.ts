@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Book } from "./api";
-import type { DeviceState } from "./library";
+import type { DeviceCopyState } from "./library";
 import {
   filterLibrary,
   isFiltered,
@@ -24,7 +24,7 @@ const emma = book(3, ["Classics"], "unread");
 const blank = book(4, []);
 const books = [dune, hobbit, emma, blank];
 
-const states: Record<number, DeviceState> = { 1: "on", 2: "stale" };
+const states: Record<number, DeviceCopyState> = { 1: "on", 2: "stale" };
 const shelves: Record<number, string[]> = {
   1: ["Sci-Fi", "Best"],
   2: ["Best"],

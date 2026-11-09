@@ -210,8 +210,9 @@ export interface OnDevice {
   stale: boolean;
 }
 
-/** A book as the device lists it. */
+/** A book on the device, including sends that Nickel hasn't imported yet. */
 export interface DeviceBook {
+  pending_import?: boolean;
   /** Host-cached thumbnail read from the Kobo. */
   cover?: string | null;
   id: string;
@@ -232,6 +233,7 @@ export interface DeviceBook {
 
 export interface RemoveOutcome {
   content_id: string;
+  book_id?: number | null;
   result: { Ok: null } | { Err: string };
 }
 
@@ -614,7 +616,7 @@ export const comicTransferEstimate = (mount: string, ids: number[]) =>
     source: Screen["source"];
   } | null>("comic_transfer_estimate", { mount, ids });
 export const deviceBooks = (mount: string) =>
-  read<DeviceBook[]>("device_books", { mount }, [deviceTag(mount)]);
+  read<DeviceBook[]>("device_books", { mount }, [deviceTag(mount), "library"]);
 export const removeFromDevice = (
   mount: string,
   contentIds: string[],

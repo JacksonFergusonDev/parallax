@@ -148,7 +148,7 @@ fn sends_library_books_with_edited_metadata() {
 
 #[test]
 fn updates_and_removes_books_on_device() {
-    use erc_core::device::{books_on_device, remove_from_device_with_progress};
+    use erc_core::device::{books_on_device, device_catalog, remove_from_device_with_progress};
     use erc_core::send::update_on_device;
     use rusqlite::Connection;
 
@@ -175,6 +175,13 @@ fn updates_and_removes_books_on_device() {
 
     let sent = send_library_books(&library, &kobo, &converter, &[book.id], |_| {});
     let content_id = sent[0].result.as_ref().unwrap().content_id.clone();
+    let catalog =
+        |library: &Library| device_catalog(library, &kobo, &kobo.open_db().unwrap()).unwrap();
+    let pending = catalog(&library);
+    assert_eq!(pending.len(), 1);
+    assert!(pending[0].pending_import);
+    assert_eq!(pending[0].book.id, content_id);
+    assert_eq!(pending[0].book.title, book.title);
     // Nickel imports the book on eject.
     Connection::open(&db)
         .unwrap()
@@ -184,6 +191,10 @@ fn updates_and_removes_books_on_device() {
             [&content_id],
         )
         .unwrap();
+    let imported = catalog(&library);
+    assert_eq!(imported.len(), 1);
+    assert!(!imported[0].pending_import);
+    assert_eq!(imported[0].book.id, content_id);
     std::thread::sleep(std::time::Duration::from_millis(1100)); // timestamps have 1 s resolution
     let mut edit = library.book(book.id).unwrap().edit();
     edit.title = "Better Title".into();
@@ -225,6 +236,7 @@ fn updates_and_removes_books_on_device() {
     )
     .unwrap();
     assert!(removed[0].result.is_ok());
+    assert_eq!(removed[0].book_id, Some(book.id));
     assert_eq!(removal.first(), Some(&(0, 1, 0.0)));
     assert!(removal.iter().any(|&(completed, total, fraction)| {
         completed == 0 && total == 1 && fraction > 0.0 && fraction < 1.0
@@ -232,11 +244,21 @@ fn updates_and_removes_books_on_device() {
     assert_eq!(removal.last(), Some(&(1, 1, 0.0)));
     assert!(books_on_device(&library, &kobo).unwrap().is_empty());
     assert!(!mount.join(&on_device[0].device_path).exists());
+    assert!(catalog(&library).is_empty());
+
+    let backup = kobo.backups(&backups)[0].file.clone();
+    kobo.restore_backup(&backups, Path::new(&backup)).unwrap();
+    assert_eq!(
+        books_on_device(&library, &kobo).unwrap()[0].book_id,
+        book.id
+    );
+    assert!(!catalog(&library)[0].pending_import);
 }
 
 #[test]
 fn sends_into_collection_and_applies_series_after_import() {
     use erc_core::collections::{CollectionChange, apply, pending_series, reconcile_series};
+    use erc_core::device::device_catalog;
     use rusqlite::Connection;
 
     let dir = tempfile::tempdir().unwrap();
@@ -283,6 +305,10 @@ fn sends_into_collection_and_applies_series_after_import() {
     .unwrap();
     // Not imported yet: nothing to reconcile.
     assert!(pending_series(&library, &kobo).unwrap().is_empty());
+    let catalog = device_catalog(&library, &kobo, &kobo.open_db().unwrap()).unwrap();
+    assert_eq!(catalog.len(), 1);
+    assert!(catalog[0].pending_import);
+    assert_eq!(catalog[0].book.collections, ["Favourites"]);
 
     // Nickel imports the book (without series, as it does for sideloads).
     Connection::open(&db)

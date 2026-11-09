@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use erc_convert::Kepubify;
 use erc_convert::amazon::ChildProcess;
 use erc_core::collections::{CollectionChange, FolderGroup};
-use erc_core::device::{OnDevice, RemoveOutcome};
+use erc_core::device::{CatalogBook, OnDevice, RemoveOutcome, device_catalog};
 use erc_core::duplicates::{DeviceGroup, LibraryGroup};
 use erc_core::enhance::{Accepted, DeviceClues, Proposal};
 use erc_core::import::DeviceImportOutcome;
@@ -19,7 +19,7 @@ use erc_core::rules::PlannedCollection;
 use erc_core::rules::Trigger;
 use erc_core::send::{SendOutcome, send_library_books, update_on_device};
 use erc_covers::{Candidate, CoverQuery};
-use erc_device::{Collection, DeviceBook, DeviceInfo};
+use erc_device::{Collection, DeviceInfo};
 use erc_device_kobo::{
     BackupInfo, BookCheck, ErcState, KoboDevice, MACOS_VOLUMES, RestoreOutcome, tidy_apple_double,
 };
@@ -380,31 +380,39 @@ async fn books_on_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResul
 #[derive(Serialize)]
 struct KoboBook {
     #[serde(flatten)]
-    book: DeviceBook,
+    entry: CatalogBook,
     cover: Option<PathBuf>,
 }
 
-/// Everything on the device, as Nickel lists it (read-only).
+/// Imported books and library sends still waiting to be imported.
 #[tauri::command]
-async fn device_books(app: AppHandle, mount: PathBuf) -> CmdResult<Vec<KoboBook>> {
+async fn device_books(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    mount: PathBuf,
+) -> CmdResult<Vec<KoboBook>> {
     let cache = app
         .path()
         .app_cache_dir()
         .map_err(err)?
         .join("device-covers");
+    let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let device = KoboDevice::open(&mount).map_err(err)?;
+        let library = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let db = device.open_db().map_err(err)?;
+        let catalog = device_catalog(&library, &device, &db).map_err(err)?;
+        drop(library);
         let images = db.image_ids().map_err(err)?;
-        Ok(db
-            .books()
-            .map_err(err)?
+        Ok(catalog
             .into_iter()
-            .map(|book| {
+            .map(|entry| {
                 let cover = images
-                    .get(&book.id)
+                    .get(&entry.book.id)
                     .and_then(|id| device.cache_cover(id, &cache));
-                KoboBook { book, cover }
+                KoboBook { entry, cover }
             })
             .collect())
     })

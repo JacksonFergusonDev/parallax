@@ -34,15 +34,16 @@ import {
   ejectDevice,
   importFromDevice,
   listCollections,
-  removeFromDevice,
   setReadingStatus,
   tidyDevice,
-  updateBooks,
   type Book,
   type Collection,
   type CollectionChange,
   type DeviceBook,
   type DeviceInfo,
+  type RemoveOutcome,
+  type ReportBookProgress,
+  type SendOutcome,
 } from "../api";
 import {
   deviceColumns,
@@ -54,6 +55,7 @@ import {
   type DeviceKey,
 } from "../device";
 import { applySort } from "../sort";
+import { deviceStateLabel } from "../library";
 import { clickSelect, SELECTION_HINT } from "../selection";
 import { deviceReviewGroups } from "../duplicates";
 import { AboutKobo } from "./AboutKobo";
@@ -85,6 +87,12 @@ interface Props {
   query: string;
   /** Library books by device ContentID, for covers. */
   libraryByContentId: Map<string, Book>;
+  koboChanges: ReadonlyMap<number, "updated" | "removed">;
+  onRemove: (
+    ids: string[],
+    report?: ReportBookProgress,
+  ) => Promise<RemoveOutcome[]>;
+  onUpdate: (ids: number[]) => Promise<SendOutcome[]>;
   onChanged: () => void;
   /** Books were added to the library. */
   onLibraryChanged: () => void;
@@ -118,6 +126,9 @@ export function DeviceView({
   revision,
   query,
   libraryByContentId,
+  koboChanges,
+  onRemove,
+  onUpdate,
   onChanged,
   onLibraryChanged,
   onBooksAdded,
@@ -219,8 +230,14 @@ export function DeviceView({
   const chosen = visible.filter((b) => selected.has(b.id));
   const removable = chosen.filter((b) => b.sideloaded);
   const importable = chosen.filter(
-    (b) => b.sideloaded && !libraryByContentId.has(b.id),
+    (b) => b.sideloaded && !b.pending_import && !libraryByContentId.has(b.id),
   );
+  const imported = chosen.filter((b) => !b.pending_import);
+  const pendingState = (b: DeviceBook) => {
+    if (b.pending_import) return "pending_import";
+    const local = libraryByContentId.get(b.id);
+    if (local && koboChanges.get(local.id) === "updated") return "updated";
+  };
 
   const toggle = useCallback(
     (id: string, e: React.MouseEvent) =>
@@ -256,7 +273,7 @@ export function DeviceView({
   const change = (changes: CollectionChange[], done: string) =>
     run(async () => {
       await changeCollections(device.mount, changes);
-      return done;
+      return `${done} Eject to see the change on your Kobo.`;
     });
 
   const ids = (list: DeviceBook[]) => list.map((b) => b.id);
@@ -310,7 +327,7 @@ export function DeviceView({
     run(async () => {
       const outcomes = await runBookOperation(
         "Removing",
-        (report) => removeFromDevice(device.mount, ids(removable), report),
+        (report) => onRemove(ids(removable), report),
         "Backing up Kobo…",
       );
       setSelected(new Set());
@@ -371,7 +388,7 @@ export function DeviceView({
     run(async () => {
       await setReadingStatus(
         device.mount,
-        ids(chosen),
+        ids(imported),
         status,
         resetPosition,
         resetTime,
@@ -631,6 +648,7 @@ export function DeviceView({
                       key={b.id}
                       book={b}
                       cover={deviceCoverSrc(b, lib)}
+                      pending={pendingState(b)}
                       selected={selected.has(b.id)}
                       onSelect={toggle}
                     />
@@ -639,7 +657,7 @@ export function DeviceView({
               </div>
             ) : (
               <div
-                className="book-list"
+                className="book-list device-list"
                 role="table"
                 style={
                   {
@@ -655,6 +673,7 @@ export function DeviceView({
                 {visible.map((b) => {
                   const lib = libraryByContentId.get(b.id);
                   const src = deviceCoverSrc(b, lib);
+                  const pending = pendingState(b);
                   return (
                     <button
                       key={b.id}
@@ -676,6 +695,13 @@ export function DeviceView({
                       </span>
                       <span className="row-main">
                         <span className="row-title">{b.title}</span>
+                        {pending && (
+                          <span
+                            className={`row-sub kobo-status kobo-${pending}`}
+                          >
+                            {deviceStateLabel[pending]}
+                          </span>
+                        )}
                         {b.collections.length > 0 && (
                           <span className="row-sub">
                             {b.collections.join(", ")}
@@ -691,10 +717,12 @@ export function DeviceView({
                           : ""}
                       </span>
                       <span className={`cell end status-${b.read_status}`}>
-                        {statusLabel(b)}
+                        {!b.pending_import && statusLabel(b)}
                       </span>
-                      <span className="cell end">{shortDate(b.last_read)}</span>
-                      <span className="cell end muted">
+                      <span className="cell end" data-column="last_read">
+                        {shortDate(b.last_read)}
+                      </span>
+                      <span className="cell end muted" data-column="added">
                         {shortDate(b.added)}
                       </span>
                     </button>
@@ -732,7 +760,7 @@ export function DeviceView({
         <ActionMenu
           label="Mark as"
           icon={<BookmarkCheck />}
-          disabled={chosen.length === 0 || locked}
+          disabled={imported.length === 0 || locked}
           items={[
             {
               label: "Finished",
@@ -741,7 +769,7 @@ export function DeviceView({
                   "finished",
                   false,
                   false,
-                  `Marked ${plural(chosen.length, "book")} finished.`,
+                  `Marked ${plural(imported.length, "book")} finished.`,
                 ),
             },
             {
@@ -751,7 +779,7 @@ export function DeviceView({
                   "unread",
                   true,
                   false,
-                  `Marked ${plural(chosen.length, "book")} unread.`,
+                  `Marked ${plural(imported.length, "book")} unread.`,
                 ),
             },
             ...(device.capabilities.reading_time
@@ -763,7 +791,7 @@ export function DeviceView({
                         "unread",
                         true,
                         true,
-                        `Marked ${plural(chosen.length, "book")} unread and cleared reading time.`,
+                        `Marked ${plural(imported.length, "book")} unread and cleared reading time.`,
                       ),
                   },
                 ]
@@ -815,7 +843,10 @@ export function DeviceView({
               : [{ kind: "create", name }];
             await changeCollections(device.mount, changes);
             setSelected(new Set());
-            setNotice({ kind: "info", text: `Created “${name}”.` });
+            setNotice({
+              kind: "info",
+              text: `Created “${name}”. Eject to see it on your Kobo.`,
+            });
             await load();
             onChanged();
           }}
@@ -832,6 +863,10 @@ export function DeviceView({
               { kind: "rename", from: dialog.name, to: name },
             ]);
             setShelf(name);
+            setNotice({
+              kind: "info",
+              text: `Renamed to “${name}”. Eject to see it on your Kobo.`,
+            });
             await load();
             onChanged();
           }}
@@ -845,7 +880,7 @@ export function DeviceView({
           kobo={{
             isOnKobo: () => true,
             update: async (ids) => {
-              const outcomes = await updateBooks(device.mount, ids);
+              const outcomes = await onUpdate(ids);
               load();
               onChanged();
               const failed = outcomes.find((o) => "Err" in o.result);
@@ -877,11 +912,7 @@ export function DeviceView({
           groups={dialog.groups}
           removeWarning="Their reading progress and highlights are deleted too. A backup of the Kobo's database is made first."
           remove={async (contentIds, report) => {
-            const outcomes = await removeFromDevice(
-              device.mount,
-              contentIds,
-              report,
-            );
+            const outcomes = await onRemove(contentIds, report);
             const failed = outcomes.find((o) => "Err" in o.result);
             if (failed && "Err" in failed.result)
               throw new Error(failed.result.Err);
@@ -897,6 +928,7 @@ export function DeviceView({
       {dialog?.kind === "check" && (
         <KoboCheck
           mount={device.mount}
+          onRemove={onRemove}
           onChanged={() => {
             load();
             onChanged();

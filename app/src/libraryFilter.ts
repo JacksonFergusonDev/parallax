@@ -1,7 +1,7 @@
 // Narrowing the library by Kobo status, collection, genre and reading status.
 import type { Book } from "./api";
 import { splitGenres } from "./genres";
-import type { DeviceState } from "./library";
+import type { DeviceCopyState } from "./library";
 import { collator } from "./sort";
 
 export type KoboFilter = "all" | "on" | "off" | "stale";
@@ -28,7 +28,7 @@ export const NO_FILTER: LibraryFilter = {
 
 /** What the filters need to know about a book beyond the book itself. */
 export interface BookFacts {
-  deviceState: (b: Book) => DeviceState;
+  deviceState: (b: Book) => DeviceCopyState;
   collectionsOf: (b: Book) => readonly string[];
 }
 
@@ -53,7 +53,7 @@ const readingOf = (b: Book): ReadingFilter =>
     ? b.reading.status
     : "unread";
 
-function matchesKobo(state: DeviceState, kobo: KoboFilter): boolean {
+function matchesKobo(state: DeviceCopyState, kobo: KoboFilter): boolean {
   switch (kobo) {
     case "all":
       return true;

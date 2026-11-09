@@ -28,13 +28,16 @@ import {
   listBooks,
   listDevices,
   removeBooks,
+  removeFromDevice,
   sendBooks,
   updateBook,
   updateBooks,
   type Book,
+  type DeviceBook,
   type DeviceInfo,
   type MetadataEdit,
   type Progress,
+  type ReportBookProgress,
   type SendOutcome,
   type Collection,
   type OnDevice,
@@ -47,6 +50,7 @@ import {
   defaultOrder,
   filterBooks,
   libraryColumns,
+  type DeviceCopyState,
   type DeviceState,
   type LibraryKey,
   BOOK_EXTENSIONS,
@@ -129,6 +133,9 @@ const LIBRARY_KEYS = [
 const NEW_COLLECTION = "\u0000new";
 
 type Notice = { kind: "error" | "info"; text: string };
+type KoboChange = "updated" | "removed";
+const NO_KOBO_CHANGES = new Map<number, KoboChange>();
+const NO_DEVICE_COPIES = new Map<number, OnDevice>();
 
 const none = new Set<number>();
 
@@ -142,7 +149,19 @@ export default function App() {
   const themed = usePreferences(setView);
   usePresentation(appRef, loaded && detected && themed);
   const [device, setDevice] = useState<DeviceInfo | null>(null);
-  const [onDevice, setOnDevice] = useState<Map<number, OnDevice>>(new Map());
+  const activeKobo = useRef<DeviceInfo | null>(null);
+  const copyRequest = useRef(0);
+  const [copies, setCopies] = useState<{
+    device: DeviceInfo;
+    byId: Map<number, OnDevice>;
+  } | null>(null);
+  const onDevice = copies?.device === device ? copies.byId : NO_DEVICE_COPIES;
+  const [changes, setChanges] = useState<{
+    device: DeviceInfo;
+    byId: Map<number, KoboChange>;
+  } | null>(null);
+  const koboChanges =
+    changes?.device === device ? changes.byId : NO_KOBO_CHANGES;
   const shownOnce = useRef(false);
   useEffect(() => {
     // The first render is the default view, not one the user chose.
@@ -163,10 +182,10 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [bySeries, setBySeries] = useState(false);
   const [filter, setFilter] = useState<LibraryFilter>(NO_FILTER);
-  /** Collections of each book on the Kobo, by content id. */
-  const [shelvesByContentId, setShelvesByContentId] = useState<
-    Map<string, string[]>
-  >(new Map());
+  const [catalog, setCatalog] = useState<{
+    device: DeviceInfo;
+    byId: Map<string, DeviceBook>;
+  } | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const { mode, setMode, sort, setSort } = useViewState<LibraryKey>(
     "library",
@@ -235,7 +254,7 @@ export default function App() {
             const next = devices[0] ?? null;
             return alive &&
               (prev?.mount !== next?.mount || prev?.serial !== next?.serial)
-              ? next
+              ? next && { ...next }
               : prev;
           }),
         )
@@ -255,10 +274,15 @@ export default function App() {
 
   const refreshOnDevice = useCallback(
     async (d: DeviceInfo | null, reload = false) => {
-      const list = d
-        ? await booksOnDevice(d.mount, reload).catch(() => [])
-        : [];
-      setOnDevice(new Map(list.map((o) => [o.book_id, o])));
+      if (!d || activeKobo.current !== d) return;
+      const request = ++copyRequest.current;
+      const list = await booksOnDevice(d.mount, reload).catch(() => null);
+      if (list && activeKobo.current === d && copyRequest.current === request) {
+        setCopies({
+          device: d,
+          byId: new Map(list.map((o) => [o.book_id, o])),
+        });
+      }
     },
     [],
   );
@@ -278,12 +302,8 @@ export default function App() {
   // sent (Nickel ignores series in sideloaded EPUBs).
   useEffect(() => {
     let alive = true;
-    const ids = device
-      ? booksOnDevice(device.mount).catch(() => [])
-      : Promise.resolve([]);
-    ids.then(
-      (list) => alive && setOnDevice(new Map(list.map((o) => [o.book_id, o]))),
-    );
+    activeKobo.current = device;
+    void refreshOnDevice(device);
     const shelves = device
       ? listCollections(device.mount).catch(() => [])
       : Promise.resolve([]);
@@ -306,7 +326,10 @@ export default function App() {
               .then((list) => alive && setCollections(list))
               .catch(() => {});
             const text = parts.join(" and ");
-            setNotice({ kind: "info", text: `On your Kobo: ${text}.` });
+            setNotice({
+              kind: "info",
+              text: `Parallax ${text} on your Kobo. Eject to see the changes.`,
+            });
           }
         })
         .catch((e) => {
@@ -318,8 +341,9 @@ export default function App() {
     }
     return () => {
       alive = false;
+      activeKobo.current = null;
     };
-  }, [device]);
+  }, [device, refreshOnDevice]);
 
   /** The connected Kobo, if books can be sent to it. */
   const writable = device?.read_only === null ? device : null;
@@ -367,6 +391,74 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
     );
   };
 
+  const rememberKoboChange = (
+    target: DeviceInfo,
+    ids: number[],
+    change: KoboChange,
+  ) => {
+    if (!ids.length || activeKobo.current !== target) return;
+    setChanges((previous) => {
+      const byId = new Map(previous?.device === target ? previous.byId : []);
+      for (const id of ids) byId.set(id, change);
+      return { device: target, byId };
+    });
+  };
+
+  const updateOnKobo = async (
+    target: DeviceInfo,
+    ids: number[],
+    report?: (p: Progress) => void,
+  ) => {
+    const outcomes = await updateBooks(target.mount, ids, report);
+    rememberKoboChange(
+      target,
+      outcomes.flatMap(({ book_id, result }) =>
+        book_id !== null && "Ok" in result ? [book_id] : [],
+      ),
+      "updated",
+    );
+    return outcomes;
+  };
+
+  const removeOnKobo = async (
+    target: DeviceInfo,
+    contentIds: string[],
+    report?: ReportBookProgress,
+  ) => {
+    try {
+      const outcomes = await removeFromDevice(target.mount, contentIds, report);
+      const succeeded = outcomes.filter(({ result }) => "Ok" in result);
+      const removed = succeeded.flatMap(({ book_id }) =>
+        book_id == null ? [] : [book_id],
+      );
+      rememberKoboChange(target, removed, "removed");
+      if (succeeded.length && activeKobo.current === target) {
+        setNotice({
+          kind: "info",
+          text: `Removed ${succeeded.length} ${succeeded.length === 1 ? "book" : "books"} from Kobo. Eject to let your Kobo refresh its library.`,
+        });
+      }
+      if (removed.length && activeKobo.current === target) {
+        setCopies((previous) => {
+          if (previous?.device !== target) return previous;
+          const byId = new Map(previous.byId);
+          for (const id of removed) byId.delete(id);
+          return { device: target, byId };
+        });
+        setStatuses((previous) => {
+          const next = { ...previous };
+          for (const id of removed) delete next[id];
+          return next;
+        });
+      }
+      return outcomes;
+    } finally {
+      await refreshOnDevice(target);
+      if (activeKobo.current === target)
+        setDeviceRevision((revision) => revision + 1);
+    }
+  };
+
   const runTransfer = async (
     ids: number[],
     action: (report: (p: Progress) => void) => Promise<SendOutcome[]>,
@@ -410,12 +502,13 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
     setBusy("sending");
     try {
       if (!(await confirmComicTransfer(writable, ids))) return null;
-      const outcomes = await runTransfer(ids, (report) =>
+      return await runTransfer(ids, (report) =>
         sendBooks(writable.mount, ids, null, report),
       );
-      await refreshOnDevice(writable);
-      return outcomes;
     } finally {
+      await refreshOnDevice(writable);
+      if (activeKobo.current === writable)
+        setDeviceRevision((revision) => revision + 1);
       setBusy(null);
     }
   };
@@ -499,12 +592,25 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
   }, [doImport]);
 
   const deviceState = useCallback(
-    (b: Book): DeviceState =>
-      onDevice.get(b.id)?.stale
-        ? "stale"
-        : onDevice.has(b.id)
-          ? "on"
-          : undefined,
+    (b: Book): DeviceState => {
+      const copy = onDevice.get(b.id);
+      const change = koboChanges.get(b.id);
+      if (!copy) return change === "removed" ? change : undefined;
+      if (
+        catalog?.device === device &&
+        catalog.byId.get(copy.content_id)?.pending_import
+      )
+        return "pending_import";
+      if (copy.stale) return "stale";
+      return change === "updated" ? change : "on";
+    },
+    [onDevice, catalog, device, koboChanges],
+  );
+  const copyState = useCallback(
+    (b: Book): DeviceCopyState => {
+      const copy = onDevice.get(b.id);
+      return copy && (copy.stale ? "stale" : "on");
+    },
     [onDevice],
   );
   // Read again whenever what's on the Kobo or its collections change.
@@ -512,29 +618,31 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
     if (!device) return;
     let alive = true;
     deviceBooks(device.mount)
-      .catch(() => [])
-      .then(
-        (list) =>
-          alive &&
-          setShelvesByContentId(
-            new Map(list.map((b) => [b.id, b.collections])),
-          ),
-      );
+      .then((list) => {
+        if (alive)
+          setCatalog({ device, byId: new Map(list.map((b) => [b.id, b])) });
+      })
+      .catch(() => {});
     return () => {
       alive = false;
     };
   }, [device, onDevice, collections, deviceRevision]);
   const facts = useMemo<BookFacts>(
     () => ({
-      deviceState,
+      deviceState: copyState,
       collectionsOf: (b) => {
         const contentId = onDevice.get(b.id)?.content_id;
-        return (contentId && shelvesByContentId.get(contentId)) || [];
+        return (
+          (contentId &&
+            catalog?.device === device &&
+            catalog.byId.get(contentId)?.collections) ||
+          []
+        );
       },
     }),
-    [deviceState, onDevice, shelvesByContentId],
+    [copyState, onDevice, catalog, device],
   );
-  const columns = useMemo(() => libraryColumns(deviceState), [deviceState]);
+  const columns = useMemo(() => libraryColumns(copyState), [copyState]);
   const covers = useMemo(
     () =>
       books.flatMap((b) => {
@@ -703,7 +811,7 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
       const outcomes = await runTransfer(ids, (report) =>
         kind === "sending"
           ? sendBooks(device.mount, ids, collection, report)
-          : updateBooks(device.mount, ids, report),
+          : updateOnKobo(device, ids, report),
       );
       if (kind === "sending" && collection && alreadyOnKobo.length > 0) {
         // Selected books that were already on the Kobo join the collection too.
@@ -817,10 +925,11 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
     try {
       await ejectDevice(device.mount);
       setDevice(null);
+      setChanges(null);
       setStatuses({});
       setNotice({
         kind: "info",
-        text: "Ejected. Unplug your Kobo; it will import the new books.",
+        text: "Ejected. Unplug your Kobo to let it refresh its library.",
       });
     } catch (e) {
       setNotice({ kind: "error", text: String(e) });
@@ -915,20 +1024,25 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
     },
   });
 
+  const transferStatus = (id: number) => {
+    const status = device ? statuses[id] : undefined;
+    return status?.stage === "sent" ? undefined : status;
+  };
   const renderCard = (b: Book) => (
     <BookCard
       key={b.id}
       book={b}
       selected={selected.has(b.id)}
       deviceState={deviceState(b)}
-      status={statuses[b.id]}
+      status={transferStatus(b.id)}
       onSelect={onSelect}
     />
   );
 
-  const sentThisSession = Object.values(statuses).some(
-    (s) => s.stage === "sent",
-  );
+  const hasChangesToSee =
+    koboChanges.size > 0 ||
+    (catalog?.device === device &&
+      [...catalog.byId.values()].some((b) => b.pending_import));
 
   return (
     <div ref={appRef} className={`app ${dragging ? "dragging" : ""}`}>
@@ -1011,6 +1125,9 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
             device={device}
             query={query}
             libraryByContentId={libraryByContentId}
+            koboChanges={koboChanges}
+            onRemove={(ids, report) => removeOnKobo(device, ids, report)}
+            onUpdate={(ids) => updateOnKobo(device, ids)}
             onLibraryChanged={refresh}
             onBooksAdded={(ids) => {
               void refresh().then(() => reviewAdded(ids, [], "kobo"));
@@ -1028,6 +1145,7 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
             }}
             onEjected={() => {
               setDevice(null);
+              setChanges(null);
               setStatuses({});
               setNotice({
                 kind: "info",
@@ -1189,7 +1307,7 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
                 <div className="grid">{visible.map(renderCard)}</div>
               ) : (
                 <div
-                  className="book-list"
+                  className="book-list library-list"
                   role="table"
                   style={
                     { "--tracks": listTracks(columns) } as React.CSSProperties
@@ -1212,7 +1330,7 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
                             book={b}
                             selected={selected.has(b.id)}
                             deviceState={deviceState(b)}
-                            status={statuses[b.id]}
+                            status={transferStatus(b.id)}
                             onSelect={onSelect}
                           />
                         ))}
@@ -1313,7 +1431,7 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
               Remove
             </button>
           )}
-          {device && sentThisSession && (
+          {device && hasChangesToSee && (
             <button
               className="secondary"
               onClick={eject}
@@ -1451,6 +1569,11 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
             setNotice({ kind: "info", text });
             if (scope === "library") void refresh();
             if (device) {
+              if (scope === "kobo") {
+                setChanges(null);
+                setStatuses({});
+              }
+              setDeviceRevision((revision) => revision + 1);
               refreshOnDevice(device);
               listCollections(device.mount)
                 .then(setCollections)
@@ -1501,8 +1624,9 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
               ? {
                   isOnKobo: (id) => onDevice.has(id),
                   update: async (ids) => {
-                    const outcomes = await updateBooks(device.mount, ids);
+                    const outcomes = await updateOnKobo(device, ids);
                     await refreshOnDevice(device);
+                    setDeviceRevision((revision) => revision + 1);
                     const failed = outcomes.find((o) => "Err" in o.result);
                     if (failed && "Err" in failed.result)
                       throw new Error(failed.result.Err);

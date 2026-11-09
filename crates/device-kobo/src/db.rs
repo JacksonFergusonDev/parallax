@@ -94,6 +94,16 @@ impl KoboDb {
         Ok(books)
     }
 
+    /// All top-level sideloaded entries, including those hidden from the book list.
+    pub fn sideloaded_ids(&self) -> Result<HashSet<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT ContentID FROM content WHERE BookID IS NULL AND ContentID LIKE 'file:///mnt/onboard/%'",
+        )?;
+        Ok(stmt
+            .query_map([], |row| row.get(0))?
+            .collect::<rusqlite::Result<_>>()?)
+    }
+
     /// Nickel's cover cache identifiers, which can differ from the ContentID.
     pub fn image_ids(&self) -> Result<HashMap<String, String>> {
         let mut stmt = self.conn.prepare(
