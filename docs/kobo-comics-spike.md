@@ -2,7 +2,7 @@
 
 Question: is it worth converting manga to KEPUB for the Kobo, and should pages be processed for the screen, or is copying the CBZ as it is already the best option? Source is in [spikes/kobo-comics](../spikes/kobo-comics/README.md). It is outside the Cargo workspace and isn't part of the product.
 
-**Verdict: processing for the screen is the clear win, for page-turn speed rather than picture quality.** The user compared all four on their Libra 2 on 2026-11-08 (see Device results).
+**Verdict: send manga as a processed KEPUB (variant D).** Processing makes pages open and turn 4–7 times faster, with no visible loss. KEPUB adds the author, which CBZ can't show. Series grouping needs the app's existing Kobo database writes whatever the format. The user compared all four on their Libra 2 on 2026-11-08 (see Device results).
 
 ## The four versions
 
@@ -41,18 +41,23 @@ Measured on this Mac (release build, 4.3 cores busy). The whole run, three volum
 
 ## Device results
 
-The user's Libra 2 (firmware 4.38), 2026-11-08:
+The user's Libra 2 (firmware 4.38), 2026-11-08. The full checklist is below.
 
-- **Quality:** the user could barely tell the four apart. The processed versions may look slightly better, and none looked noticeably worse.
-- **Page turns:** the original CBZ (A) and the lossless KEPUB (B) both take about 2 seconds a page. The processed versions (C and D) turn almost immediately. So the full-size 1810 × 2560 JPEGs, not the container, make the Kobo slow.
-- **Spreads:** A and B show the opening spread whole, on one screen. C and D show it as two separate pages, because processing splits it.
-- **Not reported:** titles, series grouping, right-to-left page turns, ComicInfo in C, progress and stats. Without those, the case for KEPUB over CBZ is still open.
+- **Speed is the big difference.** Opening a book takes 2 s for the originals (A, B) and 0.5 s processed (C, D). Turning a page takes 1.5 s against 0.2 s. The container makes no difference; the full-size 1810 × 2560 JPEGs (about 4.6 megapixels, above Kobo's guidance of about 3.8 for fixed-layout pages) make the Kobo slow.
+- **Quality:** basically identical for all four. The processed versions may look slightly better.
+- **Author:** shown only for the KEPUBs (B, D). C's ComicInfo.xml has a `Writer`, but the Kobo ignored it, which matches community reports that the stock firmware doesn't read ComicInfo. Titles showed for all four, but A and C's titles are their file names, so that proves nothing about ComicInfo.
+- **Series:** not grouped for any of them. The KEPUBs carry both `calibre:series` and EPUB 3 `belongs-to-collection`, so firmware 4.38 doesn't read series from a sideloaded book's metadata. The app must write series into the Kobo's database itself, as it already does for books ("Kobo series on connect").
+- **Right to left:** reported working for all four, including A, which has no direction information at all. Either the Kobo's comic viewer turns pages the same way whatever the book says, or the checklist wording ("swiping or tapping left goes forward") was read differently from what was meant. Recheck when the reader direction matters: tap the left edge on A and on B and see whether both go forward.
+- **Spreads:** A and B show the opening spread whole on one screen; C and D split it into two pages.
+- **Everything else** worked for all four: cover thumbnails, zoom, progress after reopening, reading stats, and sleep and wake.
 
-What it means:
+What it means for the app:
 
-- **Process pages by default:** greyscale, sized to the model's screen, 16 levels. This alone fixes the slow page turns, and it saves about 75% of the space on the device.
-- **Spreads need a choice:** split them (fast, readable, but the whole picture is never seen at once), keep them whole sized to the screen, or show both (the whole spread, then its halves, as KCC can). This should be a setting.
-- **Container:** still to decide, from the unreported metadata and RTL checks.
+- **Process pages by default:** greyscale, sized to each model's screen, 16 levels. It fixes the slow pages and saves about 75% of the space on the device.
+- **Send KEPUB.** It's the only container that shows the author, it costs under a second on top of processing, and the app's send and update flows already expect `.kepub.epub`.
+- **Write series to the Kobo's database** through the existing safe-write layer, the same as for books.
+- **Spreads become a setting:** split (the spike's behaviour), keep whole sized to the screen, or the whole spread followed by its halves, which is KCC's default in its desktop app. Very wide images should be rotated rather than split, as KCC does.
+- **Not yet known:** whether the KEPUB's right-to-left setting does anything beyond what the Kobo does for a CBZ, and whether sideloaded KEPUBs lose bookmarks and notes as reported elsewhere. Neither blocks the plan.
 
 ## Device checklist
 
@@ -60,20 +65,20 @@ Copy the files from `spikes/kobo-comics/out/` into a folder such as `Comics spik
 
 | Check | A | B | C | D |
 | --- | --- | --- | --- | --- |
-| Opens at all | | | | |
-| Title shown in the library | | | | |
-| Author shown | | | | |
-| Cover thumbnail | | | | |
-| Grouped as a series, in volume order (v01–v03) | | | | |
-| Swiping or tapping left goes forward (RTL) | | | | |
-| Time to open the book | | | | |
-| Page turn time (a slow-motion phone video helps) | | | | |
-| Sharpness of small text and screentone, side by side | | | | |
-| Spread (v01 pages 9–10): whole, split, readable? | | | | |
-| Zoom, if needed, works | | | | |
-| Reading progress kept after closing and reopening | | | | |
-| Shows in reading stats / "% read" | | | | |
-| Survives a sleep and wake | | | | |
+| Opens at all | y | y | y | y |
+| Title shown in the library | y | y | y | y |
+| Author shown | n | y | n | y |
+| Cover thumbnail | y | y | y | y |
+| Grouped as a series, in volume order (v01–v03) | n | n | n | n |
+| Swiping or tapping left goes forward (RTL) | y | y | y | y |
+| Time to open the book | 2s | 2s | 0.5s | 0.5s |
+| Page turn time (a slow-motion phone video helps) | 1.5s | 1.5s | 0.2s | 0.2s |
+| Sharpness of small text and screentone, side by side | identical | identical | identical | identical |
+| Spread (v01 pages 9–10): whole, split, readable? | whole | whole | split | split |
+| Zoom, if needed, works | y | y | y | y |
+| Reading progress kept after closing and reopening | y | y | y | y |
+| Shows in reading stats / "% read" | y | y | y | y |
+| Survives a sleep and wake | y | y | y | y |
 
 Then delete the spike folder from the Kobo and `spikes/kobo-comics/out/` from the Mac.
 
