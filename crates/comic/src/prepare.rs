@@ -49,6 +49,7 @@ pub struct Metadata<'a> {
     pub language: Option<&'a str>,
     /// EPUB's dcterms:modified timestamp, in UTC.
     pub modified: &'a str,
+    pub custom_cover: Option<&'a [u8]>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -102,6 +103,13 @@ pub fn prepare(
     let total = source.pages().len();
     let cover = source.cover_index();
     let mut epub = epub::FixedLayout::new(&epub_path)?;
+    if let Some(bytes) = metadata.custom_cover {
+        let cover = raster::cover(bytes, profile, options).map_err(|message| Error::Page {
+            page: "custom cover".to_owned(),
+            message,
+        })?;
+        epub.add_cover(&cover)?;
+    }
     let mut next = 0;
     // Bound both the decode working set and the number of large encoded inputs.
     while next < total {
@@ -122,7 +130,11 @@ pub fn prepare(
             }
             pixels += area;
             bytes += size;
-            batch.push((name, source.read_page(next)?, next == cover));
+            batch.push((
+                name,
+                source.read_page(next)?,
+                next == cover && metadata.custom_cover.is_none(),
+            ));
             next += 1;
         }
         let start = next - batch.len();

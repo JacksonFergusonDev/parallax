@@ -8,8 +8,10 @@ use erc_device_kobo::{
     files_not_in_database, merge_duplicate_collections, missing_files, orphaned_images,
     remove_book, set_read_status,
 };
-use erc_library::Library;
+use erc_library::{Format, Library};
 use serde::Serialize;
+
+use crate::comic_send::ComicTarget;
 
 /// A library book whose copy is on the connected device.
 #[derive(Debug, Clone, Serialize)]
@@ -27,13 +29,21 @@ pub fn books_on_device(
     device: &KoboDevice,
 ) -> erc_library::Result<Vec<OnDevice>> {
     let copies = library.device_copies(&device.version().serial)?;
+    let target = std::cell::OnceCell::new();
     Ok(copies
         .into_iter()
         .filter(|c| device.mount().join(&c.device_path).is_file())
         .filter_map(|c| {
             let book = library.book(c.book_id).ok()?;
             Some(OnDevice {
-                stale: book.modified_at > c.sent_at,
+                stale: book.modified_at > c.sent_at
+                    || (book.format == Format::Cbz
+                        && target
+                            .get_or_init(|| ComicTarget::new(library, device))
+                            .as_ref()
+                            .is_ok_and(|target| {
+                                c.comic_profile.as_deref() != Some(&target.fingerprint(&book))
+                            })),
                 book_id: c.book_id,
                 device_path: c.device_path,
                 content_id: c.content_id,

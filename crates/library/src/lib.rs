@@ -195,6 +195,7 @@ pub struct DeviceCopy {
     pub device_path: String,
     pub content_id: String,
     pub sent_at: String,
+    pub comic_profile: Option<String>,
 }
 
 pub struct Library {
@@ -666,17 +667,36 @@ impl Library {
         device_path: &str,
         content_id: &str,
     ) -> Result<()> {
+        self.record_device_copy_profile(book_id, device_serial, device_path, content_id, None)
+    }
+
+    pub fn record_device_copy_profile(
+        &self,
+        book_id: i64,
+        device_serial: &str,
+        device_path: &str,
+        content_id: &str,
+        comic_profile: Option<&str>,
+    ) -> Result<()> {
         self.conn.execute(
-            "INSERT OR REPLACE INTO device_copies (book_id, device_serial, device_path, content_id, sent_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![book_id, device_serial, device_path, content_id, now()],
+            "INSERT OR REPLACE INTO device_copies
+                 (book_id, device_serial, device_path, content_id, sent_at, comic_profile)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                book_id,
+                device_serial,
+                device_path,
+                content_id,
+                now(),
+                comic_profile
+            ],
         )?;
         Ok(())
     }
 
     pub fn device_copies(&self, device_serial: &str) -> Result<Vec<DeviceCopy>> {
         let mut stmt = self.conn.prepare(
-            "SELECT book_id, device_serial, device_path, content_id, sent_at FROM device_copies WHERE device_serial = ?1",
+            "SELECT book_id, device_serial, device_path, content_id, sent_at, comic_profile FROM device_copies WHERE device_serial = ?1",
         )?;
         let copies = stmt
             .query_map([device_serial], |r| {
@@ -686,6 +706,7 @@ impl Library {
                     device_path: r.get(2)?,
                     content_id: r.get(3)?,
                     sent_at: r.get(4)?,
+                    comic_profile: r.get(5)?,
                 })
             })?
             .collect::<rusqlite::Result<_>>()?;

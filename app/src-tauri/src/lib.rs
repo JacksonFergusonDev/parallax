@@ -467,6 +467,24 @@ async fn device_history(mount: PathBuf) -> CmdResult<DeviceHistory> {
 }
 
 #[tauri::command]
+async fn comic_transfer_estimate(
+    state: State<'_, AppState>,
+    mount: PathBuf,
+    ids: Vec<i64>,
+) -> CmdResult<Option<erc_core::comic_send::TransferEstimate>> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        erc_core::comic_send::estimate(&lib, &kobo, &ids)
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
 async fn send_books(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1407,6 +1425,7 @@ pub fn run() {
             tidy_device,
             device_history,
             send_books,
+            comic_transfer_estimate,
             import_from_device,
             calibre_default_library,
             reading_stats,

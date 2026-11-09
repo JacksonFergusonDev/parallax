@@ -24,6 +24,7 @@ const COMMANDS: &[&str] = &[
     "tidy_device",
     "device_history",
     "send_books",
+    "comic_transfer_estimate",
     "import_from_device",
     "calibre_default_library",
     "reading_stats",

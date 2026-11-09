@@ -41,20 +41,7 @@ pub(super) fn process(
     options: Options,
     cover: bool,
 ) -> Result<(Vec<Raster>, Option<Raster>), String> {
-    let decoded = image::load_from_memory(bytes).map_err(|e| e.to_string())?;
-    let mut rgb = if decoded.color().has_alpha() {
-        let rgba = decoded.into_rgba8();
-        RgbImage::from_fn(rgba.width(), rgba.height(), |x, y| {
-            let [r, g, b, a] = rgba.get_pixel(x, y).0;
-            let alpha = u16::from(a);
-            image::Rgb([r, g, b].map(|channel| {
-                let value = u16::from(channel) * alpha + 255 * (255 - alpha);
-                u8::try_from(value.div_ceil(255)).unwrap_or(255)
-            }))
-        })
-    } else {
-        decoded.into_rgb8()
-    };
+    let mut rgb = decode(bytes)?;
     let colour = profile.colour && is_colour(&rgb);
     let cover = cover
         .then(|| encode(rgb.clone(), colour, profile, options, None))
@@ -92,6 +79,30 @@ pub(super) fn process(
         .map(|(rgb, side)| encode(rgb, colour, profile, options, side))
         .collect::<Result<_, _>>()?;
     Ok((pages, cover))
+}
+
+pub(super) fn cover(bytes: &[u8], profile: Profile, options: Options) -> Result<Raster, String> {
+    crate::shape::image_dimensions(bytes).ok_or("missing or unsupported image dimensions")?;
+    let rgb = decode(bytes)?;
+    let colour = profile.colour && is_colour(&rgb);
+    encode(rgb, colour, profile, options, None)
+}
+
+fn decode(bytes: &[u8]) -> Result<RgbImage, String> {
+    let decoded = image::load_from_memory(bytes).map_err(|e| e.to_string())?;
+    Ok(if decoded.color().has_alpha() {
+        let rgba = decoded.into_rgba8();
+        RgbImage::from_fn(rgba.width(), rgba.height(), |x, y| {
+            let [r, g, b, a] = rgba.get_pixel(x, y).0;
+            let alpha = u16::from(a);
+            image::Rgb([r, g, b].map(|channel| {
+                let value = u16::from(channel) * alpha + 255 * (255 - alpha);
+                u8::try_from(value.div_ceil(255)).unwrap_or(255)
+            }))
+        })
+    } else {
+        decoded.into_rgb8()
+    })
 }
 
 fn encode(

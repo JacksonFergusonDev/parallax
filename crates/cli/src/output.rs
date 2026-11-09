@@ -89,6 +89,19 @@ impl Reporter {
             Progress::Converting { index, total, file } => {
                 (index, total, false, format!("converting {file}"), false)
             }
+            Progress::ProcessingComic {
+                index,
+                total,
+                file,
+                page,
+                pages,
+            } => (
+                index,
+                total,
+                false,
+                format!("preparing {file}: page {page}/{pages}"),
+                false,
+            ),
             Progress::Copying { index, total, file } => {
                 (index, total, false, format!("copying {file}"), false)
             }

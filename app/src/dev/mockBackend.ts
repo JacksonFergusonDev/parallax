@@ -498,6 +498,14 @@ export function installMockBackend(label = "main") {
             result: { Ok: {} },
           }));
         }
+        case "comic_transfer_estimate":
+          return {
+            bytes: 126_000_000,
+            free: 4_000_000_000,
+            width: 1264,
+            height: 1680,
+            source: "model",
+          };
         case "library_comic_spreads":
           return 9;
         case "library_set_comic_kind":

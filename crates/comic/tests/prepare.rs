@@ -38,6 +38,7 @@ fn metadata() -> Metadata<'static> {
         series_index: Some("1"),
         language: None,
         modified: "2026-11-08T00:00:00Z",
+        custom_cover: None,
     }
 }
 

@@ -1,16 +1,12 @@
 import { memo } from "react";
 import { GeneratedCover } from "./GeneratedCover";
 import { coverSrc, type Book } from "../api";
-import { progressLabel, type DeviceState, type SendStatus } from "../library";
-
-export const STATUS_LABEL: Record<SendStatus["stage"], string> = {
-  queued: "Waiting…",
-  preparing: "Preparing…",
-  converting: "Converting…",
-  copying: "Copying…",
-  sent: "Sent",
-  failed: "Failed",
-};
+import {
+  progressLabel,
+  sendStatusLabel,
+  type DeviceState,
+  type SendStatus,
+} from "../library";
 
 interface Props {
   book: Book;
@@ -51,7 +47,7 @@ export const BookCard = memo(function BookCard({
         )}
         {status && (
           <span className={`overlay overlay-${status.stage}`}>
-            {STATUS_LABEL[status.stage]}
+            {sendStatusLabel(status)}
           </span>
         )}
         {book.reading && book.reading.status !== "unread" && (

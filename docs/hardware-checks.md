@@ -148,3 +148,11 @@ Automated tests only cover Kindle files made by calibre. Check on a Kobo with re
 - A file bought DRM-free or made by KindleGen (`.azw3`, and a combo `.mobi` if you have one): add it, send it, and check the cover, images, styling, TOC and a footnote link.
 - An old-style `.mobi`: formatting may be plainer, as boko writes no stylesheet for these.
 - A DRM-protected Kindle file: it should be refused with a DRM message, and nothing added.
+
+## Comics
+
+1. Add a CBZ with a named series, at least one ordinary spread, and a very wide page. Try **Split**, **Keep whole**, and **Whole then halves** in Settings › Kobo. For each mode, send or update the comic, eject, open it, and check the expected page order and image fit. Keep whole and Whole then halves should show an unrotated ordinary spread. The very wide page should be rotated in each mode.
+2. For right-to-left direction, tap the left edge in a raw CBZ and in the processed KEPUB. Record whether each advances. Repeat with a left-to-right comic.
+3. After the Kobo imports the comics, reconnect with **Add series to newly imported books** enabled. Confirm that the series and volume order appear. Update a comic you started reading and check that its place survives.
+4. On a colour Kobo, check that colour art is still coloured and greyscale pages look right on Kaleido. Note any rainbow artefacts. On a Kobo with a 600 × 800 or 758 × 1024 screen, check whether the fixed-layout KEPUB opens and record its turn speed.
+5. For landscape two-up verification, record the model and firmware and whether split halves face each other. Landscape pinning currently needs a profile build with the option enabled. Use **About this Kobo** to save a device report for any unexpected behavior.

@@ -553,7 +553,12 @@ button.badge.connected:hover {
 
 /* While a book travels to the Kobo, a sheen sweeps its cover; when it lands,
    the badge pops. */
-.card:has(.overlay-preparing, .overlay-converting, .overlay-copying)
+.card:has(
+    .overlay-preparing,
+    .overlay-converting,
+    .overlay-processing_comic,
+    .overlay-copying
+  )
   .cover::before {
   content: "";
   position: absolute;

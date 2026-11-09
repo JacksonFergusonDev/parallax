@@ -154,6 +154,14 @@ export type Progress =
       file: string;
     }
   | {
+      stage: "processing_comic";
+      index: number;
+      total: number;
+      file: string;
+      page: number;
+      pages: number;
+    }
+  | {
       stage: "done";
       index: number;
       total: number;
@@ -554,8 +562,22 @@ export const deviceRestore = (mount: string, file: string) =>
     { mount, file },
     [deviceTag(mount)],
   );
-export const booksOnDevice = (mount: string) =>
-  read<OnDevice[]>("books_on_device", { mount }, [deviceTag(mount), "library"]);
+export const booksOnDevice = (mount: string, refresh = false) => {
+  if (refresh) readCache.invalidate(deviceTag(mount));
+  return read<OnDevice[]>("books_on_device", { mount }, [
+    deviceTag(mount),
+    "library",
+  ]);
+};
+
+export const comicTransferEstimate = (mount: string, ids: number[]) =>
+  invoke<{
+    bytes: number;
+    free: number;
+    width: number;
+    height: number;
+    source: Screen["source"];
+  } | null>("comic_transfer_estimate", { mount, ids });
 export const deviceBooks = (mount: string) =>
   read<DeviceBook[]>("device_books", { mount }, [deviceTag(mount)]);
 export const removeFromDevice = (mount: string, contentIds: string[]) =>

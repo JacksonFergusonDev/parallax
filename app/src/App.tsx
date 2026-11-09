@@ -16,6 +16,8 @@ import {
   booksOnDevice,
   changeCollections,
   coverSrc,
+  comicTransferEstimate,
+  onSettingChange,
   deviceBooks,
   dismissDuplicates,
   ejectDevice,
@@ -98,7 +100,7 @@ import {
   useViewState,
 } from "./components/ViewControls";
 import { applySort } from "./sort";
-import { libraryReviewGroups } from "./duplicates";
+import { formatSize, libraryReviewGroups } from "./duplicates";
 import {
   addedIds,
   anyBetterCover,
@@ -247,10 +249,25 @@ export default function App() {
     };
   }, []);
 
-  const refreshOnDevice = useCallback(async (d: DeviceInfo | null) => {
-    const list = d ? await booksOnDevice(d.mount).catch(() => []) : [];
-    setOnDevice(new Map(list.map((o) => [o.book_id, o])));
-  }, []);
+  const refreshOnDevice = useCallback(
+    async (d: DeviceInfo | null, reload = false) => {
+      const list = d
+        ? await booksOnDevice(d.mount, reload).catch(() => [])
+        : [];
+      setOnDevice(new Map(list.map((o) => [o.book_id, o])));
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!device) return;
+    const unlisten = onSettingChange(({ key }) => {
+      if (key.startsWith("comic_")) void refreshOnDevice(device, true);
+    });
+    return () => {
+      unlisten.then((stop) => stop());
+    };
+  }, [device, refreshOnDevice]);
 
   // When a Kobo connects: learn which library books are on it, list its
   // collections, and apply series to books it has imported since they were
@@ -316,13 +333,55 @@ export default function App() {
     sendTo.current = writable;
   });
 
+  const confirmComicTransfer = async (
+    target: DeviceInfo,
+    ids: number[],
+    updating = false,
+  ) => {
+    const comics = books.filter(
+      (book) => book.format === "cbz" && ids.includes(book.id),
+    );
+    if (comics.length === 0) return true;
+    const estimate = await comicTransferEstimate(target.mount, ids);
+    if (!estimate) return true;
+    const screen =
+      estimate.source === "assumed"
+        ? " The screen size is assumed."
+        : estimate.source === "covers"
+          ? " The screen size was estimated from Kobo covers."
+          : "";
+    const storage =
+      estimate.bytes > estimate.free
+        ? " The transfer may exceed the available space."
+        : "";
+    const series =
+      !updating && comics.some((book) => book.series)
+        ? " Reconnect after the Kobo imports the comics to apply series."
+        : "";
+    return ask(
+      `Prepare comics for ${estimate.width} × ${estimate.height}.${screen}
+
+Estimated transfer: ${formatSize(estimate.bytes)}. Available: ${formatSize(estimate.free)}.${storage}
+
+Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout books.${series}`,
+      {
+        title: updating ? "Update comics on Kobo?" : "Send comics to Kobo?",
+        okLabel: updating ? "Update" : "Send",
+        cancelLabel: "Cancel",
+      },
+    );
+  };
+
   /** Sends books from the review, showing progress on them as usual. */
   const sendReviewed = async (ids: number[]) => {
     if (!writable) return [];
-    batch.current = ids;
-    setStatuses(Object.fromEntries(ids.map((id) => [id, { stage: "queued" }])));
     setBusy("sending");
     try {
+      if (!(await confirmComicTransfer(writable, ids))) return null;
+      batch.current = ids;
+      setStatuses(
+        Object.fromEntries(ids.map((id) => [id, { stage: "queued" }])),
+      );
       const outcomes = await sendBooks(writable.mount, ids);
       await refreshOnDevice(writable);
       return outcomes;
@@ -599,11 +658,15 @@ export default function App() {
   const transfer = async (kind: "sending" | "updating", ids: number[]) => {
     if (!device || ids.length === 0) return;
     let thenEject = false;
-    batch.current = ids;
-    setStatuses(Object.fromEntries(ids.map((id) => [id, { stage: "queued" }])));
     setBusy(kind);
     setNotice(null);
     try {
+      if (!(await confirmComicTransfer(device, ids, kind === "updating")))
+        return;
+      batch.current = ids;
+      setStatuses(
+        Object.fromEntries(ids.map((id) => [id, { stage: "queued" }])),
+      );
       const collection =
         sendCollection === NEW_COLLECTION
           ? newCollection.trim() || null

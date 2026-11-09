@@ -136,6 +136,8 @@ const MIGRATIONS: &[&str] = &[
     "ALTER TABLE books ADD COLUMN format TEXT NOT NULL DEFAULT 'epub';
      ALTER TABLE books ADD COLUMN kind TEXT NOT NULL DEFAULT 'book';
      ALTER TABLE books ADD COLUMN direction TEXT NOT NULL DEFAULT 'ltr';",
+    // 16: the effective comic preparation profile of each device copy.
+    "ALTER TABLE device_copies ADD COLUMN comic_profile TEXT;",
 ];
 
 /// The schema version this build creates.

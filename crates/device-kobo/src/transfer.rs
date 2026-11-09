@@ -23,6 +23,19 @@ pub struct SentBook {
 }
 
 impl KoboDevice {
+    /// Bytes available to a new file on the mounted volume.
+    pub fn free_bytes(&self) -> Result<u64> {
+        let fs = nix::sys::statvfs::statvfs(self.mount())
+            .map_err(|e| io_err(self.mount(), io::Error::from_raw_os_error(e as i32)))?;
+        let block = if fs.fragment_size() == 0 {
+            fs.block_size()
+        } else {
+            fs.fragment_size()
+        };
+        let bytes = u128::from(block) * u128::from(fs.blocks_available());
+        Ok(u64::try_from(bytes).unwrap_or(u64::MAX))
+    }
+
     /// Copies `src` to `dest` (relative to the mount point). Writes to a
     /// temporary name first so an interrupted copy never leaves a half-written
     /// book where Nickel would import it, then removes the `._*` AppleDouble

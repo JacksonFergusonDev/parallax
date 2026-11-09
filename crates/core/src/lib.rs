@@ -3,6 +3,7 @@
 pub mod annotations;
 pub mod calibre;
 pub mod collections;
+pub mod comic_send;
 pub mod device;
 pub mod duplicates;
 pub mod enhance;

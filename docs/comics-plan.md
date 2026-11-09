@@ -1,13 +1,13 @@
 # Comics and manga plan
 
-Status: **C1–C5 done** (2026-11-08); C6 next. The plan for first-class comics and manga in Parallax, across the library, sending to any supported Kobo, and the reader. It builds on [the Kobo comics spike](kobo-comics-spike.md) and [the bindery and KCC research](../reports/Bindery%20and%20Kindle%20Comic%20Converter.md).
+Status: **C1–C6 done** (2026-11-08); C7 next. The plan for first-class comics and manga in Parallax, across the library, sending to any supported Kobo, and the reader. It builds on [the Kobo comics spike](kobo-comics-spike.md) and [the bindery and KCC research](../reports/Bindery%20and%20Kindle%20Comic%20Converter.md).
 
 ## 1. What's already decided
 
 | Question | Decision | Evidence |
 | --- | --- | --- |
 | What to send to a Kobo | Pages processed for that model's screen, in a fixed-layout KEPUB made through the bundled kepubify | Libra 2 spike: processed pages open in 0.5 s and turn in 0.2 s, against 2 s and 1.5 s for the originals, with no visible loss. Only KEPUBs showed the author. |
-| How series reach the Kobo | Write `content.Series`, `SeriesNumber` and `SeriesID` through the existing safe-write layer and pending-series triggers, as for books | No spike variant grouped as a series; firmware 4.38 ignores OPF series and ComicInfo for sideloaded books. |
+| How series reach the Kobo | Write `content.Series`, `SeriesNumber` and `SeriesID` through the existing safe-write layer on reconnect after Nickel imports the books | No spike variant grouped as a series; firmware 4.38 ignores OPF series and ComicInfo for sideloaded books. |
 | Caching converted output | None. Prepare in a temporary folder at send time, write to the Kobo, delete | About 8 s per 470 MB volume on this Mac; calibre's growing cache was the user's main complaint. |
 | Default page processing | Greyscale, Lanczos3 to fit the screen, 16 grey levels as 4-bit PNG, no dithering, no autocontrast, no cropping | Spike quality matched the originals. KCC users report autocontrast darkening pages and crops removing content. |
 | Spreads | A setting: **Split** (default), **Keep whole**, **Whole then halves**. Very wide images (aspect ≥ 1.8) are rotated rather than split | KCC supplies the thresholds and half order. Parallax keeps the whole image unrotated in both whole modes for ordinary spreads, and puts it first in Whole then halves. |
@@ -148,12 +148,12 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
   - page count matches the source plus splits.
 - **Performance:** the spike took about 8 s per volume on Apple silicon. The preparation crate reports progress per input page.
 
-### C6. Sending and updating comics (2–3 days)
+### C6. Sending and updating comics (done)
 
 - `send_library_books` and `update_on_device` prepare comics for the connected Kobo's profile in a temporary folder, then write through the existing safe-write layer to `KEpub/<Series> v<NN> - <Title>.kepub.epub`.
-- **Series:** set through the existing pending-series triggers, so it appears as soon as Nickel imports the book.
-- **Device copies:** recorded with a hash of the profile and settings. Changing either, or moving to another Kobo, offers "Update on Kobo".
-- **Space:** the send dialog estimates size on the device from page count and screen size, and checks free space before writing.
+- **Series:** use the existing reconnect reconciliation after Nickel imports the book. The S1 spike found that import triggers needed a Kobo restart, so they were dropped from the [device plan](PLAN.md). Updates to an already imported comic write its series in the update session.
+- **Device copies:** recorded per Kobo with a hash of the effective screen and settings. A mismatch offers "Update on Kobo" where a copy already exists.
+- **Space:** the send and update dialogs show an estimate from page count and screen size and the available space. The finished KEPUB is measured again before copying.
 - **No cache:** nothing converted is kept on the Mac after a send, including after a failure.
 - **Tests:** the FAT32 disk-image tests send and update a CBZ; fixture devices of three screen sizes produce correctly sized pages.
 

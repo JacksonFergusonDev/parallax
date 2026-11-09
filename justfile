@@ -44,6 +44,7 @@ dev-optimized: setup upscale-model
 # Opt-in tests that mount FAT32 disk images to check the device write path.
 test-fat:
     cargo test -p erc-device-kobo -- --ignored
+    cargo test -p erc-core --test send -- --ignored
 
 # Opt-in: the reader in a real build, with a hostile book. Opens windows.
 test-reader:

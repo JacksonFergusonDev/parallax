@@ -145,7 +145,11 @@ fn leaves_no_apple_double_files_on_fat32() {
         // files so only send_file's behaviour is measured.
         fs::create_dir_all(mount.join(".kobo")).unwrap();
         fs::write(mount.join(".kobo/version"), VERSION).unwrap();
-        for e in ["._.kobo", ".kobo/._version"] {
+        rusqlite::Connection::open(mount.join(".kobo/KoboReader.sqlite"))
+            .unwrap()
+            .execute_batch(SCHEMA)
+            .unwrap();
+        for e in ["._.kobo", ".kobo/._version", ".kobo/._KoboReader.sqlite"] {
             let _ = fs::remove_file(mount.join(e));
         }
         let kobo = KoboDevice::open(&mount).unwrap();

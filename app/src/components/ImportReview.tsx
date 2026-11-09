@@ -49,7 +49,7 @@ import {
   type ReviewBatch,
   type Step,
 } from "../importReview";
-import { fromForm, toForm, type SendStatus } from "../library";
+import { fromForm, sendStatusLabel, toForm, type SendStatus } from "../library";
 import { CoverPicker } from "./CoverPicker";
 import { DuplicateReview, type ReviewGroup } from "./DuplicateReview";
 import { ProposalChanges } from "./EnhanceReview";
@@ -68,7 +68,7 @@ interface Props {
   /** A connected Kobo that books can be sent to. */
   kobo: {
     name: string;
-    send: (ids: number[]) => Promise<SendOutcome[]>;
+    send: (ids: number[]) => Promise<SendOutcome[] | null>;
   } | null;
   /** Progress of books being sent, by book. */
   statuses: Record<number, SendStatus>;
@@ -95,15 +95,6 @@ interface ManualEdit {
 }
 
 const ORDER: Step[] = ["duplicates", "metadata", "covers", "send"];
-
-const SEND_STAGES: Record<SendStatus["stage"], string> = {
-  queued: "Waiting…",
-  preparing: "Preparing…",
-  converting: "Converting…",
-  copying: "Copying…",
-  sent: "Sent",
-  failed: "Failed",
-};
 
 /** A book's cover, or the stand-in the library shows without one. */
 function CoverImage({ book, src }: { book?: Book; src?: string | null }) {
@@ -305,6 +296,7 @@ export function ImportReview({
     setError(null);
     try {
       const outcomes = await kobo.send(sendList.filter((id) => toSend.has(id)));
+      if (!outcomes) return;
       const failed = outcomes.filter((o) => "Err" in o.result);
       const changes = { ...done, sent: outcomes.length - failed.length };
       setDone(changes);
@@ -827,7 +819,7 @@ export function ImportReview({
                                 : undefined
                             }
                           >
-                            {SEND_STAGES[status.stage]}
+                            {sendStatusLabel(status)}
                           </span>
                         )}
                       </label>

@@ -4,10 +4,13 @@
 
 use std::path::{Path, PathBuf};
 
+use erc_comic::prepare::{Prepared, safe_kobo_component};
 use erc_convert::Converter;
 use erc_device_kobo::{BOOKS_DIR, DisplayMetadata, KoboDevice, device_file_name, replace_book};
 use erc_library::{Book, Format, Library};
 use serde::Serialize;
+
+use crate::comic_send::{ComicTarget, check_space};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case", tag = "stage")]
@@ -21,6 +24,13 @@ pub enum Progress {
         index: usize,
         total: usize,
         file: String,
+    },
+    ProcessingComic {
+        index: usize,
+        total: usize,
+        file: String,
+        page: usize,
+        pages: usize,
     },
     Copying {
         index: usize,
@@ -56,9 +66,6 @@ pub struct SentInfo {
     pub bytes: u64,
 }
 
-/// Comics need preparing for the Kobo's screen first (comics plan, C5–C6).
-const COMICS_NOT_YET: &str = "comics can't be sent to a Kobo yet";
-
 pub const COMIC_SPREADS: &str = "comic_spreads";
 pub const COMIC_CROP: &str = "comic_crop";
 pub const COMIC_AUTOCONTRAST: &str = "comic_autocontrast";
@@ -81,6 +88,20 @@ pub fn device_path_for(source: &Path) -> String {
 
 /// Where a library book goes on the device: `KEpub/<Title> - <Author>.kepub.epub`.
 pub fn device_path_for_book(book: &Book) -> String {
+    if book.format == Format::Cbz {
+        let name = match (&book.series, &book.series_index) {
+            (Some(series), Some(index)) => {
+                let volume = index
+                    .parse::<u32>()
+                    .map_or_else(|_| index.clone(), |n| format!("{n:02}"));
+                format!("{series} v{volume} - {}", book.title)
+            }
+            (Some(series), None) if series != &book.title => format!("{series} - {}", book.title),
+            _ => book.title.clone(),
+        };
+        let name = device_file_name(&safe_kobo_component(&name));
+        return format!("{BOOKS_DIR}/{name}{KEPUB_EXT}");
+    }
     let name = match book.authors.first() {
         Some(author) => format!("{} - {author}", book.title),
         None => book.title.clone(),
@@ -144,12 +165,10 @@ pub fn send_library_books(
     // Copies already on this device, which may have a different file name if
     // the book was renamed since it was sent.
     let existing = library.device_copies(&serial).unwrap_or_default();
+    let comic_target = std::cell::OnceCell::new();
     run_batch(&labels, on_progress, |i, stage| {
         let id = ids[i];
         let result = books[i].clone().and_then(|book| {
-            if book.format == Format::Cbz {
-                return Err(COMICS_NOT_YET.to_owned());
-            }
             if let Some(copy) = existing
                 .iter()
                 .find(|c| c.book_id == id && device.mount().join(&c.device_path).is_file())
@@ -157,14 +176,31 @@ pub fn send_library_books(
                 return Err(format!("already on the device as {}", copy.device_path));
             }
             let dest = device_path_for_book(&book);
-            stage(|index, total, file| Progress::Preparing { index, total, file });
-            let workdir = tempfile::tempdir().map_err(|e| e.to_string())?;
-            let exported = workdir.path().join("book.epub");
-            library.export(id, &exported).map_err(|e| e.to_string())?;
-            let sent = deliver(device, converter, &exported, true, &dest, Some(id), stage)?;
-            library
-                .record_device_copy(id, &serial, &sent.device_path, &sent.content_id)
+            stage(&|index, total, file| Progress::Preparing { index, total, file });
+            if device.mount().join(&dest).exists() {
+                return Err(format!("{dest} is already on the device"));
+            }
+            device.check_writable().map_err(|e| e.to_string())?;
+            let upload = prepare_upload(library, device, converter, &book, &comic_target, stage)?;
+            upload.check_space(device)?;
+            stage(&|index, total, file| Progress::Copying { index, total, file });
+            let sent = device
+                .send_file_for(upload.path(), &dest, Some(id))
                 .map_err(|e| e.to_string())?;
+            library
+                .record_device_copy_profile(
+                    id,
+                    &serial,
+                    &sent.path,
+                    &sent.content_id,
+                    upload.fingerprint(),
+                )
+                .map_err(|e| e.to_string())?;
+            let sent = SentInfo {
+                device_path: sent.path,
+                content_id: sent.content_id,
+                bytes: sent.bytes,
+            };
             Ok(sent)
         });
         SendOutcome {
@@ -197,6 +233,7 @@ pub fn update_on_device(
         })
         .collect();
     let mut writer = device.open_writer(backup_root)?;
+    let comic_target = std::cell::OnceCell::new();
     let outcomes = run_batch(&labels, on_progress, |i, stage| {
         let id = ids[i];
         let result = (|| {
@@ -204,34 +241,32 @@ pub fn update_on_device(
                 .iter()
                 .find(|c| c.book_id == id && device.mount().join(&c.device_path).is_file())
                 .ok_or("not on the device")?;
-            if library.book(id).is_ok_and(|b| b.format == Format::Cbz) {
-                return Err(COMICS_NOT_YET.to_owned());
-            }
-            stage(|index, total, file| Progress::Preparing { index, total, file });
-            let workdir = tempfile::tempdir().map_err(|e| e.to_string())?;
-            let exported = workdir.path().join("book.epub");
-            let book = library.export(id, &exported).map_err(|e| e.to_string())?;
-            stage(|index, total, file| Progress::Converting { index, total, file });
-            let kepub = workdir.path().join(format!("book{KEPUB_EXT}"));
-            converter
-                .convert(&exported, &kepub)
-                .map_err(|e| e.to_string())?;
-            stage(|index, total, file| Progress::Copying { index, total, file });
+            stage(&|index, total, file| Progress::Preparing { index, total, file });
+            let book = library.book(id).map_err(|e| e.to_string())?;
+            let upload = prepare_upload(library, device, converter, &book, &comic_target, stage)?;
+            let bytes = upload.check_space(device)?;
+            stage(&|index, total, file| Progress::Copying { index, total, file });
             let meta = DisplayMetadata {
                 title: book.title.clone(),
                 author: (!book.authors.is_empty()).then(|| book.authors.join(", ")),
                 series: book.series.clone(),
                 series_number: book.series.as_ref().and(book.series_index.clone()),
             };
-            replace_book(&mut writer, &kepub, &copy.device_path, &meta)
+            replace_book(&mut writer, upload.path(), &copy.device_path, &meta)
                 .map_err(|e| e.to_string())?;
             library
-                .record_device_copy(id, &serial, &copy.device_path, &copy.content_id)
+                .record_device_copy_profile(
+                    id,
+                    &serial,
+                    &copy.device_path,
+                    &copy.content_id,
+                    upload.fingerprint(),
+                )
                 .map_err(|e| e.to_string())?;
             Ok(SentInfo {
                 device_path: copy.device_path.clone(),
                 content_id: copy.content_id.clone(),
-                bytes: std::fs::metadata(&kepub).map_or(0, |m| m.len()),
+                bytes,
             })
         })();
         SendOutcome {
@@ -244,19 +279,87 @@ pub fn update_on_device(
     Ok(outcomes)
 }
 
-type Stage = fn(usize, usize, String) -> Progress;
+enum Upload {
+    Comic(Prepared, String),
+    Epub {
+        _work: tempfile::TempDir,
+        path: PathBuf,
+    },
+}
+
+impl Upload {
+    fn path(&self) -> &Path {
+        match self {
+            Self::Comic(prepared, _) => prepared.path(),
+            Self::Epub { path, .. } => path,
+        }
+    }
+
+    fn fingerprint(&self) -> Option<&str> {
+        match self {
+            Self::Comic(_, hash) => Some(hash),
+            Self::Epub { .. } => None,
+        }
+    }
+
+    fn check_space(&self, device: &KoboDevice) -> Result<u64, String> {
+        match self {
+            Self::Comic(prepared, _) => check_space(device, prepared.path()),
+            Self::Epub { path, .. } => Ok(std::fs::metadata(path).map_or(0, |m| m.len())),
+        }
+    }
+}
+
+fn prepare_upload(
+    library: &Library,
+    device: &KoboDevice,
+    converter: &dyn Converter,
+    book: &Book,
+    target: &std::cell::OnceCell<erc_library::Result<ComicTarget>>,
+    stage: &mut dyn FnMut(Stage<'_>),
+) -> Result<Upload, String> {
+    if book.format == Format::Cbz {
+        let target = target
+            .get_or_init(|| ComicTarget::new(library, device))
+            .as_ref()
+            .map_err(ToString::to_string)?;
+        let prepared = target.prepare(library, book, converter, |page, pages| {
+            stage(&|index, total, file| Progress::ProcessingComic {
+                index,
+                total,
+                file,
+                page,
+                pages,
+            });
+        })?;
+        return Ok(Upload::Comic(prepared, target.fingerprint(book)));
+    }
+    let work = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let exported = work.path().join("book.epub");
+    let path = work.path().join(format!("book{KEPUB_EXT}"));
+    library
+        .export(book.id, &exported)
+        .map_err(|e| e.to_string())?;
+    stage(&|index, total, file| Progress::Converting { index, total, file });
+    converter
+        .convert(&exported, &path)
+        .map_err(|e| e.to_string())?;
+    Ok(Upload::Epub { _work: work, path })
+}
+
+type Stage<'a> = &'a dyn Fn(usize, usize, String) -> Progress;
 
 /// Runs `send` for each label, wrapping it with stage and result events.
 fn run_batch(
     labels: &[String],
     mut on_progress: impl FnMut(Progress),
-    mut send: impl FnMut(usize, &mut dyn FnMut(Stage)) -> SendOutcome,
+    mut send: impl FnMut(usize, &mut dyn FnMut(Stage<'_>)) -> SendOutcome,
 ) -> Vec<SendOutcome> {
     let total = labels.len();
     (0..total)
         .map(|i| {
             let (index, file) = (i + 1, labels[i].clone());
-            let outcome = send(i, &mut |stage: Stage| {
+            let outcome = send(i, &mut |stage: Stage<'_>| {
                 on_progress(stage(index, total, file.clone()));
             });
             on_progress(match &outcome.result {
@@ -285,21 +388,21 @@ fn deliver(
     convert: bool,
     dest: &str,
     library_book: Option<i64>,
-    stage: &mut dyn FnMut(Stage),
+    stage: &mut dyn FnMut(Stage<'_>),
 ) -> Result<SentInfo, String> {
     if device.mount().join(dest).exists() {
         return Err(format!("{dest} is already on the device"));
     }
     let workdir = tempfile::tempdir().map_err(|e| e.to_string())?;
     let upload = if convert {
-        stage(|index, total, file| Progress::Converting { index, total, file });
+        stage(&|index, total, file| Progress::Converting { index, total, file });
         let out = workdir.path().join(format!("book{KEPUB_EXT}"));
         converter.convert(epub, &out).map_err(|e| e.to_string())?;
         out
     } else {
         epub.to_path_buf()
     };
-    stage(|index, total, file| Progress::Copying { index, total, file });
+    stage(&|index, total, file| Progress::Copying { index, total, file });
     let sent = device
         .send_file_for(&upload, dest, library_book)
         .map_err(|e| e.to_string())?;

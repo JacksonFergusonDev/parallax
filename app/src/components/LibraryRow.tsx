@@ -2,8 +2,12 @@ import { GeneratedCover } from "./GeneratedCover";
 import { memo } from "react";
 import { coverSrc, type Book } from "../api";
 import { shortDate } from "../device";
-import { progressLabel, type DeviceState, type SendStatus } from "../library";
-import { STATUS_LABEL } from "./BookCard";
+import {
+  progressLabel,
+  sendStatusLabel,
+  type DeviceState,
+  type SendStatus,
+} from "../library";
 
 interface Props {
   book: Book;
@@ -71,7 +75,7 @@ export const LibraryRow = memo(function LibraryRow({
       </span>
       {status ? (
         <span className={`cell end send-${status.stage}`}>
-          {STATUS_LABEL[status.stage]}
+          {sendStatusLabel(status)}
         </span>
       ) : (
         <span className={`cell end kobo-${deviceState ?? "none"}`}>

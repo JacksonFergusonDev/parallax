@@ -11,8 +11,27 @@ import { collator, type Column, type SortValue } from "./sort";
 
 export type SendStatus =
   | { stage: "queued" | "preparing" | "converting" | "copying" }
+  | { stage: "processing_comic"; page: number; pages: number }
   | { stage: "sent" }
   | { stage: "failed"; error: string };
+
+const STATUS_LABEL: Record<
+  Exclude<SendStatus["stage"], "processing_comic">,
+  string
+> = {
+  queued: "Waiting…",
+  preparing: "Preparing…",
+  converting: "Converting…",
+  copying: "Copying…",
+  sent: "Sent",
+  failed: "Failed",
+};
+
+export function sendStatusLabel(status: SendStatus): string {
+  return status.stage === "processing_comic"
+    ? `Page ${status.page} of ${status.pages}`
+    : STATUS_LABEL[status.stage];
+}
 
 export function filterBooks(books: Book[], query: string): Book[] {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -38,7 +57,9 @@ export function applyProgress(
       ? { stage: "sent" }
       : p.stage === "failed"
         ? { stage: "failed", error: p.error }
-        : { stage: p.stage };
+        : p.stage === "processing_comic"
+          ? { stage: p.stage, page: p.page, pages: p.pages }
+          : { stage: p.stage };
   return { ...statuses, [id]: next };
 }
 

@@ -434,3 +434,183 @@ fn rules_group_sent_books_before_and_after_import() {
         [("#Favourites".to_owned(), 1), ("Ann Author".to_owned(), 3)]
     );
 }
+
+fn make_comic(path: &Path) {
+    use std::io::{Cursor, Write};
+    use zip::write::SimpleFileOptions;
+
+    let mut image = Cursor::new(Vec::new());
+    image::GrayImage::from_pixel(1500, 2000, image::Luma([150]))
+        .write_to(&mut image, image::ImageFormat::Png)
+        .unwrap();
+    let mut zip = zip::ZipWriter::new(fs::File::create(path).unwrap());
+    zip.start_file("01.png", SimpleFileOptions::default())
+        .unwrap();
+    zip.write_all(image.get_ref()).unwrap();
+    zip.finish().unwrap();
+}
+
+fn comic_kobo(mount: &Path, model: &str) -> KoboDevice {
+    fs::create_dir_all(mount.join(".kobo")).unwrap();
+    fs::write(
+        mount.join(".kobo/version"),
+        format!("{}{model}", &VERSION[..VERSION.len() - 3]),
+    )
+    .unwrap();
+    empty_database(mount);
+    KoboDevice::open(mount).unwrap()
+}
+
+#[test]
+fn comic_sends_follow_three_kobo_screen_profiles() {
+    use std::io::Read;
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("Storm v02.cbz");
+    make_comic(&source);
+    let mut library = Library::open(dir.path().join("lib")).unwrap();
+    let ImportOutcome::Added { book, .. } = library.import(&source).unwrap() else {
+        panic!()
+    };
+    let converter = Kepubify::locate().unwrap();
+    for (model, expected) in [
+        ("310", (600, 800)),
+        ("376", (1072, 1429)),
+        ("388", (1260, 1680)),
+    ] {
+        let mount = dir.path().join(model);
+        let kobo = comic_kobo(&mount, model);
+        let mut events = Vec::new();
+        let sent = send_library_books(&library, &kobo, &converter, &[book.id], |p| events.push(p));
+        let info = sent[0].result.as_ref().unwrap();
+        assert!(events.iter().any(|p| matches!(
+            p,
+            Progress::ProcessingComic {
+                page: 1,
+                pages: 1,
+                ..
+            }
+        )));
+        let file = fs::File::open(mount.join(&info.device_path)).unwrap();
+        let mut zip = zip::ZipArchive::new(file).unwrap();
+        let mut png = Vec::new();
+        zip.by_name("OEBPS/images/p00001.png")
+            .unwrap()
+            .read_to_end(&mut png)
+            .unwrap();
+        let image = image::load_from_memory(&png).unwrap();
+        assert_eq!((image.width(), image.height()), expected);
+    }
+}
+
+fn send_update_comic_on(mount: &Path, root: &Path) {
+    use erc_core::collections::reconcile_series;
+    use erc_core::device::books_on_device;
+    use erc_core::send::{COMIC_SPREADS, update_on_device};
+    use rusqlite::Connection;
+
+    let kobo = comic_kobo(mount, "388");
+    let source = root.join("Storm! v02.cbz");
+    make_comic(&source);
+    let mut library = Library::open(root.join("lib")).unwrap();
+    let ImportOutcome::Added { book, .. } = library.import(&source).unwrap() else {
+        panic!()
+    };
+    let backups = root.join("backups");
+    let converter = Kepubify::locate().unwrap();
+    let estimate = erc_core::comic_send::estimate(&library, &kobo, &[book.id])
+        .unwrap()
+        .unwrap();
+    assert_eq!((estimate.width, estimate.height), (1264, 1680));
+    assert!(estimate.bytes > 0 && estimate.free > estimate.bytes);
+    let sent = send_library_books(&library, &kobo, &converter, &[book.id], |_| {});
+    let sent = sent[0].result.as_ref().unwrap();
+    assert!(sent.device_path.starts_with("KEpub/Storm_ v02 - "));
+    let db = kobo.db_path();
+    Connection::open(&db).unwrap().execute(
+        "INSERT INTO content (ContentID, ContentType, MimeType, ___UserID, Title, Accessibility, IsDownloaded, ___PercentRead)
+         VALUES (?1, 6, 'application/x-kobo-epub+zip', 'kepub_user', 'Storm', -1, 'true', 55)",
+        [&sent.content_id],
+    ).unwrap();
+    assert_eq!(reconcile_series(&library, &kobo, &backups).unwrap(), 1);
+    assert!(!books_on_device(&library, &kobo).unwrap()[0].stale);
+
+    library
+        .set_setting(COMIC_SPREADS, Some("whole_then_halves"))
+        .unwrap();
+    assert!(books_on_device(&library, &kobo).unwrap()[0].stale);
+    let outcome =
+        update_on_device(&library, &kobo, &converter, &backups, &[book.id], |_| {}).unwrap();
+    assert_eq!(
+        outcome[0].result.as_ref().unwrap().device_path,
+        sent.device_path
+    );
+    assert!(!books_on_device(&library, &kobo).unwrap()[0].stale);
+    let (series, index, series_id, percent): (String, String, String, i64) = Connection::open(&db).unwrap().query_row(
+        "SELECT Series, SeriesNumber, SeriesID, ___PercentRead FROM content WHERE ContentID = ?1",
+        [&sent.content_id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+    ).unwrap();
+    assert_eq!(
+        (series.as_str(), index.as_str(), series_id.as_str(), percent),
+        ("Storm!", "2", "Storm!", 55)
+    );
+    assert!(mount.join(&sent.device_path).is_file());
+    assert!(
+        !fs::read_dir(mount.join("KEpub"))
+            .unwrap()
+            .flatten()
+            .any(|e| e.file_name().to_string_lossy().starts_with('.'))
+    );
+}
+
+#[test]
+fn comic_update_preserves_path_and_progress() {
+    let dir = tempfile::tempdir().unwrap();
+    send_update_comic_on(&dir.path().join("kobo"), dir.path());
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+#[ignore = "mounts a disk image: just test-fat"]
+fn sends_and_updates_a_comic_on_fat32() {
+    use std::process::Command;
+
+    let dir = tempfile::tempdir().unwrap();
+    let image = dir.path().join("comic.dmg");
+    let mount = dir.path().join("kobo");
+    fs::create_dir(&mount).unwrap();
+    let run = |cmd: &str, args: &[&str]| {
+        let out = Command::new(cmd).args(args).output().unwrap();
+        assert!(
+            out.status.success(),
+            "{cmd}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    let image = image.to_str().unwrap();
+    let mount_str = mount.to_str().unwrap();
+    run(
+        "diskutil",
+        &[
+            "image",
+            "create",
+            "blank",
+            "--format",
+            "RAW",
+            "--size",
+            "40m",
+            "--volumeName",
+            "KOBOTEST",
+            "--fs",
+            "MS-DOS",
+            image,
+        ],
+    );
+    run(
+        "hdiutil",
+        &["attach", "-nobrowse", "-mountpoint", mount_str, image],
+    );
+    let result = std::panic::catch_unwind(|| send_update_comic_on(&mount, dir.path()));
+    run("hdiutil", &["detach", mount_str]);
+    result.unwrap();
+}
