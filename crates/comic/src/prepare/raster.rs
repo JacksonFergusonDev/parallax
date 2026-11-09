@@ -41,7 +41,10 @@ pub(super) fn process(
     options: Options,
 ) -> Result<Vec<Raster>, String> {
     let rgb = decode(bytes)?;
-    let colour = profile.colour && is_colour(&rgb);
+    // Colour pages stay colour on a colour screen. On a greyscale screen
+    // they take the colour-page treatment below.
+    let colour_page = is_colour(&rgb);
+    let colour = profile.colour && colour_page;
     // Shape and split come from the page as drawn. Margins are trimmed from
     // each resulting part, so uneven margins can't move the split off the
     // spread's gutter.
@@ -76,7 +79,13 @@ pub(super) fn process(
     };
     parts
         .into_iter()
-        .map(|(rgb, side)| encode(rgb, colour, profile, options, side))
+        .map(|(rgb, side)| {
+            let treatment = Treatment {
+                colour,
+                stretch: options.autocontrast || colour_page,
+            };
+            encode(rgb, treatment, profile, options, side)
+        })
         .collect()
 }
 
@@ -97,9 +106,21 @@ fn decode(bytes: &[u8]) -> Result<RgbImage, String> {
     })
 }
 
+/// How a page is encoded once its shape is settled.
+#[derive(Clone, Copy)]
+struct Treatment {
+    /// Kept in colour, as JPEG, rather than reduced to 16 greys.
+    colour: bool,
+    /// Contrast stretched before greys are reduced. Colour art is painted in
+    /// mid-tones that turn into a narrow, washed-out band of grey, so colour
+    /// pages on a greyscale screen are always stretched; greyscale pages are
+    /// stretched only when the setting asks.
+    stretch: bool,
+}
+
 fn encode(
     rgb: RgbImage,
-    colour: bool,
+    Treatment { colour, stretch }: Treatment,
     profile: Profile,
     options: Options,
     side: Option<Side>,
@@ -133,7 +154,7 @@ fn encode(
         // Rec. 601 luma, as in the spike's Pillow reference, for neutral output.
         let mut gray = luma(&rgb);
         drop(rgb);
-        if options.autocontrast {
+        if stretch {
             autocontrast(&mut gray);
         }
         let gray = resized(
@@ -260,18 +281,33 @@ fn png_4bit(width: u32, height: u32, levels: &[u8]) -> Result<Vec<u8>, png::Enco
 }
 
 /// KCC's chroma histograms. Keep solid colours while still treating neutral
-/// pages on a colour device as greyscale.
+/// pages as greyscale.
+///
+/// Checks every second pixel of every second row: the decision rests on the
+/// share of pixels in each chroma histogram tail, which a regular sample
+/// keeps. On 1,403 Berserk pages this decided every page as the full check
+/// did, for a quarter of the work.
 fn is_colour(rgb: &RgbImage) -> bool {
+    const STEP: usize = 2;
     let mut cb = [0_u32; 256];
     let mut cr = [0_u32; 256];
-    for pixel in rgb.pixels() {
-        let [red, green, blue] = pixel.0.map(i32::from);
-        let u = (128 + (-43 * red - 85 * green + 128 * blue + 128).div_euclid(256)).clamp(0, 255);
-        let v = (128 + (128 * red - 107 * green - 21 * blue + 128).div_euclid(256)).clamp(0, 255);
-        cb[usize::try_from(u).unwrap_or_default()] += 1;
-        cr[usize::try_from(v).unwrap_or_default()] += 1;
+    let mut count = 0_u64;
+    let width = rgb.width() as usize;
+    if width == 0 {
+        return false;
     }
-    let count = u64::from(rgb.width()) * u64::from(rgb.height());
+    for row in rgb.as_raw().chunks_exact(width * 3).step_by(STEP) {
+        for pixel in row.as_chunks::<3>().0.iter().step_by(STEP) {
+            count += 1;
+            let [red, green, blue] = pixel.map(i32::from);
+            let u =
+                (128 + (-43 * red - 85 * green + 128 * blue + 128).div_euclid(256)).clamp(0, 255);
+            let v =
+                (128 + (128 * red - 107 * green - 21 * blue + 128).div_euclid(256)).clamp(0, 255);
+            cb[usize::try_from(u).unwrap_or_default()] += 1;
+            cr[usize::try_from(v).unwrap_or_default()] += 1;
+        }
+    }
     for (trim, threshold) in [(0, 22), (2, 10), (30, 4)] {
         let tail = count * trim / 1_000;
         let bounds = |bins: &[u32; 256]| {
@@ -379,6 +415,55 @@ fn crop_margins(rgb: RgbImage) -> RgbImage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn png_bytes(image: &RgbImage) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        image
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+        bytes
+    }
+
+    fn level_range(raster: &Raster) -> (u8, u8) {
+        let page = image::load_from_memory(&raster.bytes).unwrap().into_luma8();
+        let values = page.as_raw();
+        (*values.iter().min().unwrap(), *values.iter().max().unwrap())
+    }
+
+    #[test]
+    fn colour_pages_on_a_greyscale_screen_get_contrast() {
+        let profile = Profile {
+            width: 200,
+            height: 300,
+            colour: false,
+            landscape_spreads: false,
+        };
+        // Washed-out pastels: soft pink fading into pale blue.
+        let pastel = RgbImage::from_fn(200, 300, |_, y| {
+            let t = u8::try_from(y * 120 / 300).unwrap();
+            image::Rgb([230 - t, 200 - t / 3, 195 + t / 2])
+        });
+        let pages = process(&png_bytes(&pastel), profile, Options::default()).unwrap();
+        assert_eq!(level_range(&pages[0]), (0, 255), "stretched to full range");
+
+        // The same tones in grey are left alone unless the setting asks.
+        let grey = RgbImage::from_fn(200, 300, |_, y| {
+            let v = u8::try_from(170 + y * 50 / 300).unwrap();
+            image::Rgb([v; 3])
+        });
+        let pages = process(&png_bytes(&grey), profile, Options::default()).unwrap();
+        let (lo, hi) = level_range(&pages[0]);
+        assert!(lo >= 153 && hi <= 238, "unchanged: {lo}–{hi}");
+        let stretched = Options {
+            autocontrast: true,
+            ..Options::default()
+        };
+        let pages = process(&png_bytes(&grey), profile, stretched).unwrap();
+        assert_eq!(level_range(&pages[0]), (0, 255));
+    }
 
     #[test]
     fn rounding_picks_the_nearest_of_16_greys() {

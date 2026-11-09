@@ -63,14 +63,9 @@ impl ComicTarget {
     /// known model's screen counts; otherwise only the settings do.
     pub fn fingerprint(&self, book: &Book) -> String {
         let options = self.options(book);
-        // Revision 3 changed trimming (after splitting) and contrast
-        // (percentile cutoffs); other output is unchanged, so only copies
-        // made with those on need updating.
-        let revision = if options.crop || options.autocontrast {
-            "comic-kepub-3"
-        } else {
-            "comic-kepub-2"
-        };
+        // Revision 4: colour pages on greyscale screens are stretched for
+        // contrast, so every earlier copy may differ.
+        let revision = "comic-kepub-4";
         let encoded = if self.source == ScreenSource::Model {
             serde_json::to_vec(&(revision, self.profile, options))
         } else {
