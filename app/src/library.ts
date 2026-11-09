@@ -80,8 +80,12 @@ export function summarizeImport(results: ImportResult[]): string {
   let duplicates = 0;
   const failed: string[] = [];
   for (const r of results) {
-    if ("Err" in r.outcome) failed.push(r.path.split(/[/\\]/).pop() ?? r.path);
-    else if (r.outcome.Ok.kind === "already_in_library") existing++;
+    if ("Err" in r.outcome) {
+      const name = r.path.split(/[/\\]/).pop() ?? r.path;
+      failed.push(
+        BOOK_ARCHIVE.test(name) ? `${name} (${r.outcome.Err})` : name,
+      );
+    } else if (r.outcome.Ok.kind === "already_in_library") existing++;
     else {
       added++;
       if (r.outcome.Ok.possible_duplicate_of !== null) duplicates++;
@@ -162,8 +166,10 @@ export const fromForm = (f: EditForm): MetadataEdit => ({
       : null,
 });
 
-/** Amazon formats are converted to EPUB and CBR/CB7 comics to CBZ when
- * they're added. */
+const ARCHIVE_EXTENSIONS = ["zip", "rar", "7z"];
+const BOOK_ARCHIVE = new RegExp(`\\.(${ARCHIVE_EXTENSIONS.join("|")})$`, "i");
+
+/** Files accepted by Add Books, including archives containing books. */
 export const BOOK_EXTENSIONS = [
   "epub",
   "kepub",
@@ -175,6 +181,7 @@ export const BOOK_EXTENSIONS = [
   "cbz",
   "cbr",
   "cb7",
+  ...ARCHIVE_EXTENSIONS,
 ];
 
 const BOOK_FILE = new RegExp(`\\.(${BOOK_EXTENSIONS.join("|")})$`, "i");

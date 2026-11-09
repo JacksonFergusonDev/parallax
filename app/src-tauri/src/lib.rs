@@ -14,7 +14,7 @@ use parallax_core::device::{CatalogBook, OnDevice, RemoveOutcome, device_catalog
 use parallax_core::duplicates::{DeviceGroup, LibraryGroup};
 use parallax_core::enhance::{Accepted, DeviceClues, Proposal};
 use parallax_core::import::DeviceImportOutcome;
-use parallax_core::ingest::{import_comic_folder, import_file};
+use parallax_core::ingest::{import_archive, import_comic_folder, import_file, is_book_archive};
 use parallax_core::rules::PlannedCollection;
 use parallax_core::rules::Trigger;
 use parallax_core::send::{SendOutcome, send_library_books, update_on_device};
@@ -239,24 +239,33 @@ async fn library_import(
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let total = paths.len();
-        let outcomes = paths
-            .into_iter()
-            .enumerate()
-            .map(|(index, path)| {
-                report_books(
-                    progress.as_ref(),
-                    index,
-                    total,
-                    path.file_name().and_then(|n| n.to_str()),
+        let mut outcomes = Vec::new();
+        for (index, path) in paths.into_iter().enumerate() {
+            report_books(
+                progress.as_ref(),
+                index,
+                total,
+                path.file_name().and_then(|n| n.to_str()),
+            );
+            let outcome = if comic_folder == Some(true) {
+                import_comic_folder(&mut lib, &path).map_err(err)
+            } else if is_book_archive(&path) {
+                outcomes.extend(
+                    import_archive(&mut lib, &amazon, &path, |name| {
+                        report_books(progress.as_ref(), index, total, Some(name));
+                    })
+                    .into_iter()
+                    .map(|(path, outcome)| ImportResult {
+                        path,
+                        outcome: outcome.map_err(err),
+                    }),
                 );
-                let outcome = if comic_folder == Some(true) {
-                    import_comic_folder(&mut lib, &path).map_err(err)
-                } else {
-                    import_file(&mut lib, &amazon, &path).map_err(err)
-                };
-                ImportResult { path, outcome }
-            })
-            .collect();
+                continue;
+            } else {
+                import_file(&mut lib, &amazon, &path).map_err(err)
+            };
+            outcomes.push(ImportResult { path, outcome });
+        }
         report_books(progress.as_ref(), total, total, None);
         Ok(outcomes)
     })

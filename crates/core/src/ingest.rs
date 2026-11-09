@@ -1,11 +1,14 @@
 //! Adding a book file to the library, whatever its format. The library stores
 //! EPUBs, so Amazon books are converted on the way in.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use parallax_comic::{FolderKind, chapters_to_cbz, classify_folder, folder_to_cbz};
 use parallax_convert::{Converter, amazon};
 use parallax_library::{ImportOutcome, Library};
+
+mod archive;
+pub use archive::is_book_archive;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -17,6 +20,28 @@ pub enum Error {
     Library(#[from] parallax_library::Error),
     #[error(transparent)]
     Convert(#[from] parallax_convert::Error),
+    #[error(transparent)]
+    Archive(#[from] std::io::Error),
+}
+
+/// Imports each supported book in an archive. The returned paths identify
+/// members for reporting. Each book commits independently, so an unreadable
+/// book or a later archive error doesn't discard earlier imports.
+pub fn import_archive(
+    library: &mut Library,
+    converter: &dyn Converter,
+    path: &Path,
+    mut on_book: impl FnMut(&str),
+) -> Vec<(PathBuf, Result<ImportOutcome, Error>)> {
+    let mut outcomes = Vec::new();
+    let result = archive::visit(path, &mut on_book, |name, staged| {
+        let outcome = import_file(library, converter, staged);
+        outcomes.push((path.join(name), outcome));
+    });
+    if let Err(error) = result {
+        outcomes.push((path.to_path_buf(), Err(error.into())));
+    }
+    outcomes
 }
 
 /// Imports `path`, using `converter` to make an EPUB if it's an Amazon book.

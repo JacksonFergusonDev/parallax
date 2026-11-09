@@ -318,7 +318,7 @@ describe("book details", () => {
 });
 
 describe("isBookFile", () => {
-  it("accepts EPUBs and Amazon formats, in any case", () => {
+  it("accepts books and book archives, in any case", () => {
     for (const name of [
       "a.epub",
       "a.kepub",
@@ -327,6 +327,12 @@ describe("isBookFile", () => {
       "a.mobi",
       "a.prc",
       "a.kfx",
+      "a.cbz",
+      "a.cbr",
+      "a.cb7",
+      "a.ZIP",
+      "a.rar",
+      "a.7z",
     ]) {
       expect(isBookFile(`/books/${name}`)).toBe(true);
     }

@@ -572,7 +572,7 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
       if (files.length === 0) {
         setNotice({
           kind: "error",
-          text: "Choose an EPUB, DRM-free Kindle book, or comic archive.",
+          text: "Choose an EPUB, Kindle book, comic, or ZIP, RAR or 7z archive.",
         });
         return;
       }
@@ -755,7 +755,7 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
   const chooseFiles = useCallback(async () => {
     const picked = await open({
       multiple: true,
-      filters: [{ name: "Books", extensions: BOOK_EXTENSIONS }],
+      filters: [{ name: "Books and archives", extensions: BOOK_EXTENSIONS }],
     });
     if (picked) doImport(Array.isArray(picked) ? picked : [picked]);
   }, [doImport]);
@@ -1331,7 +1331,8 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
                   <ShelfArt />
                   <p className="dropzone-title">Your shelves are empty</p>
                   <p className="muted">
-                    Drop EPUBs, DRM-free Kindle books or comic archives here.
+                    Drop EPUBs, DRM-free Kindle books, comics, or archives of
+                    books here.
                   </p>
                   <div className="dropzone-actions">
                     <button
@@ -1501,7 +1502,10 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
               </button>
             </span>
           ) : notice ? (
-            <span className={`notice notice-${notice.kind}`}>
+            <span
+              className={`notice notice-${notice.kind}`}
+              title={notice.text}
+            >
               {notice.text}
             </span>
           ) : (

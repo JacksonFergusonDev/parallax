@@ -8,7 +8,7 @@ Licensed under GPLv3. Device logic is ported from [calibre](https://calibre-eboo
 
 ## Using it
 
-1. Drop EPUBs, DRM-free Kindle books (AZW3, MOBI, AZW, PRC, KFX), or comic archives (CBZ, CBR, CB7) onto the window (or **Add books…**, ⌘O). Edit title, authors, series, tags and cover in the side panel. Your original files are never modified.
+1. Drop EPUBs, DRM-free Kindle books (AZW3, MOBI, AZW, PRC, KFX), comic archives (CBZ, CBR, CB7), or ZIP, RAR and 7z bundles of books onto the window (or **Add Books…**, ⌘O). Bundles can contain folders of books. Edit title, authors, series, tags and cover in the side panel. Parallax leaves the original files untouched.
 2. Connect your Kobo by USB and tap **Connect** on its screen.
 3. Select books and **Send to Kobo**, optionally straight into a collection. Then **Eject Kobo** and unplug it so it imports them.
 4. **Read** in the side panel opens a book in its own window and remembers where you stopped. **Search** (⌘F) finds a word or line in it. Select text to highlight it or add a note, listed under the pen button with **Copy all**; footnotes open over the page; **Back** (⌘[) returns after a jump; the speaker button reads aloud; **Aa** sets theme, size, pages or scrolling, line length, margins and spacing. Books are shown with their scripts blocked and no internet access.

@@ -8,6 +8,7 @@ license.workspace = true
 
 [dependencies]
 chrono.workspace = true
+compress-tools.workspace = true
 parallax-comic.workspace = true
 parallax-convert.workspace = true
 parallax-device.workspace = true
@@ -23,8 +24,6 @@ serde_json.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
-
-[dev-dependencies]
 zip.workspace = true
 
 [lints]

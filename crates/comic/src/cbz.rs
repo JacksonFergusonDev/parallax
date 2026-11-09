@@ -24,20 +24,25 @@ pub enum Format {
     SevenZip,
 }
 
+impl Format {
+    pub fn from_header(head: &[u8]) -> Option<Self> {
+        if head.starts_with(b"PK\x03\x04") || head.starts_with(b"PK\x05\x06") {
+            Some(Self::Zip)
+        } else if head.starts_with(b"Rar!\x1a\x07") {
+            Some(Self::Rar)
+        } else if head.starts_with(b"7z\xbc\xaf\x27\x1c") {
+            Some(Self::SevenZip)
+        } else {
+            None
+        }
+    }
+}
+
 pub fn sniff(path: &Path) -> Result<Format> {
     let mut head = [0u8; 8];
     let mut file = File::open(path).map_err(io(path))?;
     let n = file.read(&mut head).map_err(io(path))?;
-    let head = &head[..n];
-    if head.starts_with(b"PK\x03\x04") || head.starts_with(b"PK\x05\x06") {
-        Ok(Format::Zip)
-    } else if head.starts_with(b"Rar!\x1a\x07") {
-        Ok(Format::Rar)
-    } else if head.starts_with(b"7z\xbc\xaf\x27\x1c") {
-        Ok(Format::SevenZip)
-    } else {
-        Err(Error::NotAnArchive(path.to_path_buf()))
-    }
+    Format::from_header(&head[..n]).ok_or_else(|| Error::NotAnArchive(path.to_path_buf()))
 }
 
 /// A page: its name inside the archive and its uncompressed size.
