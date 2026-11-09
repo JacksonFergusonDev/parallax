@@ -193,6 +193,7 @@ describe("library toolbar", () => {
         (el) => el.textContent,
       ),
     ).toEqual([
+      "Add comic folder…",
       "Find duplicates…",
       "Check library…",
       "Revert changes…",

@@ -49,6 +49,7 @@ import {
   BOOK_EXTENSIONS,
   isBookFile,
   summarizeImport,
+  seriesGroups,
   type SendStatus,
 } from "./library";
 import {
@@ -154,6 +155,7 @@ export default function App() {
   const [naming, setNaming] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [query, setQuery] = useState("");
+  const [bySeries, setBySeries] = useState(false);
   const [filter, setFilter] = useState<LibraryFilter>(NO_FILTER);
   /** Collections of each book on the Kobo, by content id. */
   const [shelvesByContentId, setShelvesByContentId] = useState<
@@ -365,18 +367,18 @@ export default function App() {
   );
 
   const doImport = useCallback(
-    async (paths: string[]) => {
-      const files = paths.filter(isBookFile);
+    async (paths: string[], comicFolder = false) => {
+      const files = comicFolder ? paths : paths.filter(isBookFile);
       if (files.length === 0) {
         setNotice({
           kind: "error",
-          text: "Only EPUB and Kindle books can be added.",
+          text: "Choose an EPUB, DRM-free Kindle book, or comic archive.",
         });
         return;
       }
       setBusy("importing");
       try {
-        const results = await importBooks(files);
+        const results = await importBooks(files, comicFolder);
         setNotice({ kind: "info", text: summarizeImport(results) });
         await refresh();
         void reviewAdded(addedIds(results), failedFiles(results));
@@ -479,6 +481,17 @@ export default function App() {
       ),
     [searched, shownFilter, facts, shownSort, sortColumns],
   );
+  const groups = useMemo(
+    () => (bySeries ? seriesGroups(visible) : []),
+    [bySeries, visible],
+  );
+  const selectionOrder = useMemo(
+    () =>
+      (bySeries ? groups.flatMap((group) => group.members) : visible).map(
+        (b) => b.id,
+      ),
+    [bySeries, groups, visible],
+  );
   const changeFilter = (next: LibraryFilter) => {
     setFilter(next);
     // Remove and Send act on the selection, so it mustn't hold hidden books.
@@ -517,16 +530,8 @@ export default function App() {
 
   const onSelect = useCallback(
     (id: number, e: React.MouseEvent) =>
-      setSelected((prev) =>
-        clickSelect(
-          prev,
-          id,
-          visible.map((b) => b.id),
-          anchor,
-          e,
-        ),
-      ),
-    [visible],
+      setSelected((prev) => clickSelect(prev, id, selectionOrder, anchor, e)),
+    [selectionOrder],
   );
 
   const chooseFiles = useCallback(async () => {
@@ -536,6 +541,14 @@ export default function App() {
     });
     if (picked) doImport(Array.isArray(picked) ? picked : [picked]);
   }, [doImport]);
+
+  const chooseComicFolder = async () => {
+    const folder = await open({
+      directory: true,
+      title: "Choose one comic volume",
+    });
+    if (typeof folder === "string") void doImport([folder], true);
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -797,6 +810,17 @@ export default function App() {
     },
   });
 
+  const renderCard = (b: Book) => (
+    <BookCard
+      key={b.id}
+      book={b}
+      selected={selected.has(b.id)}
+      deviceState={deviceState(b)}
+      status={statuses[b.id]}
+      onSelect={onSelect}
+    />
+  );
+
   const sentThisSession = Object.values(statuses).some(
     (s) => s.stage === "sent",
   );
@@ -932,6 +956,11 @@ export default function App() {
                     icon={<SlidersHorizontal />}
                     items={[
                       {
+                        label: "Add comic folder…",
+                        onPick: () => void chooseComicFolder(),
+                        disabled: busy !== null,
+                      },
+                      {
                         label: "Find duplicates…",
                         onPick: findDuplicates,
                       },
@@ -960,6 +989,13 @@ export default function App() {
                   {selected.size > 0 && (
                     <span className="muted">{selected.size} selected</span>
                   )}
+                  <button
+                    className="group-series"
+                    aria-pressed={bySeries}
+                    onClick={() => setBySeries((value) => !value)}
+                  >
+                    Group by series
+                  </button>
                   <ViewControls
                     mode={mode}
                     onMode={setMode}
@@ -988,10 +1024,16 @@ export default function App() {
                   <ShelfArt />
                   <p className="dropzone-title">Your shelves are empty</p>
                   <p className="muted">
-                    Drop EPUB or DRM-free Kindle books here. They're added to
-                    your library, ready to edit and send to your Kobo.
+                    Drop EPUBs, DRM-free Kindle books or comic archives here.
                   </p>
                   <div className="dropzone-actions">
+                    <button
+                      className="secondary"
+                      onClick={() => void chooseComicFolder()}
+                      disabled={busy !== null}
+                    >
+                      Add comic folder…
+                    </button>
                     <button className="secondary" onClick={chooseFiles}>
                       Choose files…
                     </button>
@@ -1028,19 +1070,18 @@ export default function App() {
                     </>
                   )}
                 </div>
+              ) : bySeries && mode === "grid" ? (
+                groups.map(({ name, members }) => (
+                  <section className="series-shelf" key={name ?? ""}>
+                    <h2>
+                      {name ?? "Without a series"}{" "}
+                      <span className="muted">· {members.length}</span>
+                    </h2>
+                    <div className="grid">{members.map(renderCard)}</div>
+                  </section>
+                ))
               ) : mode === "grid" ? (
-                <div className="grid">
-                  {visible.map((b) => (
-                    <BookCard
-                      key={b.id}
-                      book={b}
-                      selected={selected.has(b.id)}
-                      deviceState={deviceState(b)}
-                      status={statuses[b.id]}
-                      onSelect={onSelect}
-                    />
-                  ))}
-                </div>
+                <div className="grid">{visible.map(renderCard)}</div>
               ) : (
                 <div
                   className="book-list"
@@ -1050,16 +1091,29 @@ export default function App() {
                   }
                 >
                   <SortHeader columns={columns} sort={sort} onSort={setSort} />
-                  {visible.map((b) => (
-                    <LibraryRow
-                      key={b.id}
-                      book={b}
-                      selected={selected.has(b.id)}
-                      deviceState={deviceState(b)}
-                      status={statuses[b.id]}
-                      onSelect={onSelect}
-                    />
-                  ))}
+                  {(bySeries ? groups : [{ name: null, members: visible }]).map(
+                    ({ name, members }) => (
+                      <div role="rowgroup" key={name ?? ""}>
+                        {bySeries && (
+                          <div role="row" className="series-row">
+                            <span role="cell" aria-colspan={columns.length}>
+                              {name ?? "Without a series"} · {members.length}
+                            </span>
+                          </div>
+                        )}
+                        {members.map((b) => (
+                          <LibraryRow
+                            key={b.id}
+                            book={b}
+                            selected={selected.has(b.id)}
+                            deviceState={deviceState(b)}
+                            status={statuses[b.id]}
+                            onSelect={onSelect}
+                          />
+                        ))}
+                      </div>
+                    ),
+                  )}
                 </div>
               )}
             </div>

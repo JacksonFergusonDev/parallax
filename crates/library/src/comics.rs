@@ -288,6 +288,19 @@ impl Library {
         })
     }
 
+    /// Counts spreads from the stored page headers.
+    pub fn comic_spreads(&self, id: i64) -> Result<usize> {
+        let book = self.book(id)?;
+        if book.format != Format::Cbz {
+            return Err(Error::NotAComic(id));
+        }
+        let mut comic = Cbz::open(&self.book_file(id))?;
+        Ok(erc_comic::shape::Shapes::count(
+            (0..comic.pages().len()).map(|i| comic.page_dimensions(i).ok().flatten()),
+        )
+        .spreads)
+    }
+
     /// Changes whether a comic is manga or a Western comic, and which way its
     /// pages turn.
     pub fn set_comic_kind(&mut self, id: i64, kind: Kind, direction: Direction) -> Result<Book> {

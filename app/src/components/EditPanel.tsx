@@ -1,8 +1,10 @@
 import { GeneratedCover } from "./GeneratedCover";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   coverSrc,
+  comicSpreads,
+  setComicKind,
   openReader,
   resetCover,
   setCoverFromFile,
@@ -76,17 +78,43 @@ function Description({ html }: { html: string }) {
 
 /** The book's details that aren't edited here; missing ones are left out. */
 function Facts({ book }: { book: Book }) {
+  const comic = book.format === "cbz";
+  const [spreads, setSpreads] = useState<number | null>(null);
+  useEffect(() => {
+    if (!comic) return;
+    let active = true;
+    comicSpreads(book.id).then(
+      (count) => {
+        if (active) setSpreads(count);
+      },
+      () => {},
+    );
+    return () => {
+      active = false;
+    };
+  }, [book.id, comic]);
   const facts: [string, string | null | undefined, string?][] = [
     ["Published", book.published && publishedLabel(book.published)],
     ["Publisher", book.publisher],
     [
       "Pages",
       pagesLabel(book),
-      book.pages_estimated
-        ? "Estimated from the word count"
-        : "From the print edition",
+      comic
+        ? "Pages in the archive"
+        : book.pages_estimated
+          ? "Estimated from the word count"
+          : "From the print edition",
     ],
-    ["Words", book.words?.toLocaleString()],
+    ["Words", comic ? null : book.words?.toLocaleString()],
+    ["Spreads", spreads?.toLocaleString()],
+    [
+      "Direction",
+      comic
+        ? book.direction === "rtl"
+          ? "Right to left"
+          : "Left to right"
+        : null,
+    ],
     ["Language", book.language && languageLabel(book.language)],
     ["ISBN", isbnOf(book)],
     ["Last read", book.reading?.last_read && shortDate(book.reading.last_read)],
@@ -120,6 +148,7 @@ export function EditPanel({
   onClose,
 }: Props) {
   const [form, setForm] = useState<EditForm>(() => toForm(book));
+  const [changingKind, setChangingKind] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [picker, setPicker] = useState(false);
@@ -144,6 +173,21 @@ export function EditPanel({
       setError(String(err));
     } finally {
       setCoverBusy(false);
+    }
+  };
+
+  const changeKind = async (
+    kind: Book["kind"],
+    direction: Book["direction"],
+  ) => {
+    setChangingKind(true);
+    setError(null);
+    try {
+      onChanged(await setComicKind(book.id, kind, direction));
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setChangingKind(false);
     }
   };
 
@@ -278,6 +322,42 @@ export function EditPanel({
         />
       )}
       <form onSubmit={save} className="form">
+        {book.format === "cbz" && (
+          <div className="row">
+            <label className="grow">
+              Kind
+              <select
+                value={book.kind}
+                disabled={changingKind || saving}
+                onChange={(e) =>
+                  void changeKind(
+                    e.target.value as Book["kind"],
+                    book.direction,
+                  )
+                }
+              >
+                <option value="comic">Comic</option>
+                <option value="manga">Manga</option>
+              </select>
+            </label>
+            <label className="grow">
+              Direction
+              <select
+                value={book.direction}
+                disabled={changingKind || saving}
+                onChange={(e) =>
+                  void changeKind(
+                    book.kind,
+                    e.target.value as Book["direction"],
+                  )
+                }
+              >
+                <option value="ltr">Left to right</option>
+                <option value="rtl">Right to left</option>
+              </select>
+            </label>
+          </div>
+        )}
         <label>
           Title
           <input {...field("title")} required />
@@ -289,7 +369,9 @@ export function EditPanel({
           <input {...field("authors")} />
         </label>
         <fieldset className="contributors">
-          <legend>Contributors</legend>
+          <legend>
+            {book.format === "cbz" ? "Art and other credits" : "Contributors"}
+          </legend>
           {form.contributors.map((c, i) => (
             <div key={i} className="contributor">
               <input
@@ -452,7 +534,7 @@ export function EditPanel({
           <button
             type="submit"
             className="primary"
-            disabled={!dirty || saving || !form.title.trim()}
+            disabled={!dirty || saving || changingKind || !form.title.trim()}
           >
             {saving ? "Saving…" : "Save"}
           </button>

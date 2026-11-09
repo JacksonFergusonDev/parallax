@@ -10,6 +10,8 @@ const COMMANDS: &[&str] = &[
     "library_import",
     "library_review",
     "library_update",
+    "library_set_comic_kind",
+    "library_comic_spreads",
     "library_remove",
     "library_snapshots",
     "library_restore",

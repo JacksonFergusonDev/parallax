@@ -17,6 +17,8 @@
     "allow-library-import",
     "allow-library-review",
     "allow-library-update",
+    "allow-library-set-comic-kind",
+    "allow-library-comic-spreads",
     "allow-library-remove",
     "allow-library-snapshots",
     "allow-library-restore",

@@ -126,6 +126,34 @@ books.push({
   modified_at: "2026-09-01T00:00:00Z",
 });
 
+for (const [series, volume, kind] of [
+  ["The Glass Harbor", "1", "manga"],
+  ["The Glass Harbor", "2", "manga"],
+  ["Signal Fires", "1", "comic"],
+] as const) {
+  const id = books.length + 1;
+  const title = `${series} Vol. ${volume}`;
+  books.push({
+    ...books[0],
+    id,
+    title,
+    series,
+    series_index: volume,
+    kind,
+    format: "cbz",
+    direction: kind === "manga" ? "rtl" : "ltr",
+    pages: 219,
+    pages_estimated: false,
+    words: null,
+    identifiers: [],
+    description: null,
+    original_name: `${title}.cbz`,
+    cover: coverSvg(title, "Avery Park", id),
+    authors: ["Avery Park"],
+    contributors: [{ name: "Casey Lin", role: "art" }],
+  });
+}
+
 const device: DeviceInfo = {
   kind: "kobo",
   model: "Kobo Libra 2",
@@ -470,6 +498,19 @@ export function installMockBackend(label = "main") {
             result: { Ok: {} },
           }));
         }
+        case "library_comic_spreads":
+          return 9;
+        case "library_set_comic_kind":
+          books = books.map((b) =>
+            b.id === a.id
+              ? {
+                  ...b,
+                  kind: a.kind as Book["kind"],
+                  direction: a.direction as Book["direction"],
+                }
+              : b,
+          );
+          return books.find((b) => b.id === a.id);
         case "library_update": {
           const edit = a.edit as MetadataEdit;
           books = books.map((b) =>

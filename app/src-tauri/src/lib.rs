@@ -14,7 +14,7 @@ use erc_core::device::{OnDevice, RemoveOutcome};
 use erc_core::duplicates::{DeviceGroup, LibraryGroup};
 use erc_core::enhance::{Accepted, DeviceClues, Proposal};
 use erc_core::import::DeviceImportOutcome;
-use erc_core::ingest::import_file;
+use erc_core::ingest::{import_comic_folder, import_file};
 use erc_core::rules::PlannedCollection;
 use erc_core::rules::Trigger;
 use erc_core::send::{SendOutcome, send_library_books, update_on_device};
@@ -203,6 +203,7 @@ fn library_list(state: State<AppState>) -> CmdResult<Vec<LibraryBook>> {
 async fn library_import(
     state: State<'_, AppState>,
     paths: Vec<PathBuf>,
+    comic_folder: Option<bool>,
 ) -> CmdResult<Vec<ImportResult>> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -213,7 +214,11 @@ async fn library_import(
         Ok(paths
             .into_iter()
             .map(|path| ImportResult {
-                outcome: import_file(&mut lib, &amazon, &path).map_err(err),
+                outcome: if comic_folder == Some(true) {
+                    import_comic_folder(&mut lib, &path).map_err(err)
+                } else {
+                    import_file(&mut lib, &amazon, &path).map_err(err)
+                },
                 path,
             })
             .collect())
@@ -227,6 +232,32 @@ fn library_update(state: State<AppState>, id: i64, edit: MetadataEdit) -> CmdRes
     let mut lib = state.library();
     let book = lib.update(id, &edit).map_err(err)?;
     Ok(with_cover(&lib, book))
+}
+
+#[tauri::command]
+fn library_set_comic_kind(
+    state: State<AppState>,
+    id: i64,
+    kind: erc_library::Kind,
+    direction: erc_library::Direction,
+) -> CmdResult<LibraryBook> {
+    let mut lib = state.library();
+    let book = lib.set_comic_kind(id, kind, direction).map_err(err)?;
+    Ok(with_cover(&lib, book))
+}
+
+#[tauri::command]
+async fn library_comic_spreads(state: State<'_, AppState>, id: i64) -> CmdResult<usize> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .comic_spreads(id)
+            .map_err(err)
+    })
+    .await
+    .map_err(err)?
 }
 
 #[tauri::command]
@@ -1362,6 +1393,8 @@ pub fn run() {
             library_import,
             library_review,
             library_update,
+            library_set_comic_kind,
+            library_comic_spreads,
             library_remove,
             library_snapshots,
             library_restore,

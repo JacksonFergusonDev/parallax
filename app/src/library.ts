@@ -186,6 +186,25 @@ export const defaultOrder = (books: Book[]) =>
       collator.compare(titleKey(a.title), titleKey(b.title)) || a.id - b.id,
   );
 
+/** Group in current shelf order, with numbered volumes in reading order. */
+export function seriesGroups(books: Book[]) {
+  const groups = new Map<string | null, Book[]>();
+  for (const book of books) {
+    const name = book.series || null;
+    const group = groups.get(name);
+    if (group) group.push(book);
+    else groups.set(name, [book]);
+  }
+  const volume = (book: Book) => {
+    const n = parseFloat(book.series_index ?? "");
+    return Number.isFinite(n) ? n : Number.MAX_VALUE;
+  };
+  return [...groups].map(([name, members]) => ({
+    name,
+    members: name ? members.sort((a, b) => volume(a) - volume(b)) : members,
+  }));
+}
+
 /** On the Kobo: "stale" when edited since it was sent. */
 export type DeviceState = "on" | "stale" | undefined;
 

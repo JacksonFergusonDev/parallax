@@ -4,7 +4,7 @@ interface Props {
   label: string;
   icon?: React.ReactNode;
   disabled?: boolean;
-  items: { label: string; onPick: () => void }[];
+  items: { label: string; onPick: () => void; disabled?: boolean }[];
 }
 
 /** A button that opens a short list of actions. */
@@ -48,6 +48,7 @@ export function ActionMenu({ label, icon, disabled, items }: Props) {
           {items.map((item) => (
             <button
               key={item.label}
+              disabled={item.disabled}
               role="menuitem"
               onClick={() => {
                 setOpen(false);

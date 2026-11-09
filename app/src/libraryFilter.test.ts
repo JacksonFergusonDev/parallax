@@ -91,6 +91,8 @@ describe("filterLibrary", () => {
 describe("withoutKobo", () => {
   it("keeps the filters that don't need a Kobo", () => {
     const filter = {
+      ...NO_FILTER,
+      kind: "manga",
       kobo: "on",
       collection: "Best",
       genre: "Fantasy",
@@ -98,6 +100,7 @@ describe("withoutKobo", () => {
     } as const;
     expect(withoutKobo(filter)).toEqual({
       ...NO_FILTER,
+      kind: "manga",
       genre: "Fantasy",
       reading: "finished",
     });

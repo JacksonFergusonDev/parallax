@@ -11,6 +11,7 @@ export type ReadingFilter = "unread" | "reading" | "finished";
 export const NONE = "\0none";
 
 export interface LibraryFilter {
+  kind: Book["kind"] | null;
   kobo: KoboFilter;
   collection: string | null;
   genre: string | null;
@@ -18,6 +19,7 @@ export interface LibraryFilter {
 }
 
 export const NO_FILTER: LibraryFilter = {
+  kind: null,
   kobo: "all",
   collection: null,
   genre: null,
@@ -31,6 +33,7 @@ export interface BookFacts {
 }
 
 export const isFiltered = (f: LibraryFilter) =>
+  f.kind !== null ||
   f.kobo !== "all" ||
   f.collection !== null ||
   f.genre !== null ||
@@ -76,6 +79,7 @@ export function filterLibrary(
   if (!isFiltered(f)) return books;
   return books.filter(
     (b) =>
+      (f.kind === null || (b.kind ?? "book") === f.kind) &&
       matchesKobo(facts.deviceState(b), f.kobo) &&
       matchesName(facts.collectionsOf(b), f.collection) &&
       matchesName(splitGenres(b.tags).genres, f.genre) &&

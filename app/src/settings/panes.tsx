@@ -268,6 +268,7 @@ function GoogleKey({ values, set }: PaneProps) {
 }
 
 export function LibraryPane(props: PaneProps) {
+  const comicKind = useId();
   return (
     <>
       <Row label="New books">
@@ -278,6 +279,25 @@ export function LibraryPane(props: PaneProps) {
         >
           Review books when added
         </Check>
+      </Row>
+      <Row
+        label="Import comics as"
+        labelFor={comicKind}
+        hint="Used when ComicInfo has no reading kind."
+      >
+        <select
+          id={comicKind}
+          value={props.values.comics_kind ?? "manga"}
+          onChange={(e) =>
+            props.set(
+              "comics_kind",
+              e.target.value === "comic" ? "comic" : null,
+            )
+          }
+        >
+          <option value="manga">Manga</option>
+          <option value="comic">Comics</option>
+        </select>
       </Row>
       <Row
         label="Google Books"

@@ -1,3 +1,4 @@
+import type { Book } from "../api";
 import {
   isFiltered,
   NO_FILTER,
@@ -75,6 +76,22 @@ export function LibraryFilters({ filter, facets, connected, onChange }: Props) {
   }
   return (
     <div className="filter-bar" role="group" aria-label="Filter books">
+      <select
+        className={`sort-select filter-select ${filter.kind ? "active" : ""}`}
+        aria-label="Filter by kind"
+        value={filter.kind ?? ""}
+        onChange={(e) =>
+          onChange({
+            ...filter,
+            kind: (e.target.value || null) as Book["kind"] | null,
+          })
+        }
+      >
+        <option value="">All kinds</option>
+        <option value="book">Books</option>
+        <option value="comic">Comics</option>
+        <option value="manga">Manga</option>
+      </select>
       {connected && (
         <>
           <div className="segmented">

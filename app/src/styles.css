@@ -3140,3 +3140,31 @@ button.icon {
   flex-wrap: wrap;
   max-width: 100%;
 }
+
+.series-shelf {
+  margin-block: var(--space-4) var(--space-6);
+}
+
+.series-shelf h2,
+.series-row {
+  margin: 0;
+  color: var(--fg);
+  font-size: var(--text-label);
+  overflow-wrap: anywhere;
+}
+
+.series-row {
+  padding: var(--space-2) var(--space-3);
+  background: var(--sunken);
+}
+
+.group-series[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+@media (max-width: 900px) {
+  .library-toolbar .filter-select {
+    min-width: 104px;
+  }
+}

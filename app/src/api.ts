@@ -509,8 +509,23 @@ export async function listDevices(): Promise<DeviceInfo[]> {
 }
 
 export const listBooks = () => read<Book[]>("library_list", {}, ["library"]);
-export const importBooks = (paths: string[]) =>
-  write<ImportResult[]>("library_import", { paths }, ["library", "plans"]);
+export const importBooks = (paths: string[], comicFolder?: boolean) =>
+  write<ImportResult[]>(
+    "library_import",
+    comicFolder ? { paths, comicFolder } : { paths },
+    ["library", "plans"],
+  );
+export const setComicKind = (
+  id: number,
+  kind: Book["kind"],
+  direction: Book["direction"],
+) =>
+  write<Book>("library_set_comic_kind", { id, kind, direction }, [
+    "library",
+    "plans",
+  ]);
+export const comicSpreads = (id: number) =>
+  read<number>("library_comic_spreads", { id }, ["library"]);
 export const updateBook = (id: number, edit: MetadataEdit) =>
   write<Book>("library_update", { id, edit }, [
     "library",
@@ -609,7 +624,8 @@ export type SettingKey =
   | "reader_windows"
   | "kobo_series"
   | "kobo_rules"
-  | "eject_after_send";
+  | "eject_after_send"
+  | "comics_kind";
 export const getSetting = (key: SettingKey) =>
   invoke<string | null>("setting_get", { key });
 export const setSetting = (key: SettingKey, value: string | null) =>

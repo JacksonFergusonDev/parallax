@@ -1,6 +1,6 @@
 # Comics and manga plan
 
-Status: **C1–C3 done** (2026-11-08); C4 next. The plan for first-class comics and manga in Parallax, across the library, sending to any supported Kobo, and the reader. It builds on [the Kobo comics spike](kobo-comics-spike.md) and [the bindery and KCC research](../reports/Bindery%20and%20Kindle%20Comic%20Converter.md).
+Status: **C1–C4 done** (2026-11-08); C5 next. The plan for first-class comics and manga in Parallax, across the library, sending to any supported Kobo, and the reader. It builds on [the Kobo comics spike](kobo-comics-spike.md) and [the bindery and KCC research](../reports/Bindery%20and%20Kindle%20Comic%20Converter.md).
 
 ## 1. What's already decided
 
@@ -113,13 +113,14 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
 - **Until C6 and C7:** sending or updating a comic on a Kobo fails with "comics can't be sent to a Kobo yet", and Read refuses comics.
 - **Tests:** 8 library tests, 2 core tests and 4 metadata unit tests. A real Berserk volume imports as "Berserk Vol. 1", series Berserk #1, 219 pages, manga read right to left, with a 1810 × 2560 cover, in 0.46 s.
 
-### C4. Comics in the library UI (2–3 days)
+### C4. Comics in the library UI (done)
 
 - A Books / Comics / Manga filter in the library toolbar.
 - A series view where volumes stack under their series, for all kinds.
 - **Detail panel:** pages instead of words, art credits, direction, and spread count.
 - Edit kind and direction.
-- Follow `docs/design-system.md` and check the default and minimum window sizes.
+- Add comic folder imports a folder of pages or chapter archives as one volume. Settings › Library sets the fallback kind for archives without ComicInfo reading metadata.
+- Checked at 1280 × 900 and 800 × 560 with browser mock data.
 
 ### C5. Prepare for Kobo (4–6 days)
 
