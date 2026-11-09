@@ -104,6 +104,7 @@ pub struct Metadata<'a> {
     pub series: Option<&'a str>,
     pub series_index: Option<&'a str>,
     pub language: Option<&'a str>,
+    pub description: Option<&'a str>,
     /// EPUB's dcterms:modified timestamp, in UTC.
     pub modified: &'a str,
     pub custom_cover: Option<&'a [u8]>,
@@ -178,6 +179,9 @@ pub fn prepare(
     let mut source = Cbz::open(source)?;
     let total = source.pages().len();
     let cover = source.cover_index();
+    let mut chapters = source.chapters().into_iter().peekable();
+    let mut output_chapters = Vec::new();
+    let mut output_pages = 0;
     let mut epub = epub::FixedLayout::new(&epub_path)?;
     if let Some(bytes) = metadata.custom_cover {
         epub.add_cover(bytes, "custom cover")?;
@@ -238,17 +242,24 @@ pub fn prepare(
         while let Some((name, page)) = done.remove(&next_write) {
             let index = next_write;
             next_write += 1;
-            match page {
-                Some((data, Ok(pages))) => {
-                    if cover_pending && index >= cover {
-                        epub.add_cover(&data, &name)?;
-                        cover_pending = false;
-                    }
-                    for page in pages {
-                        epub.add_page(&page)?;
-                    }
+            let chapter = chapters.next_if(|chapter| chapter.page == index);
+            if let Some((data, Ok(pages))) = page {
+                if cover_pending && index >= cover {
+                    epub.add_cover(&data, &name)?;
+                    cover_pending = false;
                 }
-                _ => skipped.push(name),
+                if let Some(chapter) = chapter {
+                    output_chapters.push(crate::Chapter {
+                        page: output_pages,
+                        title: chapter.title,
+                    });
+                }
+                output_pages += pages.len();
+                for page in pages {
+                    epub.add_page(&page)?;
+                }
+            } else {
+                skipped.push(name);
             }
             progress(index + 1, total);
         }
@@ -256,7 +267,7 @@ pub fn prepare(
     if epub.is_empty() {
         return Err(Error::NoReadablePages);
     }
-    let pages = epub.finish(metadata, profile, options)?;
+    let pages = epub.finish(metadata, &output_chapters, profile, options)?;
     converter.convert_fixed_layout(&epub_path, &path)?;
     Ok(Prepared {
         _work: work,

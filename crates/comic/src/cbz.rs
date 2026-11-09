@@ -47,6 +47,13 @@ pub struct Page {
     pub size: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Chapter {
+    /// Zero-based page in reading order.
+    pub page: usize,
+    pub title: String,
+}
+
 /// An open CBZ. Pages are in natural order of their full paths, so chapter
 /// folders keep their order too.
 pub struct Cbz {
@@ -139,6 +146,40 @@ impl Cbz {
 
     pub fn pages(&self) -> &[Page] {
         &self.pages
+    }
+
+    /// Embedded chapter bookmarks take precedence over chapter folders.
+    pub fn chapters(&self) -> Vec<Chapter> {
+        if let Some(info) = &self.comic_info {
+            let mut bookmarks = info.bookmarks();
+            bookmarks.retain(|(page, _)| *page < self.pages.len());
+            bookmarks.sort_by_key(|(page, _)| *page);
+            bookmarks.dedup_by_key(|(page, _)| *page);
+            if !bookmarks.is_empty() {
+                return bookmarks
+                    .into_iter()
+                    .map(|(page, title)| Chapter { page, title })
+                    .collect();
+            }
+        }
+        let mut seen = HashSet::new();
+        self.pages
+            .iter()
+            .enumerate()
+            .filter_map(|(page, entry)| {
+                let name = self
+                    .wrapper
+                    .as_ref()
+                    .map_or(entry.name.as_str(), |wrapper| {
+                        &entry.name[wrapper.len() + 1..]
+                    });
+                let (folder, _) = name.split_once('/')?;
+                seen.insert(folder).then(|| Chapter {
+                    page,
+                    title: folder.to_owned(),
+                })
+            })
+            .collect()
     }
 
     pub fn comic_info(&self) -> Option<&ComicInfo> {

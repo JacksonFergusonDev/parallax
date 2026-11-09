@@ -27,7 +27,7 @@ fn sample(path: &Path) {
     }
     zip.start_file("ComicInfo.xml", SimpleFileOptions::default())
         .unwrap();
-    zip.write_all(br#"<ComicInfo><Pages><Page Image="2" Type="FrontCover"/></Pages></ComicInfo>"#)
+    zip.write_all(br#"<ComicInfo><Pages><Page Image="2" Type="FrontCover" Bookmark="The &amp; End"/><Page Image="1" Bookmark="Split spread"/></Pages></ComicInfo>"#)
         .unwrap();
     zip.finish().unwrap();
 }
@@ -41,6 +41,7 @@ fn metadata() -> Metadata<'static> {
         series: Some("Series"),
         series_index: Some("1"),
         language: None,
+        description: Some("A synopsis with <markup> & punctuation."),
         modified: "2026-11-08T00:00:00Z",
         custom_cover: None,
     }
@@ -88,6 +89,31 @@ fn kepubify_preserves_layout_direction_and_the_rtl_split() {
     assert!(opf.contains("page-progression-direction=\"rtl\""));
     assert!(opf.contains("Title &amp; subtitle"));
     assert!(opf.contains("belongs-to-collection"));
+    assert!(opf.contains(
+        "<dc:description>A synopsis with &lt;markup&gt; &amp; punctuation.</dc:description>"
+    ));
+    let nav = String::from_utf8(entry(&mut zip, "OEBPS/nav.xhtml")).unwrap();
+    let doc = roxmltree::Document::parse(&nav).unwrap();
+    let links: Vec<_> = doc
+        .descendants()
+        .filter(|node| node.has_tag_name("a"))
+        .map(|node| {
+            let text = node
+                .descendants()
+                .filter(roxmltree::Node::is_text)
+                .filter_map(|child| child.text())
+                .collect::<String>();
+            (node.attribute("href").unwrap(), text)
+        })
+        .collect();
+    assert_eq!(
+        links,
+        [
+            ("pages/p00001.xhtml", "Title & subtitle".to_owned()),
+            ("pages/p00002.xhtml", "Split spread".to_owned()),
+            ("pages/p00004.xhtml", "The & End".to_owned()),
+        ]
+    );
     let doc = roxmltree::Document::parse(&opf).unwrap();
     let refs: Vec<_> = doc
         .descendants()

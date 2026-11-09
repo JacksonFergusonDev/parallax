@@ -299,6 +299,7 @@ struct ComicBook {
     direction: Direction,
     cover: usize,
     pages: Vec<ComicPage>,
+    chapters: Vec<erc_comic::Chapter>,
 }
 
 #[derive(Serialize)]
@@ -449,6 +450,7 @@ pub async fn reader_book(
                     Some(ComicBook {
                         direction,
                         cover: cbz.cover_index(),
+                        chapters: cbz.chapters(),
                         pages,
                     }),
                 )

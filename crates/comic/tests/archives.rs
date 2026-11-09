@@ -71,6 +71,7 @@ fn cbz_pages_come_in_reading_order_with_comic_info() {
         ["Vol 2/p1.png", "Vol 2/p2.png", "Vol 2/p10.png"]
     );
     assert_eq!(cbz.wrapper(), Some("Vol 2"));
+    assert!(cbz.chapters().is_empty());
     let info = cbz.comic_info().unwrap();
     assert_eq!(info.series(), Some("Test Series"));
     assert_eq!(info.manga(), Manga::YesAndRightToLeft);
@@ -80,6 +81,32 @@ fn cbz_pages_come_in_reading_order_with_comic_info() {
     let reasons: Vec<SkipReason> = cbz.skipped().iter().map(|s| s.reason).collect();
     assert!(reasons.contains(&SkipReason::Hidden));
     assert!(reasons.contains(&SkipReason::NotAnImage));
+}
+
+#[test]
+fn chapter_folders_under_a_volume_wrapper_are_in_reading_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("book.cbz");
+    let page = png(4, 6);
+    write_zip(
+        &path,
+        &[
+            ("Volume/Chapter 10/1.png", &page),
+            ("Volume/Chapter 2/2.png", &page),
+            ("Volume/Chapter 2/1.png", &page),
+            (
+                "ComicInfo.xml",
+                br#"<ComicInfo><Pages><Page Image="99" Bookmark="Invalid"/></Pages></ComicInfo>"#,
+            ),
+        ],
+    );
+    let cbz = Cbz::open(&path).unwrap();
+    let chapters = cbz.chapters();
+    let entries: Vec<_> = chapters
+        .iter()
+        .map(|c| (c.page, c.title.as_str()))
+        .collect();
+    assert_eq!(entries, [(0, "Chapter 2"), (2, "Chapter 10")]);
 }
 
 #[test]

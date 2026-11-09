@@ -105,15 +105,31 @@ impl FixedLayout {
     pub fn finish(
         mut self,
         book: &Metadata<'_>,
+        chapters: &[crate::Chapter],
         profile: Profile,
         options: Options,
     ) -> Result<usize, Error> {
         let title = xml(book.title);
+        let mut contents = String::new();
+        if chapters.is_empty() || chapters[0].page > 0 {
+            let _ = write!(
+                contents,
+                r#"<li><a href="pages/p00001.xhtml">{title}</a></li>"#
+            );
+        }
+        for chapter in chapters {
+            let _ = write!(
+                contents,
+                r#"<li><a href="pages/p{:05}.xhtml">{}</a></li>"#,
+                chapter.page + 1,
+                xml(&chapter.title)
+            );
+        }
         let nav = format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
 <head><title>{title}</title></head>
-<body><nav epub:type="toc"><ol><li><a href="pages/p00001.xhtml">{title}</a></li></ol></nav></body>
+<body><nav epub:type="toc"><ol>{contents}</ol></nav></body>
 </html>"#
         );
         self.write("OEBPS/nav.xhtml", nav.as_bytes(), DEFLATED)?;
@@ -154,6 +170,13 @@ fn metadata(book: &Metadata<'_>) -> String {
     );
     for author in book.authors {
         let _ = writeln!(fields, "<dc:creator>{}</dc:creator>", xml(author));
+    }
+    if let Some(description) = book.description {
+        let _ = writeln!(
+            fields,
+            "<dc:description>{}</dc:description>",
+            xml(description)
+        );
     }
     for (i, (name, role)) in book.credits.iter().enumerate() {
         let _ = writeln!(

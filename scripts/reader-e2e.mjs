@@ -311,7 +311,7 @@ async function addComic(title, direction) {
   }
   const info = join(dir, "ComicInfo.xml");
   await writeFile(info,
-    `<ComicInfo><Title>${title}</Title><Manga>${direction === "rtl" ? "YesAndRightToLeft" : "No"}</Manga></ComicInfo>`);
+    `<ComicInfo><Title>${title}</Title><Manga>${direction === "rtl" ? "YesAndRightToLeft" : "No"}</Manga><Pages><Page Image="3" Bookmark="The next chapter"/></Pages></ComicInfo>`);
   await run("zip", ["-jq", archive, ...files, info]);
   await run(join(bin, "erc"), ["library", "add", archive], { env: { HOME: home } });
   return query("SELECT id FROM books WHERE title = ?", title)[0].id;
@@ -335,9 +335,14 @@ test("comic reader turns in RTL, saves bookmarks and resumes the last page", asy
   assert.equal(query("SELECT href FROM reader_highlights WHERE book_id = ?", id)[0]?.href, "comic-page/1");
   await read(id, [
     atComicPage(4, "document.getElementById('contents').click();"),
-    `document.querySelector('#toc:not([hidden]) button')?.click()`,
+    `document.querySelector('#toc:not([hidden]) [aria-label="Bookmarks"] button')?.click()`,
   ]);
   assert.equal(position(id)?.href, "comic-page/1");
+  await read(id, [
+    atComicPage(1, "document.getElementById('contents').click();"),
+    `document.querySelector('#toc:not([hidden]) [aria-label="Chapters"] button')?.click()`,
+  ]);
+  assert.equal(position(id)?.href, "comic-page/3");
 });
 
 test("comic reader turns in LTR and switches to vertical scroll", async () => {

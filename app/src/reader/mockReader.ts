@@ -81,7 +81,15 @@ export function installMockReader() {
         return {
           title: comic ? "The Glass Harbor" : "A Sample Book",
           comic: comic
-            ? { direction: "rtl", cover: 0, pages: comicPages }
+            ? {
+                direction: "rtl",
+                cover: 0,
+                pages: comicPages,
+                chapters: [
+                  { page: 0, title: "The Harbor" },
+                  { page: 3, title: "Out Beyond the Breakwater" },
+                ],
+              }
             : undefined,
           entries: Object.entries(FILES).map(([name, text]) => ({
             name,

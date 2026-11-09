@@ -255,6 +255,25 @@ impl ComicInfo {
             .and_then(|n| n.attribute("Image")?.trim().parse().ok())
     }
 
+    pub(crate) fn bookmarks(&self) -> Vec<(usize, String)> {
+        let Some(doc) = self
+            .pages_xml
+            .as_deref()
+            .and_then(|xml| roxmltree::Document::parse(xml).ok())
+        else {
+            return Vec::new();
+        };
+        doc.root_element()
+            .children()
+            .filter(|node| node.has_tag_name("Page"))
+            .filter_map(|node| {
+                let title = node.attribute("Bookmark")?.trim();
+                let page = node.attribute("Image")?.trim().parse().ok()?;
+                (!title.is_empty()).then(|| (page, title.to_owned()))
+            })
+            .collect()
+    }
+
     /// The file, with known fields in schema order and others after them.
     pub fn to_xml(&self) -> String {
         let mut known: Vec<&(String, String)> = self

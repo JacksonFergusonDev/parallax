@@ -67,6 +67,7 @@ export interface ComicBook {
   direction: "ltr" | "rtl";
   cover: number;
   pages: { width: number; height: number }[];
+  chapters: { page: number; title: string }[];
 }
 
 export interface OpenedBook {

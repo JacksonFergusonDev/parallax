@@ -91,8 +91,10 @@ export async function readComic(opened: OpenedBook, comic: ComicBook) {
   document.title = opened.title;
   element("title").textContent = opened.title;
   document.body.classList.add("comic-reader");
-  element("contents").textContent = "Bookmarks";
-  element("toc").setAttribute("aria-label", "Bookmarks");
+  const hasChapters = comic.chapters.length > 0;
+  const contentsLabel = hasChapters ? "Contents" : "Bookmarks";
+  element("contents").textContent = contentsLabel;
+  element("toc").setAttribute("aria-label", contentsLabel);
   element("appearance").textContent = "View";
   element("appearance").setAttribute("aria-label", "View");
   element("appearance").title = "View";
@@ -379,13 +381,13 @@ export async function readComic(opened: OpenedBook, comic: ComicBook) {
     }
   }
 
-  function renderMarks() {
-    const rows = [...marks].sort(([a], [b]) => a - b);
+  function navigationList(rows: ComicBook["chapters"], label: string) {
     const list = document.createElement("ol");
-    for (const [i] of rows) {
+    list.setAttribute("aria-label", label);
+    for (const { page: i, title } of rows) {
       const item = document.createElement("li");
       const button = document.createElement("button");
-      button.textContent = `Page ${i + 1}`;
+      button.textContent = title;
       button.addEventListener("click", () => {
         openPanel();
         go(i);
@@ -393,11 +395,26 @@ export async function readComic(opened: OpenedBook, comic: ComicBook) {
       item.append(button);
       list.append(item);
     }
-    if (rows.length) toc.replaceChildren(list);
-    else {
+    return list;
+  }
+
+  function renderMarks() {
+    toc.replaceChildren();
+    if (hasChapters) {
+      toc.append(navigationList(comic.chapters, "Chapters"));
+      const heading = document.createElement("p");
+      heading.textContent = "Bookmarks";
+      toc.append(heading);
+    }
+    if (marks.size) {
+      const rows = [...marks.keys()]
+        .sort((a, b) => a - b)
+        .map((page) => ({ page, title: `Page ${page + 1}` }));
+      toc.append(navigationList(rows, "Bookmarks"));
+    } else {
       const empty = document.createElement("p");
       empty.textContent = "No bookmarks yet.";
-      toc.replaceChildren(empty);
+      toc.append(empty);
     }
   }
 
