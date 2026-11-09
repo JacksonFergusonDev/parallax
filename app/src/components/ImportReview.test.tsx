@@ -13,6 +13,8 @@ import {
 } from "../api";
 import { readCache } from "../readCache";
 import type { ReviewBatch } from "../importReview";
+import type { SendStatus } from "../library";
+import type { BatchTransferProgress } from "../transferEstimate";
 
 vi.mock("@tauri-apps/api/core", () => ({
   Channel: class<T> {
@@ -91,6 +93,8 @@ describe("ImportReview", () => {
     b: ReviewBatch,
     books: Book[],
     kobo: { name: string; send: typeof send } | null = null,
+    statuses: Record<number, SendStatus> = {},
+    batchTransfer: BatchTransferProgress | null = null,
   ) =>
     act(async () => {
       root.render(
@@ -101,7 +105,8 @@ describe("ImportReview", () => {
           canUpscale={false}
           onKobo={() => false}
           kobo={kobo}
-          statuses={{}}
+          statuses={statuses}
+          batchTransfer={batchTransfer}
           prepareRemove={async (ids) => ({
             starting: "Saving a library snapshot…",
             run: (report) => removeBooks(ids, report),
@@ -262,6 +267,69 @@ describe("ImportReview", () => {
     expect(send).toHaveBeenCalledWith([1, 2]);
     expect(host.textContent).toContain("Sent 2 books to your Kobo");
     expect(host.textContent).toContain("Eject your Kobo");
+  });
+
+  it("keeps batch progress visible as the active volume switches from pages to copying", async () => {
+    const review = { ids: [1, 2], failed: [], review: batch().review };
+    const books = [book(1, "One"), book(2, "Two")];
+    const progress = (label: string) =>
+      host.querySelector<HTMLProgressElement>(
+        `progress[aria-label="${label}"]`,
+      );
+    let resolveSend!: (outcomes: SendOutcome[]) => void;
+    send.mockReturnValueOnce(new Promise((resolve) => (resolveSend = resolve)));
+    await show(review, books, koboFor);
+    await click("Send 2 books");
+
+    await show(
+      review,
+      books,
+      koboFor,
+      {
+        1: { stage: "processing_comic", page: 50, pages: 100 },
+        2: { stage: "queued" },
+      },
+      {
+        completed: 0,
+        total: 2,
+        value: 0.4,
+        secondsLeft: 19,
+        activeComic: {
+          stage: "processing_comic",
+          file: "One",
+          index: 1,
+          total: 2,
+          page: 50,
+          pages: 100,
+        },
+      },
+    );
+    expect(progress("Kobo transfer batch")?.value).toBe(0.4);
+    expect(host.textContent).toContain("About 20s left");
+    expect(progress("Comic pages processed")?.position).toBe(0.5);
+
+    await show(
+      review,
+      books,
+      koboFor,
+      {
+        1: { stage: "copying", bytes: 25, totalBytes: 100 },
+        2: { stage: "queued" },
+      },
+      {
+        completed: 0,
+        total: 2,
+        value: 0.85,
+        secondsLeft: 12,
+        activeComic: null,
+      },
+    );
+    expect(progress("Comic pages processed")).toBeNull();
+    expect(progress("Transfer to Kobo")?.position).toBe(0.25);
+    expect(progress("Kobo transfer batch")?.value).toBe(0.85);
+
+    await act(async () => resolveSend([]));
+    expect(host.querySelector("progress")).toBeNull();
   });
 
   it("still offers sending after keeping books as they are", async () => {

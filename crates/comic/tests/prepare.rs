@@ -81,7 +81,7 @@ fn kepubify_preserves_layout_direction_and_the_rtl_split() {
         |page, total| progress.push((page, total)),
     )
     .unwrap();
-    assert_eq!(progress, [(1, 3), (2, 3), (3, 3)]);
+    assert_eq!(progress, [(0, 3), (1, 3), (2, 3), (3, 3)]);
     assert_eq!(prepared.pages, 4);
     let path = prepared.path().to_owned();
     let mut zip = ZipArchive::new(File::open(&path).unwrap()).unwrap();
@@ -335,7 +335,7 @@ fn pages_keep_their_order_when_processed_in_parallel() {
         |page, _| seen.push(page),
     )
     .unwrap();
-    assert_eq!(seen, (1..=60).collect::<Vec<_>>());
+    assert_eq!(seen, (0..=60).collect::<Vec<_>>());
     let mut out = ZipArchive::new(File::open(prepared.path()).unwrap()).unwrap();
     for (i, &width) in widths.iter().enumerate() {
         let bytes = entry(&mut out, &format!("OEBPS/images/p{:05}.png", i + 1));

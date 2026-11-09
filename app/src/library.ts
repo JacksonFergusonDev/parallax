@@ -36,7 +36,9 @@ export function sendStatusLabel(status: SendStatus): string {
     return `Transferring ${Math.floor((bytes / totalBytes) * 100)}%`;
   }
   return status.stage === "processing_comic"
-    ? `Page ${status.page} of ${status.pages}`
+    ? status.page === 0
+      ? `Processing ${status.pages} pages…`
+      : `Page ${status.page} of ${status.pages}`
     : STATUS_LABEL[status.stage];
 }
 

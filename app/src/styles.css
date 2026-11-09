@@ -800,6 +800,34 @@ label .hint {
   flex: 1 1 180px;
 }
 
+.batch-transfer {
+  flex-shrink: 0;
+}
+
+.actions > .batch-transfer {
+  flex-basis: 100%;
+}
+
+.batch-transfer-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--text-body);
+}
+
+.batch-transfer-comic {
+  margin-top: var(--space-1);
+}
+
+.batch-transfer-title {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .book-progress {
   display: block;
   width: 100%;
@@ -3208,6 +3236,11 @@ button.review-cover-more {
 }
 .review-send .enhance-book {
   flex: 1;
+}
+.review-send-status {
+  display: grid;
+  gap: var(--space-1);
+  width: min(10rem, 28%);
 }
 .review-send .unsure {
   align-self: flex-start;

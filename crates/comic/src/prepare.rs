@@ -159,7 +159,8 @@ struct Done {
 }
 
 /// Prepare a fixed-layout KEPUB in a private temporary folder. Dropping the
-/// result removes the output. Progress counts input pages, in archive order.
+/// result removes the output. Progress starts at zero and counts input pages
+/// in archive order.
 pub fn prepare(
     source: &Path,
     metadata: &Metadata<'_>,
@@ -179,6 +180,7 @@ pub fn prepare(
     let path = work.path().join("comic.kepub.epub");
     let mut source = Cbz::open(source)?;
     let total = source.pages().len();
+    progress(0, total);
     let cover = source.cover_index();
     let mut chapters = source.chapters().into_iter().peekable();
     let mut output_chapters = Vec::new();

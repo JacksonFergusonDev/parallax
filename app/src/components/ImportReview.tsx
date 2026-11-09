@@ -20,6 +20,8 @@ import {
   type SendOutcome,
 } from "../api";
 import { TransferProgress } from "./TransferProgress";
+import { BatchTransferBar } from "./BatchTransferBar";
+import type { BatchTransferProgress } from "../transferEstimate";
 import { BookProgressBar } from "./BookProgressBar";
 import { useBookProgress, type PrepareRemoval } from "../bookProgress";
 import { libraryReviewGroups } from "../duplicates";
@@ -76,6 +78,7 @@ interface Props {
   } | null;
   /** Progress of books being sent, by book. */
   statuses: Record<number, SendStatus>;
+  batchTransfer: BatchTransferProgress | null;
   prepareRemove: PrepareRemoval<number>;
   /** Something was saved; the library should be reloaded. */
   onChanged: () => void;
@@ -147,6 +150,7 @@ export function ImportReview({
   onKobo,
   kobo,
   statuses,
+  batchTransfer,
   prepareRemove,
   onChanged,
   onClose,
@@ -831,12 +835,16 @@ export function ImportReview({
 
         {screen === "send" && (
           <>
+            {sending && batchTransfer && (
+              <BatchTransferBar progress={batchTransfer} />
+            )}
             <ul className="enhance-list review-send">
               {sendList
                 .filter((id) => !removed.has(id))
                 .map((id) => {
                   const book = books.get(id);
-                  const status = sending ? statuses[id] : undefined;
+                  const status =
+                    sending && toSend.has(id) ? statuses[id] : undefined;
                   const doubtful = review.findings.find(
                     (f) =>
                       f.book_id === id &&
@@ -873,11 +881,7 @@ export function ImportReview({
                         </span>
                         {status && (
                           <span
-                            className={
-                              status.stage === "failed"
-                                ? "notice-error"
-                                : "muted"
-                            }
+                            className={`review-send-status ${status.stage === "failed" ? "notice-error" : "muted"}`}
                             title={
                               status.stage === "failed"
                                 ? status.error

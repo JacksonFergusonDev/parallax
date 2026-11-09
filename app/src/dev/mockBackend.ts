@@ -747,13 +747,18 @@ export function installMockBackend(label = "main") {
         case "send_books": {
           const ids = a.ids as number[];
           for (const [i, id] of ids.entries()) {
-            const base = { index: i + 1, total: ids.length, file: String(id) };
+            const book = books.find((book) => book.id === id);
+            const base = {
+              index: i + 1,
+              total: ids.length,
+              file: book?.title ?? String(id),
+            };
             for (const stage of ["preparing", "converting"] as const) {
               reportSend({ stage, ...base });
               await sleep(250);
             }
-            if (books.find((book) => book.id === id)?.format === "cbz") {
-              for (const page of [1, 60, 120, 180, 219]) {
+            if (book?.format === "cbz") {
+              for (const page of [0, 1, 60, 120, 180, 219]) {
                 reportSend({
                   stage: "processing_comic",
                   ...base,

@@ -70,6 +70,11 @@ import {
   type LibraryFilter,
 } from "./libraryFilter";
 import { clickSelect, SELECTION_HINT } from "./selection";
+import {
+  TransferEstimate,
+  type BatchTransferProgress,
+} from "./transferEstimate";
+import { BatchTransferBar } from "./components/BatchTransferBar";
 import { BookCard } from "./components/BookCard";
 import { CalibreImport } from "./components/CalibreImport";
 import { ReadingView } from "./components/ReadingView";
@@ -194,6 +199,8 @@ export default function App() {
   );
   const searchRef = useRef<HTMLInputElement>(null);
   const [statuses, setStatuses] = useState<Record<number, SendStatus>>({});
+  const [batchTransfer, setBatchTransfer] =
+    useState<BatchTransferProgress | null>(null);
   const [busy, setBusy] = useState<
     "importing" | "removing" | "sending" | "updating" | "ejecting" | null
   >(null);
@@ -468,11 +475,16 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
     ids: number[],
     action: (report: (p: Progress) => void) => Promise<SendOutcome[]>,
   ) => {
+    const estimate = new TransferEstimate(ids.length);
+    setBatchTransfer(estimate.initial());
     setStatuses(Object.fromEntries(ids.map((id) => [id, { stage: "queued" }])));
     let active = true;
     try {
       const outcomes = await action((p) => {
-        if (active) setStatuses((current) => applyProgress(current, ids, p));
+        if (active) {
+          setBatchTransfer(estimate.record(p, performance.now()));
+          setStatuses((current) => applyProgress(current, ids, p));
+        }
       });
       setStatuses((current) => {
         const next = { ...current };
@@ -498,6 +510,7 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
       throw error;
     } finally {
       active = false;
+      setBatchTransfer(null);
     }
   };
 
@@ -1457,6 +1470,9 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
         </div>
 
         <footer className="actions">
+          {batchTransfer && !reviews[0] && (
+            <BatchTransferBar progress={batchTransfer} />
+          )}
           <button
             className="secondary"
             onClick={chooseFiles}
@@ -1718,6 +1734,7 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
           onKobo={(id) => onDevice.has(id)}
           kobo={writable ? { name: writable.model, send: sendReviewed } : null}
           statuses={statuses}
+          batchTransfer={batchTransfer}
           prepareRemove={prepareLibraryRemoval}
           onChanged={() => {
             void refresh();
