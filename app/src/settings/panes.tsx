@@ -368,6 +368,13 @@ export function KoboPane(props: PaneProps) {
         <Check {...props} name="comic_upscale" defaultOn={false}>
           Enlarge small pages
         </Check>
+        <Check
+          {...props}
+          name="comic_dither"
+          hint="Smoother greys in shading and gradients, for slightly larger files."
+        >
+          Dither greyscale pages
+        </Check>
       </Row>
       <Row label="After sending">
         <Check

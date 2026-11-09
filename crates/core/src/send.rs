@@ -76,6 +76,8 @@ pub const COMIC_SPREADS: &str = "comic_spreads";
 pub const COMIC_CROP: &str = "comic_crop";
 pub const COMIC_AUTOCONTRAST: &str = "comic_autocontrast";
 pub const COMIC_UPSCALE: &str = "comic_upscale";
+/// Dithering of greyscale pages; on unless set to "off".
+pub const COMIC_DITHER: &str = "comic_dither";
 
 const KEPUB_EXT: &str = ".kepub.epub";
 

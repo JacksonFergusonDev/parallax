@@ -8,7 +8,7 @@ use erc_library::{Book, Direction, Format, Library};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use crate::send::{COMIC_AUTOCONTRAST, COMIC_CROP, COMIC_SPREADS, COMIC_UPSCALE};
+use crate::send::{COMIC_AUTOCONTRAST, COMIC_CROP, COMIC_DITHER, COMIC_SPREADS, COMIC_UPSCALE};
 
 pub(crate) struct ComicTarget {
     profile: Profile,
@@ -44,7 +44,8 @@ impl ComicTarget {
                 autocontrast: on(COMIC_AUTOCONTRAST)?,
                 upscale: on(COMIC_UPSCALE)?,
                 rtl: false,
-                dither: false,
+                // Chosen on a Libra 2: very subtly better, for about 4% more space.
+                dither: library.setting(COMIC_DITHER)?.as_deref() != Some("off"),
             },
             source,
         })

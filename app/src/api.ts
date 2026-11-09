@@ -708,7 +708,8 @@ export type SettingKey =
   | "comic_spreads"
   | "comic_crop"
   | "comic_autocontrast"
-  | "comic_upscale";
+  | "comic_upscale"
+  | "comic_dither";
 export const getSetting = (key: SettingKey) =>
   invoke<string | null>("setting_get", { key });
 export const setSetting = (key: SettingKey, value: string | null) =>

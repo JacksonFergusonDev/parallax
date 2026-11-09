@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use erc_core::send::{COMIC_AUTOCONTRAST, COMIC_CROP, COMIC_SPREADS, COMIC_UPSCALE};
+use erc_core::send::{COMIC_AUTOCONTRAST, COMIC_CROP, COMIC_DITHER, COMIC_SPREADS, COMIC_UPSCALE};
 use erc_device_kobo::{BackupPolicy, backups_size, delete_all_backups};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, EventTarget, Manager, State, WebviewUrl, WebviewWindowBuilder};
@@ -41,7 +41,7 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 14] = [
+const SETTINGS: [(&str, Allowed); 15] = [
     (erc_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (erc_core::review::REVIEW_ON_ADD, Allowed::OneOf(&["off"])),
     (
@@ -62,11 +62,12 @@ const SETTINGS: [(&str, Allowed); 14] = [
     (COMIC_CROP, Allowed::OneOf(&["on"])),
     (COMIC_AUTOCONTRAST, Allowed::OneOf(&["on"])),
     (COMIC_UPSCALE, Allowed::OneOf(&["on"])),
+    (COMIC_DITHER, Allowed::OneOf(&["off"])),
 ];
 
 /// Settings that are preferences, which Reset puts back. The Google Books
 /// key is the user's own credential, so it stays.
-const PREFERENCES: [&str; 13] = [
+const PREFERENCES: [&str; 14] = [
     erc_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
@@ -80,6 +81,7 @@ const PREFERENCES: [&str; 13] = [
     COMIC_CROP,
     COMIC_AUTOCONTRAST,
     COMIC_UPSCALE,
+    COMIC_DITHER,
 ];
 
 /// `value` trimmed, with empty meaning the default, if `key` may hold it.
