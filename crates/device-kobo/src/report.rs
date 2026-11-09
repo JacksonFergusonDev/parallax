@@ -10,7 +10,6 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::Read;
 use std::path::Path;
 
 use chrono::{SecondsFormat, Utc};
@@ -206,7 +205,7 @@ fn cover_files(root: &Path) -> BTreeMap<String, CoverFiles> {
             stats.files += 1;
             if stats.files <= SAMPLED
                 && stats.sizes.len() < SIZES_KEPT
-                && let Some(size) = image_size(&path)
+                && let Some(size) = crate::screen::image_size(&path)
                 && !stats.sizes.contains(&size)
             {
                 stats.sizes.push(size);
@@ -214,37 +213,4 @@ fn cover_files(root: &Path) -> BTreeMap<String, CoverFiles> {
         }
     }
     out
-}
-
-/// Width and height of a JPEG or PNG from its header.
-fn image_size(path: &Path) -> Option<(u32, u32)> {
-    let mut head = Vec::new();
-    fs::File::open(path)
-        .ok()?
-        .take(64 * 1024)
-        .read_to_end(&mut head)
-        .ok()?;
-    if head.starts_with(b"\x89PNG\r\n\x1a\n") && head.len() >= 24 {
-        let be = |b: &[u8]| u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
-        return Some((be(&head[16..20]), be(&head[20..24])));
-    }
-    if !head.starts_with(&[0xff, 0xd8]) {
-        return None;
-    }
-    // Walk the JPEG segments to the first start-of-frame marker.
-    let mut i = 2;
-    while i + 9 < head.len() {
-        if head[i] != 0xff {
-            return None;
-        }
-        let marker = head[i + 1];
-        let len = usize::from(u16::from_be_bytes([head[i + 2], head[i + 3]]));
-        if matches!(marker, 0xc0..=0xcf) && !matches!(marker, 0xc4 | 0xc8 | 0xcc) {
-            let h = u16::from_be_bytes([head[i + 5], head[i + 6]]);
-            let w = u16::from_be_bytes([head[i + 7], head[i + 8]]);
-            return Some((w.into(), h.into()));
-        }
-        i += 2 + len;
-    }
-    None
 }

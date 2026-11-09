@@ -36,21 +36,17 @@ impl VersionInfo {
         id.trim_start_matches('0')
     }
 
-    /// Model name for the known model ids: confirmed on real hardware (388)
-    /// or by calibre's driver, which reads the same file. Others fall back to
-    /// a generic name; a device report (`erc kobo report`) is how new ones
-    /// get added.
+    /// Model name for the known model ids (`screen::MODELS`); others fall
+    /// back to a generic name. A device report (`erc kobo report`) is how new
+    /// ones get added.
     pub fn model_name(&self) -> &'static str {
-        match self.short_model_id() {
-            "388" => "Kobo Libra 2",
-            "390" => "Kobo Libra Colour",
-            "391" => "Kobo Clara BW",
-            "393" => "Kobo Clara Colour",
-            "690" => "Tolino Vision Color",
-            "691" => "Tolino Shine (5th generation)",
-            "693" => "Tolino Shine Color",
-            _ => "Kobo eReader",
-        }
+        crate::screen::find(self.short_model_id()).map_or("Kobo eReader", |m| m.name)
+    }
+
+    /// The screen comics are prepared for; `mount` is used only for a model
+    /// that isn't known.
+    pub fn screen(&self, mount: &std::path::Path) -> erc_device::Screen {
+        crate::screen::screen(self.short_model_id(), mount)
     }
 
     /// Tolino readers run Kobo's software but store data differently

@@ -17,8 +17,18 @@ export interface DeviceInfo {
     reading_progress: boolean;
     reading_time: boolean;
   };
+  /** The screen comics are prepared for, in portrait pixels. */
+  screen: Screen;
   /** Why the app won't change this device; null when it will. */
   read_only: string | null;
+}
+
+export interface Screen {
+  width: number;
+  height: number;
+  colour: boolean;
+  /** A known model's size, measured from its covers, or assumed. */
+  source: "model" | "covers" | "assumed";
 }
 
 export interface Identifier {

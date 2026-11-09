@@ -1,6 +1,6 @@
 # Comics and manga plan
 
-Status: **planned, not started** (2026-11-08). The plan for first-class comics and manga in Parallax, across the library, sending to any supported Kobo, and the reader. It builds on [the Kobo comics spike](kobo-comics-spike.md) and [the bindery and KCC research](../reports/Bindery%20and%20Kindle%20Comic%20Converter.md).
+Status: **C1 done** (2026-11-08); C2 next. The plan for first-class comics and manga in Parallax, across the library, sending to any supported Kobo, and the reader. It builds on [the Kobo comics spike](kobo-comics-spike.md) and [the bindery and KCC research](../reports/Bindery%20and%20Kindle%20Comic%20Converter.md).
 
 ## 1. What's already decided
 
@@ -48,18 +48,17 @@ Parallax writes to any Kobo with Kobo firmware 4.x and database schema 53–222 
 - **Tolino readers** stay read-only, as today.
 - **Colour Kobos** keep colour pages in colour, saved as JPEG at full screen size, and still turn greyscale pages into 16-level PNG. A page counts as colour by KCC's chroma test. No colour Kobo has been tested; this needs someone with a Libra Colour or Clara Colour before it's called supported.
 - **Old and slow Kobos** (600 × 800 and 758 × 1024) benefit most from processing. Whether their firmware handles fixed-layout KEPUBs is unknown. If one doesn't, that model gets a processed CBZ instead, recorded in its profile; the processing is the same.
-- **Profiles are data, not code paths.** One table in `crates/device-kobo/src/version.rs` (or a new `profile.rs`) returns name, screen size, colour and container for a model id, with a test that every id in `model_name` has a profile.
+- **Profiles are data, not code paths.** One table, `MODELS` in `crates/device-kobo/src/screen.rs`, gives each model id its name, screen size and colour. A container field (KEPUB or CBZ) is added only if a model turns out to need CBZ.
 
 ## 3. Milestones
 
 Each milestone ends with `just check` passing and is committed on its own. Sizes are rough.
 
-### C1. Kobo screen profiles (half a day)
+### C1. Kobo screen profiles (done)
 
-- Extend the model table with every id above, and add `ScreenProfile { width, height, colour, container }`.
-- `KoboDevice::screen_profile()` uses the model id, then the `N3_FULL` cover size, then the default, and says which it used.
-- Show the screen size in About this Kobo.
-- Tests: every known id has a profile; unknown ids fall back in order; the reference report gives 1264 × 1680.
+- `screen::MODELS` lists every id above. `DeviceInfo.screen` (`erc_device::Screen`: width, height, colour, and source `model`, `covers` or `assumed`) comes from the model id, then the tallest of up to 24 `N3_FULL` covers (width from a known model of that height, or 3:4), then 1072 × 1448.
+- About this Kobo shows the screen and says when it was measured or assumed.
+- Tests: unique ids and portrait screens; known models; the Libra 2 report's cover sizes give 1264 × 1680; covers measured on disk; the assumed fallback; the About text.
 
 ### C2. Comic archive crate, `erc-comic` (2–3 days)
 

@@ -27,6 +27,28 @@ pub struct Capabilities {
     pub reading_time: bool,
 }
 
+/// Where a device's screen size came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScreenSource {
+    /// A known model's published screen size.
+    Model,
+    /// Measured from the device's own full-screen cover images.
+    Covers,
+    /// Nothing better was available, so a common size was assumed.
+    Assumed,
+}
+
+/// The screen pages are prepared for, in portrait pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Screen {
+    pub width: u32,
+    pub height: u32,
+    /// A colour panel (Kaleido) rather than black and white.
+    pub colour: bool,
+    pub source: ScreenSource,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct DeviceInfo {
     pub kind: DeviceKind,
@@ -37,6 +59,7 @@ pub struct DeviceInfo {
     /// Where the device's storage is mounted on this computer.
     pub mount: PathBuf,
     pub capabilities: Capabilities,
+    pub screen: Screen,
     /// Why the app won't change this device (an untested model, firmware or
     /// database); `None` when it will. Reading still works.
     pub read_only: Option<String>,

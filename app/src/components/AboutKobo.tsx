@@ -6,6 +6,7 @@ import {
   type DeviceHistory,
   type DeviceInfo,
   type LogEntry,
+  type Screen,
 } from "../api";
 
 interface Props {
@@ -48,6 +49,17 @@ function describe(e: LogEntry, titles: Map<string, string>): string {
         : "";
   if (e.detail && books && e.op !== "replace") return `${e.detail}: ${books}`;
   return e.detail ?? books;
+}
+
+/** "1264 × 1680, black and white", saying when the size is a guess. */
+export function screenText(screen: Screen): string {
+  const size = `${screen.width} × ${screen.height}, ${
+    screen.colour ? "colour" : "black and white"
+  }`;
+  if (screen.source === "covers") return `${size} (measured from its covers)`;
+  if (screen.source === "assumed")
+    return `${size} (assumed, as this model isn't known yet)`;
+  return size;
 }
 
 /** ERC's records on the device: who wrote what, with which version, and when. */
@@ -104,6 +116,8 @@ export function AboutKobo({ device, titles, onClose }: Props) {
           <dd>{device.firmware}</dd>
           <dt>Serial</dt>
           <dd>{device.serial}</dd>
+          <dt>Screen</dt>
+          <dd className="wrap">{screenText(device.screen)}</dd>
           <dt>Changes</dt>
           <dd className="wrap">
             {device.read_only

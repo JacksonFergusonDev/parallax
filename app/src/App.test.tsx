@@ -32,6 +32,7 @@ const device: DeviceInfo = {
     reading_progress: true,
     reading_time: true,
   },
+  screen: { width: 1264, height: 1680, colour: false, source: "model" },
   read_only: null,
 };
 const localBook: Book = {

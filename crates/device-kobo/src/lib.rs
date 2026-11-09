@@ -9,6 +9,7 @@ mod error;
 mod maintenance;
 mod ops;
 mod report;
+mod screen;
 mod state;
 mod stats;
 mod support;
@@ -43,6 +44,7 @@ pub use ops::{
     DisplayMetadata, image_id_for, qhash, remove_book, replace_book, set_series, tidy_apple_double,
 };
 pub use report::{CoverFiles, DeviceReport, REPORT_FORMAT};
+pub use screen::ASSUMED_SCREEN;
 pub use state::{
     BookChange, BookCheck, DeviceRecord, ERC_VERSION, ErcState, LOG_KEPT, LogEntry, ManagedBook,
     Record, STATE_DIR, Stamp,
@@ -126,6 +128,7 @@ impl KoboDevice {
                 reading_progress: true,
                 reading_time: support.reading_time,
             },
+            screen: self.version.screen(&self.mount),
             read_only: support.read_only,
         }
     }

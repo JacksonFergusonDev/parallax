@@ -135,6 +135,7 @@ const device: DeviceInfo = {
     reading_progress: true,
     reading_time: true,
   },
+  screen: { width: 1264, height: 1680, colour: false, source: "model" },
   // `?readonly` previews a Kobo the app won't change.
   read_only: new URLSearchParams(location.search).has("readonly")
     ? "the Tolino Shine Color runs Tolino's version of Kobo's software, which stores data differently"

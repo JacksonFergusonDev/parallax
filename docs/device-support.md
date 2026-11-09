@@ -20,6 +20,10 @@ A Kobo that fails one is read-only: the app shows why, disables the buttons that
 
 Optional columns turn off a feature rather than the device: series (schema 65+; `SeriesID`/`SeriesNumberFloat` 136+), reading time (168+), shelf `Id`/`Type`, bookmark `Type`. Writes skip the columns a schema lacks.
 
+## Screens
+
+Each Kobo has a screen profile (size in portrait pixels, colour or not) that comics are prepared for, shown in About this Kobo. Known model ids, 310 to 393 plus the Tolino readers, are listed in `crates/device-kobo/src/screen.rs`, with sizes from Kobo's specifications. An unknown model is measured from its own full-screen covers (`N3_FULL` in `.kobo-images`, drawn at screen height), and otherwise assumed to be 1072 × 1448, the most common size. About this Kobo says when a size was measured or assumed.
+
 Not guarded because they are safe on any Kobo: deleting macOS `._` files (macOS created them) and ejecting.
 
 ## Device reports
@@ -35,7 +39,7 @@ The report is JSON: model id, firmware, database version, the database's `CREATE
 
 1. Put the report in `tests/fixtures/kobo/reports/` (name it like `libra2-fw4.38-db174.json`).
 2. Run `just test`. `reported_devices_replay` (`crates/device-kobo/tests/support.rs`) rebuilds that database from its schema, checks ERC's verdict matches the report's, and, when the Kobo is writable, makes every kind of change ERC makes and checks the database's integrity afterwards.
-3. Read the report: a new `model_id` gets a name in `VersionInfo::model_name`; `value_types` shows integer yes/no values; `cover_files` gives the screen's cover size.
+3. Read the report: a new `model_id` gets a name and screen in `screen::MODELS`; `value_types` shows integer yes/no values; `cover_files` gives the screen's height (`N3_FULL`).
 4. If it's read-only for a reason that turns out to be safe, change the check in `support.rs` with a test, and update the report's `read_only` (or ask for a new report).
 5. Before calling it supported, someone with that Kobo runs the relevant `docs/hardware-checks.md` items. A passing replay shows ERC's SQL fits the schema; it doesn't show how Nickel reacts.
 
