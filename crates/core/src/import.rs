@@ -100,15 +100,35 @@ fn import_one(
             "bought from the Kobo store (DRM-protected; it stays in your Kobo account)",
         ));
     };
-    if !path.to_lowercase().ends_with(".epub") {
+    let has_ext = |ext: &str| {
+        std::path::Path::new(path)
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case(ext))
+    };
+    let is_comic = ["cbz", "cbr", "cb7"].into_iter().any(has_ext);
+    if !has_ext("epub") && !is_comic {
         let ext = path.rsplit('.').next().unwrap_or_default();
-        return Ok(skip(&format!("not an EPUB (.{ext})")));
+        return Ok(skip(&format!("not an EPUB or comic (.{ext})")));
     }
     let link = |library: &Library, book_id: i64| {
         library
             .record_device_copy(book_id, serial, path, &book.id)
             .map_err(|e| e.to_string())
     };
+    // Comics carry no Kobo markup, so the file is imported as it is.
+    if is_comic {
+        let source = device.mount().join(path);
+        let (book_id, added) = match library.import(&source).map_err(|e| e.to_string())? {
+            ImportOutcome::Added { book: added, .. } => (added.id, true),
+            ImportOutcome::AlreadyInLibrary { book: existing } => (existing.id, false),
+        };
+        link(library, book_id)?;
+        return Ok(if added {
+            DeviceImport::Added { book_id }
+        } else {
+            DeviceImport::Linked { book_id }
+        });
+    }
     // Sent from this library on another computer, or before its record here
     // was lost: ERC's own note on the device names the library book.
     if let Some(id) = from_erc.filter(|&id| library.book(id).is_ok()) {

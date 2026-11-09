@@ -40,7 +40,7 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 9] = [
+const SETTINGS: [(&str, Allowed); 10] = [
     (erc_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (erc_core::review::REVIEW_ON_ADD, Allowed::OneOf(&["off"])),
     (
@@ -53,11 +53,12 @@ const SETTINGS: [(&str, Allowed); 9] = [
     (KOBO_SERIES, Allowed::OneOf(&["off"])),
     (KOBO_RULES, Allowed::OneOf(&["off"])),
     (EJECT_AFTER_SEND, Allowed::OneOf(&["on"])),
+    (erc_library::COMICS_KIND, Allowed::OneOf(&["comic"])),
 ];
 
 /// Settings that are preferences, which Reset puts back. The Google Books
 /// key is the user's own credential, so it stays.
-const PREFERENCES: [&str; 8] = [
+const PREFERENCES: [&str; 9] = [
     erc_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
@@ -66,6 +67,7 @@ const PREFERENCES: [&str; 8] = [
     KOBO_SERIES,
     KOBO_RULES,
     EJECT_AFTER_SEND,
+    erc_library::COMICS_KIND,
 ];
 
 /// `value` trimmed, with empty meaning the default, if `key` may hold it.

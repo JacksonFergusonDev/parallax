@@ -180,7 +180,7 @@ impl Library {
             let Some(id) = entry.file_name().to_str().and_then(|n| n.parse().ok()) else {
                 continue;
             };
-            let size = fs::metadata(entry.path().join("book.epub")).map(|m| m.len());
+            let size = fs::metadata(crate::format::stored_file(&entry.path())).map(|m| m.len());
             if rows
                 .get(&id)
                 .is_some_and(|r| size.as_ref().ok() == Some(&r.2))
@@ -199,7 +199,7 @@ impl Library {
         let held = self.held_books();
         for (id, (hash, title, _)) in &rows {
             let dir = book_dir(&self.root, *id);
-            if dir.join("book.epub").is_file() {
+            if crate::format::has_stored_file(&dir) {
                 continue;
             }
             if let Some(from) = held.get(hash) {

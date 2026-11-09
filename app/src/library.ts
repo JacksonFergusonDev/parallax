@@ -89,6 +89,8 @@ export const ROLES: [string, string][] = [
   ["trl", "Translator"],
   ["ill", "Illustrator"],
   ["edt", "Editor"],
+  ["art", "Artist"],
+  ["clr", "Colourist"],
   ["nrt", "Narrator"],
   ["aui", "Introduction by"],
   ["aft", "Afterword by"],
@@ -128,7 +130,8 @@ export const fromForm = (f: EditForm): MetadataEdit => ({
       : null,
 });
 
-/** Amazon formats are converted to EPUB when they're added. */
+/** Amazon formats are converted to EPUB and CBR/CB7 comics to CBZ when
+ * they're added. */
 export const BOOK_EXTENSIONS = [
   "epub",
   "kepub",
@@ -137,6 +140,9 @@ export const BOOK_EXTENSIONS = [
   "mobi",
   "prc",
   "kfx",
+  "cbz",
+  "cbr",
+  "cb7",
 ];
 
 const BOOK_FILE = new RegExp(`\\.(${BOOK_EXTENSIONS.join("|")})$`, "i");

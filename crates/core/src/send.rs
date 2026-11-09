@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use erc_convert::Converter;
 use erc_device_kobo::{BOOKS_DIR, DisplayMetadata, KoboDevice, device_file_name, replace_book};
-use erc_library::{Book, Library};
+use erc_library::{Book, Format, Library};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -55,6 +55,9 @@ pub struct SentInfo {
     pub content_id: String,
     pub bytes: u64,
 }
+
+/// Comics need preparing for the Kobo's screen first (comics plan, C5–C6).
+const COMICS_NOT_YET: &str = "comics can't be sent to a Kobo yet";
 
 const KEPUB_EXT: &str = ".kepub.epub";
 
@@ -139,6 +142,9 @@ pub fn send_library_books(
     run_batch(&labels, on_progress, |i, stage| {
         let id = ids[i];
         let result = books[i].clone().and_then(|book| {
+            if book.format == Format::Cbz {
+                return Err(COMICS_NOT_YET.to_owned());
+            }
             if let Some(copy) = existing
                 .iter()
                 .find(|c| c.book_id == id && device.mount().join(&c.device_path).is_file())
@@ -193,6 +199,9 @@ pub fn update_on_device(
                 .iter()
                 .find(|c| c.book_id == id && device.mount().join(&c.device_path).is_file())
                 .ok_or("not on the device")?;
+            if library.book(id).is_ok_and(|b| b.format == Format::Cbz) {
+                return Err(COMICS_NOT_YET.to_owned());
+            }
             stage(|index, total, file| Progress::Preparing { index, total, file });
             let workdir = tempfile::tempdir().map_err(|e| e.to_string())?;
             let exported = workdir.path().join("book.epub");

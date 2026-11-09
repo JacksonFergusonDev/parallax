@@ -1205,6 +1205,7 @@ name = "erc-core"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "erc-comic",
  "erc-convert",
  "erc-device",
  "erc-device-kobo",
@@ -1273,6 +1274,7 @@ name = "erc-library"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "erc-comic",
  "erc-epub",
  "image",
  "rayon",

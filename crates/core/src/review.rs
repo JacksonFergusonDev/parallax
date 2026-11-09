@@ -54,7 +54,7 @@ pub fn review(books: &[Book], files: &[BookFiles], duplicates: Vec<LibraryGroup>
         .into_iter()
         .filter_map(|f| {
             let issue = match f.check {
-                Check::Unreadable | Check::MissingFiles => Issue::Damaged,
+                Check::Unreadable | Check::MissingFiles | Check::DamagedPages => Issue::Damaged,
                 Check::Drm => Issue::Drm,
                 Check::NoCover => Issue::NoCover,
                 Check::SmallCover => Issue::SmallCover,

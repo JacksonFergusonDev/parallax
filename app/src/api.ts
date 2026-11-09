@@ -64,6 +64,11 @@ export interface Book {
   pages_estimated: boolean;
   original_name: string;
   file_size: number;
+  /** The stored file: EPUB, or CBZ for comics. */
+  format: "epub" | "cbz";
+  kind: "book" | "comic" | "manga";
+  /** Which way pages turn; books are always left to right. */
+  direction: "ltr" | "rtl";
   has_cover: boolean;
   /** The cover was chosen by the user rather than taken from the EPUB. */
   custom_cover: boolean;
@@ -667,7 +672,8 @@ export type CheckKind =
   | "series_gap"
   | "unmanifested"
   | "clutter"
-  | "embedded_fonts";
+  | "embedded_fonts"
+  | "damaged_pages";
 
 export interface Finding {
   check: CheckKind;

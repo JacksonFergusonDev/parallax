@@ -5,6 +5,9 @@
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
+use std::path::Path;
+
+use erc_comic::{Cbz, SkipReason};
 use erc_epub::{Inspection, inspect};
 use erc_library::{Book, BookFiles, CoverQuality, Library};
 use rayon::prelude::*;
@@ -27,6 +30,8 @@ pub enum Check {
     Clutter,
     /// Not a problem; some readers want to know.
     EmbeddedFonts,
+    /// Comic pages that aren't readable images.
+    DamagedPages,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -62,9 +67,14 @@ pub fn check_files(
     let reads: Vec<FileRead> = files
         .par_iter()
         .map(|file| {
-            let read = FileRead {
-                inspection: inspect(&file.book).map_err(|e| e.to_string()),
-                cover_size: file.cover_size(),
+            let read = if is_comic(&file.book) {
+                comic_read(&file.book, file.cover_size())
+            } else {
+                FileRead {
+                    inspection: inspect(&file.book).map_err(|e| e.to_string()),
+                    cover_size: file.cover_size(),
+                    damaged_pages: Vec::new(),
+                }
             };
             let mut progress = progress
                 .lock()
@@ -87,6 +97,43 @@ pub fn check_files(
 struct FileRead {
     inspection: Result<Inspection, String>,
     cover_size: Option<(u32, u32)>,
+    /// Comic pages whose size can't be read from their headers.
+    damaged_pages: Vec<String>,
+}
+
+fn is_comic(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e == "cbz")
+}
+
+/// A comic's checks in the EPUB checks' terms: hidden files are clutter and
+/// other files that aren't pages are extra files.
+fn comic_read(path: &Path, cover_size: Option<(u32, u32)>) -> FileRead {
+    let mut read = FileRead {
+        inspection: Err(String::new()),
+        cover_size,
+        damaged_pages: Vec::new(),
+    };
+    let mut comic = match Cbz::open(path) {
+        Ok(c) => c,
+        Err(e) => {
+            read.inspection = Err(e.to_string());
+            return read;
+        }
+    };
+    let mut inspection = Inspection::default();
+    for skipped in comic.skipped() {
+        match skipped.reason {
+            SkipReason::Hidden => inspection.clutter.push(skipped.name.clone()),
+            _ => inspection.unmanifested.push(skipped.name.clone()),
+        }
+    }
+    for i in 0..comic.pages().len() {
+        if !matches!(comic.page_dimensions(i), Ok(Some(_))) {
+            read.damaged_pages.push(comic.pages()[i].name.clone());
+        }
+    }
+    read.inspection = Ok(inspection);
+    read
 }
 
 fn book_findings(book: &Book, read: FileRead, out: &mut Vec<Finding>) {
@@ -130,6 +177,9 @@ fn book_findings(book: &Book, read: FileRead, out: &mut Vec<Finding>) {
             }
             if !found.fonts.is_empty() {
                 out.push(one(Check::EmbeddedFonts, list(&found.fonts)));
+            }
+            if !read.damaged_pages.is_empty() {
+                out.push(one(Check::DamagedPages, list(&read.damaged_pages)));
             }
         }
     }
@@ -223,6 +273,9 @@ mod tests {
             pages_estimated: true,
             original_name: "b.epub".into(),
             file_size: 1,
+            format: erc_library::Format::Epub,
+            kind: erc_library::Kind::Book,
+            direction: erc_library::Direction::Ltr,
             has_cover: true,
             custom_cover: false,
             cover_upscaled: false,

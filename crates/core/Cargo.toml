@@ -8,6 +8,7 @@ license.workspace = true
 
 [dependencies]
 chrono.workspace = true
+erc-comic.workspace = true
 erc-convert.workspace = true
 erc-device.workspace = true
 erc-device-kobo.workspace = true

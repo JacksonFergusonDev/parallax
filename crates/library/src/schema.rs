@@ -130,6 +130,12 @@ const MIGRATIONS: &[&str] = &[
         updated_at TEXT NOT NULL
     );
     CREATE INDEX reader_highlights_book ON reader_highlights(book_id, fraction);",
+    // 15: comics. `format` is the stored file (`epub`, or `cbz` in
+    // books/<id>/book.cbz), `kind` is book, comic or manga, and `direction`
+    // is which way pages turn (`ltr` or `rtl`).
+    "ALTER TABLE books ADD COLUMN format TEXT NOT NULL DEFAULT 'epub';
+     ALTER TABLE books ADD COLUMN kind TEXT NOT NULL DEFAULT 'book';
+     ALTER TABLE books ADD COLUMN direction TEXT NOT NULL DEFAULT 'ltr';",
 ];
 
 /// The schema version this build creates.

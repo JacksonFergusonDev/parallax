@@ -1,11 +1,12 @@
-//! The local library: imported EPUBs kept unmodified in a managed folder, with
-//! their (editable) metadata in SQLite. Edits are applied only when a copy is
-//! exported for a device, so originals are never rewritten.
+//! The local library: imported EPUBs and comics (CBZ) kept unmodified in a
+//! managed folder, with their (editable) metadata in SQLite. Edits are applied
+//! only when a copy is exported for a device, so originals are never
+//! rewritten.
 //!
 //! Layout under the library root:
 //! ```text
 //! library.sqlite
-//! books/<id>/book.epub     original file, byte for byte
+//! books/<id>/book.epub     original file, byte for byte (book.cbz for comics)
 //! books/<id>/cover.jpg     thumbnail for the grid (optional)
 //! books/<id>/custom-cover.jpg  user-chosen cover, applied on export (optional)
 //! snapshots/                the database before big changes (see `snapshots`)
@@ -14,6 +15,8 @@
 
 mod authors;
 mod color;
+mod comics;
+mod format;
 mod rules;
 mod schema;
 mod snapshots;
@@ -32,6 +35,8 @@ use sha2::{Digest, Sha256};
 
 pub use authors::normalize_authors;
 pub use color::{dominant_color, dominant_colors};
+pub use comics::COMICS_KIND;
+pub use format::{Direction, Format, Kind};
 pub use rules::{Rule, RuleKind};
 pub use snapshots::{REMOVED_KEPT_DAYS, SNAPSHOTS_KEPT, Snapshot, SnapshotRestore};
 pub use stores::{Annotation, HighlightDraft, ReaderHighlight, ReaderPosition, Reading};
@@ -44,6 +49,10 @@ pub enum Error {
     Sqlite(#[from] rusqlite::Error),
     #[error(transparent)]
     Epub(#[from] erc_epub::Error),
+    #[error(transparent)]
+    Comic(#[from] erc_comic::Error),
+    #[error("{0} isn't a comic, so it has no reading direction")]
+    NotAComic(i64),
     #[error("no book with id {0}")]
     NotFound(i64),
     #[error("title can't be empty")]
@@ -110,6 +119,11 @@ pub struct Book {
     pub pages_estimated: bool,
     pub original_name: String,
     pub file_size: u64,
+    /// The stored file: EPUB, or CBZ for comics.
+    pub format: Format,
+    pub kind: Kind,
+    /// Which way pages turn; books are always left to right.
+    pub direction: Direction,
     pub has_cover: bool,
     /// The cover was chosen by the user rather than taken from the EPUB.
     pub custom_cover: bool,
@@ -205,7 +219,7 @@ impl Library {
     fn backfill_contributors(&self) {
         let Ok(mut stmt) = self
             .conn
-            .prepare("SELECT id FROM books WHERE contributors IS NULL")
+            .prepare("SELECT id FROM books WHERE contributors IS NULL AND format = 'epub'")
         else {
             return;
         };
@@ -229,7 +243,7 @@ impl Library {
     fn backfill_extents(&self) {
         let Ok(mut stmt) = self
             .conn
-            .prepare("SELECT id FROM books WHERE words IS NULL")
+            .prepare("SELECT id FROM books WHERE words IS NULL AND format = 'epub'")
         else {
             return;
         };
@@ -270,7 +284,11 @@ impl Library {
         &self.root
     }
 
+    /// Imports an EPUB, or a comic (CBZ, CBR or CB7, which is kept as CBZ).
     pub fn import(&mut self, path: &Path) -> Result<ImportOutcome> {
+        if let Some(format) = comics::comic_format(path) {
+            return self.import_any_comic(path, format);
+        }
         self.import_from(path, path)
     }
 
@@ -507,9 +525,9 @@ impl Library {
         self.hold_book_dir(id, &hash, &book.title)
     }
 
-    /// The unmodified original.
+    /// The unmodified original: `book.epub`, or `book.cbz` for comics.
     pub fn book_file(&self, id: i64) -> PathBuf {
-        self.book_dir(id).join("book.epub")
+        format::stored_file(&self.book_dir(id))
     }
 
     /// Width and height of the cover sent to devices: the custom one if set,
@@ -534,8 +552,13 @@ impl Library {
 
     /// Writes the book with its current library metadata (and custom cover)
     /// applied to `out`.
+    /// Comics get a CBZ with their metadata in its ComicInfo.xml.
     pub fn export(&self, id: i64, out: &Path) -> Result<Book> {
         let book = self.book(id)?;
+        if book.format == Format::Cbz {
+            self.export_comic(&book, out)?;
+            return Ok(book);
+        }
         let epub = Epub::open(self.book_file(id))?;
         let cover = if book.custom_cover {
             let jpeg = fs::read(self.custom_cover_file(id))
@@ -603,6 +626,9 @@ impl Library {
         if custom.is_file() {
             return Ok(Some(fs::read(&custom).map_err(|e| io_err(&custom, e))?));
         }
+        if self.book(id)?.format == Format::Cbz {
+            return self.comic_cover(id);
+        }
         Ok(Epub::open(self.book_file(id))?.cover()?.map(|c| c.data))
     }
 
@@ -612,8 +638,16 @@ impl Library {
         let _ = fs::remove_file(self.custom_cover_file(id));
         let thumb = self.book_dir(id).join("cover.jpg");
         let _ = fs::remove_file(&thumb);
-        let original = Epub::open(self.book_file(id))?.cover().ok().flatten();
-        let has_cover = original.is_some_and(|c| write_thumbnail(&c.data, &thumb));
+        let original = if self.book(id)?.format == Format::Cbz {
+            self.comic_cover(id).ok().flatten()
+        } else {
+            Epub::open(self.book_file(id))?
+                .cover()
+                .ok()
+                .flatten()
+                .map(|c| c.data)
+        };
+        let has_cover = original.is_some_and(|c| write_thumbnail(&c, &thumb));
         self.conn.execute(
             "UPDATE books SET custom_cover = 0, cover_upscaled = 0, has_cover = ?1, modified_at = ?2 WHERE id = ?3",
             params![has_cover, now(), id],
@@ -763,6 +797,9 @@ fn book_from_row(row: &Row) -> rusqlite::Result<Book> {
         pages_estimated: row.get("pages_estimated")?,
         original_name: row.get("original_name")?,
         file_size: row.get("file_size")?,
+        format: row.get("format")?,
+        kind: row.get("kind")?,
+        direction: row.get("direction")?,
         has_cover: row.get("has_cover")?,
         custom_cover: row.get("custom_cover")?,
         cover_upscaled: row.get("cover_upscaled")?,
@@ -783,6 +820,11 @@ impl BookFiles {
     pub fn cover_size(&self) -> Option<(u32, u32)> {
         if self.custom_cover.is_file() {
             return image::image_dimensions(&self.custom_cover).ok();
+        }
+        if self.book.extension().is_some_and(|e| e == "cbz") {
+            let mut comic = erc_comic::Cbz::open(&self.book).ok()?;
+            let index = comic.cover_index();
+            return comic.page_dimensions(index).ok()?;
         }
         let cover = Epub::open(&self.book).ok()?.cover().ok()??;
         image::ImageReader::new(std::io::Cursor::new(cover.data))
@@ -886,6 +928,9 @@ mod tests {
             pages_estimated: true,
             original_name: "t.epub".into(),
             file_size: 1,
+            format: Format::Epub,
+            kind: Kind::Book,
+            direction: Direction::Ltr,
             has_cover: false,
             custom_cover: false,
             cover_upscaled: false,

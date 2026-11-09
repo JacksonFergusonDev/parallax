@@ -317,6 +317,13 @@ pub async fn reader_open(app: AppHandle, state: State<'_, AppState>, id: i64) ->
     let title = tauri::async_runtime::spawn_blocking(move || -> CmdResult<String> {
         let lib = library.lock().unwrap_or_else(PoisonError::into_inner);
         let book = lib.book(id).map_err(err)?;
+        // The comic viewer is comics plan C7.
+        if book.format == erc_library::Format::Cbz {
+            return Err(format!(
+                "{} is a comic, which can't be read here yet",
+                book.title
+            ));
+        }
         if has_drm(&lib.book_file(id)).map_err(err)? {
             return Err(format!(
                 "{} is DRM-protected, so it can't be read here",

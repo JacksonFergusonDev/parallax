@@ -1,6 +1,6 @@
 # Comics and manga plan
 
-Status: **C1 and C2 done** (2026-11-08); C3 next. The plan for first-class comics and manga in Parallax, across the library, sending to any supported Kobo, and the reader. It builds on [the Kobo comics spike](kobo-comics-spike.md) and [the bindery and KCC research](../reports/Bindery%20and%20Kindle%20Comic%20Converter.md).
+Status: **C1–C3 done** (2026-11-08); C4 next. The plan for first-class comics and manga in Parallax, across the library, sending to any supported Kobo, and the reader. It builds on [the Kobo comics spike](kobo-comics-spike.md) and [the bindery and KCC research](../reports/Bindery%20and%20Kindle%20Comic%20Converter.md).
 
 ## 1. What's already decided
 
@@ -86,23 +86,32 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
 - **Checked on real files.** The three Berserk volumes: 219, 233 and 227 pages in order, "Berserk" with volumes 1–3 and years, and 9, 7 and 13 spreads (v01 matches the spike's count).
 - **Not covered.** A real CBR comic, since there's no RAR comic to test with, and password-protected archives beyond mapping libarchive's error.
 
-### C3. Comics in the library (3–4 days)
+### C3. Comics in the library (done)
 
-- **Schema 15:** `format` (`epub`, `cbz`), `kind` (`book`, `comic`, `manga`) and `direction` (`ltr`, `rtl`); page count goes in the existing `pages`.
-- **Storage:** books are stored as `book.<format>`. The 19 places that assume `book.epub` (library, snapshots, ingest, send, convert, epub reading, reader) go through `Library::book_file`, which returns the right extension.
+- **Schema 15:** `format` (`epub`, `cbz`), `kind` (`book`, `comic`, `manga`) and `direction` (`ltr`, `rtl`) on `books`. The page count goes in `pages` with `pages_estimated` off, and `words` stays empty. The opening backfills skip comics.
+- **Storage:** comics are `books/<id>/book.cbz`. `Library::book_file` picks `book.cbz` or `book.epub` from the folder, so snapshots, restore and every caller work unchanged.
 - **Import:**
-  - CBZ is stored byte for byte.
-  - CBR and CB7 are converted to CBZ, with the original's hash kept for duplicate checks.
-  - Folders of images or chapters go through C2's bundling.
-  - `kind` follows ComicInfo's `Manga` field when there is one. Otherwise it uses a setting, "New comics are manga" (on by default, since most files lack ComicInfo, Berserk included). It's editable per book and per series.
-  - Direction follows kind.
-- **Metadata:**
-  - ComicInfo and filename parsing fill title, series, volume and credits; credits map to MARC roles (`aut`, `ill`, `clr`, `cov`…).
-  - Edits write ComicInfo into the CBZ, as edits write the OPF for EPUBs.
-- **Covers:** the FrontCover page or the first page, through the existing covers pipeline.
-- **Health checks:** pages out of order, non-image files, very large pages, missing volumes in a series (already exists for books).
-- **Import from Kobo:** CBZs already on the device can be added to the library like books.
-- **Tests:** import, dedupe, metadata round trip and snapshots/restore with CBZ books.
+  - `Library::import` tells comics from EPUBs by content: a zip without an EPUB container, or a RAR or 7z.
+  - CBZ is stored byte for byte. CBR and CB7 are converted to CBZ and identified by the original's hash, so adding the original again finds the book.
+  - `ingest::import_file`, the Add Books dialog, drag and drop (`cbz`, `cbr`, `cb7` added to `BOOK_EXTENSIONS`) and Add from Kobo all go through it. Comics on a Kobo are imported as they are.
+  - Bundling folders isn't wired to the app yet; it needs the folder picker in C4.
+- **Metadata** (`crates/library/src/comics.rs`):
+  - ComicInfo first, the file name for what it lacks.
+  - Title: ComicInfo's Title, else "Series Vol. N", else "Series #N", else the series. Series index is Volume, else Number.
+  - Authors are the writers, or the pencillers when no writer is listed. Other credits become contributors with MARC codes: `art` for penciller and inker, `clr`, `cov`, `edt`, `trl`, and `ctb` for letterer. The editor offers Artist and Colourist.
+  - Genre and Tags become tags. Year and month become published; Summary, Publisher and LanguageISO map directly; GTIN becomes the ISBN.
+- **Kind and direction:**
+  - ComicInfo `Manga`: YesAndRightToLeft is manga read right to left, Yes is manga read left to right (as the schema defines it), and No is a comic.
+  - Otherwise the setting `comics_kind` decides. Its default is manga; `comic` makes them Western comics. The Settings UI for it comes in C4.
+  - `Library::set_comic_kind` changes a comic's kind and direction; its command and UI come in C4.
+- **Edits:** like EPUBs, the stored original is never rewritten. `Library::export` writes the library's metadata into the exported copy's ComicInfo.xml, keeping fields the library doesn't manage. (This corrects the earlier plan, which said edits would rewrite the CBZ.)
+- **Covers:** the FrontCover page or the first page gives the thumbnail, cover size, cover source and reset. Custom covers still work, but they aren't written into exported CBZs.
+- **Check library:**
+  - Hidden files count as clutter, and other non-page files as extra files.
+  - A new check, "Damaged pages", covers pages whose size can't be read; the import review counts those as damaged.
+  - Comics without ComicInfo get "No author".
+- **Until C6 and C7:** sending or updating a comic on a Kobo fails with "comics can't be sent to a Kobo yet", and Read refuses comics.
+- **Tests:** 8 library tests, 2 core tests and 4 metadata unit tests. A real Berserk volume imports as "Berserk Vol. 1", series Berserk #1, 219 pages, manga read right to left, with a 1810 × 2560 cover, in 0.46 s.
 
 ### C4. Comics in the library UI (2–3 days)
 

@@ -12,7 +12,7 @@ export interface CheckInfo {
 export const CHECKS: Record<CheckKind, CheckInfo> = {
   unreadable: {
     label: "Can't be read",
-    help: "The EPUB is damaged. Re-import it from another copy.",
+    help: "The file is damaged. Re-import it from another copy.",
   },
   drm: {
     label: "Protected by DRM",
@@ -56,6 +56,10 @@ export const CHECKS: Record<CheckKind, CheckInfo> = {
     label: "Mac or Windows clutter",
     help: "Files like .DS_Store. Left out automatically when books are sent.",
     note: true,
+  },
+  damaged_pages: {
+    label: "Damaged pages",
+    help: "Pages in these comics aren't readable images. Re-import them from another copy.",
   },
   embedded_fonts: {
     label: "Embedded fonts",

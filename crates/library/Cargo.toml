@@ -8,6 +8,7 @@ license.workspace = true
 
 [dependencies]
 chrono.workspace = true
+erc-comic.workspace = true
 erc-epub.workspace = true
 image.workspace = true
 rayon.workspace = true
@@ -15,9 +16,12 @@ rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
+zip.workspace = true
 
 [dev-dependencies]
+erc-comic.workspace = true
 erc-epub.workspace = true
 image.workspace = true
 tempfile.workspace = true
