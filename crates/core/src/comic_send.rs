@@ -8,7 +8,10 @@ use erc_library::{Book, Direction, Format, Library};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use crate::send::{COMIC_AUTOCONTRAST, COMIC_CROP, COMIC_DITHER, COMIC_SPREADS, COMIC_UPSCALE};
+use crate::send::{
+    COMIC_AUTOCONTRAST, COMIC_COLOUR_CONTRAST, COMIC_COLOUR_SEPARATION, COMIC_CROP, COMIC_DITHER,
+    COMIC_MIDTONE_DARKENING, COMIC_SPREADS, COMIC_UPSCALE,
+};
 
 pub(crate) struct ComicTarget {
     profile: Profile,
@@ -25,6 +28,15 @@ impl ComicTarget {
             source,
         } = device.version().screen(device.mount());
         let on = |key| library.setting(key).map(|s| s.as_deref() == Some("on"));
+        let not_off = |key| library.setting(key).map(|s| s.as_deref() != Some("off"));
+        // A strength percentage; anything unset or unexpected is recommended.
+        let percent = |key| {
+            library.setting(key).map(|s| {
+                s.and_then(|v| v.parse::<u8>().ok())
+                    .filter(|&v| v <= 200)
+                    .unwrap_or(erc_comic::prepare::RECOMMENDED_PERCENT)
+            })
+        };
         Ok(Self {
             profile: Profile {
                 width,
@@ -45,7 +57,10 @@ impl ComicTarget {
                 upscale: on(COMIC_UPSCALE)?,
                 rtl: false,
                 // Chosen on a Libra 2: very subtly better, for about 4% more space.
-                dither: library.setting(COMIC_DITHER)?.as_deref() != Some("off"),
+                dither: not_off(COMIC_DITHER)?,
+                colour_separation: percent(COMIC_COLOUR_SEPARATION)?,
+                colour_contrast: not_off(COMIC_COLOUR_CONTRAST)?,
+                midtone_darkening: percent(COMIC_MIDTONE_DARKENING)?,
             },
             source,
         })
@@ -214,10 +229,25 @@ mod tests {
             ..Options::default()
         };
         assert_eq!(serde_json::to_string(&options).unwrap(), before);
-        let dithered = Options {
-            dither: true,
-            ..options
-        };
-        assert_ne!(serde_json::to_string(&dithered).unwrap(), before);
+        for changed in [
+            Options {
+                dither: true,
+                ..options
+            },
+            Options {
+                colour_separation: 150,
+                ..options
+            },
+            Options {
+                colour_contrast: false,
+                ..options
+            },
+            Options {
+                midtone_darkening: 0,
+                ..options
+            },
+        ] {
+            assert_ne!(serde_json::to_string(&changed).unwrap(), before);
+        }
     }
 }

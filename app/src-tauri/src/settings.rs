@@ -5,7 +5,10 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use erc_core::send::{COMIC_AUTOCONTRAST, COMIC_CROP, COMIC_DITHER, COMIC_SPREADS, COMIC_UPSCALE};
+use erc_core::send::{
+    COMIC_AUTOCONTRAST, COMIC_COLOUR_CONTRAST, COMIC_COLOUR_SEPARATION, COMIC_CROP, COMIC_DITHER,
+    COMIC_MIDTONE_DARKENING, COMIC_SPREADS, COMIC_STRENGTHS, COMIC_UPSCALE,
+};
 use erc_device_kobo::{BackupPolicy, backups_size, delete_all_backups};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, EventTarget, Manager, State, WebviewUrl, WebviewWindowBuilder};
@@ -41,7 +44,7 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 15] = [
+const SETTINGS: [(&str, Allowed); 18] = [
     (erc_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (erc_core::review::REVIEW_ON_ADD, Allowed::OneOf(&["off"])),
     (
@@ -63,11 +66,14 @@ const SETTINGS: [(&str, Allowed); 15] = [
     (COMIC_AUTOCONTRAST, Allowed::OneOf(&["on"])),
     (COMIC_UPSCALE, Allowed::OneOf(&["on"])),
     (COMIC_DITHER, Allowed::OneOf(&["off"])),
+    (COMIC_COLOUR_SEPARATION, Allowed::OneOf(&COMIC_STRENGTHS)),
+    (COMIC_COLOUR_CONTRAST, Allowed::OneOf(&["off"])),
+    (COMIC_MIDTONE_DARKENING, Allowed::OneOf(&COMIC_STRENGTHS)),
 ];
 
 /// Settings that are preferences, which Reset puts back. The Google Books
 /// key is the user's own credential, so it stays.
-const PREFERENCES: [&str; 14] = [
+const PREFERENCES: [&str; 17] = [
     erc_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
@@ -82,6 +88,9 @@ const PREFERENCES: [&str; 14] = [
     COMIC_AUTOCONTRAST,
     COMIC_UPSCALE,
     COMIC_DITHER,
+    COMIC_COLOUR_SEPARATION,
+    COMIC_COLOUR_CONTRAST,
+    COMIC_MIDTONE_DARKENING,
 ];
 
 /// `value` trimmed, with empty meaning the default, if `key` may hold it.
@@ -353,6 +362,25 @@ mod tests {
             Ok(Some("off".into()))
         );
         assert!(checked(KOBO_RULES, Some("on".into())).is_err());
+    }
+
+    #[test]
+    fn comic_strengths_are_percentages_the_pipeline_reads() {
+        for key in [COMIC_COLOUR_SEPARATION, COMIC_MIDTONE_DARKENING] {
+            for value in COMIC_STRENGTHS {
+                assert_eq!(checked(key, Some(value.into())), Ok(Some(value.into())));
+                assert!(value.parse::<u8>().is_ok_and(|v| v <= 200));
+            }
+            assert!(checked(key, Some("100".into())).is_err(), "unset is 100");
+            assert!(checked(key, Some("300".into())).is_err());
+        }
+    }
+
+    #[test]
+    fn every_comic_page_setting_is_a_preference() {
+        for key in erc_core::send::COMIC_PAGE_SETTINGS {
+            assert!(PREFERENCES.contains(&key), "{key}");
+        }
     }
 
     #[test]

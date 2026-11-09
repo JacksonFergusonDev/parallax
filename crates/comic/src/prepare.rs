@@ -28,7 +28,11 @@ pub enum Spreads {
     WholeThenHalves,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Page preparation choices. The colour-page fields default to the values
+/// chosen on a Libra 2 and, like `dither`, are left out of the serialised
+/// form while at those values, so update fingerprints of copies made before
+/// they existed still match.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Options {
     pub spreads: Spreads,
@@ -41,6 +45,54 @@ pub struct Options {
     /// of copies made before it existed still match.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub dither: bool,
+    /// Colour pages on a greyscale screen: how strongly colour differences
+    /// become grey differences, as a percentage of the recommended strength.
+    /// 0 is plain luma.
+    #[serde(skip_serializing_if = "is_recommended_percent")]
+    pub colour_separation: u8,
+    /// Colour pages on a greyscale screen: stretch contrast between the
+    /// 0.5% percentiles.
+    #[serde(skip_serializing_if = "is_on")]
+    pub colour_contrast: bool,
+    /// Colour pages on a greyscale screen: how much mostly light pages have
+    /// their mid-tones darkened, as a percentage of the recommended amount.
+    #[serde(skip_serializing_if = "is_recommended_percent")]
+    pub midtone_darkening: u8,
+}
+
+/// The recommended strength for percentage options.
+pub const RECOMMENDED_PERCENT: u8 = 100;
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            spreads: Spreads::default(),
+            crop: false,
+            autocontrast: false,
+            upscale: false,
+            rtl: false,
+            dither: false,
+            colour_separation: RECOMMENDED_PERCENT,
+            colour_contrast: true,
+            midtone_darkening: RECOMMENDED_PERCENT,
+        }
+    }
+}
+
+#[allow(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde passes a reference"
+)]
+fn is_recommended_percent(value: &u8) -> bool {
+    *value == RECOMMENDED_PERCENT
+}
+
+#[allow(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde passes a reference"
+)]
+fn is_on(value: &bool) -> bool {
+    *value
 }
 
 #[derive(Debug)]

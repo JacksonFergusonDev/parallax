@@ -78,6 +78,27 @@ pub const COMIC_AUTOCONTRAST: &str = "comic_autocontrast";
 pub const COMIC_UPSCALE: &str = "comic_upscale";
 /// Dithering of greyscale pages; on unless set to "off".
 pub const COMIC_DITHER: &str = "comic_dither";
+/// Colour pages on greyscale screens: colour separation strength, a
+/// percentage of the recommended strength, which is the default.
+pub const COMIC_COLOUR_SEPARATION: &str = "comic_colour_separation";
+/// Colour pages on greyscale screens: contrast stretch; on unless "off".
+pub const COMIC_COLOUR_CONTRAST: &str = "comic_colour_contrast";
+/// Colour pages on greyscale screens: mid-tone darkening on mostly light
+/// pages, a percentage of the recommended amount, which is the default.
+pub const COMIC_MIDTONE_DARKENING: &str = "comic_midtone_darkening";
+/// The percentages strength settings may hold; no value is 100.
+pub const COMIC_STRENGTHS: [&str; 6] = ["0", "50", "75", "125", "150", "200"];
+/// Every comic page setting, for resetting them to recommended together.
+pub const COMIC_PAGE_SETTINGS: [&str; 8] = [
+    COMIC_SPREADS,
+    COMIC_CROP,
+    COMIC_AUTOCONTRAST,
+    COMIC_UPSCALE,
+    COMIC_DITHER,
+    COMIC_COLOUR_SEPARATION,
+    COMIC_COLOUR_CONTRAST,
+    COMIC_MIDTONE_DARKENING,
+];
 
 const KEPUB_EXT: &str = ".kepub.epub";
 

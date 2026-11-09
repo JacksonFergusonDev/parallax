@@ -34,6 +34,20 @@ body {
   font-size: var(--text-small);
 }
 
+/* Seven tabs fit on one line down to the window's 560px minimum by
+   tightening spacing, never the text. */
+@media (max-width: 640px) {
+  .settings-tabs {
+    gap: 0;
+    padding-inline: var(--space-2);
+  }
+
+  .settings-tabs button {
+    min-width: 64px;
+    padding-inline: var(--space-1);
+  }
+}
+
 .settings-tabs button > .lucide {
   width: var(--icon-large);
   height: var(--icon-large);
@@ -149,6 +163,18 @@ body {
 .settings-check .hint {
   max-width: 400px;
   padding-left: calc(var(--icon-size) + var(--space-2));
+}
+
+/* A note that opens a group, level with the row's label. */
+.settings-control > .settings-lead {
+  margin: 0;
+  padding-top: var(--space-2);
+}
+
+/* A named control within a row of several, such as a strength. */
+.settings-field {
+  padding-top: var(--space-2);
+  font-weight: 500;
 }
 
 .settings-inline {

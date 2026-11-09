@@ -151,7 +151,7 @@ fn encode(
         bytes
     } else {
         let gray = match tone {
-            Tone::ColourOnGrey => super::tone::colour_page_to_grey(&rgb),
+            Tone::ColourOnGrey => super::tone::colour_page_to_grey(&rgb, options),
             // Rec. 601 luma, as in the spike's Pillow reference, for neutral output.
             Tone::Grey { stretch } => {
                 let mut gray = luma(&rgb);
@@ -175,7 +175,7 @@ fn encode(
             dithered_levels(&gray, width as usize)
         } else {
             gray.iter()
-                .map(|&value| nearest_level(f32::from(value)))
+                .map(|&value| LEVELS[usize::from(value)])
                 .collect()
         };
         png_4bit(width, height, &levels).map_err(|e| e.to_string())?
@@ -189,14 +189,24 @@ fn encode(
     })
 }
 
+/// Rec. 601 luma. Written over the raw bytes, without per-pixel
+/// coordinates, so it compiles to vector code (NEON on Apple silicon).
 pub(super) fn luma(rgb: &RgbImage) -> GrayImage {
     let (w, h) = rgb.dimensions();
-    GrayImage::from_fn(w, h, |x, y| {
-        let [red, green, blue] = rgb.get_pixel(x, y).0.map(u32::from);
-        image::Luma([
-            u8::try_from((299 * red + 587 * green + 114 * blue + 500) / 1000).unwrap_or(255),
-        ])
-    })
+    let values = rgb
+        .as_raw()
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|&[red, green, blue]| {
+            let sum = 299 * u32::from(red) + 587 * u32::from(green) + 114 * u32::from(blue);
+            // At most 255 for any input, so the narrowing never truncates.
+            #[allow(clippy::cast_possible_truncation)]
+            let value = ((sum + 500) / 1000) as u8;
+            value
+        })
+        .collect();
+    GrayImage::from_raw(w, h, values).expect("one grey byte per pixel")
 }
 
 fn resized(
@@ -222,42 +232,69 @@ fn resized(
     Ok(dst.into_vec())
 }
 
-/// The nearest of the 16 even greys (0, 17, …, 255) the Kobo shows.
-fn nearest_level(value: f32) -> u8 {
-    // Clamped to 0–15 first, so the cast can't truncate.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let level = ((value + 8.5) / 17.0).floor().clamp(0.0, 15.0) as u8;
-    level
+/// The nearest of the 16 even greys (0, 17, …, 255) the Kobo shows, for
+/// each 8-bit grey.
+const LEVELS: [u8; 256] = {
+    let mut table = [0; 256];
+    let mut value = 0;
+    while value < 256 {
+        // At most 15, so the narrowing never truncates.
+        #[allow(clippy::cast_possible_truncation)]
+        let level = ((value + 8) / 17) as u8;
+        table[value] = level;
+        value += 1;
+    }
+    table
+};
+
+/// The nearest level to a grey that error diffusion may have pushed
+/// outside 0–255.
+fn nearest_level(value: i32) -> u8 {
+    // Clamped to 0–255 first, so the conversion can't fail.
+    LEVELS[usize::try_from(value.clamp(0, 255)).unwrap_or_default()]
 }
 
 /// Floyd–Steinberg error diffusion to 16 levels, on the stored grey values
 /// as Pillow (and so KCC) does, scanning rows alternately left and right
-/// so the error doesn't drift into diagonal streaks.
+/// so the error doesn't drift into diagonal streaks. Integer arithmetic
+/// throughout: errors are carried in sixteenths of a grey value, which is
+/// exact for the 7, 3, 5 and 1 sixteenths the method spreads.
 fn dithered_levels(gray: &[u8], width: usize) -> Vec<u8> {
     let mut levels = vec![0; gray.len()];
     if width == 0 {
         return levels;
     }
     // Error carried into this row and the next, padded by one on each side.
-    let mut this_row = vec![0.0_f32; width + 2];
-    let mut next_row = vec![0.0_f32; width + 2];
-    for (y, row) in gray.chunks_exact(width).enumerate() {
-        let forward = y % 2 == 0;
-        for i in 0..width {
-            let x = if forward { i } else { width - 1 - i };
-            let wanted = f32::from(row[x]) + this_row[x + 1];
+    let mut this_row = vec![0_i32; width + 2];
+    let mut next_row = vec![0_i32; width + 2];
+    for (y, (row, out)) in gray
+        .chunks_exact(width)
+        .zip(levels.chunks_exact_mut(width))
+        .enumerate()
+    {
+        let mut step = |x: usize, ahead: usize, behind: usize| {
+            // Rounded to the nearest whole grey; >> floors negative values too.
+            let wanted = i32::from(row[x]) + ((this_row[x + 1] + 8) >> 4);
             let level = nearest_level(wanted);
-            levels[y * width + x] = level;
-            let error = wanted - f32::from(level) * 17.0;
-            // Ahead and behind, in this row's scan direction.
-            let (ahead, behind) = if forward { (x + 2, x) } else { (x, x + 2) };
-            this_row[ahead] += error * 7.0 / 16.0;
-            next_row[behind] += error * 3.0 / 16.0;
-            next_row[x + 1] += error * 5.0 / 16.0;
-            next_row[ahead] += error / 16.0;
+            out[x] = level;
+            let error = wanted - i32::from(level) * 17;
+            this_row[ahead] += error * 7;
+            next_row[behind] += error * 3;
+            next_row[x + 1] += error * 5;
+            next_row[ahead] += error;
+        };
+        // Padded indices: x + 2 is the next pixel to the right, x the left.
+        if y % 2 == 0 {
+            for x in 0..width {
+                step(x, x + 2, x);
+            }
+        } else {
+            for x in (0..width).rev() {
+                step(x, x, x + 2);
+            }
         }
         std::mem::swap(&mut this_row, &mut next_row);
-        next_row.fill(0.0);
+        next_row.fill(0);
     }
     levels
 }
@@ -266,9 +303,17 @@ fn dithered_levels(gray: &[u8], width: usize) -> Vec<u8> {
 fn png_4bit(width: u32, height: u32, levels: &[u8]) -> Result<Vec<u8>, png::EncodingError> {
     let row_bytes = width.div_ceil(2) as usize;
     let mut packed = vec![0; row_bytes * height as usize];
-    for (y, row) in levels.chunks_exact(width as usize).enumerate() {
-        for (x, &level) in row.iter().enumerate() {
-            packed[y * row_bytes + x / 2] |= if x % 2 == 0 { level << 4 } else { level };
+    for (row, out) in levels
+        .chunks_exact(width as usize)
+        .zip(packed.chunks_exact_mut(row_bytes))
+    {
+        // Pairs of pixels become one byte, high nibble first.
+        let (pairs, odd) = row.as_chunks::<2>();
+        for (byte, &[first, second]) in out.iter_mut().zip(pairs) {
+            *byte = first << 4 | second;
+        }
+        if let (Some(&last), Some(byte)) = (odd.first(), out.last_mut()) {
+            *byte = last << 4;
         }
     }
     let mut bytes = Vec::new();
@@ -306,10 +351,8 @@ fn is_colour(rgb: &RgbImage) -> bool {
         for pixel in row.as_chunks::<3>().0.iter().step_by(STEP) {
             count += 1;
             let [red, green, blue] = pixel.map(i32::from);
-            let u =
-                (128 + (-43 * red - 85 * green + 128 * blue + 128).div_euclid(256)).clamp(0, 255);
-            let v =
-                (128 + (128 * red - 107 * green - 21 * blue + 128).div_euclid(256)).clamp(0, 255);
+            let u = (128 + ((-43 * red - 85 * green + 128 * blue + 128) >> 8)).clamp(0, 255);
+            let v = (128 + ((128 * red - 107 * green - 21 * blue + 128) >> 8)).clamp(0, 255);
             cb[usize::try_from(u).unwrap_or_default()] += 1;
             cr[usize::try_from(v).unwrap_or_default()] += 1;
         }
@@ -398,12 +441,19 @@ pub(super) fn autocontrast(gray: &mut GrayImage) {
 fn crop_margins(rgb: RgbImage) -> RgbImage {
     let (w, h) = rgb.dimensions();
     let (mut left, mut top, mut right, mut bottom) = (w, h, 0, 0);
-    for (x, y, p) in rgb.enumerate_pixels() {
-        if p.0.iter().any(|&channel| channel < 240) {
-            left = left.min(x);
+    // Whole-row scans over the raw bytes, which vectorise.
+    let content = |channel: &u8| *channel < 240;
+    for (y, row) in (0_u32..).zip(rgb.as_raw().chunks_exact(w as usize * 3)) {
+        if let (Some(first), Some(last)) =
+            (row.iter().position(content), row.iter().rposition(content))
+        {
             top = top.min(y);
-            right = right.max(x + 1);
-            bottom = bottom.max(y + 1);
+            bottom = y + 1;
+            // Byte offsets to pixel columns; widths fit in u32.
+            #[allow(clippy::cast_possible_truncation)]
+            let (first, last) = ((first / 3) as u32, (last / 3) as u32);
+            left = left.min(first);
+            right = right.max(last + 1);
         }
     }
     if left >= right || top >= bottom {
@@ -473,14 +523,14 @@ mod tests {
 
     #[test]
     fn rounding_picks_the_nearest_of_16_greys() {
-        assert_eq!(nearest_level(0.0), 0);
-        assert_eq!(nearest_level(8.0), 0);
-        assert_eq!(nearest_level(9.0), 1);
-        assert_eq!(nearest_level(255.0), 15);
-        assert_eq!(nearest_level(300.0), 15);
-        assert_eq!(nearest_level(-40.0), 0);
+        assert_eq!(nearest_level(0), 0);
+        assert_eq!(nearest_level(8), 0);
+        assert_eq!(nearest_level(9), 1);
+        assert_eq!(nearest_level(255), 15);
+        assert_eq!(nearest_level(300), 15);
+        assert_eq!(nearest_level(-40), 0);
         for level in 0..16_u8 {
-            assert_eq!(nearest_level(f32::from(level) * 17.0), level);
+            assert_eq!(nearest_level(i32::from(level) * 17), level);
         }
     }
 
@@ -489,7 +539,7 @@ mod tests {
         // A flat grey of 8 sits halfway between level 0 (0) and level 1 (17).
         let (width, height) = (64, 64);
         let gray = vec![8_u8; width * height];
-        let plain: Vec<u8> = gray.iter().map(|&v| nearest_level(f32::from(v))).collect();
+        let plain: Vec<u8> = gray.iter().map(|&v| LEVELS[usize::from(v)]).collect();
         assert!(plain.iter().all(|&l| l == 0), "rounding loses the tone");
         let dithered = dithered_levels(&gray, width);
         let mean =

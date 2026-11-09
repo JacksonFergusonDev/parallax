@@ -709,7 +709,23 @@ export type SettingKey =
   | "comic_crop"
   | "comic_autocontrast"
   | "comic_upscale"
-  | "comic_dither";
+  | "comic_dither"
+  | "comic_colour_separation"
+  | "comic_colour_contrast"
+  | "comic_midtone_darkening";
+
+/** Every comic page setting; "Reset to recommended" clears them together.
+ * Matches `COMIC_PAGE_SETTINGS` in crates/core/src/send.rs. */
+export const COMIC_PAGE_SETTINGS = [
+  "comic_spreads",
+  "comic_crop",
+  "comic_autocontrast",
+  "comic_upscale",
+  "comic_dither",
+  "comic_colour_separation",
+  "comic_colour_contrast",
+  "comic_midtone_darkening",
+] as const satisfies readonly SettingKey[];
 export const getSetting = (key: SettingKey) =>
   invoke<string | null>("setting_get", { key });
 export const setSetting = (key: SettingKey, value: string | null) =>

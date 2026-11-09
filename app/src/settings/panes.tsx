@@ -1,6 +1,11 @@
 import { useId, useState, type ReactNode } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { resetSettings, showFolder, type SettingKey } from "../api";
+import {
+  COMIC_PAGE_SETTINGS,
+  resetSettings,
+  showFolder,
+  type SettingKey,
+} from "../api";
 import { APP_THEMES, appTheme, type AppTheme } from "../design/theme";
 import type { Values } from "./useSettings";
 
@@ -268,7 +273,6 @@ function GoogleKey({ values, set }: PaneProps) {
 }
 
 export function LibraryPane(props: PaneProps) {
-  const comicKind = useId();
   return (
     <>
       <Row label="New books">
@@ -279,25 +283,6 @@ export function LibraryPane(props: PaneProps) {
         >
           Review books when added
         </Check>
-      </Row>
-      <Row
-        label="Import comics as"
-        labelFor={comicKind}
-        hint="Used when ComicInfo has no reading kind."
-      >
-        <select
-          id={comicKind}
-          value={props.values.comics_kind ?? "manga"}
-          onChange={(e) =>
-            props.set(
-              "comics_kind",
-              e.target.value === "comic" ? "comic" : null,
-            )
-          }
-        >
-          <option value="manga">Manga</option>
-          <option value="comic">Comics</option>
-        </select>
       </Row>
       <Row
         label="Google Books"
@@ -317,7 +302,6 @@ export function LibraryPane(props: PaneProps) {
 }
 
 export function KoboPane(props: PaneProps) {
-  const spreads = useId();
   return (
     <>
       <Row label="When a Kobo connects">
@@ -336,44 +320,6 @@ export function KoboPane(props: PaneProps) {
           hint="After sending books and when a Kobo connects, your grouping rules file books into collections the Kobo already has. New collections are made only when you apply rules yourself."
         >
           Apply grouping rules automatically
-        </Check>
-      </Row>
-      <Row
-        label="Comic spreads"
-        labelFor={spreads}
-        hint="Very wide pages are rotated to fit in every mode."
-      >
-        <select
-          id={spreads}
-          value={props.values.comic_spreads ?? "split"}
-          onChange={(e) =>
-            props.set(
-              "comic_spreads",
-              e.target.value === "split" ? null : e.target.value,
-            )
-          }
-        >
-          <option value="split">Split</option>
-          <option value="keep_whole">Keep whole</option>
-          <option value="whole_then_halves">Whole then halves</option>
-        </select>
-      </Row>
-      <Row label="Comic pages">
-        <Check {...props} name="comic_crop" defaultOn={false}>
-          Trim white margins
-        </Check>
-        <Check {...props} name="comic_autocontrast" defaultOn={false}>
-          Increase greyscale contrast
-        </Check>
-        <Check {...props} name="comic_upscale" defaultOn={false}>
-          Enlarge small pages
-        </Check>
-        <Check
-          {...props}
-          name="comic_dither"
-          hint="Smoother greys in shading and gradients, for slightly larger files."
-        >
-          Dither greyscale pages
         </Check>
       </Row>
       <Row label="After sending">
@@ -429,6 +375,171 @@ export function AdvancedPane({
         <div className="settings-inline">
           <button onClick={() => void reset()} disabled={resetting}>
             {resetting ? "Resetting…" : "Reset all settings…"}
+          </button>
+        </div>
+      </Row>
+    </>
+  );
+}
+
+/** Strength presets, as percentages of the recommended strength. */
+const STRENGTHS: [string | null, string][] = [
+  ["0", "Off"],
+  ["50", "50%"],
+  ["75", "75%"],
+  [null, "100% (recommended)"],
+  ["125", "125%"],
+  ["150", "150%"],
+  ["200", "200%"],
+];
+
+function Strength({
+  values,
+  set,
+  name,
+  id,
+  hint,
+}: PaneProps & { name: SettingKey; id: string; hint: string }) {
+  return (
+    <select
+      id={id}
+      aria-describedby={hint}
+      value={values[name] ?? ""}
+      onChange={(e) => set(name, e.target.value || null)}
+    >
+      {STRENGTHS.map(([value, label]) => (
+        <option key={label} value={value ?? ""}>
+          {label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** How comics come into the library and how their pages are prepared for
+ * the Kobo. Every page setting has a recommended default chosen on a Libra
+ * 2, and one button puts them all back. */
+export function ComicsPane(props: PaneProps) {
+  const kind = useId();
+  const spreads = useId();
+  const separation = useId();
+  const separationHint = useId();
+  const darkening = useId();
+  const darkeningHint = useId();
+  const changed = COMIC_PAGE_SETTINGS.some((key) => props.values[key] != null);
+  return (
+    <>
+      <Row
+        label="Import comics as"
+        labelFor={kind}
+        hint="Used when ComicInfo has no reading kind."
+      >
+        <select
+          id={kind}
+          value={props.values.comics_kind ?? "manga"}
+          onChange={(e) =>
+            props.set(
+              "comics_kind",
+              e.target.value === "comic" ? "comic" : null,
+            )
+          }
+        >
+          <option value="manga">Manga</option>
+          <option value="comic">Comics</option>
+        </select>
+      </Row>
+      <Row
+        label="Spreads"
+        labelFor={spreads}
+        hint="Two-page spreads on the Kobo. Very wide pages are rotated to fit in every mode."
+      >
+        <select
+          id={spreads}
+          value={props.values.comic_spreads ?? "split"}
+          onChange={(e) =>
+            props.set(
+              "comic_spreads",
+              e.target.value === "split" ? null : e.target.value,
+            )
+          }
+        >
+          <option value="split">Split (recommended)</option>
+          <option value="keep_whole">Keep whole</option>
+          <option value="whole_then_halves">Whole then halves</option>
+        </select>
+      </Row>
+      <Row label="All pages">
+        <Check {...props} name="comic_crop" defaultOn={false}>
+          Trim white margins
+        </Check>
+        <Check {...props} name="comic_upscale" defaultOn={false}>
+          Enlarge small pages
+        </Check>
+      </Row>
+      <Row label="Black-and-white pages">
+        <Check
+          {...props}
+          name="comic_dither"
+          hint="Smoother greys in shading and gradients, for slightly larger files."
+        >
+          Dither greys
+        </Check>
+        <Check {...props} name="comic_autocontrast" defaultOn={false}>
+          Increase contrast
+        </Check>
+      </Row>
+      <Row label="Colour pages">
+        <p className="hint settings-lead">
+          On black-and-white Kobos. Colour Kobos keep colour pages in colour.
+        </p>
+        <Check
+          {...props}
+          name="comic_colour_contrast"
+          hint="Lifts the washed-out look colour art has in grey."
+        >
+          Increase contrast
+        </Check>
+        <label className="settings-field" htmlFor={separation}>
+          Colour separation
+        </label>
+        <Strength
+          {...props}
+          name="comic_colour_separation"
+          id={separation}
+          hint={separationHint}
+        />
+        <p className="hint" id={separationHint}>
+          Colours that would turn the same grey, like red on grey, become
+          different greys.
+        </p>
+        <label className="settings-field" htmlFor={darkening}>
+          Darken mid-tones on light pages
+        </label>
+        <Strength
+          {...props}
+          name="comic_midtone_darkening"
+          id={darkening}
+          hint={darkeningHint}
+        />
+        <p className="hint" id={darkeningHint}>
+          Strengthens the darker parts of mostly light art. Dark pages are left
+          alone.
+        </p>
+      </Row>
+      <Row
+        label="Recommended"
+        hint="Comics already on your Kobo are offered for update when their page settings change."
+      >
+        <div className="settings-inline">
+          <button
+            disabled={!changed}
+            onClick={() => {
+              for (const key of COMIC_PAGE_SETTINGS) {
+                if (props.values[key] != null) props.set(key, null);
+              }
+            }}
+          >
+            {changed ? "Reset to recommended" : "Using recommended settings"}
           </button>
         </div>
       </Row>

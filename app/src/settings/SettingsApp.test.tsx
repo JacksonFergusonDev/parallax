@@ -62,12 +62,25 @@ describe("Settings window", () => {
     [...host.querySelectorAll("label")]
       .find((l) => l.textContent?.includes(text))!
       .querySelector("input") as HTMLInputElement;
+  const select = (text: string) => {
+    const label = [...host.querySelectorAll("label")].find(
+      (l) => l.textContent?.trim() === text,
+    ) as HTMLLabelElement;
+    return host.querySelector(`[id="${label.htmlFor}"]`) as HTMLSelectElement;
+  };
   const settle = () =>
     act(async () => {
       for (let i = 0; i < 5; i++) await Promise.resolve();
     });
   const click = async (element: HTMLElement) => {
     await act(async () => element.click());
+    await settle();
+  };
+  const change = async (element: HTMLSelectElement, value: string) => {
+    await act(async () => {
+      element.value = value;
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     await settle();
   };
   const tab = (name: string) =>
@@ -156,6 +169,37 @@ describe("Settings window", () => {
       key: "eject_after_send",
       value: "on",
     });
+  });
+
+  it("tunes comic pages and resets them to recommended", async () => {
+    await tab("Comics");
+    const reset = button("Using recommended settings");
+    expect(reset.disabled).toBe(true);
+    const separation = select("Colour separation");
+    expect(separation.value).toBe("");
+    await change(separation, "150");
+    expect(calls("setting_set").at(-1)?.[1]).toEqual({
+      key: "comic_colour_separation",
+      value: "150",
+    });
+    await click(labelled("Dither greys"));
+    expect(calls("setting_set").at(-1)?.[1]).toEqual({
+      key: "comic_dither",
+      value: "off",
+    });
+
+    const before = calls("setting_set").length;
+    await click(button("Reset to recommended"));
+    const cleared = calls("setting_set")
+      .slice(before)
+      .map((call) => call[1]);
+    expect(cleared).toEqual([
+      { key: "comic_dither", value: null },
+      { key: "comic_colour_separation", value: null },
+    ]);
+    expect(button("Using recommended settings").disabled).toBe(true);
+    expect(separation.value).toBe("");
+    expect(labelled("Dither greys").checked).toBe(true);
   });
 
   it("asks before keeping only the latest backup", async () => {

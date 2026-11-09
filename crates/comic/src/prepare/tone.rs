@@ -4,19 +4,32 @@
 //! comparisons of five colour Berserk pages.
 use image::{GrayImage, RgbImage};
 
+use super::Options;
 use super::raster::{autocontrast, luma};
 
-/// How much colour difference is added to luminance, as a share of the
-/// contrast luminance alone loses. 0.5 was invisible on the device and 1.0
-/// darkened brown skin too far; 0.75 was chosen.
+/// How much colour difference is added to luminance at the recommended
+/// strength, as a share of the contrast luminance alone loses. 0.5 was
+/// invisible on the device and 1.0 darkened brown skin too far; 0.75 was
+/// chosen.
 const COLOUR_CONTRAST: f32 = 0.75;
 
+/// The largest gamma added to mostly light pages at the recommended amount.
+const MIDTONE_GAMMA: f64 = 0.4;
+
 /// Colour-aware greys, then a contrast stretch, then darker mid-tones on
-/// mostly light pages.
-pub(super) fn colour_page_to_grey(rgb: &RgbImage) -> GrayImage {
-    let mut gray = colour_aware(rgb, COLOUR_CONTRAST);
-    autocontrast(&mut gray);
-    darken_light_midtones(&mut gray);
+/// mostly light pages, each as strong as the options say.
+pub(super) fn colour_page_to_grey(rgb: &RgbImage, options: Options) -> GrayImage {
+    let mut gray = if options.colour_separation == 0 {
+        luma(rgb)
+    } else {
+        let strength = f32::from(options.colour_separation) / 100.0;
+        colour_aware(rgb, COLOUR_CONTRAST * strength)
+    };
+    if options.colour_contrast {
+        autocontrast(&mut gray);
+    }
+    let darkening = f64::from(options.midtone_darkening) / 100.0;
+    darken_light_midtones(&mut gray, MIDTONE_GAMMA * darkening);
     gray
 }
 
@@ -140,20 +153,21 @@ fn colour_aware(rgb: &RgbImage, effect: f32) -> GrayImage {
 
 /// Darkening mid-tones strengthens the darker parts of a mostly light page
 /// but muddies a dark one. No darkening at a mean of 0.45 or darker, rising
-/// to gamma 1.4 at 0.65 or lighter.
+/// to the full `extra_gamma` (0.4 recommended, so gamma 1.4) at 0.65 or
+/// lighter.
 #[allow(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     reason = "pixel counts are far below f32 limits, and values are clamped to 0–255 before narrowing"
 )]
-fn darken_light_midtones(gray: &mut GrayImage) {
+fn darken_light_midtones(gray: &mut GrayImage, extra_gamma: f64) {
     let values = gray.as_raw();
     if values.is_empty() {
         return;
     }
     let mean = values.iter().map(|&v| f64::from(v)).sum::<f64>() / values.len() as f64 / 255.0;
-    let gamma = 1.0 + 0.4 * ((mean - 0.45) / 0.20).clamp(0.0, 1.0);
+    let gamma = 1.0 + extra_gamma * ((mean - 0.45) / 0.20).clamp(0.0, 1.0);
     if gamma <= 1.0 {
         return;
     }
@@ -213,6 +227,39 @@ mod tests {
     }
 
     #[test]
+    fn each_colour_step_can_be_turned_off() {
+        let stripes = equal_luma_stripes();
+        let off = Options {
+            colour_separation: 0,
+            colour_contrast: false,
+            midtone_darkening: 0,
+            ..Options::default()
+        };
+        assert_eq!(colour_page_to_grey(&stripes, off), luma(&stripes));
+        let red = |x: u32| (x / 8) % 2 == 1;
+        let gap = |options: Options| {
+            let grey = colour_page_to_grey(
+                &stripes,
+                Options {
+                    colour_contrast: false,
+                    ..options
+                },
+            );
+            (mean_where(&grey, red) - mean_where(&grey, |x| !red(x))).abs()
+        };
+        let half = gap(Options {
+            colour_separation: 50,
+            ..Options::default()
+        });
+        let full = gap(Options::default());
+        let double = gap(Options {
+            colour_separation: 200,
+            ..Options::default()
+        });
+        assert!(half < full && full < double, "{half} {full} {double}");
+    }
+
+    #[test]
     fn neutral_pages_are_unchanged_by_the_colour_term() {
         let grey = RgbImage::from_fn(120, 120, |x, y| {
             image::Rgb([u8::try_from((x + y) % 256).unwrap(); 3])
@@ -226,14 +273,14 @@ mod tests {
         let mut light = GrayImage::from_fn(100, 100, |x, _| {
             image::Luma([if x < 20 { 128 } else { 240 }])
         });
-        darken_light_midtones(&mut light);
+        darken_light_midtones(&mut light, MIDTONE_GAMMA);
         assert!(light.get_pixel(0, 0).0[0] < 100, "mid-grey darkened");
         // Mostly dark: left alone.
         let mut dark = GrayImage::from_fn(100, 100, |x, _| {
             image::Luma([if x < 20 { 128 } else { 40 }])
         });
         let before = dark.clone();
-        darken_light_midtones(&mut dark);
+        darken_light_midtones(&mut dark, MIDTONE_GAMMA);
         assert_eq!(dark, before);
     }
 }
