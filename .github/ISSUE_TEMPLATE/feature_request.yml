@@ -1,0 +1,36 @@
+name: Feature Request
+description: Suggest an improvement to Parallax.
+title: "feat: <short description>"
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature area
+      options:
+        - Library and metadata
+        - Reader and comics
+        - Kobo and device management
+        - Command line
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and where do you get stuck today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe how you would expect the feature to work.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include any workarounds you already use.

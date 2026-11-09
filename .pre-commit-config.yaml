@@ -24,6 +24,11 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        exclude: ^app/pnpm-lock\.yaml$
+      - id: check-yaml
+        # pnpm 12 locks the package manager and project in separate documents.
+        files: ^app/pnpm-lock\.yaml$
+        args: [--allow-multiple-documents]
       - id: check-json
         # tsconfig files are JSON with comments.
         exclude: (^|/)tsconfig.*\.json$

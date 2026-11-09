@@ -64,12 +64,16 @@ impl Kepubify {
             .ok()
             .and_then(|exe| exe.parent().map(Path::to_path_buf))
         {
-            candidates.push(dir.join("kepubify"));
+            candidates.push(dir.join(format!("kepubify{}", env::consts::EXE_SUFFIX)));
         }
         candidates.push(
             Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../app/src-tauri/binaries")
-                .join(format!("kepubify-{}", target_triple())),
+                .join(format!(
+                    "kepubify-{}{}",
+                    target_triple(),
+                    env::consts::EXE_SUFFIX
+                )),
         );
         candidates
             .iter()
@@ -177,7 +181,8 @@ fn target_triple() -> &'static str {
         ("x86_64", "macos") => "x86_64-apple-darwin",
         ("x86_64", "linux") => "x86_64-unknown-linux-gnu",
         ("aarch64", "linux") => "aarch64-unknown-linux-gnu",
-        ("x86_64", "windows") => "x86_64-pc-windows-msvc.exe",
+        ("x86_64", "windows") => "x86_64-pc-windows-msvc",
+        ("aarch64", "windows") => "aarch64-pc-windows-msvc",
         _ => "unknown",
     }
 }

@@ -1,55 +1,85 @@
-# Rust comes from Homebrew's keg-only rustup.
-export PATH := "/opt/homebrew/opt/rustup/bin:" + env_var("PATH")
+set shell := ["bash", "-euc", "-o", "pipefail"]
+set windows-shell := ["bash", "-euc", "-o", "pipefail"]
+set quiet
 
-default: check
+# Homebrew installs rustup as keg-only. Use the system PATH elsewhere.
+export PATH := if os() == "macos" { "/opt/homebrew/opt/rustup/bin:" + env_var("PATH") } else { env_var("PATH") }
 
-# One-time setup: UI dependencies and the kepubify sidecar.
-setup:
-    scripts/fetch-kepubify.sh
-    cd app && pnpm install --frozen-lockfile
+# --- ANSI Colors ---
 
-# Everything that must pass before a commit.
-check: setup fmt-check lint test
+blue := '\033[1;34m'
+green := '\033[1;32m'
+nc := '\033[0m'
 
-fmt:
+# Show available commands
+default:
+    just --list
+
+# Install locked frontend dependencies and fetch the native kepubify sidecar
+sync:
+    printf "\n{{ blue }}=== Installing Dependencies ==={{ nc }}\n"
+    bash scripts/fetch-kepubify.sh
+    pnpm --dir app install --frozen-lockfile
+
+# Format Rust and frontend code
+format: sync
+    printf "\n{{ blue }}=== Formatting Code ==={{ nc }}\n"
     cargo fmt --all
-    cd app && pnpm format
+    pnpm --dir app format
 
-fmt-check:
+# Check formatting without editing files
+fmt-check: sync
     cargo fmt --all --check
-    cd app && pnpm format:check
+    pnpm --dir app format:check
 
-lint:
-    cargo clippy --workspace --all-targets -- -D warnings
-    cd app && pnpm typecheck && pnpm lint
+# Run Rust and frontend linters
+lint: sync
+    printf "\n{{ blue }}=== Running Linters ==={{ nc }}\n"
+    cargo clippy --locked --workspace --all-targets -- -D warnings
+    pnpm --dir app lint
 
-test:
-    node --test scripts/dev.test.mjs
-    cargo test --workspace
-    cd app && pnpm test
+# Check TypeScript types
+typecheck: sync
+    printf "\n{{ blue }}=== Running Type Checks ==={{ nc }}\n"
+    pnpm --dir app typecheck
 
-# Build the Core ML cover upscaler (slow, once). Not needed for `just check`.
+# Run the development script, Rust workspace, and frontend tests
+test: sync
+    printf "\n{{ blue }}=== Running Tests ==={{ nc }}\n"
+    if [[ "{{ os() }}" != windows ]]; then node --test scripts/dev.test.mjs; fi
+    cargo test --locked --workspace
+    pnpm --dir app test
+
+# Run the standard local checks before pushing
+ci: fmt-check lint typecheck test
+    printf "\n{{ green }}✔ Local CI pipeline completed successfully.{{ nc }}\n"
+
+alias setup := sync
+alias fmt := format
+alias check := ci
+
+# Build the Core ML cover upscaler (slow, once)
 upscale-model:
     scripts/build-upscale-model.sh
 
-# Run the desktop app with hot reload.
-dev: setup upscale-model
+# Run the desktop app with hot reload
+dev: sync upscale-model
     scripts/dev.sh
 
-# Build and run the app exactly as a release behaves. No hot reload.
-dev-optimized: setup upscale-model
-    cd app && pnpm tauri build --no-bundle --config src-tauri/tauri.upscale.conf.json
+# Build and run the app as a release behaves, without hot reload
+dev-optimized: sync upscale-model
+    pnpm --dir app tauri build --no-bundle --config src-tauri/tauri.upscale.conf.json
     target/release/Parallax
 
-# Opt-in tests that mount FAT32 disk images to check the device write path.
+# Run tests that mount FAT32 disk images (macOS only)
 test-fat:
-    cargo test -p parallax-device-kobo -- --ignored
-    cargo test -p parallax-core --test send -- --ignored
+    cargo test --locked -p parallax-device-kobo -- --ignored
+    cargo test --locked -p parallax-core --test send -- --ignored
 
-# Opt-in: the reader in a real build, with a hostile book. Opens windows.
-test-reader:
+# Exercise the reader and Settings in a real WebView (opens macOS windows)
+test-reader: sync
     node --test scripts/reader-e2e.mjs
 
-# Build the macOS app bundle (target/release/bundle/macos/).
-build: setup upscale-model
-    cd app && pnpm tauri build --bundles app --config src-tauri/tauri.upscale.conf.json
+# Build the macOS app bundle (target/release/bundle/macos/)
+build: sync upscale-model
+    pnpm --dir app tauri build --bundles app --config src-tauri/tauri.upscale.conf.json

@@ -1,0 +1,77 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    ":semanticCommits",
+    ":prHourlyLimit2"
+  ],
+  "ignorePaths": [
+    "spikes/**",
+    "vendor/**"
+  ],
+  "schedule": [
+    "before 4am on monday"
+  ],
+  "internalChecksFilter": "strict",
+  "rebaseWhen": "conflicted",
+  "labels": [
+    "dependencies",
+    "chore"
+  ],
+  "vulnerabilityAlerts": {
+    "schedule": [
+      "at any time"
+    ]
+  },
+  "packageRules": [
+    {
+      "description": "Wait one week before routine updates.",
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch",
+        "pin",
+        "digest"
+      ],
+      "minimumReleaseAge": "1 week"
+    },
+    {
+      "description": "Group routine workflow action updates.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "pin",
+        "digest"
+      ],
+      "groupName": "github-actions"
+    },
+    {
+      "description": "Group routine Rust dependency updates.",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "rust-dependencies"
+    },
+    {
+      "description": "Group routine frontend tooling updates.",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "frontend-dev-tools"
+    }
+  ]
+}

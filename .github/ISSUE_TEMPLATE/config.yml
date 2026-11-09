@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Parallax documentation
+    url: https://github.com/JacksonFergusonDev/parallax#readme
+    about: See setup instructions, supported formats, and device notes.

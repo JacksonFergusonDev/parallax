@@ -1,4 +1,5 @@
 # parallax-comic reads CBR and CB7 through compress-tools, which finds libarchive
-# with pkg-config. This shim points it at macOS's own libarchive.
+# with pkg-config on Unix and vcpkg on Windows. The shim handles macOS's
+# system libarchive and delegates to pkg-config on Linux.
 [env]
 PKG_CONFIG = { value = "scripts/pkg-config-libarchive.sh", relative = true }

@@ -155,6 +155,55 @@ fn adding_an_amazon_book_converts_it_in_a_child_process() {
 }
 
 #[test]
+fn exported_epub_keeps_metadata_edits_across_cli_invocations() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("Édition originale.epub");
+    let fixture =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/epub/minimal.epub");
+    fs::copy(fixture, &input).unwrap();
+    let added = add(dir.path(), &input);
+    assert!(
+        added.status.success() && added.stderr.is_empty(),
+        "{added:?}"
+    );
+    let books: serde_json::Value =
+        serde_json::from_slice(&run(dir.path(), &["ls", "--json"], false).stdout).unwrap();
+    let id = books[0]["id"].as_i64().unwrap().to_string();
+    let original_title = books[0]["title"].as_str().unwrap();
+
+    let title = "Café — 改訂版";
+    let author = "Zoë 著者";
+    run(
+        dir.path(),
+        &["edit", &id, "--title", title, "--author", author],
+        false,
+    );
+    let exported = dir.path().join("Édition revue.epub");
+    run(
+        dir.path(),
+        &["export", &id, exported.to_str().unwrap()],
+        false,
+    );
+
+    let read_title_and_authors = |file: &Path| {
+        let output = Command::new(env!("CARGO_BIN_EXE_parallax-cli"))
+            .args(["epub-info", "--json"])
+            .arg(file)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap()
+    };
+    let edited = read_title_and_authors(&exported);
+    assert_eq!(edited["metadata"]["title"], title);
+    assert_eq!(edited["metadata"]["authors"], serde_json::json!([author]));
+    assert_eq!(
+        read_title_and_authors(&input)["metadata"]["title"],
+        original_title
+    );
+}
+
+#[test]
 fn a_drm_book_is_refused_by_name() {
     let dir = tempfile::tempdir().unwrap();
     let locked = dir.path().join("locked.kfx");

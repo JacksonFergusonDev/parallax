@@ -1763,7 +1763,13 @@ mod tests {
                     cmd: "device_restore".into(),
                     callback: CallbackFn(0),
                     error: CallbackFn(1),
-                    url: "tauri://localhost".parse().unwrap(),
+                    url: if cfg!(windows) {
+                        "http://tauri.localhost"
+                    } else {
+                        "tauri://localhost"
+                    }
+                    .parse()
+                    .unwrap(),
                     body: InvokeBody::default(),
                     headers: tauri::http::HeaderMap::default(),
                     invoke_key: INVOKE_KEY.to_string(),
