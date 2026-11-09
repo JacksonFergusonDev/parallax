@@ -46,6 +46,12 @@ debug = "line-tables-only"
 debug = false
 opt-level = 3
 
+# erc-comic's own per-pixel loops (greyscale, packing, colour checks) are
+# workspace code, so the rule above skips them. Unoptimised, preparing a
+# 219-page volume took 34 s instead of 6 s.
+[profile.dev.package.erc-comic]
+opt-level = 3
+
 [profile.release]
 codegen-units = 1
 lto = true
