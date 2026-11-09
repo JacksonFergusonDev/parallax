@@ -15,6 +15,9 @@ interface Props {
   onClose: () => void;
 }
 
+import { BookProgressBar } from "./BookProgressBar";
+import { useBookProgress } from "../bookProgress";
+
 const plural = (n: number, word: string, many = `${word}s`) =>
   `${n} ${n === 1 ? word : many}`;
 
@@ -22,6 +25,7 @@ const plural = (n: number, word: string, many = `${word}s`) =>
 export function KoboCheck({ mount, onChanged, onClose }: Props) {
   const [health, setHealth] = useState<KoboHealth | null>(null);
   const [busy, setBusy] = useState(false);
+  const [operation, runBookOperation] = useBookProgress();
   const [message, setMessage] = useState<{
     error: boolean;
     text: string;
@@ -66,9 +70,15 @@ export function KoboCheck({ mount, onChanged, onClose }: Props) {
     );
     if (!ok) return;
     fix(async () => {
-      const outcomes = await removeFromDevice(
-        mount,
-        health.missing_files.map((m) => m.content_id),
+      const outcomes = await runBookOperation(
+        "Removing",
+        (report) =>
+          removeFromDevice(
+            mount,
+            health.missing_files.map((m) => m.content_id),
+            report,
+          ),
+        "Backing up Kobo…",
       );
       const failed = outcomes.filter((o) => "Err" in o.result).length;
       if (failed) throw new Error(`${failed} could not be removed.`);
@@ -199,6 +209,7 @@ export function KoboCheck({ mount, onChanged, onClose }: Props) {
             </li>
           </ul>
         )}
+        {operation && <BookProgressBar operation={operation} />}
         {message && (
           <p className={`notice notice-${message.error ? "error" : "info"}`}>
             {message.text}

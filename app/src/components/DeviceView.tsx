@@ -33,7 +33,6 @@ import {
   ejectDevice,
   importFromDevice,
   listCollections,
-  onImportProgress,
   removeFromDevice,
   setReadingStatus,
   tidyDevice,
@@ -64,6 +63,8 @@ import { EnhanceReview } from "./EnhanceReview";
 import { CollectionMenu } from "./CollectionMenu";
 import { DeviceCard } from "./DeviceCard";
 import { FolderImport } from "./FolderImport";
+import { BookProgressBar } from "./BookProgressBar";
+import { useBookProgress } from "../bookProgress";
 import { sortCommands, useMenuCommands } from "../menu";
 import { NameDialog } from "./NameDialog";
 import { RulesDialog } from "./RulesDialog";
@@ -131,6 +132,7 @@ export function DeviceView({
   const [shelf, setShelf] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<"working" | "ejecting" | null>(null);
+  const [bookOperation, runBookOperation] = useBookProgress();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [notice, setNotice] = useState<{
     kind: "error" | "info";
@@ -305,7 +307,11 @@ export function DeviceView({
     );
     if (!ok) return;
     run(async () => {
-      const outcomes = await removeFromDevice(device.mount, ids(removable));
+      const outcomes = await runBookOperation(
+        "Removing",
+        (report) => removeFromDevice(device.mount, ids(removable), report),
+        "Backing up Kobo…",
+      );
       setSelected(new Set());
       const failed = outcomes.filter((o) => "Err" in o.result);
       if (failed.length) {
@@ -319,55 +325,40 @@ export function DeviceView({
   };
 
   /** Adds books to the library: the given ones, or every book when null. */
+  const importBooks = (contentIds: string[] | null) =>
+    runBookOperation("Adding", (report) =>
+      importFromDevice(device.mount, contentIds, report),
+    );
+
   const addToLibrary = (contentIds: string[] | null) =>
     run(async () => {
-      const unlisten = await onImportProgress((p) =>
-        setNotice({
-          kind: "info",
-          text: `Adding ${p.index} of ${p.total}: ${p.title}…`,
-        }),
+      const outcomes = await importBooks(contentIds);
+      setSelected(new Set());
+      onLibraryChanged();
+      onBooksAdded(
+        outcomes.flatMap((o) =>
+          "Ok" in o.result && o.result.Ok.kind === "added"
+            ? [o.result.Ok.book_id]
+            : [],
+        ),
       );
-      try {
-        const outcomes = await importFromDevice(device.mount, contentIds);
-        setSelected(new Set());
-        onLibraryChanged();
-        onBooksAdded(
-          outcomes.flatMap((o) =>
-            "Ok" in o.result && o.result.Ok.kind === "added"
-              ? [o.result.Ok.book_id]
-              : [],
-          ),
-        );
-        return summarizeDeviceImport(outcomes);
-      } finally {
-        unlisten();
-      }
+      return summarizeDeviceImport(outcomes);
     });
 
   /** Brings every book into the library, then looks up series and genres. */
   const organise = () =>
     run(async () => {
-      const unlisten = await onImportProgress((p) =>
-        setNotice({
-          kind: "info",
-          text: `Adding ${p.index} of ${p.total} to your library: ${p.title}…`,
-        }),
-      );
-      try {
-        const outcomes = await importFromDevice(device.mount, null);
-        onLibraryChanged();
-        const ids = new Set([...libraryByContentId.values()].map((b) => b.id));
-        for (const o of outcomes) {
-          if ("Ok" in o.result && o.result.Ok.kind !== "skipped")
-            ids.add(o.result.Ok.book_id);
-        }
-        if (ids.size) setDialog({ kind: "enhance", ids: [...ids] });
-        return ids.size
-          ? summarizeDeviceImport(outcomes)
-          : "None of the books on this Kobo can be added to your library.";
-      } finally {
-        unlisten();
+      const outcomes = await importBooks(null);
+      onLibraryChanged();
+      const ids = new Set([...libraryByContentId.values()].map((b) => b.id));
+      for (const o of outcomes) {
+        if ("Ok" in o.result && o.result.Ok.kind !== "skipped")
+          ids.add(o.result.Ok.book_id);
       }
+      if (ids.size) setDialog({ kind: "enhance", ids: [...ids] });
+      return ids.size
+        ? summarizeDeviceImport(outcomes)
+        : "None of the books on this Kobo can be added to your library.";
     });
 
   const markAs = (
@@ -715,7 +706,9 @@ export function DeviceView({
       </div>
 
       <footer className="actions">
-        {notice ? (
+        {bookOperation ? (
+          <BookProgressBar operation={bookOperation} />
+        ) : notice ? (
           <span className={`notice notice-${notice.kind}`}>{notice.text}</span>
         ) : (
           <span className="notice notice-info">{SELECTION_HINT}</span>
@@ -882,8 +875,12 @@ export function DeviceView({
           place="Kobo"
           groups={dialog.groups}
           removeWarning="Their reading progress and highlights are deleted too. A backup of the Kobo's database is made first."
-          remove={async (contentIds) => {
-            const outcomes = await removeFromDevice(device.mount, contentIds);
+          remove={async (contentIds, report) => {
+            const outcomes = await removeFromDevice(
+              device.mount,
+              contentIds,
+              report,
+            );
             const failed = outcomes.find((o) => "Err" in o.result);
             if (failed && "Err" in failed.result)
               throw new Error(failed.result.Err);

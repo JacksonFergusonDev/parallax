@@ -102,8 +102,27 @@ impl Reporter {
                 format!("preparing {file}: page {page}/{pages}"),
                 false,
             ),
-            Progress::Copying { index, total, file } => {
-                (index, total, false, format!("copying {file}"), false)
+            Progress::Copying {
+                index,
+                total,
+                file,
+                bytes,
+                total_bytes,
+            } => {
+                if self.bar.is_none() && bytes > 0 {
+                    return;
+                }
+                let percent = bytes
+                    .saturating_mul(100)
+                    .checked_div(total_bytes)
+                    .unwrap_or(0);
+                (
+                    index,
+                    total,
+                    false,
+                    format!("copying {file} ({percent}%)"),
+                    false,
+                )
             }
             Progress::Done {
                 index,
@@ -165,6 +184,8 @@ mod tests {
             index: 1,
             total: 2,
             file: "one.epub".into(),
+            bytes: 25,
+            total_bytes: 100,
         });
         assert_eq!(bar.position(), 0);
         reporter.send(Progress::Done {

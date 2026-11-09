@@ -27,7 +27,6 @@ import {
   reviewBooks,
   listBooks,
   listDevices,
-  onSendProgress,
   removeBooks,
   sendBooks,
   updateBook,
@@ -35,6 +34,8 @@ import {
   type Book,
   type DeviceInfo,
   type MetadataEdit,
+  type Progress,
+  type SendOutcome,
   type Collection,
   type OnDevice,
   listCollections,
@@ -115,6 +116,8 @@ import {
 import { usePresentation } from "./presentation";
 import { rememberView, usePreferences, type View } from "./preferences";
 import { sortCommands, useMenuCommands } from "./menu";
+import { useBookProgress } from "./bookProgress";
+import { BookProgressBar } from "./components/BookProgressBar";
 import "./styles.css";
 
 const DEVICE_POLL_MS = 2000;
@@ -172,7 +175,7 @@ export default function App() {
   const searchRef = useRef<HTMLInputElement>(null);
   const [statuses, setStatuses] = useState<Record<number, SendStatus>>({});
   const [busy, setBusy] = useState<
-    "importing" | "sending" | "updating" | "ejecting" | null
+    "importing" | "removing" | "sending" | "updating" | "ejecting" | null
   >(null);
   const [dragging, setDragging] = useState(false);
   const [duplicates, setDuplicates] = useState<Promise<ReviewGroup[]> | null>(
@@ -198,7 +201,7 @@ export default function App() {
   const [reviews, setReviews] = useState<ReviewBatch[]>([]);
   /** Too many books to open a review for: it's offered instead. */
   const [reviewOffer, setReviewOffer] = useState<ReviewBatch | null>(null);
-  const batch = useRef<number[]>([]);
+  const [bookOperation, runBookOperation] = useBookProgress();
   const anchor = useRef<number | null>(null);
 
   const refresh = useCallback(async () => {
@@ -317,15 +320,6 @@ export default function App() {
     };
   }, [device]);
 
-  useEffect(() => {
-    const unlisten = onSendProgress((p) =>
-      setStatuses((s) => applyProgress(s, batch.current, p)),
-    );
-    return () => {
-      unlisten.then((f) => f());
-    };
-  }, []);
-
   /** The connected Kobo, if books can be sent to it. */
   const writable = device?.read_only === null ? device : null;
   const sendTo = useRef(writable);
@@ -372,17 +366,52 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
     );
   };
 
+  const runTransfer = async (
+    ids: number[],
+    action: (report: (p: Progress) => void) => Promise<SendOutcome[]>,
+  ) => {
+    setStatuses(Object.fromEntries(ids.map((id) => [id, { stage: "queued" }])));
+    let active = true;
+    try {
+      const outcomes = await action((p) => {
+        if (active) setStatuses((current) => applyProgress(current, ids, p));
+      });
+      setStatuses((current) => {
+        const next = { ...current };
+        for (const { book_id, result } of outcomes) {
+          if (book_id !== null)
+            next[book_id] =
+              "Ok" in result
+                ? { stage: "sent" }
+                : { stage: "failed", error: result.Err };
+        }
+        return next;
+      });
+      return outcomes;
+    } catch (error) {
+      setStatuses((current) => {
+        const next = { ...current };
+        for (const id of ids) {
+          if (next[id]?.stage !== "sent" && next[id]?.stage !== "failed")
+            next[id] = { stage: "failed", error: String(error) };
+        }
+        return next;
+      });
+      throw error;
+    } finally {
+      active = false;
+    }
+  };
+
   /** Sends books from the review, showing progress on them as usual. */
   const sendReviewed = async (ids: number[]) => {
     if (!writable) return [];
     setBusy("sending");
     try {
       if (!(await confirmComicTransfer(writable, ids))) return null;
-      batch.current = ids;
-      setStatuses(
-        Object.fromEntries(ids.map((id) => [id, { stage: "queued" }])),
+      const outcomes = await runTransfer(ids, (report) =>
+        sendBooks(writable.mount, ids, null, report),
       );
-      const outcomes = await sendBooks(writable.mount, ids);
       await refreshOnDevice(writable);
       return outcomes;
     } finally {
@@ -435,9 +464,12 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
         });
         return;
       }
-      setBusy("importing");
+      setNotice(null);
       try {
-        const results = await importBooks(files, comicFolder);
+        const results = await runBookOperation("Adding", (report) => {
+          setBusy("importing");
+          return importBooks(files, comicFolder, report);
+        });
         setNotice({ kind: "info", text: summarizeImport(results) });
         await refresh();
         void reviewAdded(addedIds(results), failedFiles(results));
@@ -447,7 +479,7 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
         setBusy(null);
       }
     },
-    [refresh, reviewAdded],
+    [refresh, reviewAdded, runBookOperation],
   );
 
   useEffect(() => {
@@ -663,18 +695,15 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
     try {
       if (!(await confirmComicTransfer(device, ids, kind === "updating")))
         return;
-      batch.current = ids;
-      setStatuses(
-        Object.fromEntries(ids.map((id) => [id, { stage: "queued" }])),
-      );
       const collection =
         sendCollection === NEW_COLLECTION
           ? newCollection.trim() || null
           : sendCollection || null;
-      const outcomes =
+      const outcomes = await runTransfer(ids, (report) =>
         kind === "sending"
-          ? await sendBooks(device.mount, ids, collection)
-          : await updateBooks(device.mount, ids);
+          ? sendBooks(device.mount, ids, collection, report)
+          : updateBooks(device.mount, ids, report),
+      );
       if (kind === "sending" && collection && alreadyOnKobo.length > 0) {
         // Selected books that were already on the Kobo join the collection too.
         await changeCollections(device.mount, [
@@ -760,12 +789,20 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
       },
     );
     if (!ok) return;
+    setBusy("removing");
+    setNotice(null);
     try {
-      await removeBooks([...selected]);
+      await runBookOperation(
+        "Removing",
+        (report) => removeBooks([...selected], report),
+        "Saving a library snapshot…",
+      );
       setSelected(new Set());
-      await refresh();
     } catch (e) {
       setNotice({ kind: "error", text: String(e) });
+    } finally {
+      await refresh();
+      setBusy(null);
     }
   };
 
@@ -1234,7 +1271,9 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
             <Plus />
             {busy === "importing" ? "Adding…" : "Add books…"}
           </button>
-          {reviewOffer ? (
+          {bookOperation ? (
+            <BookProgressBar operation={bookOperation} />
+          ) : reviewOffer ? (
             <span className="notice notice-info review-offer">
               {plural(reviewOffer.ids.length, "book")} added ·{" "}
               {flaggedCount(reviewOffer)} could use attention
@@ -1492,8 +1531,8 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
           place="library"
           groups={duplicates}
           removeWarning="They're removed from your library; copies on your Kobo stay."
-          remove={async (ids) => {
-            await removeBooks(ids.map(Number));
+          remove={async (ids, report) => {
+            await removeBooks(ids.map(Number), report);
             setSelected(new Set());
           }}
           dismiss={(key) => dismissDuplicates(key, null)}

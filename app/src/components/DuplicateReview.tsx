@@ -1,7 +1,9 @@
 import { GeneratedCover } from "./GeneratedCover";
 import { useEffect, useState, type ReactNode } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
-import type { DuplicateReason } from "../api";
+import type { DuplicateReason, ReportBookProgress } from "../api";
+import { useBookProgress } from "../bookProgress";
+import { BookProgressBar } from "./BookProgressBar";
 
 /** One copy in a group, already described for display. */
 export interface ReviewMember {
@@ -30,7 +32,7 @@ interface Props {
   groups: Promise<ReviewGroup[]>;
   /** Shown in the confirmation before removing. */
   removeWarning: string;
-  remove: (ids: string[]) => Promise<void>;
+  remove: (ids: string[], report: ReportBookProgress) => Promise<void>;
   dismiss: (key: string) => Promise<void>;
   onChanged: () => void;
   onClose: () => void;
@@ -58,6 +60,7 @@ export function DuplicateReview({
   const [groups, setGroups] = useState<ReviewGroup[] | null>(null);
   const [index, setIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [operation, runBookOperation] = useBookProgress();
 
   useEffect(() => {
     let alive = true;
@@ -76,7 +79,10 @@ export function DuplicateReview({
   };
 
   return (
-    <div className="modal-backdrop" onClick={step ? undefined : close}>
+    <div
+      className="modal-backdrop"
+      onClick={step || operation ? undefined : close}
+    >
       <div
         className={`modal duplicates ${step ? "review-large" : ""}`}
         onClick={(e) => e.stopPropagation()}
@@ -96,6 +102,7 @@ export function DuplicateReview({
             </p>
           </div>
         </div>
+        {operation && <BookProgressBar operation={operation} />}
         {error && <p className="notice notice-error">{error}</p>}
         {group ? (
           <GroupReview
@@ -103,7 +110,11 @@ export function DuplicateReview({
             group={group}
             removeWarning={removeWarning}
             onRemove={async (ids) => {
-              await remove(ids);
+              await runBookOperation(
+                "Removing",
+                (report) => remove(ids, report),
+                "Preparing backup…",
+              );
               setIndex((i) => i + 1);
             }}
             onDismiss={async () => {

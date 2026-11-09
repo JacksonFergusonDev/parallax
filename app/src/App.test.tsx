@@ -2,12 +2,24 @@
 import { StrictMode, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import App from "./App";
 import { readCache } from "./readCache";
-import type { Book, DeviceBook, DeviceInfo } from "./api";
+import type {
+  Book,
+  BookProgress,
+  DeviceBook,
+  DeviceInfo,
+  Progress,
+  RemoveOutcome,
+  SendOutcome,
+} from "./api";
 
 vi.mock("@tauri-apps/api/core", () => ({
+  Channel: class<T> {
+    constructor(public onmessage: (message: T) => void) {}
+  },
   invoke: vi.fn(),
   isTauri: vi.fn(() => false),
   convertFileSrc: (path: string) => `asset:${path}`,
@@ -156,6 +168,113 @@ afterEach(async () => {
   container.remove();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe("book operation progress", () => {
+  it("shows Kobo backup activity, then counts completed removals", async () => {
+    const other = { ...koboBook, id: "file:///mnt/onboard/second.epub" };
+    currentBooks = [koboBook, other];
+    vi.mocked(ask).mockResolvedValueOnce(true);
+    let finish!: (result: RemoveOutcome[]) => void;
+    const pending = new Promise<RemoveOutcome[]>((resolve) => {
+      finish = resolve;
+    });
+    const normal = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(async (command, args) =>
+      command === "remove_from_device" ? pending : normal(command, args),
+    );
+
+    await render();
+    await click(button("On Kobo"));
+    const view = panel("On Kobo");
+    const cards = view.querySelectorAll<HTMLButtonElement>("button.card");
+    await click(cards[0]);
+    await act(async () => {
+      cards[1].dispatchEvent(
+        new MouseEvent("click", { bubbles: true, metaKey: true }),
+      );
+    });
+    await click(button("Remove 2 from Kobo"));
+    const progress = () => view.querySelector<HTMLProgressElement>("progress")!;
+    expect(view.textContent).toContain("Backing up Kobo…");
+    expect(progress().hasAttribute("value")).toBe(false);
+    const { progress: channel } = calls("remove_from_device")[0][1] as {
+      progress: { onmessage: (message: BookProgress) => void };
+    };
+    await act(async () =>
+      channel.onmessage({ completed: 1, total: 2, title: null }),
+    );
+    expect(view.textContent).toContain("Removing 2 of 2");
+    expect([progress().value, progress().max]).toEqual([1, 2]);
+
+    currentBooks = [];
+    await act(async () =>
+      finish(
+        [koboBook, other].map((b) => ({
+          content_id: b.id,
+          result: { Ok: null },
+        })),
+      ),
+    );
+    expect(view.querySelector("progress")).toBeNull();
+    expect(view.textContent).toContain("Removed 2 books");
+  });
+
+  it("shows byte progress on a sending cover and clears it at completion", async () => {
+    let finish!: (result: SendOutcome[]) => void;
+    const pending = new Promise<SendOutcome[]>((resolve) => {
+      finish = resolve;
+    });
+    const normal = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(async (command, args) =>
+      command === "send_books" ? pending : normal(command, args),
+    );
+
+    await render();
+    const card =
+      panel("Library").querySelector<HTMLButtonElement>("button.card")!;
+    await click(card);
+    await click(button("Send 1 to Kobo"));
+    const { progress: channel } = calls("send_books")[0][1] as {
+      progress: { onmessage: (message: Progress) => void };
+    };
+    const base = { index: 1, total: 1, file: "Local book" };
+    await act(async () => channel.onmessage({ stage: "converting", ...base }));
+    const sheen = card.querySelector(".cover-sheen");
+    expect(sheen).not.toBeNull();
+    await act(async () =>
+      channel.onmessage({
+        stage: "copying",
+        ...base,
+        bytes: 25,
+        total_bytes: 100,
+      }),
+    );
+    expect(card.querySelector(".cover-sheen")).toBe(sheen);
+    const progress =
+      card.querySelector<HTMLProgressElement>(".cover progress")!;
+    expect([progress.value, progress.max]).toEqual([25, 100]);
+    expect(card.textContent).toContain("Transferring 25%");
+
+    await act(async () =>
+      finish([
+        {
+          source: "Local book",
+          book_id: localBook.id,
+          result: {
+            Ok: {
+              device_path: "KEpub/book.epub",
+              content_id: koboBook.id,
+              bytes: 100,
+            },
+          },
+        },
+      ]),
+    );
+    expect(card.querySelector("progress")).toBeNull();
+    expect(card.querySelector(".cover-sheen")).toBeNull();
+    expect(card.textContent).toContain("Sent");
+  });
 });
 
 describe("read-only Kobos", () => {

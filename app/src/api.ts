@@ -1,6 +1,6 @@
 // Typed wrappers over the Tauri commands in src-tauri/src/lib.rs. Shapes
 // mirror the serde output of the Rust types.
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { Channel, convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { Settings as ReaderSettings } from "./reader/backend";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { readCache } from "./readCache";
@@ -148,10 +148,18 @@ export interface ImportResult {
 
 export type Progress =
   | {
-      stage: "preparing" | "converting" | "copying";
+      stage: "preparing" | "converting";
       index: number;
       total: number;
       file: string;
+    }
+  | {
+      stage: "copying";
+      index: number;
+      total: number;
+      file: string;
+      bytes: number;
+      total_bytes: number;
     }
   | {
       stage: "processing_comic";
@@ -444,6 +452,14 @@ export interface SavedStats {
   stats: ReadingStats;
 }
 
+export interface BookProgress {
+  completed: number;
+  total: number;
+  title: string | null;
+}
+
+export type ReportBookProgress = (progress: BookProgress) => void;
+
 export interface ImportProgress {
   index: number;
   total: number;
@@ -488,6 +504,11 @@ async function write<T>(
   }
 }
 
+/** Only the command that owns the channel can report to this caller. */
+function progressArgs<T>(report?: (event: T) => void) {
+  return report ? { progress: new Channel(report) } : {};
+}
+
 /** Detection is always live; cached device data never crosses a USB session. */
 export async function listDevices(): Promise<DeviceInfo[]> {
   let devices: DeviceInfo[];
@@ -517,10 +538,14 @@ export async function listDevices(): Promise<DeviceInfo[]> {
 }
 
 export const listBooks = () => read<Book[]>("library_list", {}, ["library"]);
-export const importBooks = (paths: string[], comicFolder?: boolean) =>
+export const importBooks = (
+  paths: string[],
+  comicFolder?: boolean,
+  report?: ReportBookProgress,
+) =>
   write<ImportResult[]>(
     "library_import",
-    comicFolder ? { paths, comicFolder } : { paths },
+    { paths, ...(comicFolder ? { comicFolder } : {}), ...progressArgs(report) },
     ["library", "plans"],
   );
 export const setComicKind = (
@@ -540,8 +565,8 @@ export const updateBook = (id: number, edit: MetadataEdit) =>
     "plans",
     coverSearchTag(id),
   ]);
-export const removeBooks = (ids: number[]) =>
-  write<void>("library_remove", { ids }, [
+export const removeBooks = (ids: number[], report?: ReportBookProgress) =>
+  write<void>("library_remove", { ids, ...progressArgs(report) }, [
     "library",
     "plans",
     ...ids.map(coverSearchTag),
@@ -580,12 +605,26 @@ export const comicTransferEstimate = (mount: string, ids: number[]) =>
   } | null>("comic_transfer_estimate", { mount, ids });
 export const deviceBooks = (mount: string) =>
   read<DeviceBook[]>("device_books", { mount }, [deviceTag(mount)]);
-export const removeFromDevice = (mount: string, contentIds: string[]) =>
-  write<RemoveOutcome[]>("remove_from_device", { mount, contentIds }, [
-    deviceTag(mount),
-  ]);
-export const updateBooks = (mount: string, ids: number[]) =>
-  write<SendOutcome[]>("update_books", { mount, ids }, [deviceTag(mount)]);
+export const removeFromDevice = (
+  mount: string,
+  contentIds: string[],
+  report?: ReportBookProgress,
+) =>
+  write<RemoveOutcome[]>(
+    "remove_from_device",
+    { mount, contentIds, ...progressArgs(report) },
+    [deviceTag(mount)],
+  );
+export const updateBooks = (
+  mount: string,
+  ids: number[],
+  report?: (p: Progress) => void,
+) =>
+  write<SendOutcome[]>(
+    "update_books",
+    { mount, ids, ...progressArgs(report) },
+    [deviceTag(mount)],
+  );
 export const tidyDevice = (mount: string) =>
   write<number>("tidy_device", { mount }, [deviceTag(mount)]);
 export const deviceHistory = (mount: string) =>
@@ -594,18 +633,25 @@ export const sendBooks = (
   mount: string,
   ids: number[],
   collection: string | null = null,
+  report?: (p: Progress) => void,
 ) =>
-  write<SendOutcome[]>("send_books", { mount, ids, collection }, [
-    deviceTag(mount),
-  ]);
+  write<SendOutcome[]>(
+    "send_books",
+    { mount, ids, collection, ...progressArgs(report) },
+    [deviceTag(mount)],
+  );
 /** Adds books from the device to the library; all of them when `contentIds` is null. */
-export const importFromDevice = (mount: string, contentIds: string[] | null) =>
+export const importFromDevice = (
+  mount: string,
+  contentIds: string[] | null,
+  report?: ReportBookProgress,
+) =>
   // Reads the device only, but adds library books and device-copy links.
-  write<DeviceImportOutcome[]>("import_from_device", { mount, contentIds }, [
-    "library",
-    "plans",
-    deviceTag(mount),
-  ]);
+  write<DeviceImportOutcome[]>(
+    "import_from_device",
+    { mount, contentIds, ...progressArgs(report) },
+    ["library", "plans", deviceTag(mount)],
+  );
 export const genresPlan = (mount: string | null) =>
   invoke<TidyPlan>("genres_plan", { mount });
 export const genresApply = (
@@ -624,12 +670,13 @@ export const calibreDefaultLibrary = () =>
   invoke<string | null>("calibre_default_library");
 export const calibrePreview = (path: string) =>
   invoke<CalibrePreview>("calibre_preview", { path });
-export const calibreImport = (path: string) =>
+export const calibreImport = (path: string, report?: ReportBookProgress) =>
   // Reads the calibre library only.
-  write<CalibreImportOutcome[]>("calibre_import", { path }, [
-    "library",
-    "plans",
-  ]);
+  write<CalibreImportOutcome[]>(
+    "calibre_import",
+    { path, ...progressArgs(report) },
+    ["library", "plans"],
+  );
 /** Looks up series and genres; `mount` adds a connected Kobo's clues. */
 export const enhancePropose = (ids: number[], mount: string | null) =>
   invoke<Proposal[]>("enhance_propose", { ids, mount });
@@ -899,16 +946,6 @@ export const coverColors = (paths: string[]) =>
   invoke<([number, number, number] | null)[]>("cover_colors", { paths });
 export const ejectDevice = (mount: string) =>
   write<void>("eject_device", { mount }, [deviceTag(mount)]);
-
-export const onSendProgress = (
-  handler: (p: Progress) => void,
-): Promise<UnlistenFn> =>
-  listen<Progress>("send-progress", (e) => handler(e.payload));
-
-export const onImportProgress = (
-  handler: (p: ImportProgress) => void,
-): Promise<UnlistenFn> =>
-  listen<ImportProgress>("import-progress", (e) => handler(e.payload));
 
 /** URL for a cover thumbnail; `version` busts the webview cache after edits. */
 export function coverSrc(book: Book): string | null {

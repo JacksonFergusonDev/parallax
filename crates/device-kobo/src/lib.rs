@@ -41,7 +41,8 @@ pub use maintenance::{
     set_read_status,
 };
 pub use ops::{
-    DisplayMetadata, image_id_for, qhash, remove_book, replace_book, set_series, tidy_apple_double,
+    DisplayMetadata, image_id_for, qhash, remove_book, replace_book, replace_book_with_progress,
+    set_series, tidy_apple_double,
 };
 pub use report::{CoverFiles, DeviceReport, REPORT_FORMAT};
 pub use screen::ASSUMED_SCREEN;

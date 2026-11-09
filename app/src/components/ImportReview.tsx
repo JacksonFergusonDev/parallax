@@ -20,7 +20,11 @@ import {
   type Book,
   type Proposal,
   type SendOutcome,
+  type ReportBookProgress,
 } from "../api";
+import { TransferProgress } from "./TransferProgress";
+import { BookProgressBar } from "./BookProgressBar";
+import { useBookProgress } from "../bookProgress";
 import { libraryReviewGroups } from "../duplicates";
 import {
   countChanges,
@@ -269,8 +273,9 @@ export function ImportReview({
     else onClose();
   };
 
-  const remove = async (target: number[]) => {
-    await removeBooks(target);
+  const [removeOperation, runBookOperation] = useBookProgress();
+  const remove = async (target: number[], report: ReportBookProgress) => {
+    await removeBooks(target, report);
     setRemoved((r) => new Set([...r, ...target]));
     onChanged();
   };
@@ -278,7 +283,11 @@ export function ImportReview({
   const removeWarned = async (target: number[]) => {
     const names = target.map(title).join(", ");
     if (await ask(`Remove ${names} from your library?`, { kind: "warning" }))
-      await remove(target).catch((e) => setError(String(e)));
+      await runBookOperation(
+        "Removing",
+        (report) => remove(target, report),
+        "Saving a library snapshot…",
+      ).catch((e) => setError(String(e)));
   };
 
   const proposals =
@@ -409,7 +418,7 @@ export function ImportReview({
         step={tracker}
         groups={duplicateGroups}
         removeWarning="They're removed from your library; copies on your Kobo stay."
-        remove={(target) => remove(target.map(Number))}
+        remove={(target, report) => remove(target.map(Number), report)}
         dismiss={(key) => dismissDuplicates(key, null)}
         onChanged={onChanged}
         onClose={() => advance("duplicates")}
@@ -477,13 +486,14 @@ export function ImportReview({
           <button
             className="icon"
             aria-label="Close"
-            disabled={sending}
+            disabled={sending || removeOperation !== null}
             onClick={onClose}
           >
             ×
           </button>
         </div>
 
+        {removeOperation && <BookProgressBar operation={removeOperation} />}
         {error && <p className="notice notice-error">{error}</p>}
 
         {screen === "summary" && (
@@ -499,6 +509,7 @@ export function ImportReview({
                     {line.removable && (
                       <button
                         className="link"
+                        disabled={removeOperation !== null}
                         onClick={() => removeWarned(line.removable ?? [])}
                       >
                         Remove
@@ -515,22 +526,38 @@ export function ImportReview({
                 <>
                   <button
                     className="secondary"
+                    disabled={removeOperation !== null}
                     onClick={() =>
                       steps.includes("send") ? setScreen("send") : onClose()
                     }
                   >
                     Keep as is
                   </button>
-                  <button className="primary" autoFocus onClick={start}>
+                  <button
+                    className="primary"
+                    disabled={removeOperation !== null}
+                    autoFocus
+                    onClick={start}
+                  >
                     Review
                   </button>
                 </>
               ) : steps.includes("send") ? (
-                <button className="primary" autoFocus onClick={start}>
+                <button
+                  className="primary"
+                  disabled={removeOperation !== null}
+                  autoFocus
+                  onClick={start}
+                >
                   Continue
                 </button>
               ) : (
-                <button className="primary" autoFocus onClick={onClose}>
+                <button
+                  className="primary"
+                  disabled={removeOperation !== null}
+                  autoFocus
+                  onClick={onClose}
+                >
                   Done
                 </button>
               )}
@@ -820,6 +847,9 @@ export function ImportReview({
                             }
                           >
                             {sendStatusLabel(status)}
+                            {status.stage === "copying" && (
+                              <TransferProgress status={status} />
+                            )}
                           </span>
                         )}
                       </label>

@@ -1,3 +1,4 @@
+import { TransferProgress } from "./TransferProgress";
 import { GeneratedCover } from "./GeneratedCover";
 import { memo } from "react";
 import { coverSrc, type Book } from "../api";
@@ -76,6 +77,7 @@ export const LibraryRow = memo(function LibraryRow({
       {status ? (
         <span className={`cell end send-${status.stage}`}>
           {sendStatusLabel(status)}
+          {status.stage === "copying" && <TransferProgress status={status} />}
         </span>
       ) : (
         <span className={`cell end kobo-${deviceState ?? "none"}`}>

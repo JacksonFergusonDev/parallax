@@ -4,11 +4,12 @@ import {
   calibreDefaultLibrary,
   calibreImport,
   calibrePreview,
-  onImportProgress,
   type CalibreImportOutcome,
   type CalibrePreview,
-  type ImportProgress,
 } from "../api";
+
+import { BookProgressBar } from "./BookProgressBar";
+import { useBookProgress } from "../bookProgress";
 
 interface Props {
   /** Called with the books that are new to the library. */
@@ -23,7 +24,7 @@ export function CalibreImport({ onImported, onClose }: Props) {
   /** undefined while looking for calibre's library; null when none found. */
   const [path, setPath] = useState<string | null | undefined>(undefined);
   const [preview, setPreview] = useState<CalibrePreview | null>(null);
-  const [progress, setProgress] = useState<ImportProgress | null>(null);
+  const [operation, runBookOperation] = useBookProgress();
   const [importing, setImporting] = useState(false);
   const [outcomes, setOutcomes] = useState<CalibreImportOutcome[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,9 +68,12 @@ export function CalibreImport({ onImported, onClose }: Props) {
     if (!path) return;
     setImporting(true);
     setError(null);
-    const unlisten = await onImportProgress(setProgress);
     try {
-      const outcomes = await calibreImport(path);
+      const outcomes = await runBookOperation(
+        "Adding",
+        (report) => calibreImport(path, report),
+        "Reading calibre library…",
+      );
       setOutcomes(outcomes);
       onImported(
         outcomes.flatMap((o) =>
@@ -81,7 +85,6 @@ export function CalibreImport({ onImported, onClose }: Props) {
     } catch (e) {
       setError(String(e));
     } finally {
-      unlisten();
       setImporting(false);
     }
   };
@@ -154,11 +157,7 @@ export function CalibreImport({ onImported, onClose }: Props) {
             )}
           </div>
         ) : importing ? (
-          <p className="muted">
-            {progress
-              ? `Importing ${progress.index} of ${progress.total}: ${progress.title}…`
-              : "Starting…"}
-          </p>
+          operation && <BookProgressBar operation={operation} />
         ) : preview ? (
           <ul className="calibre-preview">
             <li>

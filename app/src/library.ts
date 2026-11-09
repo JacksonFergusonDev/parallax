@@ -10,24 +10,30 @@ import type {
 import { collator, type Column, type SortValue } from "./sort";
 
 export type SendStatus =
-  | { stage: "queued" | "preparing" | "converting" | "copying" }
+  | { stage: "queued" | "preparing" | "converting" }
+  | { stage: "copying"; bytes: number; totalBytes: number }
   | { stage: "processing_comic"; page: number; pages: number }
   | { stage: "sent" }
   | { stage: "failed"; error: string };
 
 const STATUS_LABEL: Record<
-  Exclude<SendStatus["stage"], "processing_comic">,
+  Exclude<SendStatus["stage"], "processing_comic" | "copying">,
   string
 > = {
   queued: "Waiting…",
   preparing: "Preparing…",
   converting: "Converting…",
-  copying: "Copying…",
   sent: "Sent",
   failed: "Failed",
 };
 
 export function sendStatusLabel(status: SendStatus): string {
+  if (status.stage === "copying") {
+    const { bytes, totalBytes } = status;
+    if (totalBytes <= 0) return "Transferring…";
+    if (bytes >= totalBytes) return "Finishing…";
+    return `Transferring ${Math.floor((bytes / totalBytes) * 100)}%`;
+  }
   return status.stage === "processing_comic"
     ? `Page ${status.page} of ${status.pages}`
     : STATUS_LABEL[status.stage];
@@ -59,7 +65,9 @@ export function applyProgress(
         ? { stage: "failed", error: p.error }
         : p.stage === "processing_comic"
           ? { stage: p.stage, page: p.page, pages: p.pages }
-          : { stage: p.stage };
+          : p.stage === "copying"
+            ? { stage: p.stage, bytes: p.bytes, totalBytes: p.total_bytes }
+            : { stage: p.stage };
   return { ...statuses, [id]: next };
 }
 

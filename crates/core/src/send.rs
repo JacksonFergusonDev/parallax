@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 
 use erc_comic::prepare::{Prepared, safe_kobo_component};
 use erc_convert::Converter;
-use erc_device_kobo::{BOOKS_DIR, DisplayMetadata, KoboDevice, device_file_name, replace_book};
+use erc_device_kobo::{
+    BOOKS_DIR, DisplayMetadata, KoboDevice, device_file_name, replace_book_with_progress,
+};
 use erc_library::{Book, Format, Library};
 use serde::Serialize;
 
@@ -36,6 +38,8 @@ pub enum Progress {
         index: usize,
         total: usize,
         file: String,
+        bytes: u64,
+        total_bytes: u64,
     },
     Done {
         index: usize,
@@ -183,9 +187,8 @@ pub fn send_library_books(
             device.check_writable().map_err(|e| e.to_string())?;
             let upload = prepare_upload(library, device, converter, &book, &comic_target, stage)?;
             upload.check_space(device)?;
-            stage(&|index, total, file| Progress::Copying { index, total, file });
             let sent = device
-                .send_file_for(upload.path(), &dest, Some(id))
+                .send_file_with_progress(upload.path(), &dest, Some(id), copy_progress(stage))
                 .map_err(|e| e.to_string())?;
             library
                 .record_device_copy_profile(
@@ -245,15 +248,20 @@ pub fn update_on_device(
             let book = library.book(id).map_err(|e| e.to_string())?;
             let upload = prepare_upload(library, device, converter, &book, &comic_target, stage)?;
             let bytes = upload.check_space(device)?;
-            stage(&|index, total, file| Progress::Copying { index, total, file });
             let meta = DisplayMetadata {
                 title: book.title.clone(),
                 author: (!book.authors.is_empty()).then(|| book.authors.join(", ")),
                 series: book.series.clone(),
                 series_number: book.series.as_ref().and(book.series_index.clone()),
             };
-            replace_book(&mut writer, upload.path(), &copy.device_path, &meta)
-                .map_err(|e| e.to_string())?;
+            replace_book_with_progress(
+                &mut writer,
+                upload.path(),
+                &copy.device_path,
+                &meta,
+                copy_progress(stage),
+            )
+            .map_err(|e| e.to_string())?;
             library
                 .record_device_copy_profile(
                     id,
@@ -349,6 +357,18 @@ fn prepare_upload(
 
 type Stage<'a> = &'a dyn Fn(usize, usize, String) -> Progress;
 
+fn copy_progress(stage: &mut dyn FnMut(Stage<'_>)) -> impl FnMut(u64, u64) + '_ {
+    move |bytes, total_bytes| {
+        stage(&|index, total, file| Progress::Copying {
+            index,
+            total,
+            file,
+            bytes,
+            total_bytes,
+        });
+    }
+}
+
 /// Runs `send` for each label, wrapping it with stage and result events.
 fn run_batch(
     labels: &[String],
@@ -402,9 +422,8 @@ fn deliver(
     } else {
         epub.to_path_buf()
     };
-    stage(&|index, total, file| Progress::Copying { index, total, file });
     let sent = device
-        .send_file_for(&upload, dest, library_book)
+        .send_file_with_progress(&upload, dest, library_book, copy_progress(stage))
         .map_err(|e| e.to_string())?;
     Ok(SentInfo {
         device_path: sent.path,

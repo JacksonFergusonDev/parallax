@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { TransferProgress } from "./TransferProgress";
 import { GeneratedCover } from "./GeneratedCover";
 import { coverSrc, type Book } from "../api";
 import {
@@ -31,6 +32,7 @@ export const BookCard = memo(function BookCard({
       aria-pressed={selected}
       aria-label={`${book.title}${book.authors[0] ? ` by ${book.authors[0]}` : ""}`}
       onClick={(e) => onSelect(book.id, e)}
+      aria-description={status ? sendStatusLabel(status) : undefined}
       title={status?.stage === "failed" ? status.error : undefined}
     >
       <div className="cover">
@@ -45,6 +47,13 @@ export const BookCard = memo(function BookCard({
         ) : (
           <GeneratedCover title={book.title} author={book.authors[0]} />
         )}
+        {status &&
+          status.stage !== "queued" &&
+          status.stage !== "failed" &&
+          status.stage !== "sent" && (
+            <span className="cover-sheen" aria-hidden="true" />
+          )}
+        {status?.stage === "copying" && <TransferProgress status={status} />}
         {status && (
           <span className={`overlay overlay-${status.stage}`}>
             {sendStatusLabel(status)}

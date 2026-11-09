@@ -158,8 +158,19 @@ pub fn replace_book(
     device_path: &str,
     meta: &DisplayMetadata,
 ) -> Result<()> {
+    replace_book_with_progress(writer, src, device_path, meta, |_, _| {})
+}
+
+/// As for `replace_book`, with byte progress for the replacement file.
+pub fn replace_book_with_progress(
+    writer: &mut DeviceWriter,
+    src: &Path,
+    device_path: &str,
+    meta: &DisplayMetadata,
+    progress: impl FnMut(u64, u64),
+) -> Result<()> {
     let content_id = format!("{ONBOARD_PREFIX}{device_path}");
-    writer.device().replace_file(src, device_path)?;
+    writer.device().replace_file(src, device_path, progress)?;
     let image_id = writer.transaction(|tx| {
         tx.execute(
             "UPDATE content SET Title = ?2, Attribution = ?3 WHERE ContentID = ?1 AND BookID IS NULL",

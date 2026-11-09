@@ -68,14 +68,28 @@ pub fn remove_from_device(
     backup_root: &Path,
     content_ids: &[String],
 ) -> erc_device_kobo::Result<Vec<RemoveOutcome>> {
+    remove_from_device_with_progress(library, device, backup_root, content_ids, |_, _| {})
+}
+
+/// Reports the number of processed removals after each attempt.
+pub fn remove_from_device_with_progress(
+    library: Option<&Library>,
+    device: &KoboDevice,
+    backup_root: &Path,
+    content_ids: &[String],
+    mut progress: impl FnMut(usize, usize),
+) -> erc_device_kobo::Result<Vec<RemoveOutcome>> {
     let serial = device.version().serial.clone();
     let copies = library
         .and_then(|l| l.device_copies(&serial).ok())
         .unwrap_or_default();
     let mut writer = device.open_writer(backup_root)?;
+    let total = content_ids.len();
+    progress(0, total);
     let outcomes = content_ids
         .iter()
-        .map(|content_id| {
+        .enumerate()
+        .map(|(index, content_id)| {
             let result = remove_book(&mut writer, content_id).map_err(|e| e.to_string());
             if result.is_ok()
                 && let (Some(lib), Some(copy)) =
@@ -83,6 +97,7 @@ pub fn remove_from_device(
             {
                 let _ = lib.remove_device_copy(copy.book_id, &serial);
             }
+            progress(index + 1, total);
             RemoveOutcome {
                 content_id: content_id.clone(),
                 result,

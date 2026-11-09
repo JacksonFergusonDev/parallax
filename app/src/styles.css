@@ -551,28 +551,34 @@ button.badge.connected:hover {
   animation: shake 360ms ease-in-out;
 }
 
-/* While a book travels to the Kobo, a sheen sweeps its cover; when it lands,
-   the badge pops. */
-.card:has(
-    .overlay-preparing,
-    .overlay-converting,
-    .overlay-processing_comic,
-    .overlay-copying
-  )
-  .cover::before {
-  content: "";
+/* Keep the gradient on its own clipped layer. Both ends of the
+   transform put the entire highlight outside the cover. */
+.cover-sheen {
   position: absolute;
   inset: 0;
   z-index: 1;
+  overflow: hidden;
+  border-radius: inherit;
   pointer-events: none;
+}
+
+.cover-sheen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
   background: linear-gradient(
     105deg,
-    transparent 30%,
+    transparent 24%,
     rgb(255 255 255 / 28%) 50%,
-    transparent 70%
+    transparent 76%
   );
-  background-size: 250% 100%;
   animation: sheen 1.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cover-sheen {
+    display: none;
+  }
 }
 
 .overlay-sent {
@@ -585,10 +591,10 @@ button.badge.connected:hover {
 
 @keyframes sheen {
   from {
-    background-position: 125% 0;
+    transform: translateX(-100%);
   }
   to {
-    background-position: -125% 0;
+    transform: translateX(100%);
   }
 }
 
@@ -775,6 +781,57 @@ label .hint {
   flex-wrap: wrap;
   flex-shrink: 0;
   border-top: 1px solid var(--border);
+}
+
+.book-operation {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.actions > .book-operation {
+  flex: 1 1 180px;
+}
+
+.book-progress {
+  display: block;
+  width: 100%;
+  height: var(--space-2);
+  accent-color: var(--accent);
+}
+
+.copy-progress {
+  height: var(--space-1);
+  min-width: 0;
+}
+
+.book-progress[value] {
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: var(--sunken);
+}
+
+.book-progress[value]::-webkit-progress-bar {
+  border-radius: inherit;
+  background: var(--sunken);
+}
+
+.book-progress[value]::-webkit-progress-value {
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.cover > .copy-progress {
+  position: absolute;
+  inset-inline: var(--space-2);
+  bottom: var(--space-1);
+  z-index: 2;
+  width: calc(100% - 2 * var(--space-2));
+}
+
+.cover:has(> .copy-progress) .overlay-copying {
+  bottom: var(--space-3);
 }
 
 .notice {

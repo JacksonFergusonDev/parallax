@@ -31,7 +31,20 @@ fn sends_book_atomically() {
     let kobo = fake_kobo(dir.path());
     let src = book(dir.path());
 
-    let sent = kobo.send_file(&src, "KEpub/Some Book.kepub.epub").unwrap();
+    let path = "KEpub/Some Book.kepub.epub";
+    let mut progress = Vec::new();
+    let sent = kobo
+        .send_file_with_progress(&src, path, None, |bytes, total| {
+            assert!(
+                !kobo.mount().join(path).exists(),
+                "partial book must stay hidden"
+            );
+            progress.push((bytes, total));
+        })
+        .unwrap();
+    assert_eq!(progress.first(), Some(&(0, sent.bytes)));
+    assert_eq!(progress.last(), Some(&(sent.bytes, sent.bytes)));
+    assert!(progress.windows(2).all(|pair| pair[0].0 < pair[1].0));
     assert_eq!(
         sent.content_id,
         "file:///mnt/onboard/KEpub/Some Book.kepub.epub"

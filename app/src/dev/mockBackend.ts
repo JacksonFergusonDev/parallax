@@ -2,9 +2,12 @@
 // screenshotted with `pnpm dev` in a normal browser. Loaded only in dev builds
 // when not running inside Tauri; never part of the app bundle.
 import { emit } from "@tauri-apps/api/event";
+import type { Channel } from "@tauri-apps/api/core";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type {
   Book,
+  BookProgress,
+  Progress,
   DeviceBook,
   DeviceInfo,
   MetadataEdit,
@@ -320,6 +323,20 @@ export function installMockBackend(label = "main") {
   mockIPC(
     async (cmd, args) => {
       const a = (args ?? {}) as Record<string, unknown>;
+      const reportBooks = (event: BookProgress) =>
+        (a.progress as Channel<BookProgress> | undefined)?.onmessage(event);
+      const reportSend = (event: Progress) =>
+        (a.progress as Channel<Progress> | undefined)?.onmessage(event);
+      const simulateCopy = async (base: {
+        index: number;
+        total: number;
+        file: string;
+      }) => {
+        for (let bytes = 0; bytes <= 100; bytes += 10) {
+          reportSend({ stage: "copying", ...base, bytes, total_bytes: 100 });
+          await sleep(130);
+        }
+      };
       switch (cmd) {
         case "list_devices":
           return [device];
@@ -360,6 +377,11 @@ export function installMockBackend(label = "main") {
             .sort((x, y) => x.title.localeCompare(y.title));
         case "remove_from_device": {
           const ids = a.contentIds as string[];
+          await sleep(600);
+          for (let completed = 0; completed <= ids.length; completed++) {
+            reportBooks({ completed, total: ids.length, title: null });
+            await sleep(220);
+          }
           if (ids.some((id) => id.includes("Old Book"))) health.missing = false;
           storeBooks = storeBooks.filter((b) => !ids.includes(b.id));
           for (const id of [...onDevice.keys()])
@@ -483,9 +505,8 @@ export function installMockBackend(label = "main") {
           const ids = a.ids as number[];
           for (const [i, id] of ids.entries()) {
             const base = { index: i + 1, total: ids.length, file: String(id) };
-            await emit("send-progress", { stage: "copying", ...base });
-            await sleep(300);
-            await emit("send-progress", {
+            await simulateCopy(base);
+            reportSend({
               stage: "done",
               ...base,
               device_path: "KEpub/x.kepub.epub",
@@ -599,9 +620,16 @@ export function installMockBackend(label = "main") {
             safety_backup: "KoboReader-20261106-120000.000.sqlite",
             files_restored: 2,
           };
-        case "library_remove":
-          books = books.filter((b) => !(a.ids as number[]).includes(b.id));
+        case "library_remove": {
+          const ids = a.ids as number[];
+          await sleep(450);
+          for (const [i, id] of ids.entries()) {
+            reportBooks({ completed: i, total: ids.length, title: null });
+            await sleep(220);
+            books = books.filter((b) => b.id !== id);
+          }
           return null;
+        }
         case "plugin:dialog|open":
           return [
             "/Users/you/Downloads/my_scan_01.epub",
@@ -609,8 +637,17 @@ export function installMockBackend(label = "main") {
             "/Users/you/Downloads/The Long Way Home.epub",
             "/Users/you/Downloads/broken.epub",
           ];
-        case "library_import":
-          return (a.paths as string[]).map((path) => {
+        case "library_import": {
+          const paths = a.paths as string[];
+          for (const [i, path] of paths.entries()) {
+            reportBooks({
+              completed: i,
+              total: paths.length,
+              title: path.split("/").at(-1) ?? null,
+            });
+            await sleep(320);
+          }
+          return paths.map((path) => {
             const name = path.split("/").pop() ?? path;
             if (name.startsWith("broken"))
               return {
@@ -638,6 +675,7 @@ export function installMockBackend(label = "main") {
               },
             };
           });
+        }
         case "library_review": {
           const ids = a.ids as number[];
           const findings = ids.flatMap((id) => {
@@ -663,15 +701,23 @@ export function installMockBackend(label = "main") {
           const ids = a.ids as number[];
           for (const [i, id] of ids.entries()) {
             const base = { index: i + 1, total: ids.length, file: String(id) };
-            for (const stage of [
-              "preparing",
-              "converting",
-              "copying",
-            ] as const) {
-              await emit("send-progress", { stage, ...base });
+            for (const stage of ["preparing", "converting"] as const) {
+              reportSend({ stage, ...base });
               await sleep(250);
             }
-            await emit("send-progress", {
+            if (books.find((book) => book.id === id)?.format === "cbz") {
+              for (const page of [1, 60, 120, 180, 219]) {
+                reportSend({
+                  stage: "processing_comic",
+                  ...base,
+                  page,
+                  pages: 219,
+                });
+                await sleep(180);
+              }
+            }
+            await simulateCopy(base);
+            reportSend({
               stage: "done",
               ...base,
               device_path: "KEpub/x.kepub.epub",
@@ -831,11 +877,7 @@ export function installMockBackend(label = "main") {
             "Kindle Thing",
           ];
           for (const [i, title] of titles.entries()) {
-            await emit("import-progress", {
-              index: i + 1,
-              total: titles.length,
-              title,
-            });
+            reportBooks({ completed: i, total: titles.length, title });
             await sleep(200);
           }
           return titles.map((title, i) => ({
@@ -865,11 +907,7 @@ export function installMockBackend(label = "main") {
           ].filter((b) => !wanted || wanted.includes(b.id));
           const outcomes = [];
           for (const [i, b] of all.entries()) {
-            await emit("import-progress", {
-              index: i + 1,
-              total: all.length,
-              title: b.title,
-            });
+            reportBooks({ completed: i, total: all.length, title: b.title });
             await sleep(250);
             const sideload = storeBooks.find((s) => s.id === b.id);
             if (!sideload) {

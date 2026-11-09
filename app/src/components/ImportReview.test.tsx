@@ -9,6 +9,9 @@ import { readCache } from "../readCache";
 import type { ReviewBatch } from "../importReview";
 
 vi.mock("@tauri-apps/api/core", () => ({
+  Channel: class<T> {
+    constructor(public onmessage: (message: T) => void) {}
+  },
   invoke: vi.fn(),
   convertFileSrc: (path: string) => `asset:${path}`,
 }));
@@ -180,7 +183,7 @@ describe("ImportReview", () => {
       (b) => b.textContent === "Remove",
     );
     await act(async () => remove?.click());
-    expect(calls("library_remove")[0][1]).toEqual({ ids: [1] });
+    expect(calls("library_remove")[0][1]).toMatchObject({ ids: [1] });
     expect(host.textContent).not.toContain("damaged");
     expect(host.textContent).toContain("1 book added");
   });

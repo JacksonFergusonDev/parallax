@@ -1,9 +1,10 @@
 //! Copying books onto the device and ejecting it.
 
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, BufReader, BufWriter};
+use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 use crate::KoboDevice;
 use crate::db::ONBOARD_PREFIX;
@@ -52,11 +53,22 @@ impl KoboDevice {
         dest: &str,
         library_book: Option<i64>,
     ) -> Result<SentBook> {
+        self.send_file_with_progress(src, dest, library_book, |_, _| {})
+    }
+
+    /// As for `send_file_for`, reporting the bytes written to the temporary file.
+    pub fn send_file_with_progress(
+        &self,
+        src: &Path,
+        dest: &str,
+        library_book: Option<i64>,
+        progress: impl FnMut(u64, u64),
+    ) -> Result<SentBook> {
         self.check_writable()?;
         if self.mount().join(dest).exists() {
             return Err(Error::AlreadyOnDevice(dest.to_owned()));
         }
-        let sent = self.write_file(src, dest)?;
+        let sent = self.write_file_with_progress(src, dest, progress)?;
         self.record(Record {
             entries: vec![LogEntry::new("send").ids([sent.content_id.clone()])],
             books: BookChange::written(dest, src, library_book)
@@ -71,7 +83,12 @@ impl KoboDevice {
     /// carries reading progress) stays the same.
     /// Only called inside a [`crate::DeviceWriter`] session, which has
     /// already checked the Kobo may be changed.
-    pub(crate) fn replace_file(&self, src: &Path, dest: &str) -> Result<SentBook> {
+    pub(crate) fn replace_file(
+        &self,
+        src: &Path,
+        dest: &str,
+        progress: impl FnMut(u64, u64),
+    ) -> Result<SentBook> {
         let target = self.mount().join(dest);
         if !target.is_file() {
             return Err(Error::Io {
@@ -82,10 +99,19 @@ impl KoboDevice {
                 ),
             });
         }
-        self.write_file(src, dest)
+        self.write_file_with_progress(src, dest, progress)
     }
 
     pub(crate) fn write_file(&self, src: &Path, dest: &str) -> Result<SentBook> {
+        self.write_file_with_progress(src, dest, |_, _| {})
+    }
+
+    fn write_file_with_progress(
+        &self,
+        src: &Path,
+        dest: &str,
+        progress: impl FnMut(u64, u64),
+    ) -> Result<SentBook> {
         let target = self.mount().join(dest);
         let parent = target.parent().unwrap_or(self.mount());
         let mut created_dirs: Vec<&Path> = parent
@@ -97,19 +123,21 @@ impl KoboDevice {
         let file_name = target.file_name().unwrap_or_default().to_string_lossy();
         let partial = parent.join(format!(".{file_name}.erc-part"));
 
-        let bytes = copy_plain(src, &partial).inspect_err(|_| {
-            let _ = fs::remove_file(&partial);
-        })?;
-        let expected = fs::metadata(src).map_err(|e| io_err(src, e))?.len();
+        let (bytes, expected) = copy_plain_with_progress(src, &partial, progress)?;
         if bytes != expected {
             let _ = fs::remove_file(&partial);
+            remove_apple_double(&partial);
             return Err(Error::IncompleteCopy {
                 path: target,
                 expected,
                 written: bytes,
             });
         }
-        fs::rename(&partial, &target).map_err(|e| io_err(&target, e))?;
+        fs::rename(&partial, &target).map_err(|e| {
+            let _ = fs::remove_file(&partial);
+            remove_apple_double(&partial);
+            io_err(&target, e)
+        })?;
         remove_apple_double(&target);
         for dir in created_dirs {
             remove_apple_double(dir);
@@ -164,20 +192,49 @@ pub(crate) fn remove_apple_double(path: &Path) {
 /// Streams bytes only: no xattrs, ACLs or resource forks. `fs::copy` uses
 /// `fcopyfile` on macOS, which would copy extended attributes.
 pub(crate) fn copy_plain(src: &Path, dest: &Path) -> Result<u64> {
-    let mut reader =
-        BufReader::with_capacity(1 << 20, File::open(src).map_err(|e| io_err(src, e))?);
-    let file = OpenOptions::new()
+    copy_plain_with_progress(src, dest, |_, _| {}).map(|(written, _)| written)
+}
+
+fn copy_plain_with_progress(
+    src: &Path,
+    dest: &Path,
+    mut progress: impl FnMut(u64, u64),
+) -> Result<(u64, u64)> {
+    let source = File::open(src).map_err(|e| io_err(src, e))?;
+    let total = source.metadata().map_err(|e| io_err(src, e))?.len();
+    let mut reader = BufReader::with_capacity(1 << 20, source);
+    let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(dest)
         .map_err(|e| io_err(dest, e))?;
-    let mut writer = BufWriter::with_capacity(1 << 20, file);
-    let bytes = io::copy(&mut reader, &mut writer).map_err(|e| io_err(dest, e))?;
-    let file = writer
-        .into_inner()
-        .map_err(|e| io_err(dest, e.into_error()))?;
-    file.sync_all().map_err(|e| io_err(dest, e))?;
-    Ok(bytes)
+    let mut written = 0;
+    progress(0, total);
+    let mut last = Instant::now();
+    let result = (|| {
+        loop {
+            let chunk = reader.fill_buf().map_err(|e| io_err(src, e))?;
+            if chunk.is_empty() {
+                break;
+            }
+            file.write_all(chunk).map_err(|e| io_err(dest, e))?;
+            let size = chunk.len();
+            reader.consume(size);
+            written += size as u64;
+            if written == total || last.elapsed() >= Duration::from_millis(100) {
+                progress(written, total);
+                last = Instant::now();
+            }
+        }
+        file.sync_all().map_err(|e| io_err(dest, e))?;
+        Ok((written, total))
+    })();
+    drop(file);
+    result.inspect_err(|_| {
+        // Only remove a file we created. Another writer may own an existing one.
+        let _ = fs::remove_file(dest);
+        remove_apple_double(dest);
+    })
 }
 
 /// A FAT32-safe file name built from `name`. calibre's KoboTouch makes similar

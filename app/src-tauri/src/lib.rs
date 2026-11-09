@@ -30,7 +30,8 @@ use erc_library::{
 };
 use erc_upscale::CoreMl;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::ipc::{Channel, JavaScriptChannelId};
+use tauri::{AppHandle, Emitter, Manager, State, Webview};
 
 #[cfg(feature = "e2e")]
 mod e2e;
@@ -38,10 +39,6 @@ mod menu;
 mod reader;
 mod settings;
 
-/// Event carrying [`erc_core::send::Progress`] while books are sent.
-const SEND_PROGRESS: &str = "send-progress";
-/// Event carrying [`ImportProgress`] while books come in from a device.
-const IMPORT_PROGRESS: &str = "import-progress";
 /// Event carrying [`ImportProgress`] while series and genres are looked up.
 const ENHANCE_PROGRESS: &str = "enhance-progress";
 /// Event carrying [`ImportProgress`] while the library is checked.
@@ -56,6 +53,28 @@ struct ImportProgress {
     index: usize,
     total: usize,
     title: String,
+}
+
+#[derive(Serialize)]
+struct BookProgress {
+    completed: usize,
+    total: usize,
+    title: Option<String>,
+}
+
+fn report_books(
+    channel: Option<&Channel<BookProgress>>,
+    completed: usize,
+    total: usize,
+    title: Option<&str>,
+) {
+    if let Some(channel) = channel {
+        let _ = channel.send(BookProgress {
+            completed,
+            total,
+            title: title.map(str::to_owned),
+        });
+    }
 }
 
 struct AppState {
@@ -201,27 +220,40 @@ fn library_list(state: State<AppState>) -> CmdResult<Vec<LibraryBook>> {
 
 #[tauri::command]
 async fn library_import(
+    webview: Webview,
+    progress: Option<JavaScriptChannelId>,
     state: State<'_, AppState>,
     paths: Vec<PathBuf>,
     comic_folder: Option<bool>,
 ) -> CmdResult<Vec<ImportResult>> {
+    let progress = progress.map(|id| id.channel_on(webview));
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let amazon = ChildProcess::current().map_err(err)?;
         let mut lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        Ok(paths
+        let total = paths.len();
+        let outcomes = paths
             .into_iter()
-            .map(|path| ImportResult {
-                outcome: if comic_folder == Some(true) {
+            .enumerate()
+            .map(|(index, path)| {
+                report_books(
+                    progress.as_ref(),
+                    index,
+                    total,
+                    path.file_name().and_then(|n| n.to_str()),
+                );
+                let outcome = if comic_folder == Some(true) {
                     import_comic_folder(&mut lib, &path).map_err(err)
                 } else {
                     import_file(&mut lib, &amazon, &path).map_err(err)
-                },
-                path,
+                };
+                ImportResult { path, outcome }
             })
-            .collect())
+            .collect();
+        report_books(progress.as_ref(), total, total, None);
+        Ok(outcomes)
     })
     .await
     .map_err(err)?
@@ -261,16 +293,33 @@ async fn library_comic_spreads(state: State<'_, AppState>, id: i64) -> CmdResult
 }
 
 #[tauri::command]
-fn library_remove(state: State<AppState>, ids: Vec<i64>) -> CmdResult<()> {
-    let mut lib = state.library();
-    let detail = match ids.as_slice() {
-        [id] => lib.book(*id).map_err(err)?.title,
-        _ => format!("{} books", ids.len()),
-    };
-    lib.snapshot("remove", Some(&detail)).map_err(err)?;
-    ids.into_iter()
-        .try_for_each(|id| lib.remove(id))
-        .map_err(err)
+async fn library_remove(
+    webview: Webview,
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+    progress: Option<JavaScriptChannelId>,
+) -> CmdResult<()> {
+    let progress = progress.map(|id| id.channel_on(webview));
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let detail = match ids.as_slice() {
+            [id] => lib.book(*id).map_err(err)?.title,
+            _ => format!("{} books", ids.len()),
+        };
+        lib.snapshot("remove", Some(&detail)).map_err(err)?;
+        let total = ids.len();
+        report_books(progress.as_ref(), 0, total, None);
+        for (index, id) in ids.into_iter().enumerate() {
+            lib.remove(id).map_err(err)?;
+            report_books(progress.as_ref(), index + 1, total, None);
+        }
+        Ok(())
+    })
+    .await
+    .map_err(err)?
 }
 
 /// Points the library can go back to, newest first.
@@ -362,10 +411,13 @@ async fn device_books(app: AppHandle, mount: PathBuf) -> CmdResult<Vec<KoboBook>
 
 #[tauri::command]
 async fn remove_from_device(
+    webview: Webview,
+    progress: Option<JavaScriptChannelId>,
     state: State<'_, AppState>,
     mount: PathBuf,
     content_ids: Vec<String>,
 ) -> CmdResult<Vec<RemoveOutcome>> {
+    let progress = progress.map(|id| id.channel_on(webview));
     let library = state.library.clone();
     let backups = state.backup_root.clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -373,7 +425,14 @@ async fn remove_from_device(
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        erc_core::device::remove_from_device(Some(&lib), &kobo, &backups, &content_ids).map_err(err)
+        erc_core::device::remove_from_device_with_progress(
+            Some(&lib),
+            &kobo,
+            &backups,
+            &content_ids,
+            |completed, total| report_books(progress.as_ref(), completed, total, None),
+        )
+        .map_err(err)
     })
     .await
     .map_err(err)?
@@ -381,11 +440,14 @@ async fn remove_from_device(
 
 #[tauri::command]
 async fn update_books(
-    app: AppHandle,
+    webview: Webview,
+    progress: Option<JavaScriptChannelId>,
     state: State<'_, AppState>,
     mount: PathBuf,
     ids: Vec<i64>,
 ) -> CmdResult<Vec<SendOutcome>> {
+    let progress: Option<Channel<erc_core::send::Progress>> =
+        progress.map(|id| id.channel_on(webview));
     let library = state.library.clone();
     let backups = state.backup_root.clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -394,8 +456,10 @@ async fn update_books(
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        update_on_device(&lib, &kobo, &converter, &backups, &ids, |progress| {
-            let _ = app.emit(SEND_PROGRESS, progress);
+        update_on_device(&lib, &kobo, &converter, &backups, &ids, |event| {
+            if let Some(channel) = &progress {
+                let _ = channel.send(event);
+            }
         })
         .map_err(err)
     })
@@ -486,12 +550,15 @@ async fn comic_transfer_estimate(
 
 #[tauri::command]
 async fn send_books(
-    app: AppHandle,
+    webview: Webview,
+    progress: Option<JavaScriptChannelId>,
     state: State<'_, AppState>,
     mount: PathBuf,
     ids: Vec<i64>,
     collection: Option<String>,
 ) -> CmdResult<Vec<SendOutcome>> {
+    let progress: Option<Channel<erc_core::send::Progress>> =
+        progress.map(|id| id.channel_on(webview));
     let library = state.library.clone();
     let backups = state.backup_root.clone();
     let rules = !settings::is(&state, settings::KOBO_RULES, "off");
@@ -501,8 +568,10 @@ async fn send_books(
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let outcomes = send_library_books(&lib, &kobo, &converter, &ids, |progress| {
-            let _ = app.emit(SEND_PROGRESS, progress);
+        let outcomes = send_library_books(&lib, &kobo, &converter, &ids, |event| {
+            if let Some(channel) = &progress {
+                let _ = channel.send(event);
+            }
         });
         // Collection rows can be written before Nickel imports the books.
         if let Some(name) = collection.filter(|n| !n.trim().is_empty()) {
@@ -795,33 +864,30 @@ async fn dismiss_duplicates(
 /// `None`). Only reads the device.
 #[tauri::command]
 async fn import_from_device(
-    app: AppHandle,
+    webview: Webview,
+    progress: Option<JavaScriptChannelId>,
     state: State<'_, AppState>,
     mount: PathBuf,
     content_ids: Option<Vec<String>>,
 ) -> CmdResult<Vec<DeviceImportOutcome>> {
+    let progress = progress.map(|id| id.channel_on(webview));
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let mut lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        erc_core::import::import_from_device(
+        let outcomes = erc_core::import::import_from_device(
             &mut lib,
             &kobo,
             content_ids.as_deref(),
             |index, total, title| {
-                let _ = app.emit(
-                    IMPORT_PROGRESS,
-                    ImportProgress {
-                        index,
-                        total,
-                        title: title.to_owned(),
-                    },
-                );
+                report_books(progress.as_ref(), index - 1, total, Some(title));
             },
         )
-        .map_err(err)
+        .map_err(err)?;
+        report_books(progress.as_ref(), outcomes.len(), outcomes.len(), None);
+        Ok(outcomes)
     })
     .await
     .map_err(err)?
@@ -938,10 +1004,12 @@ async fn calibre_preview(
 /// Imports the calibre library at `path`; only reads it.
 #[tauri::command]
 async fn calibre_import(
-    app: AppHandle,
+    webview: Webview,
+    progress: Option<JavaScriptChannelId>,
     state: State<'_, AppState>,
     path: PathBuf,
 ) -> CmdResult<Vec<erc_core::calibre::CalibreImportOutcome>> {
+    let progress = progress.map(|id| id.channel_on(webview));
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let books = erc_core::calibre::read_library(&path).map_err(err)?;
@@ -949,21 +1017,12 @@ async fn calibre_import(
         let mut lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        Ok(erc_core::calibre::import(
-            &mut lib,
-            &amazon,
-            &books,
-            |index, total, title| {
-                let _ = app.emit(
-                    IMPORT_PROGRESS,
-                    ImportProgress {
-                        index,
-                        total,
-                        title: title.to_owned(),
-                    },
-                );
-            },
-        ))
+        let outcomes =
+            erc_core::calibre::import(&mut lib, &amazon, &books, |index, total, title| {
+                report_books(progress.as_ref(), index - 1, total, Some(title));
+            });
+        report_books(progress.as_ref(), outcomes.len(), outcomes.len(), None);
+        Ok(outcomes)
     })
     .await
     .map_err(err)?
