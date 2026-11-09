@@ -201,7 +201,11 @@ fn png_4bit(width: u32, height: u32, gray: &[u8]) -> Result<Vec<u8>, png::Encodi
     let mut encoder = png::Encoder::new(&mut bytes, width, height);
     encoder.set_color(png::ColorType::Grayscale);
     encoder.set_depth(png::BitDepth::Four);
-    encoder.set_compression(png::Compression::Fast);
+    // Measured on Berserk v01: PNG's row filters work on packed bytes and
+    // hurt 4-bit pages, so no filter at Balanced was 24% smaller than Fast
+    // with filters. High saved only 2% more at four times the encode time.
+    encoder.set_compression(png::Compression::Balanced);
+    encoder.set_filter(png::Filter::NoFilter);
     let mut writer = encoder.write_header()?;
     writer.write_image_data(&packed)?;
     writer.finish()?;

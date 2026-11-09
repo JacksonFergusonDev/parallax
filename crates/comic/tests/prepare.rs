@@ -275,3 +275,42 @@ fn a_comic_with_no_readable_pages_is_refused() {
         Err(erc_comic::prepare::Error::NoReadablePages)
     ));
 }
+
+#[test]
+fn pages_keep_their_order_when_processed_in_parallel() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("many.cbz");
+    let mut zip = ZipWriter::new(File::create(&source).unwrap());
+    // Uneven sizes make pages finish out of order on the pool.
+    let widths: Vec<u32> = (0..60)
+        .map(|i| if i % 7 == 0 { 600 } else { 20 + i })
+        .collect();
+    for (i, &width) in widths.iter().enumerate() {
+        zip.start_file(format!("{i:03}.png"), SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(&png(&RgbImage::from_pixel(width, 800, Rgb([90, 90, 90]))))
+            .unwrap();
+    }
+    zip.finish().unwrap();
+    let mut seen = Vec::new();
+    let prepared = prepare(
+        &source,
+        &metadata(),
+        Profile {
+            width: 1000,
+            height: 1000,
+            colour: false,
+            landscape_spreads: false,
+        },
+        Options::default(),
+        &Kepubify::locate().unwrap(),
+        |page, _| seen.push(page),
+    )
+    .unwrap();
+    assert_eq!(seen, (1..=60).collect::<Vec<_>>());
+    let mut out = ZipArchive::new(File::open(prepared.path()).unwrap()).unwrap();
+    for (i, &width) in widths.iter().enumerate() {
+        let bytes = entry(&mut out, &format!("OEBPS/images/p{:05}.png", i + 1));
+        assert_eq!(image::load_from_memory(&bytes).unwrap().width(), width);
+    }
+}

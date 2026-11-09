@@ -147,7 +147,8 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
   - output images match the processing;
   - kepubify kept fixed layout and direction;
   - page count matches the source plus splits.
-- **Performance:** the spike took about 8 s per volume. Berserk v01 (219 pages) took about 12 s through preparation and copy to a Libra 2 fixture with the comic crate optimised, and about 39 s in an unoptimised development build. Progress is reported per input page.
+- **Performance:** the spike took about 8 s per volume. Pages are read in order, processed on the rayon pool as soon as memory allows (32 MP decoded, 64 MB encoded in flight), and written back in order, so no core waits for a batch. On an M3, preparing Berserk v01 (219 pages) for a Libra 2 takes about 4.3 s in release, against 5.1 s with batches and 16 s on one thread. About 73% of the work is decoding its progressive JPEGs: libjpeg-turbo was no faster and ImageIO slower, and the remaining resize and greyscale steps are too small a share for GPU or Accelerate to pay off. Development builds optimise erc-comic, which was 34 s unoptimised. Progress is reported per input page.
+- **Page encoding:** 4-bit greyscale PNG with no row filter at the png crate's Balanced level. For Berserk v01 the KEPUB is 115.5 MB, from a 448 MB CBZ; Fast with filters was 148 MB, High saved only 2% more at four times the encode time, and 8-bit JPEG needed quality 75 to match the size. Stock Kobo firmware shows WebP blank (its Qt predates WebP), so pages stay PNG, or JPEG for colour.
 
 ### C6. Sending and updating comics (done)
 

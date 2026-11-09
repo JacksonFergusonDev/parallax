@@ -5,7 +5,6 @@ mod raster;
 use std::path::{Path, PathBuf};
 
 use erc_convert::Converter;
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::Cbz;
@@ -84,6 +83,21 @@ impl Prepared {
     }
 }
 
+/// Decoded pixels being processed at once, about 160 MB of RGB.
+const MAX_PIXELS_IN_FLIGHT: u64 = 32_000_000;
+/// Encoded input bytes being processed at once.
+const MAX_BYTES_IN_FLIGHT: u64 = 64 * 1024 * 1024;
+
+/// A page back from the pool, with its input for a possible cover.
+struct Done {
+    index: usize,
+    name: String,
+    data: Vec<u8>,
+    pages: Result<Vec<raster::Raster>, String>,
+    area: u64,
+    size: u64,
+}
+
 /// Prepare a fixed-layout KEPUB in a private temporary folder. Dropping the
 /// result removes the output. Progress counts input pages, in archive order.
 pub fn prepare(
@@ -113,61 +127,74 @@ pub fn prepare(
     // A damaged cover page passes the cover to the next readable page.
     let mut cover_pending = metadata.custom_cover.is_none();
     let mut skipped = Vec::new();
-    let mut next = 0;
-    let mut reported = 0;
-    // Bound both the decode working set and the number of large encoded inputs.
-    while next < total {
-        let mut batch = Vec::new();
-        let mut pixels = 0;
-        let mut bytes = 0;
-        while next < total && batch.len() < 8 {
-            let name = source.pages()[next].name.clone();
+    // Pages are read in order here and processed on the rayon pool as soon
+    // as there is room, so no core waits for the slowest page of a batch.
+    // Results are written back in order. Room is bounded by decoded pixels
+    // and encoded input bytes in flight, and by how far reading may run
+    // ahead of writing while one slow page holds up the rest.
+    let ahead = 4 * rayon::current_num_threads().max(1);
+    let (sender, results) = std::sync::mpsc::channel::<Done>();
+    let mut done = std::collections::BTreeMap::new();
+    let (mut pixels, mut bytes) = (0, 0);
+    let (mut next_read, mut next_write) = (0, 0);
+    while next_write < total {
+        let room =
+            |pixels: u64, bytes: u64| pixels < MAX_PIXELS_IN_FLIGHT && bytes < MAX_BYTES_IN_FLIGHT;
+        if next_read < total && next_read < next_write + ahead && room(pixels, bytes) {
+            let index = next_read;
+            next_read += 1;
+            let name = source.pages()[index].name.clone();
             // An unreadable header is a damaged page, which Check library
             // reports; leave it out rather than failing the whole comic.
-            let Some((width, height)) = source.page_dimensions(next)? else {
-                skipped.push((next, name));
-                next += 1;
+            let Some((width, height)) = source.page_dimensions(index)? else {
+                done.insert(index, (name, None));
                 continue;
             };
             let area = u64::from(width) * u64::from(height);
-            let size = source.pages()[next].size;
-            if !batch.is_empty() && (pixels + area > 32_000_000 || bytes + size > 64 * 1024 * 1024)
-            {
-                break;
-            }
+            let data = source.read_page(index)?;
+            let size = data.len() as u64;
             pixels += area;
             bytes += size;
-            batch.push((next, name, source.read_page(next)?));
-            next += 1;
+            let sender = sender.clone();
+            rayon::spawn(move || {
+                let pages = raster::process(&data, profile, options);
+                // The receiver is gone only if preparation already failed.
+                let _ = sender.send(Done {
+                    index,
+                    name,
+                    data,
+                    pages,
+                    area,
+                    size,
+                });
+            });
+        } else if !done.contains_key(&next_write) {
+            let finished = results.recv().expect("a page task is still running");
+            pixels -= finished.area;
+            bytes -= finished.size;
+            done.insert(
+                finished.index,
+                (finished.name, Some((finished.data, finished.pages))),
+            );
         }
-        let prepared: Vec<_> = batch
-            .par_iter()
-            .map(|(_, _, bytes)| raster::process(bytes, profile, options))
-            .collect();
-        for ((index, name, data), pages) in batch.into_iter().zip(prepared) {
-            let Ok(pages) = pages else {
-                skipped.push((index, name));
-                progress(index + 1, total);
-                reported = index + 1;
-                continue;
-            };
-            if cover_pending && index >= cover {
-                epub.add_cover(&data, &name)?;
-                cover_pending = false;
-            }
-            for page in pages {
-                epub.add_page(&page)?;
+        while let Some((name, page)) = done.remove(&next_write) {
+            let index = next_write;
+            next_write += 1;
+            match page {
+                Some((data, Ok(pages))) => {
+                    if cover_pending && index >= cover {
+                        epub.add_cover(&data, &name)?;
+                        cover_pending = false;
+                    }
+                    for page in pages {
+                        epub.add_page(&page)?;
+                    }
+                }
+                _ => skipped.push(name),
             }
             progress(index + 1, total);
-            reported = index + 1;
-        }
-        if reported < next {
-            // Damaged pages ended the batch, so nothing above reported them.
-            progress(next, total);
-            reported = next;
         }
     }
-    skipped.sort_unstable();
     if epub.is_empty() {
         return Err(Error::NoReadablePages);
     }
@@ -177,7 +204,7 @@ pub fn prepare(
         _work: work,
         path,
         pages,
-        skipped: skipped.into_iter().map(|(_, name)| name).collect(),
+        skipped,
     })
 }
 
