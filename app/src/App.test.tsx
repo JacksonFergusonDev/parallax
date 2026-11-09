@@ -223,6 +223,52 @@ describe("library toolbar", () => {
 });
 
 describe("permanent library details", () => {
+  it("clears selection when a kind edit moves the book out of the filter", async () => {
+    const comic: Book = {
+      ...localBook,
+      format: "cbz",
+      kind: "manga",
+      pages: 20,
+    };
+    const normal = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      switch (command) {
+        case "library_list":
+          return [comic];
+        case "library_set_comic_kind":
+          return { ...comic, kind: "comic" };
+        case "library_comic_spreads":
+          return 0;
+        default:
+          return normal(command, args);
+      }
+    });
+    await render();
+    const library = panel("Library");
+    const change = async (select: HTMLSelectElement, value: string) => {
+      await act(async () => {
+        select.value = value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    };
+    await change(
+      library.querySelector('[aria-label="Filter by kind"]')!,
+      "manga",
+    );
+    await click(library.querySelector("button.card")!);
+    await change(library.querySelector(".panel .form select")!, "comic");
+    expect(calls("library_set_comic_kind")).toHaveLength(1);
+    expect(library.querySelector("button.card")).toBeNull();
+    expect(library.querySelector(".panel-empty")?.textContent).toContain(
+      "Select a book",
+    );
+    expect(
+      [...library.querySelectorAll("footer button")].some(
+        (button) => button.textContent === "Remove",
+      ),
+    ).toBe(false);
+  });
+
   it("keeps its slot through selection, switching, multiple selection and clearing", async () => {
     const normal = vi.mocked(invoke).getMockImplementation()!;
     vi.mocked(invoke).mockImplementation(async (command, args) =>

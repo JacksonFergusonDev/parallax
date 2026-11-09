@@ -1194,6 +1194,13 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
                   setBooks((bs) =>
                     bs.map((b) => (b.id === updated.id ? updated : b)),
                   );
+                  if (shownFilter.kind && updated.kind !== shownFilter.kind) {
+                    setSelected((current) => {
+                      const next = new Set(current);
+                      next.delete(updated.id);
+                      return next;
+                    });
+                  }
                   refreshOnDevice(device);
                 }}
                 onClose={() => setSelected(new Set())}
