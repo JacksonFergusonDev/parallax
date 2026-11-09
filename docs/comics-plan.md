@@ -1,0 +1,178 @@
+# Comics and manga plan
+
+Status: **planned, not started** (2026-11-08). The plan for first-class comics and manga in Parallax, across the library, sending to any supported Kobo, and the reader. It builds on [the Kobo comics spike](kobo-comics-spike.md) and [the bindery and KCC research](../reports/Bindery%20and%20Kindle%20Comic%20Converter.md).
+
+## 1. What's already decided
+
+| Question | Decision | Evidence |
+| --- | --- | --- |
+| What to send to a Kobo | Pages processed for that model's screen, in a fixed-layout KEPUB made through the bundled kepubify | Libra 2 spike: processed pages open in 0.5 s and turn in 0.2 s, against 2 s and 1.5 s for the originals, with no visible loss. Only KEPUBs showed the author. |
+| How series reach the Kobo | Write `content.Series`, `SeriesNumber` and `SeriesID` through the existing safe-write layer and pending-series triggers, as for books | No spike variant grouped as a series; firmware 4.38 ignores OPF series and ComicInfo for sideloaded books. |
+| Caching converted output | None. Prepare in a temporary folder at send time, write to the Kobo, delete | About 8 s per 470 MB volume on this Mac; calibre's growing cache was the user's main complaint. |
+| Default page processing | Greyscale, Lanczos3 to fit the screen, 16 grey levels as 4-bit PNG, no dithering, no autocontrast, no cropping | Spike quality matched the originals. KCC users report autocontrast darkening pages and crops removing content. |
+| Spreads | A setting: **Split** (default), **Keep whole**, **Whole then halves**. Very wide images (aspect ≥ 1.8) are rotated rather than split | KCC's thresholds and modes; the user liked seeing spreads whole but split pages are what fill the screen. |
+| Where code comes from | Port KCC's spread, resize, palette and ComicInfo logic to Rust, keeping its notices (ISC and GPL-3.0-or-later, both fine in GPL-3.0-only). Reimplement bindery's chapter-bundling rules and take its edge cases as tests (MIT). Write our own natural sort and palette mapping | Research report. |
+| CBR | Read through libarchive and convert to CBZ on import, keeping the original's hash as its identity, like Amazon formats. Never link unrar | UnRAR's licence forbids recreating RAR compression, which conflicts with GPLv3. |
+
+## 2. Supporting the range of Kobos
+
+Parallax writes to any Kobo with Kobo firmware 4.x and database schema 53–222 (`docs/device-support.md`). Comics should work on all of them, so every Kobo gets a **screen profile**: the screen size pages are processed to, and whether it shows colour. The model id comes from `.kobo/version`; ids and names are from pgaskin's koboutils, screen sizes from KCC's profiles and Kobo's specifications.
+
+| Model id | Model | Screen (portrait) | Colour |
+| --- | --- | --- | --- |
+| 310, 320 | Touch | 600 × 800 | no |
+| 330 | Glo | 758 × 1024 | no |
+| 340 | Mini | 600 × 800 | no |
+| 350 | Aura HD | 1080 × 1440 | no |
+| 360 | Aura | 758 × 1024 | no |
+| 370 | Aura H2O | 1080 × 1430 | no |
+| 371 | Glo HD | 1072 × 1448 | no |
+| 372 | Touch 2.0 | 600 × 800 | no |
+| 373, 381 | Aura ONE (and Limited Edition) | 1404 × 1872 | no |
+| 374, 378 | Aura H2O Edition 2 | 1080 × 1440 | no |
+| 375, 379 | Aura Edition 2 | 758 × 1024 | no |
+| 376 | Clara HD | 1072 × 1448 | no |
+| 377, 380 | Forma (and 32 GB) | 1440 × 1920 | no |
+| 382 | Nia | 758 × 1024 | no |
+| 383 | Sage | 1440 × 1920 | no |
+| 384 | Libra H2O | 1264 × 1680 | no |
+| 386 | Clara 2E | 1072 × 1448 | no |
+| 387 | Elipsa | 1404 × 1872 | no |
+| 388 | Libra 2 (reference device) | 1264 × 1680 | no |
+| 389 | Elipsa 2E | 1404 × 1872 | no |
+| 390 | Libra Colour | 1264 × 1680 | yes (Kaleido 3) |
+| 391 | Clara BW | 1072 × 1448 | no |
+| 393 | Clara Colour | 1072 × 1448 | yes (Kaleido 3) |
+
+- **Unknown models** use the size of the Kobo's own full-screen cover cache (`N3_FULL` in `.kobo-images`, which device reports already measure). If there are no cached covers yet, they fall back to 1072 × 1448, the most common size, and the send dialog says so. A device report adds the model properly.
+- **Tolino readers** stay read-only, as today.
+- **Colour Kobos** keep colour pages in colour, saved as JPEG at full screen size, and still turn greyscale pages into 16-level PNG. A page counts as colour by KCC's chroma test. No colour Kobo has been tested; this needs someone with a Libra Colour or Clara Colour before it's called supported.
+- **Old and slow Kobos** (600 × 800 and 758 × 1024) benefit most from processing. Whether their firmware handles fixed-layout KEPUBs is unknown. If one doesn't, that model gets a processed CBZ instead, recorded in its profile; the processing is the same.
+- **Profiles are data, not code paths.** One table in `crates/device-kobo/src/version.rs` (or a new `profile.rs`) returns name, screen size, colour and container for a model id, with a test that every id in `model_name` has a profile.
+
+## 3. Milestones
+
+Each milestone ends with `just check` passing and is committed on its own. Sizes are rough.
+
+### C1. Kobo screen profiles (half a day)
+
+- Extend the model table with every id above, and add `ScreenProfile { width, height, colour, container }`.
+- `KoboDevice::screen_profile()` uses the model id, then the `N3_FULL` cover size, then the default, and says which it used.
+- Show the screen size in About this Kobo.
+- Tests: every known id has a profile; unknown ids fall back in order; the reference report gives 1264 × 1680.
+
+### C2. Comic archive crate, `erc-comic` (2–3 days)
+
+- **Reading archives:**
+  - CBZ and ZIP through `zip`.
+  - CBR and CB7 through libarchive. The macOS SDK ships `libarchive.tbd` but no headers, so the first task is choosing between linking the system libarchive with vendored headers (no bundling, needs its RAR5 support confirmed) and building it statically. Pick whichever passes a RAR4 and a RAR5 fixture.
+- **Pages:**
+  - Image entries only, in natural order (`p2` before `p10`, chapter folders in order).
+  - Skip `__MACOSX`, dot files and `Thumbs.db`.
+  - Hoist a single wrapper folder.
+  - Reject absolute paths, `..` entries, zero-sized or undecodable images and absurd dimensions.
+- **ComicInfo.xml:**
+  - Read Series, Number, Volume, Title, Summary, Year, Writer, Penciller, Inker, Colorist, Letterer, CoverArtist, Publisher, LanguageISO, Manga and PageCount, plus `Pages/Page[@Type="FrontCover"]`.
+  - Write it back when metadata is edited.
+- **Filenames:** parse series, volume (`v01`, `Vol. 1`), chapter (`c012`, `#12`), year and scan-group noise when there's no ComicInfo.
+- **Shape analysis:** count spreads (aspect over 1.16 against the device), very wide pages (≥ 1.8), and long strips for webtoons.
+- **Chapter bundling** (bindery's rules): a folder of images is one volume; a folder of chapter archives becomes one volume only when asked; mixed folders are refused.
+- **Tests:**
+  - Bindery's edge cases: unpadded numbers, wrapper folders, hidden folders, dash-leading names.
+  - KCC's: zip-slip entries, zero-height images, `!` in names, spreads just either side of the thresholds.
+  - Small generated fixtures, never real manga in the repo.
+
+### C3. Comics in the library (3–4 days)
+
+- **Schema 15:** `format` (`epub`, `cbz`), `kind` (`book`, `comic`, `manga`) and `direction` (`ltr`, `rtl`); page count goes in the existing `pages`.
+- **Storage:** books are stored as `book.<format>`. The 19 places that assume `book.epub` (library, snapshots, ingest, send, convert, epub reading, reader) go through `Library::book_file`, which returns the right extension.
+- **Import:**
+  - CBZ is stored byte for byte.
+  - CBR and CB7 are converted to CBZ, with the original's hash kept for duplicate checks.
+  - Folders of images or chapters go through C2's bundling.
+  - `kind` follows ComicInfo's `Manga` field when there is one. Otherwise it uses a setting, "New comics are manga" (on by default, since most files lack ComicInfo, Berserk included). It's editable per book and per series.
+  - Direction follows kind.
+- **Metadata:**
+  - ComicInfo and filename parsing fill title, series, volume and credits; credits map to MARC roles (`aut`, `ill`, `clr`, `cov`…).
+  - Edits write ComicInfo into the CBZ, as edits write the OPF for EPUBs.
+- **Covers:** the FrontCover page or the first page, through the existing covers pipeline.
+- **Health checks:** pages out of order, non-image files, very large pages, missing volumes in a series (already exists for books).
+- **Import from Kobo:** CBZs already on the device can be added to the library like books.
+- **Tests:** import, dedupe, metadata round trip and snapshots/restore with CBZ books.
+
+### C4. Comics in the library UI (2–3 days)
+
+- A Books / Comics / Manga filter in the library toolbar.
+- A series view where volumes stack under their series, for all kinds.
+- **Detail panel:** pages instead of words, art credits, direction, and spread count.
+- Edit kind and direction.
+- Follow `docs/design-system.md` and check the default and minimum window sizes.
+
+### C5. Prepare for Kobo (4–6 days)
+
+- **`erc-comic::prepare(book, profile, settings) -> temp KEPUB`**, in parallel with rayon:
+  - decode;
+  - test for colour;
+  - greyscale, unless the page is colour on a colour Kobo;
+  - handle spreads by the setting, ordered by direction;
+  - rotate very wide pages;
+  - resize with `fast_image_resize` Lanczos3, never upscaling by default;
+  - quantise to 16 levels;
+  - encode as 4-bit PNG, or JPEG for colour pages.
+- **Package:**
+  - fixed-layout EPUB 3 with title, credits, series, cover and `page-progression-direction`;
+  - KCC's `page-spread-left/right` pinning when split halves should face each other on landscape-capable models;
+  - kepubify with `--no-add-dummy-titlepage`;
+  - file names cleaned of characters that crash Kobos (`!` and the rest of KCC's list).
+- **Settings:**
+  - spreads mode;
+  - optional margin crop, autocontrast and upscale for small pages, all off by default;
+  - a per-book override of direction.
+- **Checks** (as the spike did):
+  - output images match the processing;
+  - kepubify kept fixed layout and direction;
+  - page count matches the source plus splits.
+- **Performance:** about 8 s per volume on Apple silicon; progress is reported per page.
+
+### C6. Sending and updating comics (2–3 days)
+
+- `send_library_books` and `update_on_device` prepare comics for the connected Kobo's profile in a temporary folder, then write through the existing safe-write layer to `KEpub/<Series> v<NN> - <Title>.kepub.epub`.
+- **Series:** set through the existing pending-series triggers, so it appears as soon as Nickel imports the book.
+- **Device copies:** recorded with a hash of the profile and settings. Changing either, or moving to another Kobo, offers "Update on Kobo".
+- **Space:** the send dialog estimates size on the device from page count and screen size, and checks free space before writing.
+- **No cache:** nothing converted is kept on the Mac after a send, including after a failure.
+- **Tests:** the FAT32 disk-image tests send and update a CBZ; fixture devices of three screen sizes produce correctly sized pages.
+
+### C7. Reading comics in Parallax (4–5 days)
+
+- A dedicated image viewer in the reader window, not foliate. Pages load through `reader_entry`, with two pages preloaded.
+- **Single page or spread:** spreads are automatic in wide windows, with the cover shown alone.
+- **Direction:** right to left flips the keys, clicks and spread order.
+- **Viewing:** fit width, height or page, with zoom and pan, and a vertical scroll mode for long strips.
+- **Positions:** a page index in `reader_positions`, with page bookmarks.
+- **Window access:** the reader capability gains only what the viewer needs; the pinned grant-list test is updated.
+- **Tests:** `just test-reader` opens a generated CBZ, turns pages both directions, and reopens where it left off.
+
+### C8. Later
+
+- Online metadata from AniList (manga, free) and ComicVine (comics, needs a key).
+- Kobo reading progress mapped to pages.
+- KCC's webtoon panel splitter and colour "rainbow" filter.
+- PDF comics.
+- Kindle.
+
+## 4. Device verification
+
+Nothing here counts as working on a Kobo until someone runs it on one.
+
+- **Libra 2** (the user's): the full send, update and series flow for each spread mode, and the right-to-left recheck. Tap the left edge in a raw CBZ and in an RTL KEPUB; if both go forward, the Kobo ignores the book's direction.
+- **Other models:** a "Comics" section in `docs/hardware-checks.md`, so anyone with another Kobo can run the same checks and send a device report. The model table in §2 is from published specifications until then.
+- **Colour Kobos:** colour pages, rainbow artefacts and whether greyscale PNGs look right on Kaleido.
+- **Older Kobos:** whether fixed-layout KEPUB opens at all; if not, switch that profile to CBZ.
+
+## 5. Risks and open questions
+
+- **Bookmarks and notes:** reportedly unavailable in sideloaded fixed-layout KEPUBs (KCC issues 418 and 704). Acceptable for manga; noted in the send dialog's help.
+- **CBR support:** depends on C2's libarchive choice. If neither route reads RAR5 cleanly, CBR import ships later and CBZ goes first.
+- **Spread pinning:** whether `rendition:spread` and page-spread pinning matter on models that rotate to landscape is untested; the spike used `none` with split pages, which worked.
+- **Large libraries:** volumes are 0.5 GB each; import copies them, as for books. Linking files in place instead of copying would save disk space, but it affects the whole library and is a separate decision.
