@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, EventTarget, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 use crate::reader::{self, ReaderSettings};
-use crate::{AppState, CmdResult, err};
+use crate::{AppState, CmdResult, about, err};
 
 pub const THEME: &str = "theme";
 /// Which view the main window opens on: the library unless this says otherwise.
@@ -157,7 +157,7 @@ pub fn apply_theme(app: &AppHandle, theme: AppTheme) {
     app.set_theme(theme.native());
 }
 
-/// Tells the main and Settings windows, and for the theme the readers.
+/// Tells the main and Settings windows, and sends theme changes to About and readers.
 fn announce(app: &AppHandle, key: &str, value: Option<&str>) {
     #[derive(Clone, Serialize)]
     struct Changed<'a> {
@@ -174,6 +174,7 @@ fn announce(app: &AppHandle, key: &str, value: Option<&str>) {
     if key == THEME {
         let theme = AppTheme::parse(value);
         apply_theme(app, theme);
+        about::push_theme(app, theme);
         reader::push_app_theme(app, theme);
     }
 }

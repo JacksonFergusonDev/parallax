@@ -34,6 +34,7 @@ use serde::Serialize;
 use tauri::ipc::{Channel, JavaScriptChannelId};
 use tauri::{AppHandle, Emitter, Manager, State, Webview};
 
+mod about;
 #[cfg(feature = "e2e")]
 mod e2e;
 mod menu;
@@ -1433,7 +1434,7 @@ async fn cover_colors(app: AppHandle, paths: Vec<PathBuf>) -> CmdResult<Vec<Opti
     .map_err(err)
 }
 
-/// The main and Settings windows call this once their first layout is ready.
+/// The app's own pages call this once their first layout is ready.
 #[tauri::command]
 fn show_window(window: tauri::WebviewWindow) -> tauri::Result<()> {
     window.show()?;
@@ -1507,6 +1508,7 @@ pub fn run() {
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_filename(WINDOW_STATE_FILE)
+                .with_denylist(&[about::LABEL])
                 .with_state_flags(
                     tauri_plugin_window_state::StateFlags::all()
                         - tauri_plugin_window_state::StateFlags::VISIBLE,
@@ -1535,6 +1537,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             show_window,
+            about::about_info,
+            about::about_open_repository,
             list_devices,
             library_list,
             library_import,
@@ -1657,7 +1661,7 @@ mod tests {
     }
 
     #[test]
-    fn every_command_is_declared_and_granted_to_one_kind_of_window() {
+    fn every_command_is_declared_and_granted_to_its_window() {
         fn names(text: &str, open: &str, close: char) -> Vec<String> {
             let (_, rest) = text.split_once(open).unwrap();
             let (list, _) = rest.split_once(close).unwrap();
@@ -1682,12 +1686,26 @@ mod tests {
 
         let main = granted(include_str!("../capabilities/default.json"));
         let reader = granted(include_str!("../capabilities/reader.json"));
+        let about = granted(include_str!("../capabilities/about.json"));
+        assert_eq!(
+            about,
+            [
+                "core:event:allow-listen",
+                "allow-show-window",
+                "allow-about-info",
+                "allow-about-open-repository",
+            ]
+        );
         for command in handled {
             let permission = format!("allow-{}", command.replace('_', "-"));
-            assert!(
-                main.contains(&permission) != reader.contains(&permission),
-                "{permission} must be granted to exactly one of main and reader"
-            );
+            let grants = [&main, &reader, &about].map(|scope| scope.contains(&permission));
+            let expected = match command.as_str() {
+                "show_window" => [true, false, true],
+                "about_info" | "about_open_repository" => [false, false, true],
+                _ if reader.contains(&permission) => [false, true, false],
+                _ => [true, false, false],
+            };
+            assert_eq!(grants, expected, "unexpected grants for {permission}");
         }
         // The comic viewer uses the same scoped commands for its raster
         // entries and bookmarks. Neither reader can reach other books.

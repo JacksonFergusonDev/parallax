@@ -1,10 +1,12 @@
 //! The app's commands are listed here so Tauri enforces its ACL on them.
 //! Each one also needs granting in `capabilities/`; a window with no grant
 //! can't call it. `lib.rs` tests that this list matches `generate_handler!`
-//! and that each command goes to the main window or reader windows, not both.
+//! and that each command is granted only to the windows that need it.
 
 const COMMANDS: &[&str] = &[
     "show_window",
+    "about_info",
+    "about_open_repository",
     "list_devices",
     "library_list",
     "library_import",

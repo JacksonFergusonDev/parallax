@@ -40,7 +40,7 @@ The initial main window is 1280 × 900, with an 800 × 560 minimum. Existing sav
 
 ## Color and interaction
 
-Every window (main, Settings and reader) imports `tokens.css`. Use semantic roles (`--bg`, `--surface`, `--sunken`, `--fg`, `--muted`, `--border`, `--accent`, `--accent-fg`, `--ok`, `--warn`, `--danger`, `--status-fg`), not isolated hex colors in new controls. Gold is darker in light mode so text and primary buttons remain legible; dark mode uses luminous gold against cool ink surfaces. Error and warning messages must include text or an icon, not color alone. Book artwork and charts can have their own palettes.
+Every window imports `tokens.css`. Use semantic roles (`--bg`, `--surface`, `--sunken`, `--fg`, `--muted`, `--border`, `--accent`, `--accent-fg`, `--ok`, `--warn`, `--danger`, `--status-fg`), not isolated hex colors in new controls. Gold is darker in light mode so text and primary buttons remain legible; dark mode uses luminous gold against cool ink surfaces. Error and warning messages must include text or an icon, not color alone. Book artwork and charts can have their own palettes.
 
 Normal UI text and semantic status colors must maintain at least 4.5:1 contrast on their base surfaces. The palette test checks this in both themes, including primary button text and text on solid status badges. Color mixes, opacity, overlaid cover badges, and focus rings still require visual review; passing the base palette test is not a complete accessibility audit. Avoid reducing the opacity of readable metadata.
 

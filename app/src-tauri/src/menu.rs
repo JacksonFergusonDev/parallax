@@ -8,14 +8,13 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use serde::Deserialize;
 use tauri::menu::{
-    AboutMetadata, CheckMenuItem, IsMenuItem, Menu, MenuEvent, MenuItem, MenuItemKind,
-    PredefinedMenuItem, Submenu,
+    CheckMenuItem, IsMenuItem, Menu, MenuEvent, MenuItem, MenuItemKind, PredefinedMenuItem, Submenu,
 };
 use tauri::{AppHandle, Emitter, EventTarget, Manager, Runtime, State, WebviewWindowBuilder};
 
-use crate::{reader, settings};
+use crate::{about, reader, settings};
 
-const REPOSITORY: &str = "https://github.com/JacksonFergusonDev/parallax";
+pub(crate) const REPOSITORY: &str = "https://github.com/JacksonFergusonDev/parallax";
 const MAIN: &str = "main";
 /// The event the main window gets with a menu command's id.
 const COMMAND: &str = "menu-command";
@@ -81,6 +80,7 @@ const SORTS: [(&str, &str); 11] = [
     ("color", "Colour"),
 ];
 
+const ABOUT: Command = command("about", "About Parallax", App);
 const SETTINGS: Command = key(command("settings", "Settings…", App), "CmdOrCtrl+,");
 
 const FILE: &[Command] = &[
@@ -274,24 +274,6 @@ pub fn closed(app: &AppHandle, label: &str) {
     inner.refresh();
 }
 
-fn about(app: &AppHandle) -> AboutMetadata<'static> {
-    AboutMetadata {
-        name: Some("Parallax".to_owned()),
-        version: Some(app.package_info().version.to_string()),
-        copyright: app.config().bundle.copyright.clone(),
-        credits: Some(
-            "Free software under the GNU General Public License, version 3.\n\n\
-             Built with Tauri, foliate-js (reading), boko (Amazon formats) and \
-             kepubify (Kobo books), with Kobo handling ported from calibre."
-                .to_owned(),
-        ),
-        license: Some("GPL-3.0-only".to_owned()),
-        website: Some(REPOSITORY.to_owned()),
-        website_label: Some("Parallax on GitHub".to_owned()),
-        ..AboutMetadata::default()
-    }
-}
-
 type Wry = tauri::Wry;
 type Item = MenuItemKind<Wry>;
 
@@ -367,6 +349,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         app,
         built: HashMap::new(),
     };
+    let about_item = items.command(&ABOUT)?;
     let settings_item = items.command(&SETTINGS)?;
     let file = items.group(FILE)?;
     let find = items.command(&FIND)?;
@@ -390,7 +373,6 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let help = items.group(HELP)?;
 
     let sep = PredefinedMenuItem::separator(app)?;
-    let about_item = PredefinedMenuItem::about(app, Some("About Parallax"), Some(about(app)))?;
     let services = PredefinedMenuItem::services(app, None)?;
     let hide = PredefinedMenuItem::hide(app, None)?;
     let hide_others = PredefinedMenuItem::hide_others(app, None)?;
@@ -565,6 +547,11 @@ pub fn run(app: &AppHandle, id: &str) {
         .get(id)
         .map(|(t, _)| *t);
     match (id, target) {
+        ("about", _) => {
+            if let Err(error) = about::open_window(app) {
+                eprintln!("Could not open About Parallax: {error}");
+            }
+        }
         ("settings", _) => {
             let _ = settings::open_window(app);
         }
@@ -629,7 +616,7 @@ mod tests {
         ]
         .into_iter()
         .flatten()
-        .chain([&SETTINGS, &FIND, &EJECT, &LIBRARY_WINDOW])
+        .chain([&ABOUT, &SETTINGS, &FIND, &EJECT, &LIBRARY_WINDOW])
         .collect()
     }
 

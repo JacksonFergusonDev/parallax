@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "about",
+  "description": "About Parallax can read its display metadata, follow the app theme, and open the repository",
+  "windows": ["about"],
+  "permissions": [
+    "core:event:allow-listen",
+    "allow-show-window",
+    "allow-about-info",
+    "allow-about-open-repository"
+  ]
+}
