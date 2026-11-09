@@ -195,6 +195,12 @@ impl KoboDevice {
         self.mount().join(STATE_DIR)
     }
 
+    /// Books Parallax wrote, without loading the operation log.
+    pub fn managed_books(&self) -> Result<Vec<ManagedBook>, String> {
+        read_json::<BooksFile>(&self.state_dir().join("books.json"))
+            .map(|file| file.map_or_else(Vec::new, |file| file.books))
+    }
+
     /// Reads `/.erc/` without changing anything.
     pub fn erc_state(&self) -> ErcState {
         let dir = self.state_dir();
@@ -203,8 +209,8 @@ impl KoboDevice {
             Ok(d) => state.device = d,
             Err(e) => state.problems.push(format!("device.json: {e}")),
         }
-        match read_json::<BooksFile>(&dir.join("books.json")) {
-            Ok(b) => state.books = b.map(|b| b.books).unwrap_or_default(),
+        match self.managed_books() {
+            Ok(books) => state.books = books,
             Err(e) => state.problems.push(format!("books.json: {e}")),
         }
         let (mut log, bad) = read_log(&dir.join("log.jsonl"));

@@ -144,6 +144,13 @@ fn sends_library_books_with_edited_metadata() {
         copies[0].content_id,
         format!("file:///mnt/onboard/{}", sent.device_path)
     );
+
+    library.remove(book.id).unwrap();
+    let catalog =
+        erc_core::device::device_catalog(&library, &kobo, &kobo.open_db().unwrap()).unwrap();
+    assert_eq!(catalog.len(), 1);
+    assert_eq!(catalog[0].book.id, sent.content_id);
+    assert!(catalog[0].pending_import);
 }
 
 #[test]

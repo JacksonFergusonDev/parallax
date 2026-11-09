@@ -183,6 +183,7 @@ const onDevice = new Map<number, string>([
   [5, "2026-10-01T00:00:00Z"],
 ]);
 const pendingImport = new Set<number>();
+const deviceOnlyBooks = new Map<number, Book>();
 const shelves = new Map<string, Set<string>>([["Favourites", new Set()]]);
 // `?shelves=N` adds N collections, some with long names, to check the sidebar.
 for (
@@ -344,17 +345,24 @@ export function installMockBackend(label = "main") {
         case "library_list":
           return books;
         case "books_on_device":
-          return [...onDevice].map(([id, sentAt]) => ({
-            book_id: id,
-            device_path: `KEpub/book-${id}.kepub.epub`,
-            content_id: contentId(id),
-            sent_at: sentAt,
-            stale: books.find((b) => b.id === id)!.modified_at > sentAt,
-          }));
+          return books.flatMap((book) => {
+            const sentAt = onDevice.get(book.id);
+            return sentAt
+              ? [
+                  {
+                    book_id: book.id,
+                    device_path: `KEpub/book-${book.id}.kepub.epub`,
+                    content_id: contentId(book.id),
+                    sent_at: sentAt,
+                    stale: book.modified_at > sentAt,
+                  },
+                ]
+              : [];
+          });
         case "device_books":
           await sleep(300);
           return [
-            ...books
+            ...[...books, ...deviceOnlyBooks.values()]
               .filter((b) => onDevice.has(b.id))
               .map((b): DeviceBook => ({
                 pending_import: pendingImport.has(b.id),
@@ -399,19 +407,22 @@ export function installMockBackend(label = "main") {
           });
           if (ids.some((id) => id.includes("Old Book"))) health.missing = false;
           storeBooks = storeBooks.filter((b) => !ids.includes(b.id));
-          const linked = new Map(
+          const copies = new Map(
             [...onDevice.keys()].map((id) => [contentId(id), id]),
           );
           for (const content of ids) {
-            const id = linked.get(content);
+            const id = copies.get(content);
             if (id !== undefined) {
               onDevice.delete(id);
               pendingImport.delete(id);
+              deviceOnlyBooks.delete(id);
             }
           }
           return ids.map((content_id) => ({
             content_id,
-            book_id: linked.get(content_id) ?? null,
+            book_id:
+              books.find((book) => contentId(book.id) === content_id)?.id ??
+              null,
             result: { Ok: null },
           }));
         }
@@ -657,6 +668,8 @@ export function installMockBackend(label = "main") {
           for (const [i, id] of ids.entries()) {
             reportBooks({ completed: i, total: ids.length, title: null });
             await sleep(220);
+            const book = books.find((book) => book.id === id);
+            if (book && onDevice.has(id)) deviceOnlyBooks.set(id, book);
             books = books.filter((b) => b.id !== id);
           }
           return null;
@@ -1382,7 +1395,20 @@ export function installMockBackend(label = "main") {
         case "plugin:dialog|message": {
           // ask() resolves true when the returned label matches its OK label.
           const buttons = a.buttons as
-            { OkCancelCustom?: [string, string] } | string | undefined;
+            | {
+                OkCancelCustom?: [string, string];
+                YesNoCancelCustom?: [string, string, string];
+              }
+            | string
+            | undefined;
+          if (typeof buttons === "object" && buttons.YesNoCancelCustom) {
+            const [first, second, cancel] = buttons.YesNoCancelCustom;
+            const choice = window.prompt(
+              `${a.message}\n\n1. ${first}\n2. ${second}`,
+              "1",
+            );
+            return choice === "1" ? first : choice === "2" ? second : cancel;
+          }
           const ok =
             typeof buttons === "object" && buttons.OkCancelCustom
               ? buttons.OkCancelCustom[0]

@@ -4,7 +4,13 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { ImportReview } from "./ImportReview";
-import type { Book, Issue, Proposal, SendOutcome } from "../api";
+import {
+  removeBooks,
+  type Book,
+  type Issue,
+  type Proposal,
+  type SendOutcome,
+} from "../api";
 import { readCache } from "../readCache";
 import type { ReviewBatch } from "../importReview";
 
@@ -18,7 +24,6 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(async () => () => {}),
 }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn(async () => true) }));
 
 const book = (id: number, title: string) =>
   ({
@@ -97,6 +102,10 @@ describe("ImportReview", () => {
           onKobo={() => false}
           kobo={kobo}
           statuses={{}}
+          prepareRemove={async (ids) => ({
+            starting: "Saving a library snapshot…",
+            run: (report) => removeBooks(ids, report),
+          })}
           onChanged={onChanged}
           onClose={onClose}
         />,

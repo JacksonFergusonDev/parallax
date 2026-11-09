@@ -427,15 +427,19 @@ async fn remove_from_device(
     state: State<'_, AppState>,
     mount: PathBuf,
     content_ids: Vec<String>,
+    expected_serial: Option<String>,
 ) -> CmdResult<Vec<RemoveOutcome>> {
     let progress = progress.map(|id| id.channel_on(webview));
     let library = state.library.clone();
     let backups = state.backup_root.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let kobo = KoboDevice::open(&mount).map_err(err)?;
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        if expected_serial.is_some_and(|serial| serial != kobo.version().serial) {
+            return Err("A different Kobo is connected. Confirm the removal again.".into());
+        }
         erc_core::device::remove_from_device_with_progress(
             Some(&lib),
             &kobo,

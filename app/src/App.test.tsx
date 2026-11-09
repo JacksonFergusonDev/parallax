@@ -2,7 +2,7 @@
 import { StrictMode, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { ask, message } from "@tauri-apps/plugin-dialog";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import App from "./App";
 import { readCache } from "./readCache";
@@ -30,7 +30,11 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("@tauri-apps/api/webview", () => ({
   getCurrentWebview: () => ({ onDragDropEvent: async () => () => {} }),
 }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn(), open: vi.fn() }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  ask: vi.fn(),
+  message: vi.fn(),
+  open: vi.fn(),
+}));
 
 const device: DeviceInfo = {
   kind: "kobo",
@@ -128,6 +132,8 @@ async function render() {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.mocked(isTauri).mockReturnValue(false);
+  vi.mocked(ask).mockReset();
+  vi.mocked(message).mockReset();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear();
   readCache.clear();
@@ -168,6 +174,104 @@ afterEach(async () => {
   container.remove();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe("removing from the library", () => {
+  it("asks only about the library when the Kobo is unplugged", async () => {
+    connected = [];
+    vi.mocked(ask).mockResolvedValueOnce(true);
+    await render();
+    await click(panel("Library").querySelector("button.card")!);
+    await click(button("Remove"));
+    expect(ask).toHaveBeenCalledWith(
+      "Remove 1 book from your library?",
+      expect.objectContaining({ okLabel: "Remove", cancelLabel: "Cancel" }),
+    );
+    expect(message).not.toHaveBeenCalled();
+    expect(calls("library_remove")).toHaveLength(1);
+    expect(calls("remove_from_device")).toHaveLength(0);
+  });
+
+  it.each([
+    { choice: "Library Only", deviceRemovals: 0, libraryRemovals: 1 },
+    { choice: "Cancel", deviceRemovals: 0, libraryRemovals: 0 },
+    { choice: "Library and Kobo", deviceRemovals: 1, libraryRemovals: 1 },
+    { choice: "Library and Kobo", deviceRemovals: 1, libraryRemovals: 0 },
+  ])(
+    "handles $choice with $libraryRemovals library writes and $deviceRemovals Kobo writes",
+    async ({ choice, deviceRemovals, libraryRemovals }) => {
+      const other = { ...localBook, id: 2, title: "Library-only book" };
+      const mutations: string[] = [];
+      const normal = vi.mocked(invoke).getMockImplementation()!;
+      vi.mocked(invoke).mockImplementation(async (command, args) => {
+        if (command === "library_list") return [localBook, other];
+        if (command === "books_on_device")
+          return [
+            {
+              book_id: localBook.id,
+              device_path: koboBook.path,
+              content_id: koboBook.id,
+              sent_at: "2026-11-01",
+              stale: false,
+            },
+          ];
+        if (command === "remove_from_device") {
+          mutations.push(command);
+          return [
+            {
+              content_id: koboBook.id,
+              book_id: localBook.id,
+              result: libraryRemovals
+                ? { Ok: null }
+                : { Err: "Device unavailable" },
+            },
+          ];
+        }
+        if (command === "library_remove") mutations.push(command);
+        return normal(command, args);
+      });
+      vi.mocked(message).mockResolvedValueOnce(choice);
+      await render();
+      const cards =
+        panel("Library").querySelectorAll<HTMLButtonElement>("button.card");
+      await click(cards[0]);
+      await act(async () => {
+        cards[1].dispatchEvent(
+          new MouseEvent("click", { bubbles: true, metaKey: true }),
+        );
+      });
+      await click(button("Remove"));
+      expect(message).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "Remove 2 books from your library? One selected book has a copy on your Kobo.",
+        ),
+        expect.objectContaining({
+          buttons: {
+            yes: "Library Only",
+            no: "Library and Kobo",
+            cancel: "Cancel",
+          },
+        }),
+      );
+      expect(calls("remove_from_device")).toHaveLength(deviceRemovals);
+      expect(calls("library_remove")).toHaveLength(libraryRemovals);
+      if (deviceRemovals)
+        expect(calls("remove_from_device")[0][1]).toMatchObject({
+          contentIds: [koboBook.id],
+          expectedSerial: device.serial,
+        });
+      if (libraryRemovals)
+        expect(calls("library_remove")[0][1]).toMatchObject({
+          ids: expect.arrayContaining([localBook.id, other.id]),
+        });
+      if (deviceRemovals && libraryRemovals)
+        expect(mutations).toEqual(["remove_from_device", "library_remove"]);
+      if (deviceRemovals && !libraryRemovals)
+        expect(panel("Library").textContent).toContain(
+          "Your library books were kept.",
+        );
+    },
+  );
 });
 
 describe("book operation progress", () => {

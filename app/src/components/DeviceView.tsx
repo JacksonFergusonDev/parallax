@@ -67,7 +67,7 @@ import { CollectionMenu } from "./CollectionMenu";
 import { DeviceCard } from "./DeviceCard";
 import { FolderImport } from "./FolderImport";
 import { BookProgressBar } from "./BookProgressBar";
-import { useBookProgress } from "../bookProgress";
+import { useBookProgress, type PrepareRemoval } from "../bookProgress";
 import { sortCommands, useMenuCommands } from "../menu";
 import { NameDialog } from "./NameDialog";
 import { RulesDialog } from "./RulesDialog";
@@ -312,10 +312,9 @@ export function DeviceView({
     change([{ kind: "delete", name }], `Deleted “${name}”.`);
   };
 
-  const removeBooks = async () => {
-    const n = removable.length;
+  const prepareRemove: PrepareRemoval<string> = async (contentIds) => {
     const ok = await ask(
-      `Remove ${plural(n, "book")} from your Kobo? Reading progress and highlights are deleted too. A backup of the Kobo's database is made first.`,
+      `Remove ${plural(contentIds.length, "book")} from your Kobo? Reading progress and highlights are deleted too. A backup of the Kobo's database is made first.`,
       {
         title: "Remove from Kobo",
         kind: "warning",
@@ -323,22 +322,33 @@ export function DeviceView({
         cancelLabel: "Cancel",
       },
     );
-    if (!ok) return;
-    run(async () => {
-      const outcomes = await runBookOperation(
-        "Removing",
-        (report) => onRemove(ids(removable), report),
-        "Backing up Kobo…",
-      );
-      setSelected(new Set());
-      const failed = outcomes.filter((o) => "Err" in o.result);
-      if (failed.length) {
-        const first = failed[0].result;
-        throw new Error(
-          `${failed.length} could not be removed: ${"Err" in first ? first.Err : ""}`,
+    if (!ok) return null;
+    return {
+      starting: "Backing up Kobo…",
+      run: async (report) => {
+        const outcomes = await onRemove(contentIds, report);
+        const failures = outcomes.flatMap(({ result }) =>
+          "Err" in result ? [result.Err] : [],
         );
+        if (failures.length)
+          throw new Error(
+            `${failures.length} could not be removed. ${failures[0]}`,
+          );
+      },
+    };
+  };
+
+  const removeBooks = async () => {
+    const contentIds = ids(removable);
+    const removal = await prepareRemove(contentIds);
+    if (!removal) return;
+    run(async () => {
+      try {
+        await runBookOperation("Removing", removal.run, removal.starting);
+      } finally {
+        setSelected(new Set());
       }
-      return `Removed ${plural(outcomes.length, "book")}. Eject to let your Kobo refresh its library.`;
+      return `Removed ${plural(contentIds.length, "book")}. Eject to let your Kobo refresh its library.`;
     });
   };
 
@@ -910,13 +920,7 @@ export function DeviceView({
         <DuplicateReview
           place="Kobo"
           groups={dialog.groups}
-          removeWarning="Their reading progress and highlights are deleted too. A backup of the Kobo's database is made first."
-          remove={async (contentIds, report) => {
-            const outcomes = await onRemove(contentIds, report);
-            const failed = outcomes.find((o) => "Err" in o.result);
-            if (failed && "Err" in failed.result)
-              throw new Error(failed.result.Err);
-          }}
+          prepareRemove={prepareRemove}
           dismiss={(key) => dismissDuplicates(key, device.mount)}
           onChanged={() => {
             load();

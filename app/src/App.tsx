@@ -11,7 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { ask, open } from "@tauri-apps/plugin-dialog";
+import { ask, message, open } from "@tauri-apps/plugin-dialog";
 import {
   booksOnDevice,
   changeCollections,
@@ -121,7 +121,7 @@ import {
 import { usePresentation } from "./presentation";
 import { rememberView, usePreferences, type View } from "./preferences";
 import { sortCommands, useMenuCommands } from "./menu";
-import { useBookProgress } from "./bookProgress";
+import { useBookProgress, type PrepareRemoval } from "./bookProgress";
 import { BookProgressBar } from "./components/BookProgressBar";
 import "./styles.css";
 
@@ -426,7 +426,12 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
     report?: ReportBookProgress,
   ) => {
     try {
-      const outcomes = await removeFromDevice(target.mount, contentIds, report);
+      const outcomes = await removeFromDevice(
+        target.mount,
+        contentIds,
+        report,
+        target.serial,
+      );
       const succeeded = outcomes.filter(({ result }) => "Ok" in result);
       const removed = succeeded.flatMap(({ book_id }) =>
         book_id == null ? [] : [book_id],
@@ -890,31 +895,97 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
     setCollections(await listCollections(device.mount).catch(() => []));
   };
 
-  const remove = async () => {
-    const n = selected.size;
-    const ok = await ask(
-      `Remove ${n} ${n === 1 ? "book" : "books"} from your library? Copies on your Kobo stay.`,
-      {
-        title: "Remove from library",
-        kind: "warning",
+  const prepareLibraryRemoval: PrepareRemoval<number> = async (ids) => {
+    const target = writable;
+    const selectedIds = new Set(ids);
+    const copies = target
+      ? await booksOnDevice(target.mount).catch(() => [])
+      : [];
+    const contentIds =
+      target && activeKobo.current === target
+        ? [
+            ...new Set(
+              copies
+                .filter((copy) => selectedIds.has(copy.book_id))
+                .map((copy) => copy.content_id),
+            ),
+          ]
+        : [];
+    const count = contentIds.length;
+    const question = `Remove ${ids.length} ${ids.length === 1 ? "book" : "books"} from your library?`;
+    const options = { title: "Remove from library", kind: "warning" } as const;
+
+    let koboCount = 0;
+    if (count) {
+      const libraryOnly = "Library Only";
+      const both = "Library and Kobo";
+      const answer = await message(
+        `${question} ${count === 1 ? "One selected book has a copy" : `${count} selected books have copies`} on your Kobo. Removing from Kobo also removes the reading progress and highlights stored there.`,
+        {
+          ...options,
+          buttons: { yes: libraryOnly, no: both, cancel: "Cancel" },
+        },
+      );
+      if (answer === both) koboCount = count;
+      else if (answer !== libraryOnly) return null;
+    } else if (
+      !(await ask(question, {
+        ...options,
         okLabel: "Remove",
         cancelLabel: "Cancel",
+      }))
+    ) {
+      return null;
+    }
+    const total = ids.length + koboCount;
+    return {
+      starting: koboCount ? "Backing up Kobo…" : "Saving a library snapshot…",
+      run: async (report) => {
+        try {
+          if (target && koboCount) {
+            if (activeKobo.current !== target) {
+              throw new Error(
+                "The Kobo connection changed. Confirm the removal again.",
+              );
+            }
+            const outcomes = await removeOnKobo(
+              target,
+              contentIds,
+              (progress) => report({ ...progress, total }),
+            );
+            const failure = outcomes.find((outcome) => "Err" in outcome.result);
+            if (failure && "Err" in failure.result) {
+              throw new Error(
+                `Could not remove every selected copy from Kobo. Your library books were kept. ${failure.result.Err}`,
+              );
+            }
+          }
+          await removeBooks(ids, (progress) =>
+            report({
+              ...progress,
+              total,
+              completed: koboCount + progress.completed,
+            }),
+          );
+          setSelected(new Set());
+        } finally {
+          await refresh();
+        }
       },
-    );
-    if (!ok) return;
+    };
+  };
+
+  const remove = async () => {
+    if (!selected.size || busy) return;
     setBusy("removing");
-    setNotice(null);
     try {
-      await runBookOperation(
-        "Removing",
-        (report) => removeBooks([...selected], report),
-        "Saving a library snapshot…",
-      );
-      setSelected(new Set());
+      const removal = await prepareLibraryRemoval([...selected]);
+      if (!removal) return;
+      setNotice(null);
+      await runBookOperation("Removing", removal.run, removal.starting);
     } catch (e) {
       setNotice({ kind: "error", text: String(e) });
     } finally {
-      await refresh();
       setBusy(null);
     }
   };
@@ -1647,6 +1718,7 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
           onKobo={(id) => onDevice.has(id)}
           kobo={writable ? { name: writable.model, send: sendReviewed } : null}
           statuses={statuses}
+          prepareRemove={prepareLibraryRemoval}
           onChanged={() => {
             void refresh();
             setEnhanced((n) => n + 1);
@@ -1659,11 +1731,7 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
         <DuplicateReview
           place="library"
           groups={duplicates}
-          removeWarning="They're removed from your library; copies on your Kobo stay."
-          remove={async (ids, report) => {
-            await removeBooks(ids.map(Number), report);
-            setSelected(new Set());
-          }}
+          prepareRemove={(ids) => prepareLibraryRemoval(ids.map(Number))}
           dismiss={(key) => dismissDuplicates(key, null)}
           onChanged={refresh}
           onClose={() => setDuplicates(null)}

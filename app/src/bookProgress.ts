@@ -7,6 +7,12 @@ export interface BookOperation {
   progress?: BookProgress;
 }
 
+/** A removal the user confirmed, ready to run with a progress indicator. */
+export type PrepareRemoval<Id> = (ids: Id[]) => Promise<{
+  starting: string;
+  run: (report: ReportBookProgress) => Promise<void>;
+} | null>;
+
 /** Owns the indicator until the command settles, including its initial wait. */
 export function useBookProgress() {
   const [operation, setOperation] = useState<BookOperation | null>(null);

@@ -1,8 +1,7 @@
 import { GeneratedCover } from "./GeneratedCover";
 import { useEffect, useState, type ReactNode } from "react";
-import { ask } from "@tauri-apps/plugin-dialog";
-import type { DuplicateReason, ReportBookProgress } from "../api";
-import { useBookProgress } from "../bookProgress";
+import type { DuplicateReason } from "../api";
+import { useBookProgress, type PrepareRemoval } from "../bookProgress";
 import { BookProgressBar } from "./BookProgressBar";
 
 /** One copy in a group, already described for display. */
@@ -30,9 +29,7 @@ interface Props {
   place: string;
   /** Started when the review opens, so later list refreshes don't reshuffle it. */
   groups: Promise<ReviewGroup[]>;
-  /** Shown in the confirmation before removing. */
-  removeWarning: string;
-  remove: (ids: string[], report: ReportBookProgress) => Promise<void>;
+  prepareRemove: PrepareRemoval<string>;
   dismiss: (key: string) => Promise<void>;
   onChanged: () => void;
   onClose: () => void;
@@ -50,8 +47,7 @@ const REASONS: Record<DuplicateReason, string> = {
 export function DuplicateReview({
   place,
   groups: pending,
-  removeWarning,
-  remove,
+  prepareRemove,
   dismiss,
   onChanged,
   onClose,
@@ -108,13 +104,10 @@ export function DuplicateReview({
           <GroupReview
             key={group.key}
             group={group}
-            removeWarning={removeWarning}
             onRemove={async (ids) => {
-              await runBookOperation(
-                "Removing",
-                (report) => remove(ids, report),
-                "Preparing backup…",
-              );
+              const removal = await prepareRemove(ids);
+              if (!removal) return;
+              await runBookOperation("Removing", removal.run, removal.starting);
               setIndex((i) => i + 1);
             }}
             onDismiss={async () => {
@@ -138,14 +131,12 @@ export function DuplicateReview({
 
 function GroupReview({
   group,
-  removeWarning,
   onRemove,
   onDismiss,
   onSkip,
   onError,
 }: {
   group: ReviewGroup;
-  removeWarning: string;
   onRemove: (ids: string[]) => Promise<void>;
   onDismiss: () => Promise<void>;
   onSkip: () => void;
@@ -176,22 +167,9 @@ function GroupReview({
       await f();
     } catch (e) {
       onError(String(e));
+    } finally {
       setBusy(false);
     }
-  };
-
-  const removeChosen = async () => {
-    const n = chosen.size;
-    const ok = await ask(
-      `Remove ${n} ${n === 1 ? "copy" : "copies"}? ${removeWarning}`,
-      {
-        title: "Remove duplicates",
-        kind: "warning",
-        okLabel: "Remove",
-        cancelLabel: "Cancel",
-      },
-    );
-    if (ok) act(() => onRemove([...chosen]));
   };
 
   return (
@@ -252,7 +230,7 @@ function GroupReview({
         </button>
         <button
           className="primary danger-fill"
-          onClick={removeChosen}
+          onClick={() => void act(() => onRemove([...chosen]))}
           disabled={busy || chosen.size === 0 || !keepsOne}
         >
           {busy

@@ -1,12 +1,12 @@
 //! Library-aware changes to books already on a device.
 
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 
 use erc_device::{DeviceBook, ReadStatus};
 use erc_device_kobo::{
-    AnnotationKind, DuplicateCollection, KoboDb, KoboDevice, Mismatch, duplicate_collections,
-    files_not_in_database, merge_duplicate_collections, missing_files, orphaned_images,
-    remove_book_with_progress, set_read_status,
+    AnnotationKind, BOOKS_DIR, DuplicateCollection, KoboDb, KoboDevice, Mismatch, ONBOARD_PREFIX,
+    duplicate_collections, files_not_in_database, merge_duplicate_collections, missing_files,
+    orphaned_images, remove_book_with_progress, set_read_status,
 };
 use erc_library::{Format, Library};
 use serde::Serialize;
@@ -40,42 +40,75 @@ pub fn device_catalog(
             pending_import: false,
         })
         .collect();
-    let copies = library.device_copies(&device.version().serial)?;
-    if copies.is_empty() {
+    // A send remains on the Kobo even if its library book has since been removed.
+    let mut candidates: BTreeMap<_, _> = device
+        .managed_books()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|book| {
+            Path::new(&book.path).parent() == Some(Path::new(BOOKS_DIR))
+                && book.path.ends_with(".kepub.epub")
+                && book.content_id == format!("{ONBOARD_PREFIX}{}", book.path)
+        })
+        .map(|book| (book.content_id, (book.path, book.last_written, None)))
+        .collect();
+    for copy in library.device_copies(&device.version().serial)? {
+        candidates.insert(
+            copy.content_id,
+            (copy.device_path, copy.sent_at, Some(copy.book_id)),
+        );
+    }
+    if candidates.is_empty() {
         return Ok(books);
     }
     let imported = db.sideloaded_ids()?;
     let memberships = db.memberships()?;
-    for copy in copies {
-        if imported.contains(&copy.content_id) {
+    for (content_id, (path, sent_at, book_id)) in candidates {
+        if imported.contains(&content_id) {
             continue;
         }
-        let Ok(file) = device.mount().join(&copy.device_path).metadata() else {
+        let Ok(file) = device.mount().join(&path).metadata() else {
             continue;
         };
         if !file.is_file() {
             continue;
         }
-        let local = library.book(copy.book_id)?;
+        let (title, author, series, series_number) = if let Some(id) = book_id {
+            let local = library.book(id)?;
+            (
+                local.title,
+                (!local.authors.is_empty()).then(|| local.authors.join(", ")),
+                local.series,
+                local.series_index,
+            )
+        } else {
+            let name = Path::new(&path)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy();
+            (
+                name.strip_suffix(".kepub.epub").unwrap_or(&name).to_owned(),
+                None,
+                None,
+                None,
+            )
+        };
         books.push(CatalogBook {
             pending_import: true,
             book: DeviceBook {
-                collections: memberships
-                    .get(&copy.content_id)
-                    .cloned()
-                    .unwrap_or_default(),
-                id: copy.content_id,
-                title: local.title,
-                author: (!local.authors.is_empty()).then(|| local.authors.join(", ")),
-                path: Some(copy.device_path),
+                collections: memberships.get(&content_id).cloned().unwrap_or_default(),
+                id: content_id,
+                title,
+                author,
+                path: Some(path),
                 sideloaded: true,
-                series: local.series,
-                series_number: local.series_index,
+                series,
+                series_number,
                 read_status: ReadStatus::Unread,
                 percent_read: 0,
                 last_read: None,
                 reading_time_secs: None,
-                added: erc_device_kobo::parse_kobo_date(Some(copy.sent_at)),
+                added: erc_device_kobo::parse_kobo_date(Some(sent_at)),
                 file_size: Some(file.len()),
             },
         });

@@ -621,10 +621,11 @@ export const removeFromDevice = (
   mount: string,
   contentIds: string[],
   report?: ReportBookProgress,
+  expectedSerial?: string,
 ) =>
   write<RemoveOutcome[]>(
     "remove_from_device",
-    { mount, contentIds, ...progressArgs(report) },
+    { mount, contentIds, expectedSerial, ...progressArgs(report) },
     [deviceTag(mount)],
   );
 export const updateBooks = (

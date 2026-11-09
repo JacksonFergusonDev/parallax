@@ -5,7 +5,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ask } from "@tauri-apps/plugin-dialog";
 import {
   coverSrc,
   dismissDuplicates,
@@ -13,18 +12,16 @@ import {
   enhancePropose,
   getSetting,
   onEnhanceProgress,
-  removeBooks,
   setCoverFromUrl,
   setSetting,
   updateBook,
   type Book,
   type Proposal,
   type SendOutcome,
-  type ReportBookProgress,
 } from "../api";
 import { TransferProgress } from "./TransferProgress";
 import { BookProgressBar } from "./BookProgressBar";
-import { useBookProgress } from "../bookProgress";
+import { useBookProgress, type PrepareRemoval } from "../bookProgress";
 import { libraryReviewGroups } from "../duplicates";
 import {
   countChanges,
@@ -76,6 +73,7 @@ interface Props {
   } | null;
   /** Progress of books being sent, by book. */
   statuses: Record<number, SendStatus>;
+  prepareRemove: PrepareRemoval<number>;
   /** Something was saved; the library should be reloaded. */
   onChanged: () => void;
   onClose: () => void;
@@ -146,6 +144,7 @@ export function ImportReview({
   onKobo,
   kobo,
   statuses,
+  prepareRemove,
   onChanged,
   onClose,
 }: Props) {
@@ -274,20 +273,27 @@ export function ImportReview({
   };
 
   const [removeOperation, runBookOperation] = useBookProgress();
-  const remove = async (target: number[], report: ReportBookProgress) => {
-    await removeBooks(target, report);
-    setRemoved((r) => new Set([...r, ...target]));
-    onChanged();
+  const prepareReviewRemoval: PrepareRemoval<number> = async (target) => {
+    const removal = await prepareRemove(target);
+    if (!removal) return null;
+    return {
+      ...removal,
+      run: async (report) => {
+        await removal.run(report);
+        setRemoved((r) => new Set([...r, ...target]));
+        onChanged();
+      },
+    };
   };
 
   const removeWarned = async (target: number[]) => {
-    const names = target.map(title).join(", ");
-    if (await ask(`Remove ${names} from your library?`, { kind: "warning" }))
-      await runBookOperation(
-        "Removing",
-        (report) => remove(target, report),
-        "Saving a library snapshot…",
-      ).catch((e) => setError(String(e)));
+    try {
+      const removal = await prepareReviewRemoval(target);
+      if (removal)
+        await runBookOperation("Removing", removal.run, removal.starting);
+    } catch (e) {
+      setError(String(e));
+    }
   };
 
   const proposals =
@@ -417,8 +423,7 @@ export function ImportReview({
         place="library"
         step={tracker}
         groups={duplicateGroups}
-        removeWarning="They're removed from your library; copies on your Kobo stay."
-        remove={(target, report) => remove(target.map(Number), report)}
+        prepareRemove={(target) => prepareReviewRemoval(target.map(Number))}
         dismiss={(key) => dismissDuplicates(key, null)}
         onChanged={onChanged}
         onClose={() => advance("duplicates")}
