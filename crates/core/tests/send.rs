@@ -621,3 +621,84 @@ fn sends_and_updates_a_comic_on_fat32() {
     run("hdiutil", &["detach", mount_str]);
     result.unwrap();
 }
+
+#[test]
+fn comics_added_from_the_kobo_are_never_replaced() {
+    use erc_core::device::books_on_device;
+    use erc_core::send::{COMIC_SPREADS, update_on_device};
+
+    let dir = tempfile::tempdir().unwrap();
+    let mount = dir.path().join("kobo");
+    let kobo = comic_kobo(&mount, "388");
+    // The comic as it was on the Kobo, linked as "Add from Kobo" does.
+    let rel = "Comics/Storm v02.cbz";
+    let on_kobo = mount.join(rel);
+    fs::create_dir_all(on_kobo.parent().unwrap()).unwrap();
+    make_comic(&on_kobo);
+    let original = fs::read(&on_kobo).unwrap();
+    let mut library = Library::open(dir.path().join("lib")).unwrap();
+    let ImportOutcome::Added { book, .. } = library.import(&on_kobo).unwrap() else {
+        panic!()
+    };
+    let content_id = format!("file:///mnt/onboard/{rel}");
+    library
+        .record_device_copy(book.id, &kobo.version().serial, rel, &content_id)
+        .unwrap();
+
+    library
+        .set_setting(COMIC_SPREADS, Some("keep_whole"))
+        .unwrap();
+    let mut edit = book.edit();
+    edit.title = "Storm, edited".into();
+    library.update(book.id, &edit).unwrap();
+    assert!(!books_on_device(&library, &kobo).unwrap()[0].stale);
+
+    let converter = Kepubify::locate().unwrap();
+    let backups = dir.path().join("backups");
+    let outcome =
+        update_on_device(&library, &kobo, &converter, &backups, &[book.id], |_| {}).unwrap();
+    assert!(
+        outcome[0]
+            .result
+            .as_ref()
+            .unwrap_err()
+            .contains("can't be updated")
+    );
+    assert_eq!(fs::read(&on_kobo).unwrap(), original);
+}
+
+#[test]
+fn a_guessed_screen_changing_does_not_mark_comics_out_of_date() {
+    use erc_core::device::books_on_device;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mount = dir.path().join("kobo");
+    // A model Parallax doesn't know, with no covers yet: the screen is assumed.
+    let kobo = comic_kobo(&mount, "999");
+    let source = dir.path().join("Storm v02.cbz");
+    make_comic(&source);
+    let mut library = Library::open(dir.path().join("lib")).unwrap();
+    let ImportOutcome::Added { book, .. } = library.import(&source).unwrap() else {
+        panic!()
+    };
+    let converter = Kepubify::locate().unwrap();
+    let sent = send_library_books(&library, &kobo, &converter, &[book.id], |_| {});
+    assert!(sent[0].result.is_ok());
+    assert!(!books_on_device(&library, &kobo).unwrap()[0].stale);
+
+    // Nickel makes a cover, so the screen is now guessed from it instead.
+    let images = mount.join(".kobo-images/12/34");
+    fs::create_dir_all(&images).unwrap();
+    image::GrayImage::new(1264, 1680)
+        .save_with_format(images.join("abc - N3_FULL.parsed"), image::ImageFormat::Png)
+        .unwrap();
+    let kobo = KoboDevice::open(&mount).unwrap();
+    assert_ne!(
+        (
+            kobo.version().screen(&mount).width,
+            kobo.version().screen(&mount).height
+        ),
+        (1072, 1448)
+    );
+    assert!(!books_on_device(&library, &kobo).unwrap()[0].stale);
+}

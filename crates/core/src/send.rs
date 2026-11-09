@@ -12,7 +12,7 @@ use erc_device_kobo::{
 use erc_library::{Book, Format, Library};
 use serde::Serialize;
 
-use crate::comic_send::{ComicTarget, check_space};
+use crate::comic_send::{ComicTarget, check_space, is_prepared_copy};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case", tag = "stage")]
@@ -68,6 +68,8 @@ pub struct SentInfo {
     pub device_path: String,
     pub content_id: String,
     pub bytes: u64,
+    /// Comic pages left out because they aren't readable images.
+    pub skipped_pages: Vec<String>,
 }
 
 pub const COMIC_SPREADS: &str = "comic_spreads";
@@ -203,6 +205,7 @@ pub fn send_library_books(
                 device_path: sent.path,
                 content_id: sent.content_id,
                 bytes: sent.bytes,
+                skipped_pages: upload.skipped_pages(),
             };
             Ok(sent)
         });
@@ -244,8 +247,14 @@ pub fn update_on_device(
                 .iter()
                 .find(|c| c.book_id == id && device.mount().join(&c.device_path).is_file())
                 .ok_or("not on the device")?;
-            stage(&|index, total, file| Progress::Preparing { index, total, file });
             let book = library.book(id).map_err(|e| e.to_string())?;
+            if book.format == Format::Cbz && !is_prepared_copy(&copy.device_path) {
+                return Err(format!(
+                    "{} is the comic file as it was added, so it can't be updated. Remove it from the Kobo and send it again.",
+                    copy.device_path
+                ));
+            }
+            stage(&|index, total, file| Progress::Preparing { index, total, file });
             let upload = prepare_upload(library, device, converter, &book, &comic_target, stage)?;
             let bytes = upload.check_space(device)?;
             let meta = DisplayMetadata {
@@ -275,6 +284,7 @@ pub fn update_on_device(
                 device_path: copy.device_path.clone(),
                 content_id: copy.content_id.clone(),
                 bytes,
+                skipped_pages: upload.skipped_pages(),
             })
         })();
         SendOutcome {
@@ -300,6 +310,13 @@ impl Upload {
         match self {
             Self::Comic(prepared, _) => prepared.path(),
             Self::Epub { path, .. } => path,
+        }
+    }
+
+    fn skipped_pages(&self) -> Vec<String> {
+        match self {
+            Self::Comic(prepared, _) => prepared.skipped.clone(),
+            Self::Epub { .. } => Vec::new(),
         }
     }
 
@@ -429,6 +446,7 @@ fn deliver(
         device_path: sent.path,
         content_id: sent.content_id,
         bytes: sent.bytes,
+        skipped_pages: Vec::new(),
     })
 }
 

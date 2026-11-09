@@ -56,9 +56,25 @@ impl ComicTarget {
         }
     }
 
+    /// A hash of what shapes the prepared file. A guessed screen (from cover
+    /// sizes, or assumed) can change as Nickel makes more covers, so only a
+    /// known model's screen counts; otherwise only the settings do.
     pub fn fingerprint(&self, book: &Book) -> String {
-        let encoded = serde_json::to_vec(&("comic-kepub-2", self.profile, self.options(book)))
-            .expect("comic settings only contain integers, booleans and enums");
+        let options = self.options(book);
+        // Revision 3 changed trimming (after splitting) and contrast
+        // (percentile cutoffs); other output is unchanged, so only copies
+        // made with those on need updating.
+        let revision = if options.crop || options.autocontrast {
+            "comic-kepub-3"
+        } else {
+            "comic-kepub-2"
+        };
+        let encoded = if self.source == ScreenSource::Model {
+            serde_json::to_vec(&(revision, self.profile, options))
+        } else {
+            serde_json::to_vec(&(revision, "guessed-screen", options))
+        }
+        .expect("comic settings only contain integers, booleans and enums");
         Sha256::digest(encoded)
             .iter()
             .map(|b| format!("{b:02x}"))
@@ -167,6 +183,12 @@ pub fn estimate(
         height: target.profile.height,
         source: target.source,
     }))
+}
+
+/// Whether a comic's copy on the Kobo is a KEPUB Parallax prepared, rather
+/// than the original archive (a comic added from the Kobo).
+pub(crate) fn is_prepared_copy(device_path: &str) -> bool {
+    device_path.to_ascii_lowercase().ends_with(".kepub.epub")
 }
 
 pub(crate) fn check_space(device: &KoboDevice, path: &std::path::Path) -> Result<u64, String> {

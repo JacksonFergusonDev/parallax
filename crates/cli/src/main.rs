@@ -1648,7 +1648,17 @@ fn finish_send(
         let mut rows = table(&["Status", "Book", "Destination / error"]);
         for outcome in outcomes {
             let (status, detail) = match &outcome.result {
-                Ok(sent) => (success("sent"), sent.device_path.clone()),
+                Ok(sent) if sent.skipped_pages.is_empty() => {
+                    (success("sent"), sent.device_path.clone())
+                }
+                Ok(sent) => (
+                    warning("sent"),
+                    format!(
+                        "{} (left out damaged pages: {})",
+                        sent.device_path,
+                        sent.skipped_pages.join(", ")
+                    ),
+                ),
                 Err(error) => (warning("failed"), error.clone()),
             };
             rows.add_row([status, outcome.source.clone(), detail]);

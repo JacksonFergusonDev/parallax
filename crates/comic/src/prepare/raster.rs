@@ -40,20 +40,24 @@ pub(super) fn process(
     profile: Profile,
     options: Options,
 ) -> Result<Vec<Raster>, String> {
-    let mut rgb = decode(bytes)?;
+    let rgb = decode(bytes)?;
     let colour = profile.colour && is_colour(&rgb);
-    if options.crop {
-        rgb = crop_margins(rgb);
-    }
+    // Shape and split come from the page as drawn. Margins are trimmed from
+    // each resulting part, so uneven margins can't move the split off the
+    // spread's gutter.
+    let trim = |rgb: RgbImage| if options.crop { crop_margins(rgb) } else { rgb };
     let (w, h) = rgb.dimensions();
     let parts = match classify(w, h) {
-        PageShape::Wide => vec![(rotate270(&rgb), Some(Side::Center))],
+        PageShape::Wide => vec![(rotate270(&trim(rgb)), Some(Side::Center))],
         PageShape::Spread if options.spreads != Spreads::KeepWhole => {
             let half = w / 2;
             let mut halves = [
-                (crop_imm(&rgb, 0, 0, half, h).to_image(), Some(Side::Left)),
                 (
-                    crop_imm(&rgb, half, 0, w - half, h).to_image(),
+                    trim(crop_imm(&rgb, 0, 0, half, h).to_image()),
+                    Some(Side::Left),
+                ),
+                (
+                    trim(crop_imm(&rgb, half, 0, w - half, h).to_image()),
                     Some(Side::Right),
                 ),
             ];
@@ -61,14 +65,14 @@ pub(super) fn process(
                 halves.reverse();
             }
             if options.spreads == Spreads::WholeThenHalves {
-                let mut pages = vec![(rgb, Some(Side::Center))];
+                let mut pages = vec![(trim(rgb), Some(Side::Center))];
                 pages.extend(halves);
                 pages
             } else {
                 Vec::from(halves)
             }
         }
-        _ => vec![(rgb, None)],
+        _ => vec![(trim(rgb), None)],
     };
     parts
         .into_iter()
@@ -255,16 +259,44 @@ fn is_colour(rgb: &RgbImage) -> bool {
     false
 }
 
+/// Stretches the greys between the darkest and lightest 0.5% of pixels to
+/// the full range, like Pillow's `autocontrast(cutoff=0.5)`, so a few specks
+/// of black or white don't stop faded scans from gaining contrast. Nearly
+/// uniform pages (blank or a flat tint) are left alone rather than turning
+/// their noise into strong patterns.
 fn autocontrast(gray: &mut GrayImage) {
-    let (min, max) = gray.as_raw().iter().fold((255, 0), |(min, max), &value| {
-        (min.min(value), max.max(value))
-    });
-    let range = u16::from(max - min);
-    if range < 159 {
+    let mut histogram = [0_u64; 256];
+    for &value in gray.as_raw() {
+        histogram[usize::from(value)] += 1;
+    }
+    let tail = gray.as_raw().len() as u64 * 5 / 1_000;
+    let mut running = 0;
+    let lo = histogram
+        .iter()
+        .position(|&n| {
+            running += n;
+            running > tail
+        })
+        .unwrap_or(0);
+    let mut running = 0;
+    let hi = histogram
+        .iter()
+        .rposition(|&n| {
+            running += n;
+            running > tail
+        })
+        .unwrap_or(255);
+    if hi < lo + 32 || (lo, hi) == (0, 255) {
         return;
     }
+    // Both are histogram positions, so below 256.
+    let lo = u32::try_from(lo).unwrap_or(0);
+    let range = u32::try_from(hi).unwrap_or(255) - lo;
+    let table: Vec<u8> = (0..=255_u32)
+        .map(|v| u8::try_from(v.saturating_sub(lo) * 255 / range).unwrap_or(255))
+        .collect();
     for pixel in gray.pixels_mut() {
-        pixel.0[0] = u8::try_from(u16::from(pixel.0[0] - min) * 255 / range).unwrap_or(255);
+        pixel.0[0] = table[usize::from(pixel.0[0])];
     }
 }
 
@@ -290,5 +322,62 @@ fn crop_margins(rgb: RgbImage) -> RgbImage {
         rgb
     } else {
         crop_imm(&rgb, x, y, right - x, bottom - y).to_image()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn autocontrast_ignores_specks_and_flat_pages() {
+        // A faded page (greys 80–180) with a few pure black and white specks.
+        let mut faded = GrayImage::from_fn(100, 100, |x, _| {
+            image::Luma([u8::try_from(80 + x).unwrap()])
+        });
+        faded.put_pixel(0, 0, image::Luma([0]));
+        faded.put_pixel(1, 0, image::Luma([255]));
+        autocontrast(&mut faded);
+        let values = faded.as_raw();
+        assert!(values.iter().filter(|&&v| v < 10).count() > 50);
+        assert!(values.iter().filter(|&&v| v > 245).count() > 50);
+
+        let mut flat = GrayImage::from_fn(100, 100, |x, _| {
+            image::Luma([u8::try_from(120 + x % 10).unwrap()])
+        });
+        let before = flat.clone();
+        autocontrast(&mut flat);
+        assert_eq!(flat, before);
+    }
+
+    #[test]
+    fn spreads_split_at_the_gutter_before_margins_are_trimmed() {
+        // A 300 × 200 spread: a wide white margin on the left only, with
+        // dark art up to the gutter on both sides.
+        let spread = RgbImage::from_fn(300, 200, |x, _| {
+            image::Rgb(if x < 30 { [255; 3] } else { [30; 3] })
+        });
+        let mut bytes = Vec::new();
+        spread
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+        let profile = Profile {
+            width: 1000,
+            height: 1000,
+            colour: false,
+            landscape_spreads: false,
+        };
+        let options = Options {
+            crop: true,
+            ..Options::default()
+        };
+        let pages = process(&bytes, profile, options).unwrap();
+        // Each half is 150 px wide. The left loses at most 10% of that to its
+        // margin; the right has none and keeps it all.
+        let sizes: Vec<_> = pages.iter().map(|p| (p.width, p.height)).collect();
+        assert_eq!(sizes, [(135, 200), (150, 200)]);
     }
 }

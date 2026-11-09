@@ -529,7 +529,14 @@ export function installMockBackend(label = "main") {
           return ids.map((id) => ({
             source: String(id),
             book_id: id,
-            result: { Ok: {} },
+            result: {
+              Ok: {
+                device_path: "KEpub/x.kepub.epub",
+                content_id: `mock-${id}`,
+                bytes: 1_000_000,
+                skipped_pages: [],
+              },
+            },
           }));
         }
         case "comic_transfer_estimate":
@@ -740,7 +747,14 @@ export function installMockBackend(label = "main") {
           return ids.map((id) => ({
             source: String(id),
             book_id: id,
-            result: { Ok: {} },
+            result: {
+              Ok: {
+                device_path: "KEpub/x.kepub.epub",
+                content_id: `mock-${id}`,
+                bytes: 1_000_000,
+                skipped_pages: [],
+              },
+            },
           }));
         }
         case "genres_plan":

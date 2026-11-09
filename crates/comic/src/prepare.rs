@@ -66,12 +66,16 @@ pub enum Error {
     Page { page: String, message: String },
     #[error("invalid comic screen size {0} × {1}")]
     Screen(u32, u32),
+    #[error("none of the comic's pages could be read")]
+    NoReadablePages,
 }
 
 pub struct Prepared {
     _work: tempfile::TempDir,
     path: PathBuf,
     pub pages: usize,
+    /// Pages left out because they aren't readable images, by archive name.
+    pub skipped: Vec<String>,
 }
 
 impl Prepared {
@@ -106,7 +110,11 @@ pub fn prepare(
     if let Some(bytes) = metadata.custom_cover {
         epub.add_cover(bytes, "custom cover")?;
     }
+    // A damaged cover page passes the cover to the next readable page.
+    let mut cover_pending = metadata.custom_cover.is_none();
+    let mut skipped = Vec::new();
     let mut next = 0;
+    let mut reported = 0;
     // Bound both the decode working set and the number of large encoded inputs.
     while next < total {
         let mut batch = Vec::new();
@@ -114,10 +122,13 @@ pub fn prepare(
         let mut bytes = 0;
         while next < total && batch.len() < 8 {
             let name = source.pages()[next].name.clone();
-            let (width, height) = source.page_dimensions(next)?.ok_or_else(|| Error::Page {
-                page: name.clone(),
-                message: "missing or unsupported image dimensions".into(),
-            })?;
+            // An unreadable header is a damaged page, which Check library
+            // reports; leave it out rather than failing the whole comic.
+            let Some((width, height)) = source.page_dimensions(next)? else {
+                skipped.push((next, name));
+                next += 1;
+                continue;
+            };
             let area = u64::from(width) * u64::from(height);
             let size = source.pages()[next].size;
             if !batch.is_empty() && (pixels + area > 32_000_000 || bytes + size > 64 * 1024 * 1024)
@@ -126,29 +137,39 @@ pub fn prepare(
             }
             pixels += area;
             bytes += size;
-            let data = source.read_page(next)?;
-            if next == cover && metadata.custom_cover.is_none() {
-                epub.add_cover(&data, &name)?;
-            }
-            batch.push((name, data));
+            batch.push((next, name, source.read_page(next)?));
             next += 1;
         }
-        let start = next - batch.len();
         let prepared: Vec<_> = batch
-            .into_par_iter()
-            .map(|(name, bytes)| {
-                raster::process(&bytes, profile, options).map_err(|message| Error::Page {
-                    page: name,
-                    message,
-                })
-            })
-            .collect::<Result<_, _>>()?;
-        for (offset, pages) in prepared.into_iter().enumerate() {
+            .par_iter()
+            .map(|(_, _, bytes)| raster::process(bytes, profile, options))
+            .collect();
+        for ((index, name, data), pages) in batch.into_iter().zip(prepared) {
+            let Ok(pages) = pages else {
+                skipped.push((index, name));
+                progress(index + 1, total);
+                reported = index + 1;
+                continue;
+            };
+            if cover_pending && index >= cover {
+                epub.add_cover(&data, &name)?;
+                cover_pending = false;
+            }
             for page in pages {
                 epub.add_page(&page)?;
             }
-            progress(start + offset + 1, total);
+            progress(index + 1, total);
+            reported = index + 1;
         }
+        if reported < next {
+            // Damaged pages ended the batch, so nothing above reported them.
+            progress(next, total);
+            reported = next;
+        }
+    }
+    skipped.sort_unstable();
+    if epub.is_empty() {
+        return Err(Error::NoReadablePages);
     }
     let pages = epub.finish(metadata, profile, options)?;
     converter.convert_fixed_layout(&epub_path, &path)?;
@@ -156,6 +177,7 @@ pub fn prepare(
         _work: work,
         path,
         pages,
+        skipped: skipped.into_iter().map(|(_, name)| name).collect(),
     })
 }
 

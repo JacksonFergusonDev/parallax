@@ -278,6 +278,7 @@ describe("book operation progress", () => {
               device_path: "KEpub/book.epub",
               content_id: koboBook.id,
               bytes: 100,
+              skipped_pages: [],
             },
           },
         },

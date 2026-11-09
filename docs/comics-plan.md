@@ -140,7 +140,8 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
   - `safe_kobo_component` applies the KCC character list to device filenames. C6 uses a fixed safe parent directory.
 - **Settings:**
   - spreads mode;
-  - optional white-margin crop, greyscale autocontrast and upscale for small pages, all off by default;
+  - optional white-margin crop, greyscale autocontrast and upscale for small pages, all off by default. Crop trims each part after a spread is split, so the split stays on the gutter. Autocontrast stretches between the 0.5% percentiles and leaves nearly flat pages alone;
+  - pages that aren't readable images are left out and named in the send result. A comic with no readable pages is refused;
   - a per-book override of direction.
 - **Checks** (as the spike did):
   - output images match the processing;
@@ -152,7 +153,7 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
 
 - `send_library_books` and `update_on_device` prepare comics for the connected Kobo's profile in a temporary folder, then write through the existing safe-write layer to `KEpub/<Series> v<NN> - <Title>.kepub.epub`.
 - **Series:** use the existing reconnect reconciliation after Nickel imports the book. The S1 spike found that import triggers needed a Kobo restart, so they were dropped from the [device plan](PLAN.md). Updates to an already imported comic write its series in the update session.
-- **Device copies:** recorded per Kobo with a hash of the effective screen and settings. A mismatch offers "Update on Kobo" where a copy already exists.
+- **Device copies:** recorded per Kobo with a hash of the effective screen and settings. A mismatch offers "Update on Kobo" where a copy already exists. A screen guessed from cover sizes or assumed is left out of the hash, as it changes while Nickel makes covers. A raw comic added from the Kobo is never offered for update, as replacing it would put a KEPUB in an archive's file.
 - **Space:** the send and update dialogs show an estimate from page count and screen size and the available space. The finished KEPUB is measured again before copying.
 - **No cache:** nothing converted is kept on the Mac after a send, including after a failure.
 - **Tests:** the FAT32 disk-image tests send and update a CBZ; fixture devices of three screen sizes produce correctly sized pages.

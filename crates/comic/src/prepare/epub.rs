@@ -76,6 +76,10 @@ impl FixedLayout {
         self.write(&format!("OEBPS/{path}"), &data, STORED)
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.sides.is_empty()
+    }
+
     pub fn add_page(&mut self, raster: &Raster) -> Result<(), Error> {
         self.sides.push(raster.side);
         let n = self.sides.len();

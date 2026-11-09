@@ -51,6 +51,7 @@ import {
   type LibraryKey,
   BOOK_EXTENSIONS,
   isBookFile,
+  skippedPagesNote,
   summarizeImport,
   seriesGroups,
   type SendStatus,
@@ -734,10 +735,14 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
             }
           : {
               kind: "info",
-              text:
+              text: [
                 kind === "sending"
                   ? "Sent. Eject your Kobo and unplug it to import the new books."
                   : "Updated. Eject your Kobo to see the changes.",
+                skippedPagesNote(outcomes),
+              ]
+                .filter(Boolean)
+                .join(" "),
             },
       );
     } catch (e) {

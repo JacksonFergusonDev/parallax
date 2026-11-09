@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Book, ImportResult } from "./api";
+import type { Book, ImportResult, SendOutcome } from "./api";
 import {
   isBookFile,
   applyProgress,
@@ -11,6 +11,7 @@ import {
   libraryColumns,
   pagesLabel,
   publishedLabel,
+  skippedPagesNote,
   summarizeImport,
   toForm,
 } from "./library";
@@ -335,5 +336,33 @@ describe("isBookFile", () => {
     for (const name of ["a.pdf", "a.txt", "azw3", "a.azw3.bak"]) {
       expect(isBookFile(`/books/${name}`)).toBe(false);
     }
+  });
+});
+
+describe("skippedPagesNote", () => {
+  const sent = (source: string, skipped: string[]): SendOutcome => ({
+    source,
+    book_id: 1,
+    result: {
+      Ok: {
+        device_path: "KEpub/x.kepub.epub",
+        content_id: "x",
+        bytes: 1,
+        skipped_pages: skipped,
+      },
+    },
+  });
+
+  it("names each comic's damaged pages", () => {
+    expect(skippedPagesNote([sent("Storm", [])])).toBeNull();
+    expect(
+      skippedPagesNote([
+        sent("Storm", ["02.png", "03.png"]),
+        sent("Saga", []),
+        { source: "Bad", book_id: 2, result: { Err: "no" } },
+      ]),
+    ).toBe(
+      "Damaged pages were left out: Storm (02.png, 03.png). Check library lists them.",
+    );
   });
 });

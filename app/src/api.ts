@@ -188,7 +188,15 @@ export interface SendOutcome {
   source: string;
   book_id: number | null;
   result:
-    | { Ok: { device_path: string; content_id: string; bytes: number } }
+    | {
+        Ok: {
+          device_path: string;
+          content_id: string;
+          bytes: number;
+          /** Comic pages left out because they aren't readable images. */
+          skipped_pages: string[];
+        };
+      }
     | { Err: string };
 }
 

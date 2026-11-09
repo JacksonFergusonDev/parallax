@@ -125,10 +125,10 @@ export async function readComic(opened: OpenedBook, comic: ComicBook) {
   const stripCount = comic.pages.filter(
     (p) => p.width > 0 && p.height >= 2.5 * p.width,
   ).length;
+  // Vertical scroll is the default only for mostly long strips. The book
+  // reader's scrolled flow is a reading preference for text, not comics.
   let layout: Layout =
-    opened.settings.flow === "scrolled" || stripCount * 2 > count
-      ? "scroll"
-      : opened.settings.spread;
+    stripCount * 2 > count ? "scroll" : opened.settings.spread;
   layoutControl.value = layout;
   let fit: Fit = "page";
   let zoom = 1;

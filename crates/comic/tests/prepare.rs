@@ -196,3 +196,82 @@ fn greyscale_kepubs_keep_the_original_or_custom_colour_cover() {
         );
     }
 }
+
+fn png(image: &RgbImage) -> Vec<u8> {
+    let mut bytes = Cursor::new(Vec::new());
+    image.write_to(&mut bytes, ImageFormat::Png).unwrap();
+    bytes.into_inner()
+}
+
+#[test]
+fn damaged_pages_are_left_out_and_named() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("damaged.cbz");
+    let good = png(&RgbImage::from_pixel(9, 20, Rgb([140, 140, 140])));
+    let noise = RgbImage::from_fn(90, 200, |x, y| {
+        Rgb([u8::try_from((x * 31 + y * 17) % 256).unwrap(); 3])
+    });
+    let mut truncated = png(&noise);
+    truncated.truncate(truncated.len() / 2); // The header reads; the pixels don't.
+    let mut zip = ZipWriter::new(File::create(&source).unwrap());
+    for (name, bytes) in [
+        ("1.png", good.as_slice()),
+        ("2.png", b"not an image".as_slice()),
+        ("3.png", truncated.as_slice()),
+        ("4.png", good.as_slice()),
+    ] {
+        zip.start_file(name, SimpleFileOptions::default()).unwrap();
+        zip.write_all(bytes).unwrap();
+    }
+    // The cover is the damaged second page, so the next readable page is used.
+    zip.start_file("ComicInfo.xml", SimpleFileOptions::default())
+        .unwrap();
+    zip.write_all(br#"<ComicInfo><Pages><Page Image="1" Type="FrontCover"/></Pages></ComicInfo>"#)
+        .unwrap();
+    zip.finish().unwrap();
+
+    let mut seen = Vec::new();
+    let prepared = prepare(
+        &source,
+        &metadata(),
+        profile(),
+        Options::default(),
+        &Kepubify::locate().unwrap(),
+        |page, pages| seen.push((page, pages)),
+    )
+    .unwrap();
+    assert_eq!(prepared.pages, 2);
+    assert_eq!(prepared.skipped, ["2.png", "3.png"]);
+    // Each page is counted once, damaged or not.
+    assert_eq!(seen.last(), Some(&(4, 4)));
+    assert!(seen.windows(2).all(|w| w[0].0 < w[1].0));
+    assert!(
+        seen.contains(&(3, 4)),
+        "the page that failed to decode is counted"
+    );
+    let mut out = ZipArchive::new(File::open(prepared.path()).unwrap()).unwrap();
+    assert_eq!(entry(&mut out, "OEBPS/images/cover.png"), good);
+}
+
+#[test]
+fn a_comic_with_no_readable_pages_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("broken.cbz");
+    let mut zip = ZipWriter::new(File::create(&source).unwrap());
+    zip.start_file("1.png", SimpleFileOptions::default())
+        .unwrap();
+    zip.write_all(b"not an image").unwrap();
+    zip.finish().unwrap();
+    let result = prepare(
+        &source,
+        &metadata(),
+        profile(),
+        Options::default(),
+        &Kepubify::locate().unwrap(),
+        |_, _| {},
+    );
+    assert!(matches!(
+        result,
+        Err(erc_comic::prepare::Error::NoReadablePages)
+    ));
+}

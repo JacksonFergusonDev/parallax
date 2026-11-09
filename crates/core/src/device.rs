@@ -11,7 +11,7 @@ use erc_device_kobo::{
 use erc_library::{Format, Library};
 use serde::Serialize;
 
-use crate::comic_send::ComicTarget;
+use crate::comic_send::{ComicTarget, is_prepared_copy};
 
 /// A library book whose copy is on the connected device.
 #[derive(Debug, Clone, Serialize)]
@@ -35,15 +35,19 @@ pub fn books_on_device(
         .filter(|c| device.mount().join(&c.device_path).is_file())
         .filter_map(|c| {
             let book = library.book(c.book_id).ok()?;
+            // A comic copied to the Kobo as it is (added from the Kobo) can't
+            // be updated in place, so it is never offered as out of date.
+            let raw_comic = book.format == Format::Cbz && !is_prepared_copy(&c.device_path);
             Some(OnDevice {
-                stale: book.modified_at > c.sent_at
-                    || (book.format == Format::Cbz
-                        && target
-                            .get_or_init(|| ComicTarget::new(library, device))
-                            .as_ref()
-                            .is_ok_and(|target| {
-                                c.comic_profile.as_deref() != Some(&target.fingerprint(&book))
-                            })),
+                stale: !raw_comic
+                    && (book.modified_at > c.sent_at
+                        || (book.format == Format::Cbz
+                            && target
+                                .get_or_init(|| ComicTarget::new(library, device))
+                                .as_ref()
+                                .is_ok_and(|target| {
+                                    c.comic_profile.as_deref() != Some(&target.fingerprint(&book))
+                                }))),
                 book_id: c.book_id,
                 device_path: c.device_path,
                 content_id: c.content_id,

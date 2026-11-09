@@ -6,6 +6,7 @@ import type {
   ImportResult,
   MetadataEdit,
   Progress,
+  SendOutcome,
 } from "./api";
 import { collator, type Column, type SortValue } from "./sort";
 
@@ -365,4 +366,16 @@ export function progressLabel(b: Book): string {
     default:
       return "";
   }
+}
+
+/** Names the damaged comic pages a transfer left out, if any. */
+export function skippedPagesNote(outcomes: SendOutcome[]): string | null {
+  const books = outcomes.flatMap(({ source, result }) =>
+    "Ok" in result && result.Ok.skipped_pages.length > 0
+      ? [`${source} (${result.Ok.skipped_pages.join(", ")})`]
+      : [],
+  );
+  return books.length
+    ? `Damaged pages were left out: ${books.join("; ")}. Check library lists them.`
+    : null;
 }
