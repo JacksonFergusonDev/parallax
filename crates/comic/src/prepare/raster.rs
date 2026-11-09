@@ -43,8 +43,13 @@ pub(super) fn process(
     let rgb = decode(bytes)?;
     // Colour pages stay colour on a colour screen. On a greyscale screen
     // they take the colour-page treatment below.
-    let colour_page = is_colour(&rgb);
-    let colour = profile.colour && colour_page;
+    let tone = match (is_colour(&rgb), profile.colour) {
+        (true, true) => Tone::Colour,
+        (true, false) => Tone::ColourOnGrey,
+        (false, _) => Tone::Grey {
+            stretch: options.autocontrast,
+        },
+    };
     // Shape and split come from the page as drawn. Margins are trimmed from
     // each resulting part, so uneven margins can't move the split off the
     // spread's gutter.
@@ -79,13 +84,7 @@ pub(super) fn process(
     };
     parts
         .into_iter()
-        .map(|(rgb, side)| {
-            let treatment = Treatment {
-                colour,
-                stretch: options.autocontrast || colour_page,
-            };
-            encode(rgb, treatment, profile, options, side)
-        })
+        .map(|(rgb, side)| encode(rgb, tone, profile, options, side))
         .collect()
 }
 
@@ -106,21 +105,20 @@ fn decode(bytes: &[u8]) -> Result<RgbImage, String> {
     })
 }
 
-/// How a page is encoded once its shape is settled.
+/// How a page's tones are carried to the screen.
 #[derive(Clone, Copy)]
-struct Treatment {
-    /// Kept in colour, as JPEG, rather than reduced to 16 greys.
-    colour: bool,
-    /// Contrast stretched before greys are reduced. Colour art is painted in
-    /// mid-tones that turn into a narrow, washed-out band of grey, so colour
-    /// pages on a greyscale screen are always stretched; greyscale pages are
-    /// stretched only when the setting asks.
-    stretch: bool,
+enum Tone {
+    /// A colour page on a colour screen, kept as JPEG.
+    Colour,
+    /// A colour page on a greyscale screen: see [`super::tone`].
+    ColourOnGrey,
+    /// A greyscale page, contrast stretched only when the setting asks.
+    Grey { stretch: bool },
 }
 
 fn encode(
     rgb: RgbImage,
-    Treatment { colour, stretch }: Treatment,
+    tone: Tone,
     profile: Profile,
     options: Options,
     side: Option<Side>,
@@ -136,6 +134,7 @@ fn encode(
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let fit = |n: u32| (f64::from(n) * scale).round().max(1.0) as u32;
     let (width, height) = (fit(w), fit(h));
+    let colour = matches!(tone, Tone::Colour);
     let bytes = if colour {
         let rgb = resized(
             w,
@@ -151,12 +150,19 @@ fn encode(
             .map_err(|e| e.to_string())?;
         bytes
     } else {
-        // Rec. 601 luma, as in the spike's Pillow reference, for neutral output.
-        let mut gray = luma(&rgb);
+        let gray = match tone {
+            Tone::ColourOnGrey => super::tone::colour_page_to_grey(&rgb),
+            // Rec. 601 luma, as in the spike's Pillow reference, for neutral output.
+            Tone::Grey { stretch } => {
+                let mut gray = luma(&rgb);
+                if stretch {
+                    autocontrast(&mut gray);
+                }
+                gray
+            }
+            Tone::Colour => unreachable!("colour pages are encoded as JPEG above"),
+        };
         drop(rgb);
-        if stretch {
-            autocontrast(&mut gray);
-        }
         let gray = resized(
             w,
             h,
@@ -183,7 +189,7 @@ fn encode(
     })
 }
 
-fn luma(rgb: &RgbImage) -> GrayImage {
+pub(super) fn luma(rgb: &RgbImage) -> GrayImage {
     let (w, h) = rgb.dimensions();
     GrayImage::from_fn(w, h, |x, y| {
         let [red, green, blue] = rgb.get_pixel(x, y).0.map(u32::from);
@@ -351,7 +357,7 @@ fn is_colour(rgb: &RgbImage) -> bool {
 /// of black or white don't stop faded scans from gaining contrast. Nearly
 /// uniform pages (blank or a flat tint) are left alone rather than turning
 /// their noise into strong patterns.
-fn autocontrast(gray: &mut GrayImage) {
+pub(super) fn autocontrast(gray: &mut GrayImage) {
     let mut histogram = [0_u64; 256];
     for &value in gray.as_raw() {
         histogram[usize::from(value)] += 1;

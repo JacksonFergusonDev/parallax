@@ -1,6 +1,7 @@
 //! Device-sized comic output. Only a bounded batch of decoded pages is held at once.
 mod epub;
 mod raster;
+mod tone;
 
 use std::path::{Path, PathBuf};
 

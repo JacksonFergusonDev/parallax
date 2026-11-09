@@ -63,9 +63,10 @@ impl ComicTarget {
     /// known model's screen counts; otherwise only the settings do.
     pub fn fingerprint(&self, book: &Book) -> String {
         let options = self.options(book);
-        // Revision 4: colour pages on greyscale screens are stretched for
-        // contrast, so every earlier copy may differ.
-        let revision = "comic-kepub-4";
+        // Revision 5: colour pages on greyscale screens get colour-aware
+        // greys, contrast and adaptive mid-tones, so every earlier copy may
+        // differ.
+        let revision = "comic-kepub-5";
         let encoded = if self.source == ScreenSource::Model {
             serde_json::to_vec(&(revision, self.profile, options))
         } else {
