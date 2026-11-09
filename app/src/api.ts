@@ -959,14 +959,23 @@ export function coverSrc(book: Book): string | null {
     : `${url}?v=${encodeURIComponent(book.modified_at)}`;
 }
 
-/** Prefer the cover actually on the Kobo, falling back to a library copy. */
+/** Use original library artwork for linked comics. Nickel's thumbnail
+ * can be greyscale on an otherwise colour cover. */
+export function deviceCoverPath(
+  book: DeviceBook,
+  library?: Book,
+): string | null {
+  if (library?.cover && (library.format === "cbz" || !book.cover)) {
+    return library.cover;
+  }
+  return book.cover ?? null;
+}
+
 export function deviceCoverSrc(
   book: DeviceBook,
   library?: Book,
 ): string | null {
-  return book.cover
-    ? convertFileSrc(book.cover)
-    : library
-      ? coverSrc(library)
-      : null;
+  const path = deviceCoverPath(book, library);
+  if (!path) return null;
+  return path === library?.cover ? coverSrc(library) : convertFileSrc(path);
 }

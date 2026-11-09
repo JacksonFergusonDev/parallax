@@ -25,6 +25,10 @@ fn sample(path: &Path) {
         zip.start_file(name, SimpleFileOptions::default()).unwrap();
         zip.write_all(bytes.get_ref()).unwrap();
     }
+    zip.start_file("ComicInfo.xml", SimpleFileOptions::default())
+        .unwrap();
+    zip.write_all(br#"<ComicInfo><Pages><Page Image="2" Type="FrontCover"/></Pages></ComicInfo>"#)
+        .unwrap();
     zip.finish().unwrap();
 }
 
@@ -137,4 +141,58 @@ fn whole_modes_emit_an_unrotated_spread_before_any_halves() {
         assert_eq!((spread.width(), spread.height()), (24, 15));
     }
     assert_eq!(safe_kobo_component("S! <V>/ $3"), "S_ _V__ _3");
+}
+
+#[test]
+fn greyscale_kepubs_keep_the_original_or_custom_colour_cover() {
+    let dir = tempfile::tempdir().unwrap();
+    let cbz = dir.path().join("test.cbz");
+    sample(&cbz);
+    let original = entry(
+        &mut ZipArchive::new(File::open(&cbz).unwrap()).unwrap(),
+        "3.png",
+    );
+    let mut custom = Cursor::new(Vec::new());
+    RgbImage::from_pixel(29, 42, Rgb([20, 190, 90]))
+        .write_to(&mut custom, ImageFormat::Jpeg)
+        .unwrap();
+
+    let mut profile = profile();
+    profile.colour = false;
+    for (custom_cover, extension, expected) in [
+        (None, "png", original.as_slice()),
+        (
+            Some(custom.get_ref().as_slice()),
+            "jpg",
+            custom.get_ref().as_slice(),
+        ),
+    ] {
+        let prepared = prepare(
+            &cbz,
+            &Metadata {
+                custom_cover,
+                ..metadata()
+            },
+            profile,
+            Options {
+                crop: true,
+                autocontrast: true,
+                ..Options::default()
+            },
+            &Kepubify::locate().unwrap(),
+            |_, _| {},
+        )
+        .unwrap();
+        let mut zip = ZipArchive::new(File::open(prepared.path()).unwrap()).unwrap();
+        assert_eq!(
+            entry(&mut zip, &format!("OEBPS/images/cover.{extension}")),
+            expected
+        );
+        let cover_page = entry(&mut zip, "OEBPS/images/p00004.png");
+        assert_eq!(
+            &cover_page[24..26],
+            &[4, 0],
+            "reading page is still 4-bit greyscale"
+        );
+    }
 }

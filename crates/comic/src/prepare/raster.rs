@@ -39,13 +39,9 @@ pub(super) fn process(
     bytes: &[u8],
     profile: Profile,
     options: Options,
-    cover: bool,
-) -> Result<(Vec<Raster>, Option<Raster>), String> {
+) -> Result<Vec<Raster>, String> {
     let mut rgb = decode(bytes)?;
     let colour = profile.colour && is_colour(&rgb);
-    let cover = cover
-        .then(|| encode(rgb.clone(), colour, profile, options, None))
-        .transpose()?;
     if options.crop {
         rgb = crop_margins(rgb);
     }
@@ -74,18 +70,10 @@ pub(super) fn process(
         }
         _ => vec![(rgb, None)],
     };
-    let pages = parts
+    parts
         .into_iter()
         .map(|(rgb, side)| encode(rgb, colour, profile, options, side))
-        .collect::<Result<_, _>>()?;
-    Ok((pages, cover))
-}
-
-pub(super) fn cover(bytes: &[u8], profile: Profile, options: Options) -> Result<Raster, String> {
-    crate::shape::image_dimensions(bytes).ok_or("missing or unsupported image dimensions")?;
-    let rgb = decode(bytes)?;
-    let colour = profile.colour && is_colour(&rgb);
-    encode(rgb, colour, profile, options, None)
+        .collect()
 }
 
 fn decode(bytes: &[u8]) -> Result<RgbImage, String> {

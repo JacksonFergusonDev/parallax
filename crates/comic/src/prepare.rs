@@ -104,11 +104,7 @@ pub fn prepare(
     let cover = source.cover_index();
     let mut epub = epub::FixedLayout::new(&epub_path)?;
     if let Some(bytes) = metadata.custom_cover {
-        let cover = raster::cover(bytes, profile, options).map_err(|message| Error::Page {
-            page: "custom cover".to_owned(),
-            message,
-        })?;
-        epub.add_cover(&cover)?;
+        epub.add_cover(bytes, "custom cover")?;
     }
     let mut next = 0;
     // Bound both the decode working set and the number of large encoded inputs.
@@ -130,27 +126,24 @@ pub fn prepare(
             }
             pixels += area;
             bytes += size;
-            batch.push((
-                name,
-                source.read_page(next)?,
-                next == cover && metadata.custom_cover.is_none(),
-            ));
+            let data = source.read_page(next)?;
+            if next == cover && metadata.custom_cover.is_none() {
+                epub.add_cover(&data, &name)?;
+            }
+            batch.push((name, data));
             next += 1;
         }
         let start = next - batch.len();
         let prepared: Vec<_> = batch
             .into_par_iter()
-            .map(|(name, bytes, cover)| {
-                raster::process(&bytes, profile, options, cover).map_err(|message| Error::Page {
+            .map(|(name, bytes)| {
+                raster::process(&bytes, profile, options).map_err(|message| Error::Page {
                     page: name,
                     message,
                 })
             })
             .collect::<Result<_, _>>()?;
-        for (offset, (pages, cover)) in prepared.into_iter().enumerate() {
-            if let Some(cover) = cover {
-                epub.add_cover(&cover)?;
-            }
+        for (offset, pages) in prepared.into_iter().enumerate() {
             for page in pages {
                 epub.add_page(&page)?;
             }

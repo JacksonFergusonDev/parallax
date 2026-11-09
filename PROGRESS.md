@@ -4,6 +4,7 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 ## Completed
 
+- Comic cover colour (2026-11-08): On Kobo uses the linked comic’s library thumbnail for display and colour sorting. New prepared KEPUBs keep the selected cover separate from page processing, preserving JPEG and PNG bytes. The preparation fingerprint marks older device copies available for update.
 - Kobo removal progress (2026-11-08): once the database backup is ready, the bar fills through each book using the bytes saved for undo. The label still shows which book is being removed, and the bar completes after the last removal.
 - Book operation progress (2026-11-08): library and Kobo adds and removals show activity during setup or backup and count completed books. Kobo sends and updates report actual bytes copied on the cover and in list view. The cover sheen starts and ends outside the cover. Progress channels are scoped to each command.
 - Berserk removal benchmark (2026-11-08): read-only copies of three processed KEPUBs from the connected Libra 2 took 26.0 s for 456 MB. The database's 37.5 MB raw read took 0.9 s. On a disposable FAT32 image using a database clone, opening a backed-up write session took 0.45–0.71 s and the compressed database was 2.0 MB. The three-file removal loop took 0.76 s for the processed copies, 4.84 s for the 1.50 GB originals, and 0.003 s for rows alone. Undo policy stays in place. File retention is the part worth revisiting for verified local copies.

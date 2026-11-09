@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  deviceCoverPath,
   deviceCoverSrc,
   type Book,
   type DeviceBook,
@@ -24,6 +25,17 @@ describe("device cover URLs", () => {
   it("uses the Kobo thumbnail even without a library copy", () => {
     expect(deviceCoverSrc(device)).toBe("asset:/cache/kobo-cover.jpg");
     expect(deviceCoverSrc(device, library)).toBe("asset:/cache/kobo-cover.jpg");
+  });
+
+  it("uses the library art and its colour-sorting path for linked comics", () => {
+    const comic: Book = { ...library, format: "cbz" };
+    expect(deviceCoverPath(device, comic)).toBe("/library/cover.jpg");
+    expect(deviceCoverSrc(device, comic)).toBe(
+      "asset:/library/cover.jpg?v=2026-10-31",
+    );
+    expect(deviceCoverSrc(device, { ...comic, cover: null })).toBe(
+      "asset:/cache/kobo-cover.jpg",
+    );
   });
 
   it("falls back to the library and handles books with no available cover", () => {

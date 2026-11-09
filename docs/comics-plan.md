@@ -135,6 +135,7 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
 - **Package:**
   - fixed-layout EPUB 3 with title, credits, series, cover and `page-progression-direction`;
   - KCC’s `buildOPF` aligns `rendition:page-spread-left/right` for facing halves. The implementation gates it on the profile, with no models enabled pending a landscape hardware check;
+  - preserve the source or custom cover separately from page processing. Keep JPEG and PNG bytes and use lossless PNG for other supported cover formats;
   - kepubify with `--no-add-dummy-titlepage`;
   - `safe_kobo_component` applies the KCC character list to device filenames. C6 uses a fixed safe parent directory.
 - **Settings:**

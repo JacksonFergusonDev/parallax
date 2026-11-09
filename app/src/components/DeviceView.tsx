@@ -26,6 +26,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   changeCollections,
+  deviceCoverPath,
   deviceCoverSrc,
   deviceBooks,
   deviceDuplicates,
@@ -189,7 +190,7 @@ export function DeviceView({
       (books ?? []).flatMap((b) => {
         const lib = libraryByContentId.get(b.id);
         const key = deviceCoverSrc(b, lib);
-        const path = b.cover ?? lib?.cover;
+        const path = deviceCoverPath(b, lib);
         return key && path ? [{ key, path }] : [];
       }),
     [books, libraryByContentId],

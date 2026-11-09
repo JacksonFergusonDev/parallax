@@ -57,7 +57,7 @@ impl ComicTarget {
     }
 
     pub fn fingerprint(&self, book: &Book) -> String {
-        let encoded = serde_json::to_vec(&("comic-kepub-1", self.profile, self.options(book)))
+        let encoded = serde_json::to_vec(&("comic-kepub-2", self.profile, self.options(book)))
             .expect("comic settings only contain integers, booleans and enums");
         Sha256::digest(encoded)
             .iter()

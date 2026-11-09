@@ -1,11 +1,13 @@
 //! Fixed-layout packaging follows the Parallax Kobo comics spike. The facing
 //! halves and backward spine alignment follow KCC v13.0.0 buildOPF (ISC,
 //! Ciro Mattia Gonano and Pawel Jastrzebski; see KCC-NOTICES).
+use std::borrow::Cow;
 use std::fmt::Write as _;
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter, Cursor, Write};
 use std::path::Path;
 
+use image::ImageFormat;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
@@ -43,14 +45,35 @@ impl FixedLayout {
         Ok(())
     }
 
-    pub fn add_cover(&mut self, raster: &Raster) -> Result<(), Error> {
-        let path = format!("images/cover.{}", raster.extension());
+    /// The cover is separate artwork. Preserve JPEG and PNG bytes and use a
+    /// lossless PNG of the first frame for other supported archive images.
+    pub fn add_cover(&mut self, bytes: &[u8], name: &str) -> Result<(), Error> {
+        let error = |message: String| Error::Page {
+            page: name.to_owned(),
+            message,
+        };
+        crate::shape::image_dimensions(bytes)
+            .ok_or_else(|| error("missing or unsupported image dimensions".into()))?;
+        let format = image::guess_format(bytes).map_err(|e| error(e.to_string()))?;
+        let (data, extension, mime) = match format {
+            ImageFormat::Jpeg => (Cow::Borrowed(bytes), "jpg", "image/jpeg"),
+            ImageFormat::Png => (Cow::Borrowed(bytes), "png", "image/png"),
+            _ => {
+                let cover = image::load_from_memory_with_format(bytes, format)
+                    .map_err(|e| error(e.to_string()))?;
+                let mut png = Cursor::new(Vec::new());
+                cover
+                    .write_to(&mut png, ImageFormat::Png)
+                    .map_err(|e| error(e.to_string()))?;
+                (Cow::Owned(png.into_inner()), "png", "image/png")
+            }
+        };
+        let path = format!("images/cover.{extension}");
         let _ = writeln!(
             self.manifest,
-            r#"<item id="cover" href="{path}" media-type="{}" properties="cover-image"/>"#,
-            raster.mime()
+            r#"<item id="cover" href="{path}" media-type="{mime}" properties="cover-image"/>"#,
         );
-        self.write(&format!("OEBPS/{path}"), &raster.bytes, STORED)
+        self.write(&format!("OEBPS/{path}"), &data, STORED)
     }
 
     pub fn add_page(&mut self, raster: &Raster) -> Result<(), Error> {
