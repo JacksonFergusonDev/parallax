@@ -21,6 +21,7 @@ mod entries;
 mod error;
 mod filename;
 mod natural;
+pub mod prepare;
 pub mod shape;
 
 pub use bundle::{Bundled, FolderKind, chapters_to_cbz, classify_folder, folder_to_cbz};

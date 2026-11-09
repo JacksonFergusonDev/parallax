@@ -59,6 +59,11 @@ pub struct SentInfo {
 /// Comics need preparing for the Kobo's screen first (comics plan, C5–C6).
 const COMICS_NOT_YET: &str = "comics can't be sent to a Kobo yet";
 
+pub const COMIC_SPREADS: &str = "comic_spreads";
+pub const COMIC_CROP: &str = "comic_crop";
+pub const COMIC_AUTOCONTRAST: &str = "comic_autocontrast";
+pub const COMIC_UPSCALE: &str = "comic_upscale";
+
 const KEPUB_EXT: &str = ".kepub.epub";
 
 /// Where a loose file goes on the device: `KEpub/<file stem>.kepub.epub`.

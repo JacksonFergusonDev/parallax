@@ -8,6 +8,11 @@ license.workspace = true
 
 [dependencies]
 compress-tools.workspace = true
+erc-convert.workspace = true
+fast_image_resize = "6.1"
+png = "0.18"
+rayon.workspace = true
+serde.workspace = true
 image.workspace = true
 roxmltree.workspace = true
 tempfile.workspace = true

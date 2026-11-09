@@ -317,6 +317,7 @@ export function LibraryPane(props: PaneProps) {
 }
 
 export function KoboPane(props: PaneProps) {
+  const spreads = useId();
   return (
     <>
       <Row label="When a Kobo connects">
@@ -335,6 +336,37 @@ export function KoboPane(props: PaneProps) {
           hint="After sending books and when a Kobo connects, your grouping rules file books into collections the Kobo already has. New collections are made only when you apply rules yourself."
         >
           Apply grouping rules automatically
+        </Check>
+      </Row>
+      <Row
+        label="Comic spreads"
+        labelFor={spreads}
+        hint="Very wide pages are rotated to fit in every mode."
+      >
+        <select
+          id={spreads}
+          value={props.values.comic_spreads ?? "split"}
+          onChange={(e) =>
+            props.set(
+              "comic_spreads",
+              e.target.value === "split" ? null : e.target.value,
+            )
+          }
+        >
+          <option value="split">Split</option>
+          <option value="keep_whole">Keep whole</option>
+          <option value="whole_then_halves">Whole then halves</option>
+        </select>
+      </Row>
+      <Row label="Comic pages">
+        <Check {...props} name="comic_crop" defaultOn={false}>
+          Trim white margins
+        </Check>
+        <Check {...props} name="comic_autocontrast" defaultOn={false}>
+          Increase greyscale contrast
+        </Check>
+        <Check {...props} name="comic_upscale" defaultOn={false}>
+          Enlarge small pages
         </Check>
       </Row>
       <Row label="After sending">

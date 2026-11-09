@@ -1,0 +1,25 @@
+Kindle Comic Converter v13.0.0
+https://github.com/ciromattia/kcc/tree/v13.0.0/kindlecomicconverter
+
+The spread and chroma algorithms in src/prepare/raster.rs were adapted from
+image.py. That file is licensed GPL-3.0-or-later. See the repository's LICENSE
+for GPL version 3 and the copyright notices in src/prepare/raster.rs.
+
+The spine alignment and filename rules in src/prepare were adapted from
+comic2ebook.py, under the following notice:
+
+Copyright (c) 2012-2014 Ciro Mattia Gonano <ciromattia@gmail.com>
+Copyright (c) 2013-2019 Pawel Jastrzebski <pawelj@iosphe.re>
+
+Permission to use, copy, modify, and/or distribute this software for
+any purpose with or without fee is hereby granted, provided that the
+above copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
+WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
+AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
+DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA
+OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.

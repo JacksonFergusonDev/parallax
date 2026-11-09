@@ -1,6 +1,6 @@
 # Comics and manga plan
 
-Status: **C1–C4 done** (2026-11-08); C5 next. The plan for first-class comics and manga in Parallax, across the library, sending to any supported Kobo, and the reader. It builds on [the Kobo comics spike](kobo-comics-spike.md) and [the bindery and KCC research](../reports/Bindery%20and%20Kindle%20Comic%20Converter.md).
+Status: **C1–C5 done** (2026-11-08); C6 next. The plan for first-class comics and manga in Parallax, across the library, sending to any supported Kobo, and the reader. It builds on [the Kobo comics spike](kobo-comics-spike.md) and [the bindery and KCC research](../reports/Bindery%20and%20Kindle%20Comic%20Converter.md).
 
 ## 1. What's already decided
 
@@ -10,8 +10,8 @@ Status: **C1–C4 done** (2026-11-08); C5 next. The plan for first-class comics 
 | How series reach the Kobo | Write `content.Series`, `SeriesNumber` and `SeriesID` through the existing safe-write layer and pending-series triggers, as for books | No spike variant grouped as a series; firmware 4.38 ignores OPF series and ComicInfo for sideloaded books. |
 | Caching converted output | None. Prepare in a temporary folder at send time, write to the Kobo, delete | About 8 s per 470 MB volume on this Mac; calibre's growing cache was the user's main complaint. |
 | Default page processing | Greyscale, Lanczos3 to fit the screen, 16 grey levels as 4-bit PNG, no dithering, no autocontrast, no cropping | Spike quality matched the originals. KCC users report autocontrast darkening pages and crops removing content. |
-| Spreads | A setting: **Split** (default), **Keep whole**, **Whole then halves**. Very wide images (aspect ≥ 1.8) are rotated rather than split | KCC's thresholds and modes; the user liked seeing spreads whole but split pages are what fill the screen. |
-| Where code comes from | Port KCC's spread, resize, palette and ComicInfo logic to Rust, keeping its notices (ISC and GPL-3.0-or-later, both fine in GPL-3.0-only). Reimplement bindery's chapter-bundling rules and take its edge cases as tests (MIT). Write our own natural sort and palette mapping | Research report. |
+| Spreads | A setting: **Split** (default), **Keep whole**, **Whole then halves**. Very wide images (aspect ≥ 1.8) are rotated rather than split | KCC supplies the thresholds and half order. Parallax keeps the whole image unrotated in both whole modes for ordinary spreads, and puts it first in Whole then halves. |
+| Where code comes from | Adapt KCC v13.0.0 for spreads, colour detection and spine alignment. Reuse the Parallax spike for resize, 4-bit encoding and fixed-layout EPUB. C2 implemented ComicInfo, natural sorting and bindery-inspired bundling. Keep the upstream notices with the Rust code | Research report. |
 | CBR | Read through libarchive and convert to CBZ on import, keeping the original's hash as its identity, like Amazon formats. Never link unrar | UnRAR's licence forbids recreating RAR compression, which conflicts with GPLv3. |
 
 ## 2. Supporting the range of Kobos
@@ -122,9 +122,9 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
 - Add comic folder imports a folder of pages or chapter archives as one volume. Settings › Library sets the fallback kind for archives without ComicInfo reading metadata.
 - Checked at 1280 × 900 and 800 × 560 with browser mock data.
 
-### C5. Prepare for Kobo (4–6 days)
+### C5. Prepare for Kobo (done)
 
-- **`erc-comic::prepare(book, profile, settings) -> temp KEPUB`**, in parallel with rayon:
+- **`erc_comic::prepare::prepare`** writes a temporary KEPUB and uses rayon in bounded batches. [KCC image notes](../research_notes/Bindery%20and%20Kindle%20Comic%20Converter/kcc_image_pipeline.md) map spread and chroma logic to `image.py`. The [spike implementation](../spikes/kobo-comics/src/main.rs) is the reference for resize, PNG and EPUB packaging.
   - decode;
   - test for colour;
   - greyscale, unless the page is colour on a colour Kobo;
@@ -135,18 +135,18 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
   - encode as 4-bit PNG, or JPEG for colour pages.
 - **Package:**
   - fixed-layout EPUB 3 with title, credits, series, cover and `page-progression-direction`;
-  - KCC's `page-spread-left/right` pinning when split halves should face each other on landscape-capable models;
+  - KCC’s `buildOPF` aligns `rendition:page-spread-left/right` for facing halves. The implementation gates it on the profile, with no models enabled pending a landscape hardware check;
   - kepubify with `--no-add-dummy-titlepage`;
-  - file names cleaned of characters that crash Kobos (`!` and the rest of KCC's list).
+  - `safe_kobo_component` applies the KCC character list to device filenames. C6 uses a fixed safe parent directory.
 - **Settings:**
   - spreads mode;
-  - optional margin crop, autocontrast and upscale for small pages, all off by default;
+  - optional white-margin crop, greyscale autocontrast and upscale for small pages, all off by default;
   - a per-book override of direction.
 - **Checks** (as the spike did):
   - output images match the processing;
   - kepubify kept fixed layout and direction;
   - page count matches the source plus splits.
-- **Performance:** about 8 s per volume on Apple silicon; progress is reported per page.
+- **Performance:** the spike took about 8 s per volume on Apple silicon. The preparation crate reports progress per input page.
 
 ### C6. Sending and updating comics (2–3 days)
 

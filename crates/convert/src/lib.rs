@@ -30,6 +30,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub trait Converter {
     /// Converts `input` and writes the result to `output`, which must not exist.
     fn convert(&self, input: &Path, output: &Path) -> Result<()>;
+
+    /// Converts a fixed-layout EPUB without inserting a dummy title page.
+    fn convert_fixed_layout(&self, input: &Path, output: &Path) -> Result<()> {
+        self.convert(input, output)
+    }
 }
 
 /// Environment variable that overrides where kepubify is found.
@@ -80,11 +85,12 @@ impl Kepubify {
     pub fn binary(&self) -> &Path {
         &self.binary
     }
-}
-
-impl Converter for Kepubify {
-    fn convert(&self, input: &Path, output: &Path) -> Result<()> {
-        let out = Command::new(&self.binary)
+    fn run(&self, input: &Path, output: &Path, fixed_layout: bool) -> Result<()> {
+        let mut command = Command::new(&self.binary);
+        if fixed_layout {
+            command.arg("--no-add-dummy-titlepage");
+        }
+        let out = command
             .arg("--output")
             .arg(output)
             .arg(input)
@@ -112,6 +118,16 @@ impl Converter for Kepubify {
                 message
             },
         })
+    }
+}
+
+impl Converter for Kepubify {
+    fn convert(&self, input: &Path, output: &Path) -> Result<()> {
+        self.run(input, output, false)
+    }
+
+    fn convert_fixed_layout(&self, input: &Path, output: &Path) -> Result<()> {
+        self.run(input, output, true)
     }
 }
 
@@ -148,6 +164,10 @@ impl Converter for ToKepub {
         let epub = workdir.path().join("book.epub");
         self.amazon.convert(input, &epub)?;
         self.kepub.convert(&epub, output)
+    }
+
+    fn convert_fixed_layout(&self, input: &Path, output: &Path) -> Result<()> {
+        self.kepub.convert_fixed_layout(input, output)
     }
 }
 

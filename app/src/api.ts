@@ -625,7 +625,11 @@ export type SettingKey =
   | "kobo_series"
   | "kobo_rules"
   | "eject_after_send"
-  | "comics_kind";
+  | "comics_kind"
+  | "comic_spreads"
+  | "comic_crop"
+  | "comic_autocontrast"
+  | "comic_upscale";
 export const getSetting = (key: SettingKey) =>
   invoke<string | null>("setting_get", { key });
 export const setSetting = (key: SettingKey, value: string | null) =>
