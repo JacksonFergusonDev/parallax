@@ -1,4 +1,4 @@
-# E-Reader Companion — Project Brief
+# Parallax — Project Brief
 
 ## Goal
 

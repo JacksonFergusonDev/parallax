@@ -2,10 +2,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use erc_device_kobo::{
-    BACKUPS_KEPT, BackupPolicy, BookCheck, DisplayMetadata, ERC_VERSION, Error, Keep, KoboDevice,
-    LOG_KEPT, LogEntry, Record, backups_size, delete_all_backups, image_id_for, qhash, remove_book,
-    replace_book, restore, tidy_apple_double,
+use parallax_device_kobo::{
+    BACKUPS_KEPT, BackupPolicy, BookCheck, DisplayMetadata, Error, Keep, KoboDevice, LOG_KEPT,
+    LogEntry, PARALLAX_VERSION, Record, backups_size, delete_all_backups, image_id_for, qhash,
+    remove_book, replace_book, restore, tidy_apple_double,
 };
 use rusqlite::Connection;
 
@@ -345,7 +345,7 @@ fn going_back_brings_removed_books_back_with_their_rows() {
         2
     );
     assert_eq!(count(&db, "SELECT count(*) FROM Bookmark"), 2);
-    assert_eq!(kobo.erc_state().log[0].op, "restore");
+    assert_eq!(kobo.parallax_state().log[0].op, "restore");
 }
 
 #[test]
@@ -476,7 +476,7 @@ fn a_failed_copy_leaves_the_database_and_its_side_files() {
 
     assert!(restore(&db, &dir.path().join("missing.sqlite")).is_err());
     assert!(wal.exists());
-    assert!(!db.with_extension("sqlite.erc-restore").exists());
+    assert!(!db.with_extension("sqlite.parallax-restore").exists());
 }
 
 /// A backup as older versions wrote it: an uncompressed `.sqlite`, with no
@@ -871,8 +871,8 @@ fn writes_cleanly_on_fat32() {
             for e in fs::read_dir(mnt.join(sub)).unwrap().flatten() {
                 let name = e.file_name().to_string_lossy().into_owned();
                 if name.starts_with("._")
-                    || name.ends_with(".erc-part")
-                    || name.ends_with(".erc-restore")
+                    || name.ends_with(".parallax-part")
+                    || name.ends_with(".parallax-restore")
                 {
                     leftovers.push(format!("{sub}/{name}"));
                 }
@@ -895,11 +895,14 @@ fn meta(title: &str) -> DisplayMetadata {
 }
 
 #[test]
-fn records_what_erc_did_in_dot_erc() {
+fn records_what_parallax_did() {
     let dir = tempfile::tempdir().unwrap();
     let (kobo, _db) = fake_kobo(dir.path());
     let backups = dir.path().join("backups");
-    assert!(kobo.erc_state().device.is_none(), "nothing recorded yet");
+    assert!(
+        kobo.parallax_state().device.is_none(),
+        "nothing recorded yet"
+    );
 
     let src = dir.path().join("new.kepub.epub");
     fs::write(&src, b"new book bytes").unwrap();
@@ -919,11 +922,11 @@ fn records_what_erc_did_in_dot_erc() {
     remove_book(&mut writer, &cid(BOOK)).unwrap();
     writer.close().unwrap();
 
-    let state = kobo.erc_state();
+    let state = kobo.parallax_state();
     assert!(state.problems.is_empty(), "{:?}", state.problems);
     let device = state.device.unwrap();
     assert_eq!(device.serial, "N000000000001");
-    assert_eq!(device.first_write.erc_version, ERC_VERSION);
+    assert_eq!(device.first_write.parallax_version, PARALLAX_VERSION);
     assert_eq!(device.last_write.db_version, Some(174));
     assert_eq!(device.last_write.firmware, "4.38.23697");
 
@@ -940,8 +943,8 @@ fn records_what_erc_did_in_dot_erc() {
     assert_eq!(state.log[0].backup.as_deref(), Some(backup_name.as_str()));
     assert!(state.log.iter().all(|e| e.error.is_none()));
 
-    // Only dot files under /.erc, and no temporary files left.
-    let mut names: Vec<String> = fs::read_dir(kobo.mount().join(".erc"))
+    // Only dot files under /.parallax, and no temporary files left.
+    let mut names: Vec<String> = fs::read_dir(kobo.mount().join(".parallax"))
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
@@ -953,13 +956,53 @@ fn records_what_erc_did_in_dot_erc() {
         entries: vec![LogEntry::new("tidy")],
         books: Vec::new(),
     });
-    let again = kobo.erc_state().device.unwrap();
+    let again = kobo.parallax_state().device.unwrap();
     assert_eq!(again.device_id, device.device_id);
     assert_eq!(again.first_write, device.first_write);
 }
 
 #[test]
-fn spots_books_changed_or_removed_outside_erc() {
+fn upgrades_device_records_on_write_and_reads_them_beforehand() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, _db) = fake_kobo(dir.path());
+    let src = dir.path().join("a.kepub.epub");
+    fs::write(&src, b"abc").unwrap();
+    kobo.send_file_for(&src, "KEpub/A.kepub.epub", Some(42))
+        .unwrap();
+    let current = kobo.mount().join(".parallax");
+    let legacy = kobo.mount().join(".erc");
+    for name in ["device.json", "books.json", "log.jsonl"] {
+        let path = current.join(name);
+        let json = fs::read_to_string(&path).unwrap();
+        fs::write(&path, json.replace("parallax_version", "erc_version")).unwrap();
+    }
+    fs::rename(&current, &legacy).unwrap();
+
+    let before = kobo.parallax_state();
+    assert!(before.problems.is_empty());
+    assert_eq!(kobo.managed_books().unwrap()[0].library_book, Some(42));
+    assert_eq!(before.log[0].op, "send");
+    assert!(!current.exists(), "reading does not migrate the folder");
+
+    kobo.send_file(&src, "KEpub/B.kepub.epub").unwrap();
+    let after = kobo.parallax_state();
+    assert!(after.problems.is_empty());
+    assert!(!legacy.exists());
+    assert_eq!(
+        after.device.unwrap().device_id,
+        before.device.unwrap().device_id
+    );
+    assert_eq!(after.books[0], before.books[0]);
+    assert_eq!(after.log[1], before.log[0]);
+    for name in ["device.json", "books.json", "log.jsonl"] {
+        let json = fs::read_to_string(current.join(name)).unwrap();
+        assert!(json.contains("parallax_version"));
+        assert!(!json.contains("erc_version"));
+    }
+}
+
+#[test]
+fn spots_books_changed_or_removed_outside_parallax() {
     let dir = tempfile::tempdir().unwrap();
     let (kobo, _db) = fake_kobo(dir.path());
     let src = dir.path().join("a.kepub.epub");
@@ -970,7 +1013,7 @@ fn spots_books_changed_or_removed_outside_erc() {
     fs::write(kobo.mount().join("KEpub/B.kepub.epub"), b"changed").unwrap();
     fs::remove_file(kobo.mount().join("KEpub/C.kepub.epub")).unwrap();
 
-    let checks = kobo.erc_state().check(kobo.mount());
+    let checks = kobo.parallax_state().check(kobo.mount());
     let by_name: Vec<(&str, BookCheck)> = checks
         .iter()
         .map(|(id, c)| (id.rsplit('/').next().unwrap(), *c))
@@ -989,25 +1032,25 @@ fn spots_books_changed_or_removed_outside_erc() {
 fn unreadable_records_never_block_changes() {
     let dir = tempfile::tempdir().unwrap();
     let (kobo, _db) = fake_kobo(dir.path());
-    let erc = kobo.mount().join(".erc");
-    fs::create_dir_all(&erc).unwrap();
-    fs::write(erc.join("device.json"), b"{not json").unwrap();
-    fs::write(erc.join("books.json"), b"[]").unwrap();
-    fs::write(erc.join("log.jsonl"), b"garbage\n").unwrap();
+    let parallax = kobo.mount().join(".parallax");
+    fs::create_dir_all(&parallax).unwrap();
+    fs::write(parallax.join("device.json"), b"{not json").unwrap();
+    fs::write(parallax.join("books.json"), b"[]").unwrap();
+    fs::write(parallax.join("log.jsonl"), b"garbage\n").unwrap();
 
-    let state = kobo.erc_state();
+    let state = kobo.parallax_state();
     assert_eq!(state.problems.len(), 3, "{:?}", state.problems);
 
     let src = dir.path().join("a.kepub.epub");
     fs::write(&src, b"abc").unwrap();
     kobo.send_file(&src, "KEpub/A.kepub.epub").unwrap();
 
-    let state = kobo.erc_state();
+    let state = kobo.parallax_state();
     assert!(state.device.is_some());
     assert_eq!(state.books.len(), 1);
     assert_eq!(state.log.len(), 1, "the bad log line is dropped on rewrite");
     // The unreadable files are kept beside the new ones for debugging.
-    let aside = fs::read_dir(&erc)
+    let aside = fs::read_dir(&parallax)
         .unwrap()
         .filter(|e| {
             e.as_ref()
@@ -1031,7 +1074,7 @@ fn log_is_capped() {
         entries,
         books: Vec::new(),
     });
-    let log = kobo.erc_state().log;
+    let log = kobo.parallax_state().log;
     assert_eq!(log.len(), LOG_KEPT);
     assert_eq!(log[0].detail.as_deref(), Some(&*(LOG_KEPT + 4).to_string()));
 }
@@ -1045,5 +1088,5 @@ fn refused_changes_are_not_logged() {
     let mut writer = kobo.open_writer(&dir.path().join("backups")).unwrap();
     assert!(remove_book(&mut writer, "store-book-id").is_err());
     writer.close().unwrap();
-    assert!(kobo.erc_state().log.is_empty());
+    assert!(kobo.parallax_state().log.is_empty());
 }

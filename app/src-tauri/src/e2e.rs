@@ -1,13 +1,13 @@
 //! Hooks for `scripts/reader-e2e.mjs`, compiled only with the `e2e` feature.
 //!
-//! - `ERC_E2E_OPEN=<id>`: open that book in a reader and no main window. The
+//! - `PARALLAX_E2E_OPEN=<id>`: open that book in a reader and no main window. The
 //!   main window writes to a connected Kobo by itself, which a test must not.
-//! - `ERC_E2E_SETTINGS=1`: open the Settings window instead, also alone.
-//! - `ERC_E2E_STEPS`: scripts to run in that window, separated by `@@`, two
+//! - `PARALLAX_E2E_SETTINGS=1`: open the Settings window instead, also alone.
+//! - `PARALLAX_E2E_STEPS`: scripts to run in that window, separated by `@@`, two
 //!   seconds apart. They stand in for a person turning pages. A step
 //!   `menu:<id>` chooses that menu command instead.
-//! - `ERC_E2E_SECS`: how long to wait after the last step before quitting.
-//! - `ERC_E2E_LOOSE=1`: serve the reader page without its CSP and with a loose
+//! - `PARALLAX_E2E_SECS`: how long to wait after the last step before quitting.
+//! - `PARALLAX_E2E_LOOSE=1`: serve the reader page without its CSP and with a loose
 //!   one in its place, so the test can show its detector catches scripts.
 
 use std::borrow::Cow;
@@ -23,11 +23,11 @@ const LOOSE_CSP: &str = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:
     connect-src * ipc: http://ipc.localhost";
 
 fn book() -> Option<i64> {
-    std::env::var("ERC_E2E_OPEN").ok()?.parse().ok()
+    std::env::var("PARALLAX_E2E_OPEN").ok()?.parse().ok()
 }
 
 fn settings_window() -> bool {
-    std::env::var_os("ERC_E2E_SETTINGS").is_some()
+    std::env::var_os("PARALLAX_E2E_SETTINGS").is_some()
 }
 
 pub fn prepare<R: Runtime>(context: &mut Context<R>) {
@@ -51,8 +51,8 @@ pub fn start(app: &App) {
             eprintln!("e2e: settings {:?}", settings::open_window(&app));
             "settings".to_owned()
         };
-        let steps = std::env::var("ERC_E2E_STEPS").unwrap_or_default();
-        let secs = std::env::var("ERC_E2E_SECS")
+        let steps = std::env::var("PARALLAX_E2E_STEPS").unwrap_or_default();
+        let secs = std::env::var("PARALLAX_E2E_SECS")
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(5);
@@ -76,7 +76,7 @@ pub fn start(app: &App) {
 pub fn reader_window<R: Runtime, M: Manager<R>>(
     builder: WebviewWindowBuilder<'_, R, M>,
 ) -> WebviewWindowBuilder<'_, R, M> {
-    if std::env::var_os("ERC_E2E_LOOSE").is_none() {
+    if std::env::var_os("PARALLAX_E2E_LOOSE").is_none() {
         return builder;
     }
     builder.on_web_resource_request(|request, response| {

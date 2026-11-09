@@ -1,4 +1,4 @@
-//! Small stores used by `erc-core` workflows: which books are on a device,
+//! Small stores used by `parallax-core` workflows: which books are on a device,
 //! duplicate groups the user dismissed, app settings, reading progress,
 //! reading statistics and annotations seen on devices, and calibre imports.
 
@@ -110,7 +110,7 @@ impl Library {
         Ok(ids)
     }
 
-    /// Remembers that the group `members` (a key from `erc-core`) in `scope`
+    /// Remembers that the group `members` (a key from `parallax-core`) in `scope`
     /// isn't a set of duplicates.
     pub fn dismiss_duplicates(&self, scope: &str, members: &str) -> Result<()> {
         self.conn.execute(

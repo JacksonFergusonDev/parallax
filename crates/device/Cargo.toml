@@ -1,5 +1,5 @@
 [package]
-name = "erc-device"
+name = "parallax-device"
 description = "Device-agnostic types shared by all e-reader backends"
 version.workspace = true
 edition.workspace = true

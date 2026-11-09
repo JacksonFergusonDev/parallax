@@ -38,7 +38,7 @@ pub trait Converter {
 }
 
 /// Environment variable that overrides where kepubify is found.
-pub const KEPUBIFY_ENV: &str = "ERC_KEPUBIFY";
+pub const KEPUBIFY_ENV: &str = "PARALLAX_KEPUBIFY";
 
 #[derive(Debug, Clone)]
 pub struct Kepubify {
@@ -52,12 +52,12 @@ impl Kepubify {
         }
     }
 
-    /// Finds kepubify: `$ERC_KEPUBIFY`, then next to the running executable
+    /// Finds kepubify: `$PARALLAX_KEPUBIFY`, then next to the running executable
     /// (where Tauri places sidecars, both in bundles and in `target/`), then
     /// the repo's downloaded sidecar for development builds.
     pub fn locate() -> Result<Self> {
         let mut candidates = Vec::new();
-        if let Some(path) = env::var_os(KEPUBIFY_ENV) {
+        if let Some(path) = env::var_os(KEPUBIFY_ENV).or_else(|| env::var_os("ERC_KEPUBIFY")) {
             candidates.push(PathBuf::from(path));
         }
         if let Some(dir) = env::current_exe()

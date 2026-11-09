@@ -46,10 +46,10 @@ debug = "line-tables-only"
 debug = false
 opt-level = 3
 
-# erc-comic's own per-pixel loops (greyscale, packing, colour checks) are
+# parallax-comic's own per-pixel loops (greyscale, packing, colour checks) are
 # workspace code, so the rule above skips them. Unoptimised, preparing a
 # 219-page volume took 34 s instead of 6 s.
-[profile.dev.package.erc-comic]
+[profile.dev.package.parallax-comic]
 opt-level = 3
 
 [profile.release]
@@ -81,16 +81,16 @@ zstd = "0.14"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 rayon = "1"
 uuid = { version = "1", features = ["v4"] }
-erc-convert = { path = "crates/convert" }
-erc-comic = { path = "crates/comic" }
-erc-core = { path = "crates/core" }
-erc-covers = { path = "crates/covers" }
-erc-upscale = { path = "crates/upscale" }
-erc-device = { path = "crates/device" }
-erc-epub = { path = "crates/epub" }
-erc-library = { path = "crates/library" }
-erc-metadata = { path = "crates/metadata" }
-erc-device-kobo = { path = "crates/device-kobo" }
+parallax-convert = { path = "crates/convert" }
+parallax-comic = { path = "crates/comic" }
+parallax-core = { path = "crates/core" }
+parallax-covers = { path = "crates/covers" }
+parallax-upscale = { path = "crates/upscale" }
+parallax-device = { path = "crates/device" }
+parallax-epub = { path = "crates/epub" }
+parallax-library = { path = "crates/library" }
+parallax-metadata = { path = "crates/metadata" }
+parallax-device-kobo = { path = "crates/device-kobo" }
 
 # boko with two fixes that aren't released yet; see vendor/boko/VENDORED.md.
 [patch.crates-io]

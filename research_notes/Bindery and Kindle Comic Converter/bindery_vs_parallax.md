@@ -80,7 +80,7 @@ Bindery and Parallax overlap only in KEPUB conversion, comics conversion, filena
 - Bindery writes to a temp dir, moves outputs with collision-free `_2`/`_3` names under a lock, renames failures to `<name>.failed` (or `_2.failed` and so on) so they aren't retried, and offers three originals modes: delete, archive to `.archive` mirroring the folders, or keep in place with the ledger — [processor.py L629-L689, L864-L973](https://github.com/jarynclouatre/bindery/blob/730dd98/processor.py#L629-L973)
 - It saves config and ledger JSON atomically (temp file then `os.replace`) — [config.py L135-L143](https://github.com/jarynclouatre/bindery/blob/730dd98/config.py#L135-L143); [processor.py L183-L192](https://github.com/jarynclouatre/bindery/blob/730dd98/processor.py#L183-L192)
 - It refuses to convert books when `Books_in` and `Books_out` overlap, comparing directory identity and parsing `/proc` mount info for bind mounts, so it can't convert its own output in a loop — [processor.py L388-L477](https://github.com/jarynclouatre/bindery/blob/730dd98/processor.py#L388-L477)
-- Parallax: temp file + rename for `/.erc/` records, database backups before every write, removed files held for 30 days, library snapshots before imports — `docs/device-notes.md` "ERC records", "Backups"; `crates/library/src/snapshots.rs`; `crates/core/src/import.rs` L58-L60
+- Parallax: temp file + rename for `/.parallax/` records, database backups before every write, removed files held for 30 days, library snapshots before imports — `docs/device-notes.md` "Parallax records", "Backups"; `crates/library/src/snapshots.rs`; `crates/core/src/import.rs` L58-L60
 
 #### Comics image processing
 

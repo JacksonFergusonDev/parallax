@@ -1,11 +1,11 @@
 use std::io::Cursor;
 use std::path::Path;
 
-use erc_comic::{Cbz, parse_file_name};
-use erc_library::{Book, Kind};
-use erc_metadata::comics::{self, Catalog, Match, MatchError, Query};
-use erc_metadata::{Fetch, FetchError};
 use image::imageops::FilterType;
+use parallax_comic::{Cbz, parse_file_name};
+use parallax_library::{Book, Kind};
+use parallax_metadata::comics::{self, Catalog, Match, MatchError, Query};
+use parallax_metadata::{Fetch, FetchError};
 
 pub(super) fn lookup(
     fetch: &dyn Fetch,
@@ -30,7 +30,7 @@ pub(super) fn lookup(
         query.volume = archive
             .as_ref()
             .and_then(Cbz::comic_info)
-            .and_then(erc_comic::ComicInfo::volume)
+            .and_then(parallax_comic::ComicInfo::volume)
             .or(name.volume.as_deref());
         return Ok(comics::mangainfo(fetch, &query)?);
     }
@@ -43,14 +43,14 @@ pub(super) fn lookup(
     let archive = file.and_then(|path| Cbz::open(path).ok());
     let info = archive.as_ref().and_then(Cbz::comic_info);
     let stored_index = book.series_index.as_deref();
-    let embedded_volume = info.and_then(erc_comic::ComicInfo::volume);
+    let embedded_volume = info.and_then(parallax_comic::ComicInfo::volume);
     // Older imports put ComicInfo's Volume in the library index. For Metron it
     // identifies the run, while Number is the issue within that run.
     let run = embedded_volume.or(name.volume.as_deref());
     query.run = run.filter(|v| v.parse::<u32>().is_ok_and(|number| number > 0));
     query.issue = stored_index
         .filter(|index| Some(*index) != run)
-        .or(info.and_then(erc_comic::ComicInfo::number))
+        .or(info.and_then(parallax_comic::ComicInfo::number))
         .or(name.number.as_deref());
     query.year = book.published.as_deref().and_then(|date| date.get(..4));
     let web = info.and_then(|info| info.get("Web")).unwrap_or_default();
@@ -96,7 +96,7 @@ fn number_after(web: &str, prefix: &str) -> Option<u64> {
 /// Metron uses ImageHash's 64-bit pHash. Compare the same low-frequency DCT
 /// coefficients after resampling, allowing small differences between decoders.
 fn cover_hash(bytes: &[u8]) -> Option<u64> {
-    erc_comic::shape::image_dimensions(bytes)?;
+    parallax_comic::shape::image_dimensions(bytes)?;
     let gray = image::ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
         .ok()?

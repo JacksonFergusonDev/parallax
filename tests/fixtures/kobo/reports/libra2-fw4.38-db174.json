@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "erc_version": "0.1.0",
+  "parallax_version": "0.1.0",
   "created": "2026-11-01T23:21:11Z",
   "model_id": "00000000-0000-0000-0000-000000000388",
   "model_name": "Kobo Libra 2",
@@ -173,7 +173,7 @@
     ".Trash-1000",
     ".Trashes",
     ".adobe-digital-editions",
-    ".erc",
+    ".parallax",
     ".fseventsd",
     ".kobo",
     ".kobo-images"

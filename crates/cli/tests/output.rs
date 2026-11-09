@@ -1,12 +1,13 @@
 //! Exercise the real binary with captured streams and an isolated local library.
+use std::fs;
 use std::path::Path;
 use std::process::{Command, Output};
 
-use erc_library::Library;
+use parallax_library::Library;
 use tempfile::TempDir;
 
 fn run(root: &Path, args: &[&str], force_color: bool) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_erc"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_parallax-cli"));
     cmd.args(["library", "--library"])
         .arg(root)
         .args(args)
@@ -33,7 +34,7 @@ fn library() -> (TempDir, i64, String) {
     let fixture =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/epub/minimal.epub");
     let imported = lib.import(&fixture).unwrap();
-    let erc_library::ImportOutcome::Added { book, .. } = imported else {
+    let parallax_library::ImportOutcome::Added { book, .. } = imported else {
         panic!("fresh library")
     };
     let title = format!("長い題名 — Café {}", "A long book title ".repeat(10));
@@ -42,6 +43,38 @@ fn library() -> (TempDir, i64, String) {
     edit.authors = vec!["Zoë 著者".into()];
     let saved = lib.update(book.id, &edit).unwrap();
     (dir, book.id, saved.title)
+}
+
+#[test]
+fn default_library_and_backups_survive_the_name_change() {
+    let home = tempfile::tempdir().unwrap();
+    let support = home.path().join("Library/Application Support");
+    let legacy = support.join("dev.erc.companion");
+    let current = support.join("dev.parallax.app");
+    fs::create_dir_all(legacy.join("device-backups")).unwrap();
+    fs::write(legacy.join("device-backups/policy.json"), b"{}").unwrap();
+    let (library, id, title) = library();
+    fs::rename(library.path(), legacy.join("library")).unwrap();
+
+    let list = || {
+        let output = Command::new(env!("CARGO_BIN_EXE_parallax-cli"))
+            .env("HOME", home.path())
+            .args(["library", "ls", "--json"])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{:?}", output.stderr);
+        let books: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(books[0]["id"], id);
+        assert_eq!(books[0]["title"], title);
+    };
+    list();
+    assert!(!legacy.exists());
+    assert!(current.join("device-backups/policy.json").is_file());
+
+    // If another installation recreated the previous directory, keep both.
+    fs::create_dir(&legacy).unwrap();
+    list();
+    assert!(legacy.is_dir());
 }
 
 #[test]
@@ -101,7 +134,7 @@ fn amazon_fixture() -> std::path::PathBuf {
 }
 
 fn add(root: &Path, file: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_erc"))
+    Command::new(env!("CARGO_BIN_EXE_parallax-cli"))
         .args(["library", "--library"])
         .arg(root)
         .arg("add")

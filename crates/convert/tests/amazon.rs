@@ -5,9 +5,9 @@ use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use erc_convert::amazon::{InProcess, Kind, sniff};
-use erc_convert::{Converter, Error, ToKepub};
-use erc_epub::Epub;
+use parallax_convert::amazon::{InProcess, Kind, sniff};
+use parallax_convert::{Converter, Error, ToKepub};
+use parallax_epub::Epub;
 use tempfile::TempDir;
 use zip::ZipArchive;
 
@@ -267,7 +267,7 @@ fn files_are_recognised_by_content() {
 struct Copy;
 
 impl Converter for Copy {
-    fn convert(&self, input: &Path, output: &Path) -> erc_convert::Result<()> {
+    fn convert(&self, input: &Path, output: &Path) -> parallax_convert::Result<()> {
         Epub::open(input).expect("kepubify must be given an EPUB");
         fs::copy(input, output)?;
         Ok(())
@@ -296,7 +296,7 @@ fn to_kepub_goes_through_epub() {
 fn a_child_that_dies_is_an_error_not_a_crash() {
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("out.epub");
-    let err = erc_convert::amazon::ChildProcess::new("/usr/bin/false")
+    let err = parallax_convert::amazon::ChildProcess::new("/usr/bin/false")
         .convert(&fixture("book.azw3"), &out)
         .unwrap_err();
     assert!(err.to_string().contains("crashed"), "{err}");

@@ -14,9 +14,9 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
-use erc_device::{DeviceBook, ReadStatus};
-use erc_device_kobo::KoboDevice;
-use erc_library::{Book, Library, normalize_authors};
+use parallax_device::{DeviceBook, ReadStatus};
+use parallax_device_kobo::KoboDevice;
+use parallax_library::{Book, Library, normalize_authors};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
@@ -174,7 +174,7 @@ pub struct LibraryGroup {
 }
 
 /// Probable duplicates among library books, minus dismissed groups.
-pub fn library_duplicates(library: &Library) -> erc_library::Result<Vec<LibraryGroup>> {
+pub fn library_duplicates(library: &Library) -> parallax_library::Result<Vec<LibraryGroup>> {
     let books = library.books()?;
     let on_device = library.books_on_any_device()?;
     let dismissed = library.dismissed_duplicates(LIBRARY_SCOPE)?;
@@ -232,7 +232,7 @@ pub struct DeviceMember {
     /// "KEPUB", "EPUB", "PDF"… or "Kobo store".
     pub format: String,
     pub size: Option<u64>,
-    /// ERC can remove it (sideloaded).
+    /// Parallax can remove it (sideloaded).
     pub removable: bool,
     /// Suggested for removal.
     pub remove: bool,
@@ -250,7 +250,7 @@ pub struct DeviceGroup {
 pub fn device_duplicates(
     library: &Library,
     device: &KoboDevice,
-) -> erc_device_kobo::Result<Vec<DeviceGroup>> {
+) -> parallax_device_kobo::Result<Vec<DeviceGroup>> {
     let books = device.open_db()?.books()?;
     let dismissed = library
         .dismissed_duplicates(&device_scope(&device.version().serial))

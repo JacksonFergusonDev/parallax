@@ -2,9 +2,9 @@ use std::fs::File;
 use std::io::{Cursor, Read, Write};
 use std::path::Path;
 
-use erc_comic::prepare::{Metadata, Options, Profile, Spreads, prepare, safe_kobo_component};
-use erc_convert::Kepubify;
 use image::{ImageFormat, Rgb, RgbImage};
+use parallax_comic::prepare::{Metadata, Options, Profile, Spreads, prepare, safe_kobo_component};
+use parallax_convert::Kepubify;
 use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 fn sample(path: &Path) {
@@ -300,7 +300,7 @@ fn a_comic_with_no_readable_pages_is_refused() {
     );
     assert!(matches!(
         result,
-        Err(erc_comic::prepare::Error::NoReadablePages)
+        Err(parallax_comic::prepare::Error::NoReadablePages)
     ));
 }
 

@@ -7,9 +7,9 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use erc_device::{DeviceBook, ReadStatus};
-use erc_device_kobo::{FinishedEvent, KoboDevice};
-use erc_library::Library;
+use parallax_device::{DeviceBook, ReadStatus};
+use parallax_device_kobo::{FinishedEvent, KoboDevice};
+use parallax_library::Library;
 use serde::Serialize;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -49,7 +49,7 @@ pub struct ReadingStats {
 pub fn reading_stats(
     device: &KoboDevice,
     library: Option<&Library>,
-) -> erc_device_kobo::Result<ReadingStats> {
+) -> parallax_device_kobo::Result<ReadingStats> {
     let db = device.open_db()?;
     let books = db.books()?;
     let events = db.finished_events()?;
@@ -167,7 +167,7 @@ fn compute(
 
 /// A title (and author) from a sideloaded book's file name, for books that
 /// are gone. Store books have opaque ids: "Unknown book". Understands:
-/// - calibre and ERC: `Title - Author`, with unsafe characters as `_`;
+/// - calibre and Parallax: `Title - Author`, with unsafe characters as `_`;
 /// - Library Genesis: `Author - Title (2009, Publisher) - libgen.li`;
 /// - Anna's Archive: `Title -- Author -- Publisher, 2014 -- … -- <hash>`;
 /// - sort forms: `Hobbit, The`, `Rothfuss, Patrick - Title`.

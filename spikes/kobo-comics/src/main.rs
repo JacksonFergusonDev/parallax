@@ -527,7 +527,7 @@ fn write_epub(
 }
 
 fn kepubify() -> Result<PathBuf> {
-    if let Ok(path) = std::env::var("ERC_KEPUBIFY") {
+    if let Ok(path) = std::env::var("PARALLAX_KEPUBIFY") {
         return Ok(PathBuf::from(path));
     }
     let bundled = Path::new(env!("CARGO_MANIFEST_DIR"))

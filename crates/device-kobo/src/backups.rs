@@ -250,7 +250,7 @@ impl KoboDevice {
     pub fn backups(&self, root: &Path) -> Vec<BackupInfo> {
         let dir = self.backup_dir(root);
         let current = readable_version(&self.db_path());
-        let log = self.erc_state().log;
+        let log = self.parallax_state().log;
         let mut names = backup_names(&dir);
         names.reverse();
         names

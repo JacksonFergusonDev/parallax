@@ -4,10 +4,10 @@ use std::fs::File;
 use std::io::{Cursor, Write};
 use std::path::Path;
 
-use erc_convert::amazon::InProcess;
-use erc_core::health::{Check, check_library};
-use erc_core::ingest::import_file;
-use erc_library::{Format, ImportOutcome, Library};
+use parallax_convert::amazon::InProcess;
+use parallax_core::health::{Check, check_library};
+use parallax_core::ingest::import_file;
+use parallax_library::{Format, ImportOutcome, Library};
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
@@ -94,8 +94,8 @@ fn check_library_reads_comics_as_comics() {
 
 #[test]
 fn comic_enrichment_uses_the_embedded_issue_and_preserves_local_details() {
-    use erc_core::enhance::{self, Accepted, Details, DeviceClues, METRON_TOKEN};
-    use erc_metadata::{Fetch, FetchError};
+    use parallax_core::enhance::{self, Accepted, Details, DeviceClues, METRON_TOKEN};
+    use parallax_metadata::{Fetch, FetchError};
 
     struct Metron;
     impl Fetch for Metron {

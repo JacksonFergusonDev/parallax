@@ -27,7 +27,7 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
-use erc_epub::{Contributor, Cover, Epub, Extent, Identifier, Metadata, MetadataEdit};
+use parallax_epub::{Contributor, Cover, Epub, Extent, Identifier, Metadata, MetadataEdit};
 use rayon::prelude::*;
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::Serialize;
@@ -48,9 +48,9 @@ pub enum Error {
     #[error("library database error: {0}")]
     Sqlite(#[from] rusqlite::Error),
     #[error(transparent)]
-    Epub(#[from] erc_epub::Error),
+    Epub(#[from] parallax_epub::Error),
     #[error(transparent)]
-    Comic(#[from] erc_comic::Error),
+    Comic(#[from] parallax_comic::Error),
     #[error("{0} isn't a comic, so it has no reading direction")]
     NotAComic(i64),
     #[error("no book with id {0}")]
@@ -874,7 +874,7 @@ impl BookFiles {
             return image::image_dimensions(&self.custom_cover).ok();
         }
         if self.book.extension().is_some_and(|e| e == "cbz") {
-            let mut comic = erc_comic::Cbz::open(&self.book).ok()?;
+            let mut comic = parallax_comic::Cbz::open(&self.book).ok()?;
             let index = comic.cover_index();
             return comic.page_dimensions(index).ok()?;
         }

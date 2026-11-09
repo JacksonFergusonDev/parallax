@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-use erc_epub::{Contributor, Epub, MetadataEdit};
+use parallax_epub::{Contributor, Epub, MetadataEdit};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
@@ -213,7 +213,7 @@ fn edits_epub3_and_drops_orphaned_refinements() {
     }
     // The editor and their role refinement are kept.
     assert!(opf.contains("An Editor") && opf.contains(r##"refines="#c2""##));
-    assert!(opf.contains(r#"property="belongs-to-collection" id="erc-series""#));
+    assert!(opf.contains(r#"property="belongs-to-collection" id="parallax-series""#));
     assert!(opf.contains("dcterms:modified"));
     roxmltree::Document::parse(&opf).expect("edited OPF is well-formed");
 }
@@ -226,8 +226,8 @@ fn rejects_non_epub() {
     assert!(Epub::open(&path).is_err());
 }
 
-fn cover(data: &[u8], media_type: &str) -> erc_epub::Cover {
-    erc_epub::Cover {
+fn cover(data: &[u8], media_type: &str) -> parallax_epub::Cover {
+    parallax_epub::Cover {
         data: data.to_vec(),
         media_type: media_type.into(),
     }
@@ -251,7 +251,7 @@ fn replaces_same_type_cover_in_place() {
     assert_eq!(edited.cover().unwrap().unwrap().data, b"NEWJPEG");
     let opf = read_opf(&out);
     assert!(
-        !opf.contains("erc-cover"),
+        !opf.contains("parallax-cover"),
         "should reuse the existing item:\n{opf}"
     );
     let mut zip = ZipArchive::new(File::open(&out).unwrap()).unwrap();
@@ -289,7 +289,9 @@ fn adds_cover_item_when_type_differs_epub2() {
     );
     let opf = read_opf(&out);
     assert_eq!(opf.matches(r#"name="cover""#).count(), 1, "{opf}");
-    assert!(opf.contains(r#"<item id="erc-cover" href="erc-cover.png" media-type="image/png"/>"#));
+    assert!(opf.contains(
+        r#"<item id="parallax-cover" href="parallax-cover.png" media-type="image/png"/>"#
+    ));
     roxmltree::Document::parse(&opf).expect("well-formed");
 }
 
@@ -435,11 +437,11 @@ fn writes_contributors_epub3_and_none_leaves_them() {
         .unwrap();
     let opf = read_opf(&out);
     assert!(!opf.contains("An Editor") && !opf.contains("#c2"));
-    assert!(
-        opf.contains(r#"<dc:contributor id="erc-contributor-1">Ann Translator</dc:contributor>"#)
-    );
     assert!(opf.contains(
-        r##"<meta refines="#erc-contributor-2" property="role" scheme="marc:relators">ill</meta>"##
+        r#"<dc:contributor id="parallax-contributor-1">Ann Translator</dc:contributor>"#
+    ));
+    assert!(opf.contains(
+        r##"<meta refines="#parallax-contributor-2" property="role" scheme="marc:relators">ill</meta>"##
     ));
     assert_eq!(Epub::open(&out).unwrap().metadata().contributors, {
         let mut p = people();

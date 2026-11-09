@@ -4,9 +4,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use erc_comic::Cbz;
-use erc_epub::{BookFile, Entry, has_drm};
-use erc_library::{Book, Direction, Format, HighlightDraft, ReaderHighlight, ReaderPosition};
+use parallax_comic::Cbz;
+use parallax_epub::{BookFile, Entry, has_drm};
+use parallax_library::{Book, Direction, Format, HighlightDraft, ReaderHighlight, ReaderPosition};
 use serde::{Deserialize, Serialize};
 use tauri::ipc::Response;
 use tauri::utils::config::BackgroundThrottlingPolicy;
@@ -138,7 +138,7 @@ impl ReaderSettings {
 }
 
 /// The saved reader appearance, or the default.
-pub fn saved_settings(lib: &erc_library::Library) -> ReaderSettings {
+pub fn saved_settings(lib: &parallax_library::Library) -> ReaderSettings {
     lib.setting(SETTINGS_KEY)
         .ok()
         .flatten()
@@ -299,7 +299,7 @@ struct ComicBook {
     direction: Direction,
     cover: usize,
     pages: Vec<ComicPage>,
-    chapters: Vec<erc_comic::Chapter>,
+    chapters: Vec<parallax_comic::Chapter>,
 }
 
 #[derive(Serialize)]
@@ -490,7 +490,7 @@ pub async fn reader_entry(
             OpenBook::Comic(cbz) => {
                 let index = comic_page_index(&name, cbz.pages().len())?;
                 let bytes = cbz.read_page(index).map_err(err)?;
-                erc_comic::shape::image_dimensions(&bytes)
+                parallax_comic::shape::image_dimensions(&bytes)
                     .ok_or("this comic page is not a supported image")?;
                 Ok(bytes)
             }

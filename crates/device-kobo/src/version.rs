@@ -37,7 +37,7 @@ impl VersionInfo {
     }
 
     /// Model name for the known model ids (`screen::MODELS`); others fall
-    /// back to a generic name. A device report (`erc kobo report`) is how new
+    /// back to a generic name. A device report (`parallax-cli kobo report`) is how new
     /// ones get added.
     pub fn model_name(&self) -> &'static str {
         crate::screen::find(self.short_model_id()).map_or("Kobo eReader", |m| m.name)
@@ -45,7 +45,7 @@ impl VersionInfo {
 
     /// The screen comics are prepared for; `mount` is used only for a model
     /// that isn't known.
-    pub fn screen(&self, mount: &std::path::Path) -> erc_device::Screen {
+    pub fn screen(&self, mount: &std::path::Path) -> parallax_device::Screen {
         crate::screen::screen(self.short_model_id(), mount)
     }
 

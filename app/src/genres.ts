@@ -1,4 +1,4 @@
-// The standard genre names, in the backend's order (erc_metadata::genres;
+// The standard genre names, in the backend's order (parallax_metadata::genres;
 // a Rust test checks the two lists match). A tag with one of these names is a
 // genre; the edit panel shows those in their own field.
 

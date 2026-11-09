@@ -1,10 +1,10 @@
 //! Preparation settings shared by sending, estimates and update detection.
 
-use erc_comic::prepare::{Metadata, Options, Prepared, Profile, Spreads, prepare};
-use erc_convert::Converter;
-use erc_device::{Screen, ScreenSource};
-use erc_device_kobo::KoboDevice;
-use erc_library::{Book, Direction, Format, Library};
+use parallax_comic::prepare::{Metadata, Options, Prepared, Profile, Spreads, prepare};
+use parallax_convert::Converter;
+use parallax_device::{Screen, ScreenSource};
+use parallax_device_kobo::KoboDevice;
+use parallax_library::{Book, Direction, Format, Library};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
@@ -20,7 +20,7 @@ pub(crate) struct ComicTarget {
 }
 
 impl ComicTarget {
-    pub fn new(library: &Library, device: &KoboDevice) -> erc_library::Result<Self> {
+    pub fn new(library: &Library, device: &KoboDevice) -> parallax_library::Result<Self> {
         let Screen {
             width,
             height,
@@ -34,7 +34,7 @@ impl ComicTarget {
             library.setting(key).map(|s| {
                 s.and_then(|v| v.parse::<u8>().ok())
                     .filter(|&v| v <= 200)
-                    .unwrap_or(erc_comic::prepare::RECOMMENDED_PERCENT)
+                    .unwrap_or(parallax_comic::prepare::RECOMMENDED_PERCENT)
             })
         };
         Ok(Self {
@@ -125,8 +125,8 @@ impl ComicTarget {
             description: book.description.as_deref(),
             source: book.identifiers.iter().find_map(|identifier| {
                 let catalog = match identifier.scheme.as_deref()? {
-                    "mangainfo-url" => erc_metadata::comics::Catalog::Mangainfo,
-                    "metron-url" => erc_metadata::comics::Catalog::Metron,
+                    "mangainfo-url" => parallax_metadata::comics::Catalog::Mangainfo,
+                    "metron-url" => parallax_metadata::comics::Catalog::Metron,
                     _ => return None,
                 };
                 catalog
@@ -226,7 +226,7 @@ pub(crate) fn check_space(device: &KoboDevice, path: &std::path::Path) -> Result
 
 #[cfg(test)]
 mod tests {
-    use erc_comic::prepare::Options;
+    use parallax_comic::prepare::Options;
 
     #[test]
     fn options_added_while_off_keep_fingerprints_of_existing_copies() {

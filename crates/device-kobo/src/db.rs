@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
-use erc_device::{Collection, DeviceBook, ReadStatus};
+use parallax_device::{Collection, DeviceBook, ReadStatus};
 use rusqlite::{Connection, OpenFlags, Row};
 
 use crate::error::{Error, Result};

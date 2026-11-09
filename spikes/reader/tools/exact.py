@@ -33,4 +33,4 @@ for title,ch,cdate in k.execute("select Title,ChapterIDBookmarked,DateCreated fr
     dates['hit' if hit else 'miss'].append((cdate or '')[:10])
 print('exact text at mapped offset',exact,'of',tot)
 for k_,v in dates.items(): print(k_,len(v),sorted(v)[:3],'..',sorted(v)[-3:])
-print('first ERC commit:')
+print('first Parallax commit:')

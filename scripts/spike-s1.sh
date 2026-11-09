@@ -10,7 +10,7 @@ set -euo pipefail
 
 VOL="${KOBO_VOLUME:-/Volumes/KOBOeReader}"
 DB="$VOL/.kobo/KoboReader.sqlite"
-DIR_NAME="ERC-Spike"
+DIR_NAME="Parallax-Spike"
 DEV_DIR="$VOL/$DIR_NAME"
 CID_PREFIX="file:///mnt/onboard/$DIR_NAME"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -56,15 +56,15 @@ book_id, title, out = sys.argv[1:4]
 opf = f"""<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uid">
  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-  <dc:title>{title}</dc:title><dc:creator>ERC Spike</dc:creator>
-  <dc:language>en</dc:language><dc:identifier id="uid">urn:uuid:erc-spike-{book_id}</dc:identifier>
+  <dc:title>{title}</dc:title><dc:creator>Parallax Spike</dc:creator>
+  <dc:language>en</dc:language><dc:identifier id="uid">urn:uuid:parallax-spike-{book_id}</dc:identifier>
  </metadata>
  <manifest><item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/>
   <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/></manifest>
  <spine toc="ncx"><itemref idref="c1"/></spine>
 </package>"""
 ncx = f"""<?xml version="1.0" encoding="utf-8"?>
-<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1"><head><meta name="dtb:uid" content="urn:uuid:erc-spike-{book_id}"/></head>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1"><head><meta name="dtb:uid" content="urn:uuid:parallax-spike-{book_id}"/></head>
 <docTitle><text>{title}</text></docTitle><navMap><navPoint id="p1" playOrder="1"><navLabel><text>Start</text></navLabel><content src="c1.xhtml"/></navPoint></navMap></ncx>"""
 body = f"""<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"><head><title>{title}</title></head>
@@ -97,9 +97,9 @@ cmd_prepare() {
   backup prepare
   local tmp
   tmp="$(mktemp -d)"
-  make_epub a "ERC Spike A" "$tmp/spike-a.epub"
-  make_epub b "ERC Spike B" "$tmp/spike-b.epub"
-  make_epub c "ERC Spike C" "$tmp/spike-c.epub"
+  make_epub a "Parallax Spike A" "$tmp/spike-a.epub"
+  make_epub b "Parallax Spike B" "$tmp/spike-b.epub"
+  make_epub c "Parallax Spike C" "$tmp/spike-c.epub"
   mkdir "$DEV_DIR"
   for f in "$tmp"/*.epub; do cp -X "$f" "$DEV_DIR/"; done
   rm -rf "$tmp"
@@ -108,19 +108,19 @@ cmd_prepare() {
 
   sql <<SQL
 BEGIN;
-$(add_shelf 'ERC Spike A')
-$(add_shelf 'ERC Spike B')
+$(add_shelf 'Parallax Spike A')
+$(add_shelf 'Parallax Spike B')
 -- A: membership row written before the book exists in content.
-$(add_member 'ERC Spike A' "$CID_PREFIX/spike-a.epub")
+$(add_member 'Parallax Spike A' "$CID_PREFIX/spike-a.epub")
 -- B: membership written by a trigger at the moment Nickel imports the book.
-CREATE TABLE IF NOT EXISTS _erc_pending_shelf (ContentId TEXT, ShelfName TEXT, PRIMARY KEY (ContentId, ShelfName));
-INSERT OR IGNORE INTO _erc_pending_shelf VALUES ('$CID_PREFIX/spike-b.epub', 'ERC Spike B');
-CREATE TRIGGER IF NOT EXISTS _erc_content_insert AFTER INSERT ON content
-  WHEN EXISTS (SELECT 1 FROM _erc_pending_shelf WHERE ContentId = new.ContentID)
+CREATE TABLE IF NOT EXISTS _parallax_pending_shelf (ContentId TEXT, ShelfName TEXT, PRIMARY KEY (ContentId, ShelfName));
+INSERT OR IGNORE INTO _parallax_pending_shelf VALUES ('$CID_PREFIX/spike-b.epub', 'Parallax Spike B');
+CREATE TRIGGER IF NOT EXISTS _parallax_content_insert AFTER INSERT ON content
+  WHEN EXISTS (SELECT 1 FROM _parallax_pending_shelf WHERE ContentId = new.ContentID)
 BEGIN
   INSERT OR IGNORE INTO ShelfContent (ShelfName, ContentId, DateModified, _IsDeleted, _IsSynced)
-    SELECT ShelfName, new.ContentID, $NOW, 'false', 'false' FROM _erc_pending_shelf WHERE ContentId = new.ContentID;
-  DELETE FROM _erc_pending_shelf WHERE ContentId = new.ContentID;
+    SELECT ShelfName, new.ContentID, $NOW, 'false', 'false' FROM _parallax_pending_shelf WHERE ContentId = new.ContentID;
+  DELETE FROM _parallax_pending_shelf WHERE ContentId = new.ContentID;
 END;
 COMMIT;
 SQL
@@ -136,11 +136,11 @@ cmd_check() {
   echo "== test books in content"
   sqlite3 -header -column "$copy" "SELECT substr(ContentID, length('$CID_PREFIX/')+1) AS file, Title, Series, SeriesNumber FROM content WHERE ContentType=6 AND ContentID LIKE '$CID_PREFIX/%' ORDER BY 1"
   echo "== test collections"
-  sqlite3 -header -column "$copy" "SELECT Name, _IsDeleted, _IsSynced FROM Shelf WHERE Name LIKE 'ERC Spike%'"
+  sqlite3 -header -column "$copy" "SELECT Name, _IsDeleted, _IsSynced FROM Shelf WHERE Name LIKE 'Parallax Spike%'"
   echo "== memberships"
-  sqlite3 -header -column "$copy" "SELECT ShelfName, substr(ContentId, length('$CID_PREFIX/')+1) AS file, _IsDeleted, (SELECT count(*) FROM content c WHERE c.ContentID = sc.ContentId) AS imported FROM ShelfContent sc WHERE ShelfName LIKE 'ERC Spike%'"
+  sqlite3 -header -column "$copy" "SELECT ShelfName, substr(ContentId, length('$CID_PREFIX/')+1) AS file, _IsDeleted, (SELECT count(*) FROM content c WHERE c.ContentID = sc.ContentId) AS imported FROM ShelfContent sc WHERE ShelfName LIKE 'Parallax Spike%'"
   echo "== pending (trigger side table; empty after B imported)"
-  sqlite3 "$copy" "SELECT * FROM _erc_pending_shelf" 2>/dev/null || echo "(no side table)"
+  sqlite3 "$copy" "SELECT * FROM _parallax_pending_shelf" 2>/dev/null || echo "(no side table)"
   echo "== ghost ._ rows"
   sqlite3 "$copy" "SELECT count(*) FROM content WHERE instr(ContentID, '/._') > 0"
   rm -rf "$(dirname "$copy")"
@@ -153,9 +153,9 @@ cmd_replug_test() {
   backup replug
   sql <<SQL
 BEGIN;
-$(add_shelf 'ERC Spike C')
-$(add_member 'ERC Spike C' "$cid")
-UPDATE content SET Series='ERC Spike Series', SeriesNumber='1', SeriesID='ERC Spike Series' WHERE ContentID='$cid' AND ContentType=6;
+$(add_shelf 'Parallax Spike C')
+$(add_member 'Parallax Spike C' "$cid")
+UPDATE content SET Series='Parallax Spike Series', SeriesNumber='1', SeriesID='Parallax Spike Series' WHERE ContentID='$cid' AND ContentType=6;
 COMMIT;
 SQL
   finish_write
@@ -169,10 +169,10 @@ cmd_cleanup() {
   # Book rows are left for Nickel to drop when it sees the files are gone.
   sql <<SQL
 BEGIN;
-DROP TRIGGER IF EXISTS _erc_content_insert;
-DROP TABLE IF EXISTS _erc_pending_shelf;
-DELETE FROM ShelfContent WHERE ShelfName LIKE 'ERC Spike%';
-DELETE FROM Shelf WHERE Name LIKE 'ERC Spike%';
+DROP TRIGGER IF EXISTS _parallax_content_insert;
+DROP TABLE IF EXISTS _parallax_pending_shelf;
+DELETE FROM ShelfContent WHERE ShelfName LIKE 'Parallax Spike%';
+DELETE FROM Shelf WHERE Name LIKE 'Parallax Spike%';
 COMMIT;
 SQL
   finish_write

@@ -41,7 +41,7 @@ pub enum Error {
     CannotRestore(String),
     #[error("{0}")]
     InvalidCollection(String),
-    #[error("ERC only reads this Kobo: {0}")]
+    #[error("Parallax only reads this Kobo: {0}")]
     UnsupportedDevice(String),
     #[error("Kobo database error: {0}")]
     Sqlite(#[from] rusqlite::Error),

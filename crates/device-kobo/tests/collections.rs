@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use erc_device_kobo::{
+use parallax_device_kobo::{
     Error, KoboDevice, add_to_collection, create_collection, delete_collection,
     remove_from_collection, rename_collection,
 };
@@ -44,8 +44,8 @@ fn fake_kobo(root: &Path) -> KoboDevice {
 fn with_writer<T>(
     kobo: &KoboDevice,
     dir: &Path,
-    f: impl FnOnce(&rusqlite::Transaction) -> erc_device_kobo::Result<T>,
-) -> erc_device_kobo::Result<T> {
+    f: impl FnOnce(&rusqlite::Transaction) -> parallax_device_kobo::Result<T>,
+) -> parallax_device_kobo::Result<T> {
     let mut writer = kobo.open_writer(&dir.join("backups"))?;
     let value = writer.transaction(f);
     writer.close()?;

@@ -151,7 +151,7 @@ impl Epub {
                         "image/webp" => "webp",
                         _ => "jpg",
                     };
-                    let href = format!("erc-cover.{ext}");
+                    let href = format!("parallax-cover.{ext}");
                     new_opf = opf::add_cover_item(&new_opf, &href, &cover.media_type)?;
                     cover_entry = Some((resolve_href(&self.opf_path, &href), &cover.data));
                 }

@@ -1,5 +1,5 @@
 [package]
-name = "erc-metadata"
+name = "parallax-metadata"
 description = "Filling in book metadata (series, genres) from public sources"
 version.workspace = true
 edition.workspace = true

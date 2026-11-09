@@ -8,7 +8,7 @@
 // CSP loosened must leave that mark, or the test can't see anything.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -51,7 +51,7 @@ let server;
 const ids = {};
 
 const libraryFile = () =>
-  join(home, "Library/Application Support/dev.erc.companion/library/library.sqlite");
+  join(home, "Library/Application Support/dev.parallax.app/library/library.sqlite");
 
 function query(sql, ...params) {
   const db = new DatabaseSync(libraryFile());
@@ -74,9 +74,9 @@ function read(id, steps = [], env = {}) {
     timeout: RUN_TIMEOUT_MS,
     env: {
       HOME: home,
-      ERC_E2E_OPEN: String(id),
-      ERC_E2E_STEPS: steps.join("@@"),
-      ERC_E2E_SECS: "4",
+      PARALLAX_E2E_OPEN: String(id),
+      PARALLAX_E2E_STEPS: steps.join("@@"),
+      PARALLAX_E2E_SECS: "4",
       ...env,
     },
   });
@@ -88,9 +88,9 @@ function inSettings(steps) {
     timeout: RUN_TIMEOUT_MS,
     env: {
       HOME: home,
-      ERC_E2E_SETTINGS: "1",
-      ERC_E2E_STEPS: steps.join("@@"),
-      ERC_E2E_SECS: "2",
+      PARALLAX_E2E_SETTINGS: "1",
+      PARALLAX_E2E_STEPS: steps.join("@@"),
+      PARALLAX_E2E_SECS: "2",
     },
   });
 }
@@ -116,23 +116,27 @@ before(async () => {
     await run("pnpm", ["--dir", "app", "build"]);
     await run("cargo", [
       "build",
-      "-p", "erc-app",
-      "-p", "erc-cli",
-      "--features", "erc-app/e2e",
+      "-p", "parallax-app",
+      "-p", "parallax-cli",
+      "--features", "parallax-app/e2e",
       "--target-dir", "target/e2e",
     ]);
   }
   home = await mkdtemp(join(tmpdir(), "parallax-reader-e2e-"));
-  await run(join(bin, "erc"), [
+  await run(join(bin, "parallax-cli"), [
     "library", "add",
     join(fixtures, "hostile.epub"),
     join(fixtures, "long.epub"),
   ], { env: { HOME: home } });
   const books = JSON.parse(
-    await run(join(bin, "erc"), ["--json", "library", "ls"], { env: { HOME: home } }),
+    await run(join(bin, "parallax-cli"), ["--json", "library", "ls"], { env: { HOME: home } }),
   );
   for (const book of books) ids[book.title] = book.id;
   assert.ok(ids.Hostile && ids.Long, "fixtures weren't added");
+
+  // The first desktop launch must still see a library created before the rename.
+  const support = join(home, "Library/Application Support");
+  await rename(join(support, "dev.parallax.app"), join(support, "dev.erc.companion"));
 
   server = createServer((request, response) => {
     requests.push(request.url);
@@ -163,7 +167,7 @@ test("a hostile book runs no scripts and reaches no network", async () => {
 
 test("control: with the CSP loosened, the same scripts are caught", async () => {
   requests = [];
-  await read(ids.Hostile, everySection, { ERC_E2E_LOOSE: "1" });
+  await read(ids.Hostile, everySection, { PARALLAX_E2E_LOOSE: "1" });
   assert.match(readerSettings() ?? "", /"fontSize":200/, "scripts ran but weren't seen");
   assert.ok(requests.some((url) => url.startsWith("/exec/")), "no script reached the network");
   // The ACL holds even when the CSP doesn't.
@@ -240,7 +244,7 @@ test("the Settings window changes settings, and backups at once", async () => {
   assert.equal(setting("kobo_rules"), "off");
   const policy = JSON.parse(
     await readFile(
-      join(home, "Library/Application Support/dev.erc.companion/device-backups/policy.json"),
+      join(home, "Library/Application Support/dev.parallax.app/device-backups/policy.json"),
       "utf8",
     ),
   );
@@ -313,7 +317,7 @@ async function addComic(title, direction) {
   await writeFile(info,
     `<ComicInfo><Title>${title}</Title><Manga>${direction === "rtl" ? "YesAndRightToLeft" : "No"}</Manga><Pages><Page Image="3" Bookmark="The next chapter"/></Pages></ComicInfo>`);
   await run("zip", ["-jq", archive, ...files, info]);
-  await run(join(bin, "erc"), ["library", "add", archive], { env: { HOME: home } });
+  await run(join(bin, "parallax-cli"), ["library", "add", archive], { env: { HOME: home } });
   return query("SELECT id FROM books WHERE title = ?", title)[0].id;
 }
 

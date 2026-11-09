@@ -5,7 +5,7 @@
 //! when only that is missing) and genres the book isn't already tagged with.
 //! Local clues come first: the series Nickel shows on a connected Kobo and
 //! the Kobo folder a book sits in ("KEpub/Fantasy/…"). Then the online
-//! sources in `erc-metadata`. Genres always use the standard names
+//! sources in `parallax-metadata`. Genres always use the standard names
 //! ("Science Fiction", never "Sci-Fi"), so every source fills the same tag
 //! and collections made from them don't split.
 
@@ -16,15 +16,15 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use erc_device::DeviceBook;
-use erc_device_kobo::KoboDevice;
-use erc_epub::{Contributor, Identifier};
-use erc_library::{Book, Kind, Library};
-use erc_metadata::comics::{Catalog, CatalogRecord, IssueChoice, MatchError};
-use erc_metadata::genres;
+use parallax_device::DeviceBook;
+use parallax_device_kobo::KoboDevice;
+use parallax_epub::{Contributor, Identifier};
+use parallax_library::{Book, Kind, Library};
+use parallax_metadata::comics::{Catalog, CatalogRecord, IssueChoice, MatchError};
+use parallax_metadata::genres;
 
 use crate::genres::folder_genre;
-use erc_metadata::{CachedFetcher, Confidence, Fetch, HttpFetcher, Lookup, Query};
+use parallax_metadata::{CachedFetcher, Confidence, Fetch, HttpFetcher, Lookup, Query};
 use serde::{Deserialize, Serialize};
 
 /// Library setting holding the user's Google Books API key.
@@ -121,7 +121,7 @@ pub struct DeviceClues {
 }
 
 impl DeviceClues {
-    pub fn read(library: &Library, device: &KoboDevice) -> erc_device_kobo::Result<Self> {
+    pub fn read(library: &Library, device: &KoboDevice) -> parallax_device_kobo::Result<Self> {
         let books = device.open_db()?.books()?;
         let copies = library
             .device_copies(&device.version().serial)
@@ -249,7 +249,7 @@ fn needs_lookup(book: &Book) -> bool {
 }
 
 pub struct Options {
-    general: erc_metadata::Options,
+    general: parallax_metadata::Options,
     metron_token: Option<String>,
     comic_files: HashMap<i64, PathBuf>,
     selected_issue: Option<(i64, u64)>,
@@ -264,7 +264,7 @@ impl Options {
 /// Lookup options from the library's settings.
 pub fn options(library: &Library, books: &[Book]) -> Options {
     Options {
-        general: erc_metadata::Options {
+        general: parallax_metadata::Options {
             google_books_key: library.setting(GOOGLE_BOOKS_KEY).ok().flatten(),
         },
         metron_token: library
@@ -384,9 +384,9 @@ fn propose_book(
     }
     let isbn = book
         .isbn()
-        .filter(|isbn| book.kind == Kind::Book || erc_metadata::comics::isbn(isbn).is_some());
+        .filter(|isbn| book.kind == Kind::Book || parallax_metadata::comics::isbn(isbn).is_some());
     let lookup = (book.kind == Kind::Book || isbn.is_some()).then(|| {
-        erc_metadata::lookup(
+        parallax_metadata::lookup(
             fetch,
             &Query {
                 title: book.title.clone(),
@@ -441,7 +441,7 @@ pub fn propose(
 }
 
 /// Applies accepted changes; returns the updated books.
-pub fn apply(library: &mut Library, accepted: &[Accepted]) -> erc_library::Result<Vec<Book>> {
+pub fn apply(library: &mut Library, accepted: &[Accepted]) -> parallax_library::Result<Vec<Book>> {
     if !accepted.is_empty() {
         library.snapshot("enhance", Some(&format!("{} books", accepted.len())))?;
     }
@@ -513,7 +513,7 @@ pub fn apply(library: &mut Library, accepted: &[Accepted]) -> erc_library::Resul
 
 #[cfg(test)]
 mod tests {
-    use erc_metadata::{GenreFound, SeriesFound, Source};
+    use parallax_metadata::{GenreFound, SeriesFound, Source};
 
     use super::*;
 
@@ -536,9 +536,9 @@ mod tests {
             pages_estimated: true,
             original_name: "t.epub".into(),
             file_size: 1,
-            format: erc_library::Format::Epub,
-            kind: erc_library::Kind::Book,
-            direction: erc_library::Direction::Ltr,
+            format: parallax_library::Format::Epub,
+            kind: parallax_library::Kind::Book,
+            direction: parallax_library::Direction::Ltr,
             has_cover: false,
             custom_cover: false,
             cover_upscaled: false,
@@ -556,7 +556,7 @@ mod tests {
             sideloaded: true,
             series: series.map(Into::into),
             series_number: series.map(|_| "3".into()),
-            read_status: erc_device::ReadStatus::Unread,
+            read_status: parallax_device::ReadStatus::Unread,
             percent_read: 0,
             last_read: None,
             reading_time_secs: None,

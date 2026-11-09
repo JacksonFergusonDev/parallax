@@ -265,7 +265,7 @@ pub fn cover_item(doc: &Document) -> Option<(String, String)> {
 /// cover: removes other `<meta name="cover">` pointers and other items'
 /// `cover-image` property, then declares it both ways.
 pub fn add_cover_item(opf: &str, href: &str, media_type: &str) -> Result<String> {
-    const ID: &str = "erc-cover";
+    const ID: &str = "parallax-cover";
     let doc = Document::parse(opf).map_err(|e| Error::Invalid(format!("OPF: {e}")))?;
     let meta = metadata_node(&doc).ok_or_else(|| Error::Invalid("OPF has no <metadata>".into()))?;
     let manifest = doc
@@ -475,7 +475,7 @@ fn render_managed(
     let mut lines = vec![format!("<{d}:title{dd}>{}</{d}:title>", esc(&edit.title))];
     for (i, author) in edit.authors.iter().enumerate() {
         if epub3 {
-            let id = format!("erc-creator-{}", i + 1);
+            let id = format!("parallax-creator-{}", i + 1);
             lines.push(format!(
                 "<{d}:creator{dd} id=\"{id}\">{}</{d}:creator>",
                 esc(author)
@@ -495,7 +495,7 @@ fn render_managed(
     for (i, c) in edit.contributors.iter().flatten().enumerate() {
         let role = esc(&c.role.trim().to_lowercase());
         if epub3 {
-            let id = format!("erc-contributor-{}", i + 1);
+            let id = format!("parallax-contributor-{}", i + 1);
             lines.push(format!(
                 "<{d}:contributor{dd} id=\"{id}\">{}</{d}:contributor>",
                 esc(&c.name)
@@ -529,16 +529,16 @@ fn render_managed(
         }
         if epub3 {
             lines.push(format!(
-                r#"<meta property="belongs-to-collection" id="erc-series">{}</meta>"#,
+                r#"<meta property="belongs-to-collection" id="parallax-series">{}</meta>"#,
                 esc(series)
             ));
             lines.push(
-                r##"<meta refines="#erc-series" property="collection-type">series</meta>"##
+                r##"<meta refines="#parallax-series" property="collection-type">series</meta>"##
                     .to_owned(),
             );
             if let Some(index) = &edit.series_index {
                 lines.push(format!(
-                    r##"<meta refines="#erc-series" property="group-position">{}</meta>"##,
+                    r##"<meta refines="#parallax-series" property="group-position">{}</meta>"##,
                     esc(index)
                 ));
             }

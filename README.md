@@ -16,7 +16,9 @@ Licensed under GPLv3. Device logic is ported from [calibre](https://calibre-eboo
 
 Choose **Library tools › Add comic folder…** to bundle pages or chapter archives as a volume. The comic reader supports spreads, vertical scroll, zoom and bookmarks. Parallax prepares comic pages for the Kobo screen when sending. See the [hardware checklist](docs/hardware-checks.md#comics) for model verification.
 
-Every change to the Kobo's database is backed up first, compressed, to `~/Library/Application Support/dev.erc.companion/device-backups/`. Removed books are held on your Mac for 30 days, and the library is saved before removals and bulk changes. **Revert changes…**, in both the Library and On Kobo tabs, lists these points by time and goes back to one. How things are now is saved first, so a revert can be undone too.
+Every change to the Kobo's database is backed up first, compressed, to `~/Library/Application Support/dev.parallax.app/device-backups/`. Removed books are held on your Mac for 30 days, and the library is saved before removals and bulk changes. **Revert changes…**, in both the Library and On Kobo tabs, lists these points by time and goes back to one. How things are now is saved first, so a revert can be undone too.
+
+When upgrading, Parallax moves the existing library and backups into the new app data folder if it does not already exist. Existing Kobo history stays readable and moves to `.parallax` the next time Parallax records a change.
 
 Brand and UI rules: [Parallax design system](docs/design-system.md).
 
@@ -36,14 +38,14 @@ just build    # macOS .app bundle
 
 `just dev` prompts before stopping processes that occupy Vite’s port (1420). Accepting retries app startup without repeating setup; declining or closing input leaves those processes running.
 
-`erc` is a command-line companion for development and scripting: `cargo run -p erc-cli -- --help`. It shares the desktop app’s library and core operations.
+`parallax-cli` is a command-line companion for development and scripting: `cargo run -p parallax-cli -- --help`. It shares the desktop app’s library and core operations.
 
 The CLI uses `comfy-table` for device, book, collection, cover, rule and transfer-result tables; `console` for coloured status labels; and `indicatif` for transfer, Kobo-import and metadata-lookup progress bars on stderr. Redirected output uses plain tables and progress logs. Set `NO_COLOR=1` to disable colours; `--json` keeps existing JSON responses free of styling and suppresses progress.
 
 ```bash
-cargo run -p erc-cli -- library ls
-cargo run -p erc-cli -- library ls --json
-cargo run -p erc-cli -- library enhance  # preview metadata proposals
+cargo run -p parallax-cli -- library ls
+cargo run -p parallax-cli -- library ls --json
+cargo run -p parallax-cli -- library enhance  # preview metadata proposals
 ```
 
 Project plan and progress: [docs/PLAN.md](docs/PLAN.md), [PROGRESS.md](PROGRESS.md). Device findings: [docs/device-notes.md](docs/device-notes.md). Manual device checks: [docs/hardware-checks.md](docs/hardware-checks.md). App caching and invalidation: [docs/app-caching.md](docs/app-caching.md).

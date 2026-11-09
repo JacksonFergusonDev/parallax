@@ -1,5 +1,5 @@
 [package]
-name = "erc-convert"
+name = "parallax-convert"
 description = "Ebook format conversion (Amazon formats to EPUB via boko, EPUB to KEPUB via kepubify)"
 version.workspace = true
 edition.workspace = true
@@ -13,7 +13,7 @@ thiserror.workspace = true
 
 
 [dev-dependencies]
-erc-epub.workspace = true
+parallax-epub.workspace = true
 zip.workspace = true
 
 [lints]

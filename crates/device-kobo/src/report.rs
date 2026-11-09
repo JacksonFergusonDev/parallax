@@ -1,9 +1,9 @@
-//! A device report: what someone with a Kobo ERC doesn't know yet can send
+//! A device report: what someone with a Kobo Parallax doesn't know yet can send
 //! so support for it can be added and tested without the device.
 //!
 //! It holds the model id, firmware, database version and schema (the
 //! `CREATE` statements, no rows), how yes/no values are stored, row counts,
-//! the cover-cache file kinds with their pixel sizes, and ERC's own verdict.
+//! the cover-cache file kinds with their pixel sizes, and Parallax's own verdict.
 //! It never holds the serial number, book titles, file names, reading data,
 //! highlights or account details. Gathering it only reads: the database is
 //! opened immutable and nothing on the device is written.
@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::KoboDevice;
 use crate::db::{columns, open_immutable};
-use crate::state::ERC_VERSION;
+use crate::state::PARALLAX_VERSION;
 
 /// Bumped when fields change meaning.
 pub const REPORT_FORMAT: u32 = 1;
@@ -36,15 +36,16 @@ const BOOLEAN_COLUMNS: [(&str, &str); 6] = [
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DeviceReport {
     pub format: u32,
-    pub erc_version: String,
+    #[serde(alias = "erc_version")]
+    pub parallax_version: String,
     pub created: String,
     /// From `.kobo/version`, e.g. `00000000-0000-0000-0000-000000000388`.
     pub model_id: String,
-    /// ERC's name for it; "Kobo eReader" when the id is new to ERC.
+    /// Parallax's name for it; "Kobo eReader" when the id is new to Parallax.
     pub model_name: String,
     pub firmware: String,
     pub db_version: Option<u32>,
-    /// Why ERC would only read this Kobo; `None` when it would change it.
+    /// Why Parallax would only read this Kobo; `None` when it would change it.
     pub read_only: Option<String>,
     /// `CREATE` statements for the database's tables, indexes and triggers.
     pub schema: Vec<String>,
@@ -79,7 +80,7 @@ impl KoboDevice {
         let version = self.version();
         let mut report = DeviceReport {
             format: REPORT_FORMAT,
-            erc_version: ERC_VERSION.to_owned(),
+            parallax_version: PARALLAX_VERSION.to_owned(),
             created: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
             model_id: version.model_id.clone(),
             model_name: version.model_name().to_owned(),

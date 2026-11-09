@@ -3,7 +3,7 @@
 //! The `Event` table counts things per book, and its rows outlive the book:
 //! they stay after a book is removed. Kobo doesn't document the event types;
 //! type 5 is recorded each time a book is finished (its count goes up on a
-//! re-read and `LastOccurrence` is the latest finish), which is what ERC uses
+//! re-read and `LastOccurrence` is the latest finish), which is what Parallax uses
 //! for "books finished". The others (opens, page turns…) aren't used.
 
 use std::collections::HashMap;

@@ -1,6 +1,6 @@
 //! Exporting a book's highlights and notes.
 
-use erc_library::{Annotation, Book};
+use parallax_library::{Annotation, Book};
 use serde::Serialize;
 
 /// Readable notes: the book, then each chapter's highlights as quotes with
@@ -102,9 +102,9 @@ mod tests {
             pages_estimated: true,
             original_name: "d.epub".into(),
             file_size: 1,
-            format: erc_library::Format::Epub,
-            kind: erc_library::Kind::Book,
-            direction: erc_library::Direction::Ltr,
+            format: parallax_library::Format::Epub,
+            kind: parallax_library::Kind::Book,
+            direction: parallax_library::Direction::Ltr,
             has_cover: false,
             custom_cover: false,
             cover_upscaled: false,

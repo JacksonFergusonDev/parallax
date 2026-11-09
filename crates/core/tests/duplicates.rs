@@ -1,12 +1,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use erc_core::duplicates::{
+use parallax_core::duplicates::{
     LIBRARY_SCOPE, Reason, device_duplicates, device_scope, library_duplicates,
 };
-use erc_device_kobo::KoboDevice;
-use erc_epub::Epub;
-use erc_library::{ImportOutcome, Library};
+use parallax_device_kobo::KoboDevice;
+use parallax_epub::Epub;
+use parallax_library::{ImportOutcome, Library};
 use rusqlite::{Connection, params};
 
 const VERSION: &str =
@@ -33,7 +33,7 @@ fn library_groups_suggest_keeping_the_richer_copy() {
     // Same book, different file: a tagged copy with a subtitle.
     let epub = Epub::open(fixture("minimal.epub")).unwrap();
     let mut edit = library.book(plain).unwrap().edit();
-    edit.title = "ERC Test Book: Special Edition".into();
+    edit.title = "Parallax Test Book: Special Edition".into();
     edit.tags = vec!["Fiction".into()];
     let copy = dir.path().join("copy.epub");
     epub.write_with_metadata(&edit, &copy).unwrap();

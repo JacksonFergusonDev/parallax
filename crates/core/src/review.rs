@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use erc_library::{Book, BookFiles};
+use parallax_library::{Book, BookFiles};
 use serde::Serialize;
 
 use crate::duplicates::LibraryGroup;

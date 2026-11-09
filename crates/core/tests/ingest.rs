@@ -3,9 +3,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use erc_convert::amazon::InProcess;
-use erc_core::ingest::{Error, import_file};
-use erc_library::{ImportOutcome, Library};
+use parallax_convert::amazon::InProcess;
+use parallax_core::ingest::{Error, import_file};
+use parallax_library::{ImportOutcome, Library};
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -26,7 +26,7 @@ fn an_amazon_book_is_stored_as_an_epub_and_only_added_once() {
     assert_eq!(book.title, "Amazon Fixture");
     assert_eq!(book.original_name, "book.azw3");
     assert!(book.has_cover);
-    assert!(erc_epub::Epub::open(library.book_file(book.id)).is_ok());
+    assert!(parallax_epub::Epub::open(library.book_file(book.id)).is_ok());
 
     let again = import_file(&mut library, &InProcess, &path).unwrap();
     assert!(matches!(again, ImportOutcome::AlreadyInLibrary { .. }));

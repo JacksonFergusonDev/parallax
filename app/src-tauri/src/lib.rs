@@ -7,28 +7,29 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use erc_convert::Kepubify;
-use erc_convert::amazon::ChildProcess;
-use erc_core::collections::{CollectionChange, FolderGroup};
-use erc_core::device::{CatalogBook, OnDevice, RemoveOutcome, device_catalog};
-use erc_core::duplicates::{DeviceGroup, LibraryGroup};
-use erc_core::enhance::{Accepted, DeviceClues, Proposal};
-use erc_core::import::DeviceImportOutcome;
-use erc_core::ingest::{import_comic_folder, import_file};
-use erc_core::rules::PlannedCollection;
-use erc_core::rules::Trigger;
-use erc_core::send::{SendOutcome, send_library_books, update_on_device};
-use erc_covers::{Candidate, CoverQuery};
-use erc_device::{Collection, DeviceInfo};
-use erc_device_kobo::{
-    BackupInfo, BookCheck, ErcState, KoboDevice, MACOS_VOLUMES, RestoreOutcome, tidy_apple_double,
+use parallax_convert::Kepubify;
+use parallax_convert::amazon::ChildProcess;
+use parallax_core::collections::{CollectionChange, FolderGroup};
+use parallax_core::device::{CatalogBook, OnDevice, RemoveOutcome, device_catalog};
+use parallax_core::duplicates::{DeviceGroup, LibraryGroup};
+use parallax_core::enhance::{Accepted, DeviceClues, Proposal};
+use parallax_core::import::DeviceImportOutcome;
+use parallax_core::ingest::{import_comic_folder, import_file};
+use parallax_core::rules::PlannedCollection;
+use parallax_core::rules::Trigger;
+use parallax_core::send::{SendOutcome, send_library_books, update_on_device};
+use parallax_covers::{Candidate, CoverQuery};
+use parallax_device::{Collection, DeviceInfo};
+use parallax_device_kobo::{
+    BackupInfo, BookCheck, DeviceState, KoboDevice, MACOS_VOLUMES, RestoreOutcome,
+    tidy_apple_double,
 };
-use erc_epub::MetadataEdit;
-use erc_library::{
+use parallax_epub::MetadataEdit;
+use parallax_library::{
     Book, CUSTOM_COVER_MAX_HEIGHT, CoverQuality, ImportOutcome, Library, Reading, Rule, Snapshot,
     SnapshotRestore,
 };
-use erc_upscale::CoreMl;
+use parallax_upscale::CoreMl;
 use serde::Serialize;
 use tauri::ipc::{Channel, JavaScriptChannelId};
 use tauri::{AppHandle, Emitter, Manager, State, Webview};
@@ -273,8 +274,8 @@ fn library_update(state: State<AppState>, id: i64, edit: MetadataEdit) -> CmdRes
 fn library_set_comic_kind(
     state: State<AppState>,
     id: i64,
-    kind: erc_library::Kind,
-    direction: erc_library::Direction,
+    kind: parallax_library::Kind,
+    direction: parallax_library::Direction,
 ) -> CmdResult<LibraryBook> {
     let mut lib = state.library();
     let book = lib.set_comic_kind(id, kind, direction).map_err(err)?;
@@ -371,7 +372,7 @@ async fn books_on_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResul
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        erc_core::device::books_on_device(&lib, &kobo).map_err(err)
+        parallax_core::device::books_on_device(&lib, &kobo).map_err(err)
     })
     .await
     .map_err(err)?
@@ -440,7 +441,7 @@ async fn remove_from_device(
         if expected_serial.is_some_and(|serial| serial != kobo.version().serial) {
             return Err("A different Kobo is connected. Confirm the removal again.".into());
         }
-        erc_core::device::remove_from_device_with_progress(
+        parallax_core::device::remove_from_device_with_progress(
             Some(&lib),
             &kobo,
             &backups,
@@ -470,7 +471,7 @@ async fn update_books(
     mount: PathBuf,
     ids: Vec<i64>,
 ) -> CmdResult<Vec<SendOutcome>> {
-    let progress: Option<Channel<erc_core::send::Progress>> =
+    let progress: Option<Channel<parallax_core::send::Progress>> =
         progress.map(|id| id.channel_on(webview));
     let library = state.library.clone();
     let backups = state.backup_root.clone();
@@ -509,10 +510,10 @@ const HISTORY_SHOWN: usize = 200;
 #[derive(Serialize)]
 struct DeviceHistory {
     #[serde(flatten)]
-    state: ErcState,
-    /// ContentIDs of ERC-written books changed by something else since.
+    state: DeviceState,
+    /// ContentIDs of Parallax-written books changed by something else since.
     changed: Vec<String>,
-    /// ContentIDs of ERC-written books no longer on the device.
+    /// ContentIDs of Parallax-written books no longer on the device.
     missing: Vec<String>,
 }
 
@@ -529,12 +530,12 @@ async fn device_report(mount: PathBuf, path: PathBuf) -> CmdResult<()> {
     .map_err(err)?
 }
 
-/// What ERC's `/.erc/` records say about the device.
+/// What Parallax's `/.parallax/` records say about the device.
 #[tauri::command]
 async fn device_history(mount: PathBuf) -> CmdResult<DeviceHistory> {
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        let mut state = kobo.erc_state();
+        let mut state = kobo.parallax_state();
         let checks = state.check(kobo.mount());
         let ids = |want: BookCheck| {
             checks
@@ -559,14 +560,14 @@ async fn comic_transfer_estimate(
     state: State<'_, AppState>,
     mount: PathBuf,
     ids: Vec<i64>,
-) -> CmdResult<Option<erc_core::comic_send::TransferEstimate>> {
+) -> CmdResult<Option<parallax_core::comic_send::TransferEstimate>> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        erc_core::comic_send::estimate(&lib, &kobo, &ids)
+        parallax_core::comic_send::estimate(&lib, &kobo, &ids)
     })
     .await
     .map_err(err)?
@@ -581,7 +582,7 @@ async fn send_books(
     ids: Vec<i64>,
     collection: Option<String>,
 ) -> CmdResult<Vec<SendOutcome>> {
-    let progress: Option<Channel<erc_core::send::Progress>> =
+    let progress: Option<Channel<parallax_core::send::Progress>> =
         progress.map(|id| id.channel_on(webview));
     let library = state.library.clone();
     let backups = state.backup_root.clone();
@@ -604,7 +605,7 @@ async fn send_books(
                 .filter_map(|o| o.result.as_ref().ok().map(|s| s.content_id.clone()))
                 .collect();
             if !content_ids.is_empty() {
-                erc_core::collections::apply(
+                parallax_core::collections::apply(
                     &kobo,
                     &backups,
                     &[CollectionChange::Add { name, content_ids }],
@@ -615,7 +616,7 @@ async fn send_books(
         // Enabled grouping rules file the new books into existing collections
         // too (no-op otherwise), unless turned off in Settings.
         if rules {
-            erc_core::rules::run(&lib, &kobo, &backups, Trigger::Automatic).map_err(err)?;
+            parallax_core::rules::run(&lib, &kobo, &backups, Trigger::Automatic).map_err(err)?;
         }
         Ok(outcomes)
     })
@@ -625,7 +626,10 @@ async fn send_books(
 
 /// A book's highlights, notes and bookmarks, in reading order.
 #[tauri::command]
-fn annotations_list(state: State<AppState>, id: i64) -> CmdResult<Vec<erc_library::Annotation>> {
+fn annotations_list(
+    state: State<AppState>,
+    id: i64,
+) -> CmdResult<Vec<parallax_library::Annotation>> {
     state.library().annotations(id).map_err(err)
 }
 
@@ -642,8 +646,8 @@ fn annotations_export(
     let book = lib.book(id).map_err(err)?;
     let items = lib.annotations(id).map_err(err)?;
     let text = match format.as_str() {
-        "json" => erc_core::annotations::json(&book, &items),
-        _ => erc_core::annotations::markdown(&book, &items),
+        "json" => parallax_core::annotations::json(&book, &items),
+        _ => parallax_core::annotations::markdown(&book, &items),
     };
     std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
     Ok(items.len())
@@ -654,13 +658,13 @@ fn annotations_export(
 async fn library_check(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> CmdResult<Vec<erc_core::health::Finding>> {
+) -> CmdResult<Vec<parallax_core::health::Finding>> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        erc_core::health::check_library(&lib, |index, total| {
+        parallax_core::health::check_library(&lib, |index, total| {
             let _ = app.emit(
                 CHECK_PROGRESS,
                 ImportProgress {
@@ -678,9 +682,9 @@ async fn library_check(
 
 /// "Check this Kobo": mismatches, duplicate collections, leftover covers.
 #[tauri::command]
-async fn kobo_health(mount: PathBuf) -> CmdResult<erc_core::device::Health> {
+async fn kobo_health(mount: PathBuf) -> CmdResult<parallax_core::device::Health> {
     tauri::async_runtime::spawn_blocking(move || {
-        erc_core::device::health(&KoboDevice::open(&mount).map_err(err)?).map_err(err)
+        parallax_core::device::health(&KoboDevice::open(&mount).map_err(err)?).map_err(err)
     })
     .await
     .map_err(err)?
@@ -691,7 +695,7 @@ async fn kobo_health(mount: PathBuf) -> CmdResult<erc_core::device::Health> {
 #[tauri::command]
 async fn clean_images(mount: PathBuf) -> CmdResult<(usize, u64)> {
     tauri::async_runtime::spawn_blocking(move || {
-        erc_device_kobo::remove_orphaned_images(&KoboDevice::open(&mount).map_err(err)?)
+        parallax_device_kobo::remove_orphaned_images(&KoboDevice::open(&mount).map_err(err)?)
             .map_err(err)
     })
     .await
@@ -703,7 +707,7 @@ async fn merge_collections(state: State<'_, AppState>, mount: PathBuf) -> CmdRes
     let backups = state.backup_root.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        erc_core::device::merge_collections(&kobo, &backups).map_err(err)
+        parallax_core::device::merge_collections(&kobo, &backups).map_err(err)
     })
     .await
     .map_err(err)?
@@ -714,7 +718,7 @@ async fn set_reading_status(
     state: State<'_, AppState>,
     mount: PathBuf,
     content_ids: Vec<String>,
-    status: erc_device::ReadStatus,
+    status: parallax_device::ReadStatus,
     reset_position: bool,
     reset_time: bool,
 ) -> CmdResult<usize> {
@@ -725,7 +729,7 @@ async fn set_reading_status(
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        erc_core::device::change_reading_status(
+        parallax_core::device::change_reading_status(
             Some(&lib),
             &kobo,
             &backups,
@@ -746,7 +750,7 @@ async fn set_reading_status(
 async fn library_review(
     state: State<'_, AppState>,
     ids: Vec<i64>,
-) -> CmdResult<erc_core::review::Review> {
+) -> CmdResult<parallax_core::review::Review> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let (books, files, duplicates) = {
@@ -756,13 +760,13 @@ async fn library_review(
             let books = ids
                 .iter()
                 .map(|&id| lib.book(id))
-                .collect::<erc_library::Result<Vec<_>>>()
+                .collect::<parallax_library::Result<Vec<_>>>()
                 .map_err(err)?;
             let files: Vec<_> = ids.iter().map(|&id| lib.book_files(id)).collect();
-            let duplicates = erc_core::duplicates::library_duplicates(&lib).map_err(err)?;
+            let duplicates = parallax_core::duplicates::library_duplicates(&lib).map_err(err)?;
             (books, files, duplicates)
         };
-        Ok(erc_core::review::review(&books, &files, duplicates))
+        Ok(parallax_core::review::review(&books, &files, duplicates))
     })
     .await
     .map_err(err)?
@@ -791,7 +795,7 @@ async fn enhance_propose(
             let books = ids
                 .iter()
                 .map(|&id| lib.book(id))
-                .collect::<erc_library::Result<Vec<_>>>()
+                .collect::<parallax_library::Result<Vec<_>>>()
                 .map_err(err)?;
             let clues = match mount {
                 Some(mount) => {
@@ -799,14 +803,14 @@ async fn enhance_propose(
                 }
                 None => DeviceClues::default(),
             };
-            let fetch = erc_core::enhance::fetcher(&lib)?;
-            let mut options = erc_core::enhance::options(&lib, &books);
+            let fetch = parallax_core::enhance::fetcher(&lib)?;
+            let mut options = parallax_core::enhance::options(&lib, &books);
             if let Some(issue) = metron_issue {
                 options.select_metron_issue(ids[0], issue);
             }
             (books, options, clues, fetch)
         };
-        Ok(erc_core::enhance::propose(
+        Ok(parallax_core::enhance::propose(
             &books,
             &options,
             &fetch,
@@ -834,13 +838,13 @@ async fn enhance_propose(
 #[tauri::command]
 fn enhance_apply(state: State<AppState>, accepted: Vec<Accepted>) -> CmdResult<Vec<LibraryBook>> {
     let mut lib = state.library();
-    let books = erc_core::enhance::apply(&mut lib, &accepted).map_err(err)?;
+    let books = parallax_core::enhance::apply(&mut lib, &accepted).map_err(err)?;
     Ok(books.into_iter().map(|b| with_cover(&lib, b)).collect())
 }
 
 #[tauri::command]
 fn open_metadata_source(url: String) -> CmdResult<()> {
-    use erc_metadata::comics::Catalog;
+    use parallax_metadata::comics::Catalog;
 
     if ![Catalog::Mangainfo, Catalog::Metron]
         .iter()
@@ -868,7 +872,7 @@ async fn library_duplicates(state: State<'_, AppState>) -> CmdResult<Vec<Library
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        erc_core::duplicates::library_duplicates(&lib).map_err(err)
+        parallax_core::duplicates::library_duplicates(&lib).map_err(err)
     })
     .await
     .map_err(err)?
@@ -886,7 +890,7 @@ async fn device_duplicates(
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        erc_core::duplicates::device_duplicates(&lib, &kobo).map_err(err)
+        parallax_core::duplicates::device_duplicates(&lib, &kobo).map_err(err)
     })
     .await
     .map_err(err)?
@@ -903,10 +907,10 @@ async fn dismiss_duplicates(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let scope = match mount {
-            Some(mount) => erc_core::duplicates::device_scope(
+            Some(mount) => parallax_core::duplicates::device_scope(
                 &KoboDevice::open(&mount).map_err(err)?.version().serial,
             ),
-            None => erc_core::duplicates::LIBRARY_SCOPE.to_owned(),
+            None => parallax_core::duplicates::LIBRARY_SCOPE.to_owned(),
         };
         let lib = library
             .lock()
@@ -934,7 +938,7 @@ async fn import_from_device(
         let mut lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let outcomes = erc_core::import::import_from_device(
+        let outcomes = parallax_core::import::import_from_device(
             &mut lib,
             &kobo,
             content_ids.as_deref(),
@@ -971,7 +975,7 @@ async fn reading_stats(
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(mount) = mount {
             let kobo = KoboDevice::open(&mount).map_err(err)?;
-            let stats = erc_core::stats::reading_stats(&kobo, Some(&lib)).map_err(err)?;
+            let stats = parallax_core::stats::reading_stats(&kobo, Some(&lib)).map_err(err)?;
             let json = serde_json::to_string(&stats).map_err(err)?;
             lib.save_reading_stats(&kobo.version().serial, &json)
                 .map_err(err)?;
@@ -995,7 +999,7 @@ async fn reading_stats(
 async fn genres_plan(
     state: State<'_, AppState>,
     mount: Option<PathBuf>,
-) -> CmdResult<erc_core::genres::TidyPlan> {
+) -> CmdResult<parallax_core::genres::TidyPlan> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = mount
@@ -1005,7 +1009,7 @@ async fn genres_plan(
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        erc_core::genres::plan(&lib, kobo.as_ref()).map_err(err)
+        parallax_core::genres::plan(&lib, kobo.as_ref()).map_err(err)
     })
     .await
     .map_err(err)?
@@ -1016,8 +1020,8 @@ async fn genres_plan(
 async fn genres_apply(
     state: State<'_, AppState>,
     mount: Option<PathBuf>,
-    choice: erc_core::genres::TidyChoice,
-) -> CmdResult<erc_core::genres::TidyResult> {
+    choice: parallax_core::genres::TidyChoice,
+) -> CmdResult<parallax_core::genres::TidyResult> {
     let library = state.library.clone();
     let backups = state.backup_root.clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -1028,7 +1032,7 @@ async fn genres_apply(
         let mut lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        erc_core::genres::apply_tidy(&mut lib, kobo.as_ref(), &backups, &choice).map_err(err)
+        parallax_core::genres::apply_tidy(&mut lib, kobo.as_ref(), &backups, &choice).map_err(err)
     })
     .await
     .map_err(err)?
@@ -1037,7 +1041,7 @@ async fn genres_apply(
 /// calibre's current library folder, if there is one.
 #[tauri::command]
 fn calibre_default_library() -> Option<PathBuf> {
-    erc_core::calibre::default_library()
+    parallax_core::calibre::default_library()
 }
 
 /// What importing the calibre library at `path` would do (reads only).
@@ -1045,14 +1049,14 @@ fn calibre_default_library() -> Option<PathBuf> {
 async fn calibre_preview(
     state: State<'_, AppState>,
     path: PathBuf,
-) -> CmdResult<erc_core::calibre::CalibrePreview> {
+) -> CmdResult<parallax_core::calibre::CalibrePreview> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let books = erc_core::calibre::read_library(&path).map_err(err)?;
+        let books = parallax_core::calibre::read_library(&path).map_err(err)?;
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        Ok(erc_core::calibre::preview(&lib, &books))
+        Ok(parallax_core::calibre::preview(&lib, &books))
     })
     .await
     .map_err(err)?
@@ -1065,17 +1069,17 @@ async fn calibre_import(
     progress: Option<JavaScriptChannelId>,
     state: State<'_, AppState>,
     path: PathBuf,
-) -> CmdResult<Vec<erc_core::calibre::CalibreImportOutcome>> {
+) -> CmdResult<Vec<parallax_core::calibre::CalibreImportOutcome>> {
     let progress = progress.map(|id| id.channel_on(webview));
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let books = erc_core::calibre::read_library(&path).map_err(err)?;
+        let books = parallax_core::calibre::read_library(&path).map_err(err)?;
         let amazon = ChildProcess::current().map_err(err)?;
         let mut lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let outcomes =
-            erc_core::calibre::import(&mut lib, &amazon, &books, |index, total, title| {
+            parallax_core::calibre::import(&mut lib, &amazon, &books, |index, total, title| {
                 report_books(progress.as_ref(), index - 1, total, Some(title));
             });
         report_books(progress.as_ref(), outcomes.len(), outcomes.len(), None);
@@ -1106,7 +1110,7 @@ async fn change_collections(
     let backups = state.backup_root.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        erc_core::collections::apply(&kobo, &backups, &changes).map_err(err)
+        parallax_core::collections::apply(&kobo, &backups, &changes).map_err(err)
     })
     .await
     .map_err(err)?
@@ -1119,7 +1123,7 @@ async fn folder_groups(mount: PathBuf) -> CmdResult<Vec<FolderGroup>> {
             .and_then(|k| k.open_db())
             .and_then(|db| db.books())
             .map_err(err)?;
-        Ok(erc_core::collections::folder_groups(&books))
+        Ok(parallax_core::collections::folder_groups(&books))
     })
     .await
     .map_err(err)?
@@ -1153,17 +1157,17 @@ async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResu
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         Ok(Reconciled {
             series: if series {
-                erc_core::collections::reconcile_series(&lib, &kobo, &backups).map_err(err)?
+                parallax_core::collections::reconcile_series(&lib, &kobo, &backups).map_err(err)?
             } else {
                 0
             },
             grouped: if rules {
-                erc_core::rules::run(&lib, &kobo, &backups, Trigger::Automatic).map_err(err)?
+                parallax_core::rules::run(&lib, &kobo, &backups, Trigger::Automatic).map_err(err)?
             } else {
                 0
             },
-            reading: erc_core::device::sync_reading(&lib, &kobo).map_err(err)?,
-            annotations: erc_core::device::sync_annotations(&mut lib, &kobo).map_err(err)?,
+            reading: parallax_core::device::sync_reading(&lib, &kobo).map_err(err)?,
+            annotations: parallax_core::device::sync_annotations(&mut lib, &kobo).map_err(err)?,
         })
     })
     .await
@@ -1197,7 +1201,7 @@ async fn rules_preview(
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        erc_core::rules::plan(&lib.rules().map_err(err)?, &lib, &kobo).map_err(err)
+        parallax_core::rules::plan(&lib.rules().map_err(err)?, &lib, &kobo).map_err(err)
     })
     .await
     .map_err(err)?
@@ -1212,7 +1216,7 @@ async fn rules_apply(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<us
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        erc_core::rules::run(&lib, &kobo, &backups, Trigger::User).map_err(err)
+        parallax_core::rules::run(&lib, &kobo, &backups, Trigger::User).map_err(err)
     })
     .await
     .map_err(err)?
@@ -1239,7 +1243,7 @@ async fn cover_search(state: State<'_, AppState>, id: i64) -> CmdResult<Vec<Cand
         isbn: book.isbn().map(str::to_owned),
         asin: book.asin().map(str::to_owned),
     };
-    tauri::async_runtime::spawn_blocking(move || erc_covers::search(&query))
+    tauri::async_runtime::spawn_blocking(move || parallax_covers::search(&query))
         .await
         .map_err(err)
 }
@@ -1248,7 +1252,7 @@ async fn cover_search(state: State<'_, AppState>, id: i64) -> CmdResult<Vec<Cand
 async fn cover_set_url(state: State<'_, AppState>, id: i64, url: String) -> CmdResult<LibraryBook> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let image = erc_covers::download(&url).map_err(err)?;
+        let image = parallax_covers::download(&url).map_err(err)?;
         let mut lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -1311,7 +1315,7 @@ async fn cover_upscale_tiles(state: State<'_, AppState>, ids: Vec<i64>) -> CmdRe
         ids.iter()
             .filter_map(|&id| lib.cover_size(id))
             .filter(|&(_, height)| height < CUSTOM_COVER_MAX_HEIGHT)
-            .map(|(width, height)| erc_upscale::tile_count(width, height))
+            .map(|(width, height)| parallax_upscale::tile_count(width, height))
             .sum()
     })
     .await
@@ -1352,7 +1356,7 @@ async fn cover_upscale_preview(
         let Some(engine) = engine.as_ref() else {
             return Err("cover upscaling isn't available".to_owned());
         };
-        let up = erc_upscale::upscale_cover(
+        let up = parallax_upscale::upscale_cover(
             engine,
             &cover,
             CUSTOM_COVER_MAX_HEIGHT,
@@ -1362,7 +1366,7 @@ async fn cover_upscale_preview(
             &upscaler.cancelled,
         );
         let up = match up {
-            Err(erc_upscale::Error::AlreadyFullSize) => return Ok(None),
+            Err(parallax_upscale::Error::AlreadyFullSize) => return Ok(None),
             other => other.map_err(err)?,
         };
         let run = upscaler.runs.fetch_add(1, Ordering::Relaxed);
@@ -1423,7 +1427,7 @@ async fn cover_colors(app: AppHandle, paths: Vec<PathBuf>) -> CmdResult<Vec<Opti
                     .unwrap_or_default()
             })
             .collect();
-        erc_library::dominant_colors(&allowed)
+        parallax_library::dominant_colors(&allowed)
     })
     .await
     .map_err(err)
@@ -1490,6 +1494,15 @@ pub fn run() {
     e2e::prepare(&mut context);
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Move the data before the window state plugin reads its saved layout.
+        .plugin(
+            tauri::plugin::Builder::<_, ()>::new("parallax-data")
+                .setup(|app, _| {
+                    parallax_core::app_data::migrate(&app.path().app_data_dir()?)?;
+                    Ok(())
+                })
+                .build(),
+        )
         // Reopens the window where and how big it was last time.
         .plugin(
             tauri_plugin_window_state::Builder::default()

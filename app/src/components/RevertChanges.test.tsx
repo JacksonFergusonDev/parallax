@@ -20,7 +20,7 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 const device = { mount: "/Volumes/K", model: "Kobo Libra 2" } as DeviceInfo;
 const entry = (op: string, ids: string[], error?: string): LogEntry => ({
   at: "2026-11-05T12:00:00Z",
-  erc_version: "0.1.0",
+  parallax_version: "0.1.0",
   op,
   content_ids: ids,
   error,

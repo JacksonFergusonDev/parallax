@@ -1,5 +1,5 @@
 [package]
-name = "erc-cli"
+name = "parallax-cli"
 description = "Developer CLI over the Parallax core"
 version.workspace = true
 edition.workspace = true
@@ -7,7 +7,7 @@ publish.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "erc"
+name = "parallax-cli"
 path = "src/main.rs"
 
 [dependencies]
@@ -15,14 +15,14 @@ anyhow.workspace = true
 clap.workspace = true
 comfy-table.workspace = true
 console.workspace = true
-erc-convert.workspace = true
-erc-core.workspace = true
-erc-covers.workspace = true
-erc-device.workspace = true
-erc-device-kobo.workspace = true
-erc-epub.workspace = true
-erc-library.workspace = true
-erc-upscale.workspace = true
+parallax-convert.workspace = true
+parallax-core.workspace = true
+parallax-covers.workspace = true
+parallax-device.workspace = true
+parallax-device-kobo.workspace = true
+parallax-epub.workspace = true
+parallax-library.workspace = true
+parallax-upscale.workspace = true
 indicatif.workspace = true
 serde.workspace = true
 serde_json.workspace = true

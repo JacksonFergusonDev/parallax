@@ -6,8 +6,8 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use erc_convert::{Converter, Kepubify};
-use erc_epub::strip_kobo_markup;
+use parallax_convert::{Converter, Kepubify};
+use parallax_epub::strip_kobo_markup;
 use zip::ZipArchive;
 
 fn fixture(name: &str) -> PathBuf {

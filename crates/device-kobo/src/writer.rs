@@ -2,7 +2,7 @@
 //!
 //! Every write session:
 //! 1. refuses if Nickel left `-wal`/`-shm`/`-journal` files (not cleanly
-//!    handed over) or ERC doesn't support changing this Kobo
+//!    handed over) or Parallax doesn't support changing this Kobo
 //!    ([`crate::support`]);
 //! 2. runs `PRAGMA quick_check` and backs the database up with SQLite's online
 //!    backup API ([`crate::backups`] has what's kept and how to go back);
@@ -28,7 +28,7 @@ pub struct DeviceWriter<'a> {
     conn: Option<Connection>,
     backup: PathBuf,
     db_version: Option<u32>,
-    /// Written to `/.erc/` when the session ends.
+    /// Written to `/.parallax/` when the session ends.
     record: Record,
 }
 
@@ -98,12 +98,12 @@ impl<'a> DeviceWriter<'a> {
         hold_removed(&self.backup, path, device_path, progress)
     }
 
-    /// Adds an operation to this session's entry in `/.erc/log.jsonl`.
+    /// Adds an operation to this session's entry in `/.parallax/log.jsonl`.
     pub fn log(&mut self, entry: LogEntry) {
         self.record.entries.push(entry);
     }
 
-    /// Notes a book file ERC wrote or removed, for `/.erc/books.json`.
+    /// Notes a book file Parallax wrote or removed, for `/.parallax/books.json`.
     pub fn track(&mut self, change: BookChange) {
         self.record.books.push(change);
     }
@@ -179,7 +179,7 @@ impl Drop for DeviceWriter<'_> {
 pub fn restore(db_path: &Path, backup: &Path) -> Result<()> {
     let plain = Plain::open(backup)?;
     let backup = plain.path();
-    let tmp = db_path.with_extension("sqlite.erc-restore");
+    let tmp = db_path.with_extension("sqlite.parallax-restore");
     let _ = fs::remove_file(&tmp);
     let bytes = crate::transfer::copy_plain(backup, &tmp).inspect_err(|_| {
         let _ = fs::remove_file(&tmp);

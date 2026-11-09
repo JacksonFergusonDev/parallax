@@ -5,7 +5,7 @@ mod tone;
 
 use std::path::{Path, PathBuf};
 
-use erc_convert::Converter;
+use parallax_convert::Converter;
 use serde::{Deserialize, Serialize};
 
 use crate::Cbz;
@@ -120,7 +120,7 @@ pub enum Error {
     #[error(transparent)]
     Zip(#[from] zip::result::ZipError),
     #[error(transparent)]
-    Convert(#[from] erc_convert::Error),
+    Convert(#[from] parallax_convert::Error),
     #[error("could not prepare {page}: {message}")]
     Page { page: String, message: String },
     #[error("invalid comic screen size {0} × {1}")]

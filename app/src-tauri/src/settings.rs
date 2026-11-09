@@ -5,11 +5,11 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use erc_core::send::{
+use parallax_core::send::{
     COMIC_AUTOCONTRAST, COMIC_COLOUR_CONTRAST, COMIC_COLOUR_SEPARATION, COMIC_CROP, COMIC_DITHER,
     COMIC_MIDTONE_DARKENING, COMIC_SPREADS, COMIC_STRENGTHS, COMIC_UPSCALE,
 };
-use erc_device_kobo::{BackupPolicy, backups_size, delete_all_backups};
+use parallax_device_kobo::{BackupPolicy, backups_size, delete_all_backups};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, EventTarget, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
@@ -45,9 +45,12 @@ enum Allowed {
 
 /// Settings the app may read and change, and what each may be.
 const SETTINGS: [(&str, Allowed); 19] = [
-    (erc_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
-    (erc_core::enhance::METRON_TOKEN, Allowed::Text(256)),
-    (erc_core::review::REVIEW_ON_ADD, Allowed::OneOf(&["off"])),
+    (parallax_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
+    (parallax_core::enhance::METRON_TOKEN, Allowed::Text(256)),
+    (
+        parallax_core::review::REVIEW_ON_ADD,
+        Allowed::OneOf(&["off"]),
+    ),
     (
         THEME,
         Allowed::OneOf(&["light", "dark", "sepia", "contrast"]),
@@ -58,7 +61,7 @@ const SETTINGS: [(&str, Allowed); 19] = [
     (KOBO_SERIES, Allowed::OneOf(&["off"])),
     (KOBO_RULES, Allowed::OneOf(&["off"])),
     (EJECT_AFTER_SEND, Allowed::OneOf(&["on"])),
-    (erc_library::COMICS_KIND, Allowed::OneOf(&["comic"])),
+    (parallax_library::COMICS_KIND, Allowed::OneOf(&["comic"])),
     (
         COMIC_SPREADS,
         Allowed::OneOf(&["keep_whole", "whole_then_halves"]),
@@ -74,7 +77,7 @@ const SETTINGS: [(&str, Allowed); 19] = [
 
 /// Settings that are preferences, which Reset puts back. Credentials stay.
 const PREFERENCES: [&str; 17] = [
-    erc_core::review::REVIEW_ON_ADD,
+    parallax_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
     LAST_VIEW,
@@ -82,7 +85,7 @@ const PREFERENCES: [&str; 17] = [
     KOBO_SERIES,
     KOBO_RULES,
     EJECT_AFTER_SEND,
-    erc_library::COMICS_KIND,
+    parallax_library::COMICS_KIND,
     COMIC_SPREADS,
     COMIC_CROP,
     COMIC_AUTOCONTRAST,
@@ -186,7 +189,7 @@ pub fn setting_get(state: State<AppState>, key: String) -> CmdResult<Option<Stri
 }
 
 fn visible_setting(key: &str, value: Option<String>) -> Option<String> {
-    if key == erc_core::enhance::METRON_TOKEN {
+    if key == parallax_core::enhance::METRON_TOKEN {
         value.map(|_| "configured".to_owned())
     } else {
         value
@@ -373,7 +376,13 @@ mod tests {
         assert_eq!(checked(THEME, Some(String::new())), Ok(None));
         assert!(checked(THEME, Some("neon".into())).is_err());
         assert!(checked("password", Some("x".into())).is_err());
-        assert!(checked(erc_core::enhance::GOOGLE_BOOKS_KEY, Some("k".repeat(201))).is_err());
+        assert!(
+            checked(
+                parallax_core::enhance::GOOGLE_BOOKS_KEY,
+                Some("k".repeat(201))
+            )
+            .is_err()
+        );
         assert_eq!(
             checked(KOBO_RULES, Some("off".into())),
             Ok(Some("off".into()))
@@ -395,7 +404,7 @@ mod tests {
 
     #[test]
     fn every_comic_page_setting_is_a_preference() {
-        for key in erc_core::send::COMIC_PAGE_SETTINGS {
+        for key in parallax_core::send::COMIC_PAGE_SETTINGS {
             assert!(PREFERENCES.contains(&key), "{key}");
         }
     }

@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use comfy_table::{Cell, ContentArrangement, Table, presets};
 use console::style;
-use erc_core::send::Progress;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use parallax_core::send::Progress;
 
 pub fn table(headers: &[&str]) -> Table {
     let interactive = io::stdout().is_terminal();

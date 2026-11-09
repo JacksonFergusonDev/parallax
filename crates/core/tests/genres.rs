@@ -3,10 +3,10 @@
 use std::fs;
 use std::path::Path;
 
-use erc_core::collections::{CollectionChange, apply};
-use erc_core::genres::{TidyChoice, apply_tidy, plan};
-use erc_device_kobo::KoboDevice;
-use erc_library::{ImportOutcome, Library};
+use parallax_core::collections::{CollectionChange, apply};
+use parallax_core::genres::{TidyChoice, apply_tidy, plan};
+use parallax_device_kobo::KoboDevice;
+use parallax_library::{ImportOutcome, Library};
 
 const VERSION: &str =
     "N000000000001,4.1.15,4.38.23697,4.1.15,4.1.15,00000000-0000-0000-0000-000000000388";

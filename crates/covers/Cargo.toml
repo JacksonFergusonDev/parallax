@@ -1,5 +1,5 @@
 [package]
-name = "erc-covers"
+name = "parallax-covers"
 description = "Online cover search (Amazon by ASIN/ISBN, Apple Books, Indigo, Open Library, Google Books)"
 version.workspace = true
 edition.workspace = true
@@ -7,7 +7,7 @@ publish.workspace = true
 license.workspace = true
 
 [dependencies]
-erc-metadata.workspace = true
+parallax-metadata.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -1,5 +1,5 @@
 [package]
-name = "erc-comic"
+name = "parallax-comic"
 description = "Comic book archives: pages in reading order, ComicInfo.xml, file names and page shapes"
 version.workspace = true
 edition.workspace = true
@@ -8,7 +8,7 @@ license.workspace = true
 
 [dependencies]
 compress-tools.workspace = true
-erc-convert.workspace = true
+parallax-convert.workspace = true
 fast_image_resize = "6.1"
 png = "0.18"
 rayon.workspace = true

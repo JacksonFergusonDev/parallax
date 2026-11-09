@@ -19,7 +19,7 @@ pub enum Error {
     #[error("network error: {0}")]
     Http(#[from] reqwest::Error),
     #[error(transparent)]
-    Limited(#[from] erc_metadata::FetchError),
+    Limited(#[from] parallax_metadata::FetchError),
     #[error("{0}")]
     NotAnImage(String),
 }
@@ -57,7 +57,7 @@ const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
 
 fn client() -> Result<Client> {
     Ok(Client::builder()
-        .user_agent(erc_metadata::USER_AGENT)
+        .user_agent(parallax_metadata::USER_AGENT)
         .timeout(Duration::from_secs(12))
         .build()?)
 }
@@ -93,7 +93,7 @@ pub fn search(query: &CoverQuery) -> Vec<Candidate> {
 pub fn download(url: &str) -> Result<Vec<u8>> {
     let response = client()?
         .get(url)
-        .header(USER_AGENT, erc_metadata::user_agent(url))
+        .header(USER_AGENT, parallax_metadata::user_agent(url))
         .send()?
         .error_for_status()?;
     let is_image = response
@@ -118,18 +118,18 @@ pub fn download(url: &str) -> Result<Vec<u8>> {
 /// A search request, taking its turn with the metadata lookups that share
 /// these services' limits.
 fn get_json(client: &Client, url: &str, params: &[(&str, &str)]) -> Result<Value> {
-    erc_metadata::wait_turn(url)?;
+    parallax_metadata::wait_turn(url)?;
     let response = client
         .get(url)
         .query(params)
-        .header(USER_AGENT, erc_metadata::user_agent(url))
+        .header(USER_AGENT, parallax_metadata::user_agent(url))
         .send()?;
-    erc_metadata::check_limited(url, &response)?;
+    parallax_metadata::check_limited(url, &response)?;
     Ok(response.error_for_status()?.json()?)
 }
 
 fn search_terms(q: &CoverQuery) -> String {
-    let title = erc_metadata::search_title(&q.title);
+    let title = parallax_metadata::search_title(&q.title);
     match &q.author {
         Some(author) => format!("{title} {author}"),
         None => title,
@@ -138,7 +138,7 @@ fn search_terms(q: &CoverQuery) -> String {
 
 /// The candidates whose listing is this book.
 pub fn this_book(q: &CoverQuery, listings: Vec<Listing>) -> Vec<Candidate> {
-    let query = erc_metadata::Query {
+    let query = parallax_metadata::Query {
         title: q.title.clone(),
         authors: q.author.iter().cloned().collect(),
         isbn: None,
@@ -146,12 +146,12 @@ pub fn this_book(q: &CoverQuery, listings: Vec<Listing>) -> Vec<Candidate> {
     listings
         .into_iter()
         .filter(|l| {
-            let hit = erc_metadata::Hit {
+            let hit = parallax_metadata::Hit {
                 title: l.title.clone(),
                 authors: l.authors.clone(),
-                ..erc_metadata::Hit::default()
+                ..parallax_metadata::Hit::default()
             };
-            erc_metadata::match_confidence(&query, &hit).is_some()
+            parallax_metadata::match_confidence(&query, &hit).is_some()
         })
         .map(|l| l.candidate)
         .collect()
@@ -316,7 +316,7 @@ pub fn parse_apple_books(json: &Value) -> Vec<Listing> {
 }
 
 fn open_library(client: &Client, q: &CoverQuery) -> Result<Vec<Candidate>> {
-    let title = erc_metadata::search_title(&q.title);
+    let title = parallax_metadata::search_title(&q.title);
     let mut params = vec![
         ("title", title.as_str()),
         ("limit", "8"),
@@ -359,7 +359,7 @@ pub fn parse_open_library(json: &Value) -> Vec<Listing> {
 }
 
 fn google_books(client: &Client, q: &CoverQuery) -> Result<Vec<Candidate>> {
-    let mut terms = format!("intitle:{}", erc_metadata::search_title(&q.title));
+    let mut terms = format!("intitle:{}", parallax_metadata::search_title(&q.title));
     if let Some(author) = &q.author {
         terms.push_str(&format!(" inauthor:{author}"));
     }
@@ -553,7 +553,7 @@ mod tests {
         assert_eq!(kept[0].url, "https://cdn.shopify.com/s/files/1/a.jpg?v=1");
     }
 
-    /// Hits the real services: `cargo test -p erc-covers -- --ignored`.
+    /// Hits the real services: `cargo test -p parallax-covers -- --ignored`.
     #[test]
     #[ignore = "hits the real services"]
     fn live_search_finds_covers() {

@@ -1,5 +1,5 @@
 [package]
-name = "erc-library"
+name = "parallax-library"
 description = "The local book library: managed files plus a SQLite catalogue"
 version.workspace = true
 edition.workspace = true
@@ -8,8 +8,8 @@ license.workspace = true
 
 [dependencies]
 chrono.workspace = true
-erc-comic.workspace = true
-erc-epub.workspace = true
+parallax-comic.workspace = true
+parallax-epub.workspace = true
 image.workspace = true
 rayon.workspace = true
 rusqlite.workspace = true
@@ -21,8 +21,8 @@ thiserror.workspace = true
 zip.workspace = true
 
 [dev-dependencies]
-erc-comic.workspace = true
-erc-epub.workspace = true
+parallax-comic.workspace = true
+parallax-epub.workspace = true
 image.workspace = true
 tempfile.workspace = true
 zip.workspace = true

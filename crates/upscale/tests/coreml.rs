@@ -1,13 +1,13 @@
 //! Runs the real model, so it needs `just upscale-model` first:
-//! `cargo test -p erc-upscale -- --ignored`
+//! `cargo test -p parallax-upscale -- --ignored`
 
 #![cfg(target_os = "macos")]
 
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
-use erc_upscale::{CoreMl, Error, upscale};
 use image::{Rgb, RgbImage};
+use parallax_upscale::{CoreMl, Error, upscale};
 
 const MODEL: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),

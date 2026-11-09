@@ -1,5 +1,5 @@
 [package]
-name = "erc-upscale"
+name = "parallax-upscale"
 description = "Cover upscaling: tiling around a Core ML model (macOS only)"
 version.workspace = true
 edition.workspace = true

@@ -5,10 +5,10 @@ use std::fs::{self, File};
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 
-use erc_convert::amazon::InProcess;
-use erc_core::calibre::{CalibreImport, import, preview, read_library};
-use erc_epub::Epub;
-use erc_library::{ImportOutcome, Library};
+use parallax_convert::amazon::InProcess;
+use parallax_core::calibre::{CalibreImport, import, preview, read_library};
+use parallax_epub::Epub;
+use parallax_library::{ImportOutcome, Library};
 use rusqlite::{Connection, params};
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;

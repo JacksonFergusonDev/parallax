@@ -1,5 +1,5 @@
 //! Automatic grouping rules, stored with the library. Planning and applying
-//! them against a device lives in `erc-core`.
+//! them against a device lives in `parallax-core`.
 
 use rusqlite::params;
 use serde::{Deserialize, Serialize};

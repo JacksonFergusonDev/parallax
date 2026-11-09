@@ -495,7 +495,7 @@ export function installMockBackend(label = "main") {
         case "device_history": {
           const stamp = (at: string, v: string) => ({
             at,
-            erc_version: v,
+            parallax_version: v,
             firmware: "4.38.23697",
             db_version: 174,
           });
@@ -513,7 +513,7 @@ export function installMockBackend(label = "main") {
             log: [
               {
                 at: "2026-10-31T14:02:00Z",
-                erc_version: "0.1.0",
+                parallax_version: "0.1.0",
                 op: "collection",
                 content_ids: [contentId(1)],
                 detail: "add to “Favourites”",
@@ -521,7 +521,7 @@ export function installMockBackend(label = "main") {
               },
               {
                 at: "2026-10-31T13:40:00Z",
-                erc_version: "0.1.0",
+                parallax_version: "0.1.0",
                 op: "replace",
                 content_ids: [contentId(5)],
                 detail: "Pride and Prejudice",
@@ -529,7 +529,7 @@ export function installMockBackend(label = "main") {
               },
               {
                 at: "2026-10-31T09:12:00Z",
-                erc_version: "0.1.0",
+                parallax_version: "0.1.0",
                 op: "send",
                 content_ids: [contentId(1)],
               },
@@ -626,7 +626,7 @@ export function installMockBackend(label = "main") {
               entries: [
                 {
                   at: "2026-11-05T12:00:01Z",
-                  erc_version: "0.1.0",
+                  parallax_version: "0.1.0",
                   op: "remove",
                   content_ids: [contentId(1), contentId(5)],
                 },
@@ -641,7 +641,7 @@ export function installMockBackend(label = "main") {
               entries: [
                 {
                   at: "2026-10-31T14:02:00Z",
-                  erc_version: "0.1.0",
+                  parallax_version: "0.1.0",
                   op: "collection",
                   content_ids: [contentId(1)],
                 },

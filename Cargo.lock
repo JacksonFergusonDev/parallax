@@ -1136,192 +1136,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "erc-app"
-version = "0.1.0"
-dependencies = [
- "erc-comic",
- "erc-convert",
- "erc-core",
- "erc-covers",
- "erc-device",
- "erc-device-kobo",
- "erc-epub",
- "erc-library",
- "erc-metadata",
- "erc-upscale",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-window-state",
-]
-
-[[package]]
-name = "erc-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "comfy-table",
- "console",
- "erc-convert",
- "erc-core",
- "erc-covers",
- "erc-device",
- "erc-device-kobo",
- "erc-epub",
- "erc-library",
- "erc-upscale",
- "indicatif",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "erc-comic"
-version = "0.1.0"
-dependencies = [
- "compress-tools",
- "erc-convert",
- "fast_image_resize",
- "image",
- "png",
- "rayon",
- "roxmltree",
- "serde",
- "tempfile",
- "thiserror 2.0.21",
- "zip",
-]
-
-[[package]]
-name = "erc-convert"
-version = "0.1.0"
-dependencies = [
- "boko",
- "erc-epub",
- "tempfile",
- "thiserror 2.0.21",
- "zip",
-]
-
-[[package]]
-name = "erc-core"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "erc-comic",
- "erc-convert",
- "erc-device",
- "erc-device-kobo",
- "erc-epub",
- "erc-library",
- "erc-metadata",
- "image",
- "rayon",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "tempfile",
- "thiserror 2.0.21",
- "zip",
-]
-
-[[package]]
-name = "erc-covers"
-version = "0.1.0"
-dependencies = [
- "erc-metadata",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "erc-device"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
-]
-
-[[package]]
-name = "erc-device-kobo"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "erc-device",
- "nix",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "tempfile",
- "thiserror 2.0.21",
- "uuid",
- "zstd",
-]
-
-[[package]]
-name = "erc-epub"
-version = "0.1.0"
-dependencies = [
- "roxmltree",
- "serde",
- "tempfile",
- "thiserror 2.0.21",
- "zip",
-]
-
-[[package]]
-name = "erc-library"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "erc-comic",
- "erc-epub",
- "image",
- "rayon",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "tempfile",
- "thiserror 2.0.21",
- "zip",
-]
-
-[[package]]
-name = "erc-metadata"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "reqwest",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "tempfile",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "erc-upscale"
-version = "0.1.0"
-dependencies = [
- "block2",
- "image",
- "objc2",
- "objc2-core-ml",
- "objc2-foundation",
- "thiserror 2.0.21",
-]
-
-[[package]]
 name = "errno"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3036,6 +2850,192 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps",
+]
+
+[[package]]
+name = "parallax-app"
+version = "0.1.0"
+dependencies = [
+ "parallax-comic",
+ "parallax-convert",
+ "parallax-core",
+ "parallax-covers",
+ "parallax-device",
+ "parallax-device-kobo",
+ "parallax-epub",
+ "parallax-library",
+ "parallax-metadata",
+ "parallax-upscale",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-window-state",
+]
+
+[[package]]
+name = "parallax-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "comfy-table",
+ "console",
+ "indicatif",
+ "parallax-convert",
+ "parallax-core",
+ "parallax-covers",
+ "parallax-device",
+ "parallax-device-kobo",
+ "parallax-epub",
+ "parallax-library",
+ "parallax-upscale",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "parallax-comic"
+version = "0.1.0"
+dependencies = [
+ "compress-tools",
+ "fast_image_resize",
+ "image",
+ "parallax-convert",
+ "png",
+ "rayon",
+ "roxmltree",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.21",
+ "zip",
+]
+
+[[package]]
+name = "parallax-convert"
+version = "0.1.0"
+dependencies = [
+ "boko",
+ "parallax-epub",
+ "tempfile",
+ "thiserror 2.0.21",
+ "zip",
+]
+
+[[package]]
+name = "parallax-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "image",
+ "parallax-comic",
+ "parallax-convert",
+ "parallax-device",
+ "parallax-device-kobo",
+ "parallax-epub",
+ "parallax-library",
+ "parallax-metadata",
+ "rayon",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "thiserror 2.0.21",
+ "zip",
+]
+
+[[package]]
+name = "parallax-covers"
+version = "0.1.0"
+dependencies = [
+ "parallax-metadata",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "parallax-device"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+]
+
+[[package]]
+name = "parallax-device-kobo"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "nix",
+ "parallax-device",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "thiserror 2.0.21",
+ "uuid",
+ "zstd",
+]
+
+[[package]]
+name = "parallax-epub"
+version = "0.1.0"
+dependencies = [
+ "roxmltree",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.21",
+ "zip",
+]
+
+[[package]]
+name = "parallax-library"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "image",
+ "parallax-comic",
+ "parallax-epub",
+ "rayon",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "thiserror 2.0.21",
+ "zip",
+]
+
+[[package]]
+name = "parallax-metadata"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "parallax-upscale"
+version = "0.1.0"
+dependencies = [
+ "block2",
+ "image",
+ "objc2",
+ "objc2-core-ml",
+ "objc2-foundation",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

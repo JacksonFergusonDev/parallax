@@ -4,12 +4,12 @@
 
 use std::path::{Path, PathBuf};
 
-use erc_comic::prepare::{Prepared, safe_kobo_component};
-use erc_convert::Converter;
-use erc_device_kobo::{
+use parallax_comic::prepare::{Prepared, safe_kobo_component};
+use parallax_convert::Converter;
+use parallax_device_kobo::{
     BOOKS_DIR, DisplayMetadata, KoboDevice, device_file_name, replace_book_with_progress,
 };
-use erc_library::{Book, Format, Library};
+use parallax_library::{Book, Format, Library};
 use serde::Serialize;
 
 use crate::comic_send::{ComicTarget, check_space, is_prepared_copy};
@@ -250,7 +250,7 @@ pub fn update_on_device(
     backup_root: &Path,
     ids: &[i64],
     on_progress: impl FnMut(Progress),
-) -> erc_device_kobo::Result<Vec<SendOutcome>> {
+) -> parallax_device_kobo::Result<Vec<SendOutcome>> {
     let serial = device.version().serial.clone();
     let copies = library.device_copies(&serial).unwrap_or_default();
     let labels: Vec<String> = ids
@@ -363,7 +363,7 @@ fn prepare_upload(
     device: &KoboDevice,
     converter: &dyn Converter,
     book: &Book,
-    target: &std::cell::OnceCell<erc_library::Result<ComicTarget>>,
+    target: &std::cell::OnceCell<parallax_library::Result<ComicTarget>>,
     stage: &mut dyn FnMut(Stage<'_>),
 ) -> Result<Upload, String> {
     if book.format == Format::Cbz {

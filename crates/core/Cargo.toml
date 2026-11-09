@@ -1,5 +1,5 @@
 [package]
-name = "erc-core"
+name = "parallax-core"
 description = "Workflows that combine conversion, library and device backends"
 version.workspace = true
 edition.workspace = true
@@ -8,13 +8,13 @@ license.workspace = true
 
 [dependencies]
 chrono.workspace = true
-erc-comic.workspace = true
-erc-convert.workspace = true
-erc-device.workspace = true
-erc-device-kobo.workspace = true
-erc-epub.workspace = true
-erc-library.workspace = true
-erc-metadata.workspace = true
+parallax-comic.workspace = true
+parallax-convert.workspace = true
+parallax-device.workspace = true
+parallax-device-kobo.workspace = true
+parallax-epub.workspace = true
+parallax-library.workspace = true
+parallax-metadata.workspace = true
 image.workspace = true
 rayon.workspace = true
 rusqlite.workspace = true

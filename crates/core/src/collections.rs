@@ -5,12 +5,12 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use erc_device::DeviceBook;
-use erc_device_kobo::{
+use parallax_device::DeviceBook;
+use parallax_device_kobo::{
     BOOKS_DIR, KoboDevice, LogEntry, add_to_collection, create_collection, delete_collection,
     remove_from_collection, rename_collection, set_series,
 };
-use erc_library::Library;
+use parallax_library::Library;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,7 +42,7 @@ pub fn apply(
     device: &KoboDevice,
     backup_root: &Path,
     changes: &[CollectionChange],
-) -> erc_device_kobo::Result<()> {
+) -> parallax_device_kobo::Result<()> {
     let mut writer = device.open_writer(backup_root)?;
     let result = writer.transaction(|tx| {
         for change in changes {
@@ -106,7 +106,7 @@ pub fn folder_groups(books: &[DeviceBook]) -> Vec<FolderGroup> {
             parts.remove(0);
         }
         if let Some(folder) = parts.first().filter(|f| !f.is_empty()) {
-            let name = erc_metadata::genres::canonical(folder).unwrap_or(folder);
+            let name = parallax_metadata::genres::canonical(folder).unwrap_or(folder);
             groups
                 .entry(name.to_owned())
                 .or_default()
@@ -135,7 +135,7 @@ pub struct PendingSeries {
 pub fn pending_series(
     library: &Library,
     device: &KoboDevice,
-) -> erc_device_kobo::Result<Vec<PendingSeries>> {
+) -> parallax_device_kobo::Result<Vec<PendingSeries>> {
     let copies = library
         .device_copies(&device.version().serial)
         .unwrap_or_default();
@@ -178,7 +178,7 @@ pub fn reconcile_series(
     library: &Library,
     device: &KoboDevice,
     backup_root: &Path,
-) -> erc_device_kobo::Result<usize> {
+) -> parallax_device_kobo::Result<usize> {
     let pending = pending_series(library, device)?;
     if pending.is_empty() {
         return Ok(0);
@@ -222,7 +222,7 @@ mod tests {
             sideloaded: true,
             series: None,
             series_number: None,
-            read_status: erc_device::ReadStatus::Unread,
+            read_status: parallax_device::ReadStatus::Unread,
             percent_read: 0,
             last_read: None,
             reading_time_secs: None,

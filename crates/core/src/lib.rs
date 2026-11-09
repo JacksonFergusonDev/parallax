@@ -1,6 +1,7 @@
 //! Workflows shared by the CLI and the desktop app.
 
 pub mod annotations;
+pub mod app_data;
 pub mod calibre;
 pub mod collections;
 pub mod comic_send;

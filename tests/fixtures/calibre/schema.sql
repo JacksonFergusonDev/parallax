@@ -1,4 +1,4 @@
--- Tables from a calibre 7/8 metadata.db that ERC reads (no triggers or
+-- Tables from a calibre 7/8 metadata.db that Parallax reads (no triggers or
 -- indexes: they call SQL functions only calibre defines).
 
 CREATE TABLE books ( id      INTEGER PRIMARY KEY AUTOINCREMENT,

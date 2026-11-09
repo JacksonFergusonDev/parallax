@@ -2,11 +2,11 @@ use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-use erc_convert::{Converter, Kepubify};
-use erc_core::device::{books_on_device, sync_annotations, sync_reading};
-use erc_core::import::{DeviceImport, import_from_device};
-use erc_device_kobo::KoboDevice;
-use erc_library::Library;
+use parallax_convert::{Converter, Kepubify};
+use parallax_core::device::{books_on_device, sync_annotations, sync_reading};
+use parallax_core::import::{DeviceImport, import_from_device};
+use parallax_device_kobo::KoboDevice;
+use parallax_library::Library;
 use rusqlite::Connection;
 use zip::ZipArchive;
 use zip::write::SimpleFileOptions;
@@ -80,7 +80,7 @@ fn fake_kobo(root: &Path) -> KoboDevice {
             cid(KEPUB),
             "application/x-kobo-epub+zip",
             "kepub_user",
-            "ERC Test Book",
+            "Parallax Test Book",
             Some("Test Saga"),
             Some("3"),
             -1,
@@ -125,7 +125,7 @@ fn fake_kobo(root: &Path) -> KoboDevice {
 }
 
 fn outcome_for<'a>(
-    outcomes: &'a [erc_core::import::DeviceImportOutcome],
+    outcomes: &'a [parallax_core::import::DeviceImportOutcome],
     id: &str,
 ) -> &'a DeviceImport {
     outcomes
@@ -164,7 +164,7 @@ fn imports_sideloads_cleaned_and_skips_the_rest() {
     assert!(skipped(outcome_for(&outcomes, STORE)).contains("Kobo store"));
 
     let book = library.book(book_id).unwrap();
-    assert_eq!(book.title, "ERC Test Book");
+    assert_eq!(book.title, "Parallax Test Book");
     assert_eq!(book.original_name, "Mini - Test Author.epub");
     // Nickel's series (written by calibre) is kept since the EPUB has none.
     assert_eq!(book.series.as_deref(), Some("Test Saga"));
@@ -187,7 +187,7 @@ fn imports_sideloads_cleaned_and_skips_the_rest() {
 
     // Read-only: the device database is untouched and nothing was recorded.
     assert_eq!(fs::read(kobo.db_path()).unwrap(), db_before);
-    assert!(!kobo.mount().join(".erc").exists());
+    assert!(!kobo.mount().join(".parallax").exists());
 
     // A second run finds nothing new.
     let again = import_from_device(&mut library, &kobo, Some(&[cid(KEPUB)]), |_, _, _| {}).unwrap();
@@ -204,7 +204,7 @@ fn links_books_the_library_already_has() {
     let dir = tempfile::tempdir().unwrap();
     let kobo = fake_kobo(dir.path());
     let mut library = Library::open(dir.path().join("lib")).unwrap();
-    let erc_library::ImportOutcome::Added { book, .. } =
+    let parallax_library::ImportOutcome::Added { book, .. } =
         library.import(&fixture("minimal.epub")).unwrap()
     else {
         panic!();

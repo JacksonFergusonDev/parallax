@@ -4,7 +4,7 @@ Throwaway tool that makes four versions of each manga CBZ (original CBZ, lossles
 
 ## Running it
 
-Needs the kepubify sidecar from `just setup`, or `ERC_KEPUBIFY` pointing at a kepubify binary.
+Needs the kepubify sidecar from `just setup`, or `PARALLAX_KEPUBIFY` pointing at a kepubify binary.
 
 ```bash
 cargo run --release -- --out out --author "Kentaro Miura" ~/Downloads/"Berserk (Digital) (danke-Empire)"/*.cbz

@@ -4,9 +4,9 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
-use erc_core::duplicates::library_duplicates;
-use erc_core::review::{AUTO_REVIEW_LIMIT, Issue, Review, review};
-use erc_library::{ImportOutcome, Library};
+use parallax_core::duplicates::library_duplicates;
+use parallax_core::review::{AUTO_REVIEW_LIMIT, Issue, Review, review};
+use parallax_library::{ImportOutcome, Library};
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 

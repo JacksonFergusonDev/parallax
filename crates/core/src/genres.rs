@@ -1,6 +1,6 @@
 //! Standard genre names across the library and the Kobo.
 //!
-//! Genres are tags whose name is one of `erc_metadata::genres`' standard
+//! Genres are tags whose name is one of `parallax_metadata::genres`' standard
 //! names. "Tidy genres" finds tags and Kobo collections that are a genre
 //! written another way ("sci-fi", "Non-Fiction", "Thrillers") and renames them
 //! to the standard name, merging into it where it already exists. Tags that
@@ -10,9 +10,9 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
-use erc_device_kobo::KoboDevice;
-use erc_library::Library;
-use erc_metadata::genres;
+use parallax_device_kobo::KoboDevice;
+use parallax_library::Library;
+use parallax_metadata::genres;
 use serde::{Deserialize, Serialize};
 
 use crate::collections::{CollectionChange, apply};

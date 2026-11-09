@@ -57,7 +57,7 @@ OPF = """<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id">
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 <dc:title>Amazon Fixture</dc:title><dc:creator>Test Author</dc:creator>
-<dc:language>en</dc:language><dc:identifier id="id">erc-amazon-fixture</dc:identifier>
+<dc:language>en</dc:language><dc:identifier id="id">parallax-amazon-fixture</dc:identifier>
 <meta name="cover" content="cover"/></metadata>
 <manifest>
 <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
@@ -70,7 +70,7 @@ OPF = """<?xml version="1.0" encoding="utf-8"?>
 <spine toc="ncx"><itemref idref="one"/><itemref idref="two"/></spine></package>"""
 NCX = """<?xml version="1.0" encoding="utf-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
-<head><meta name="dtb:uid" content="erc-amazon-fixture"/></head>
+<head><meta name="dtb:uid" content="parallax-amazon-fixture"/></head>
 <docTitle><text>Amazon Fixture</text></docTitle><navMap>
 <navPoint id="n1" playOrder="1"><navLabel><text>Chapter One</text></navLabel><content src="one.xhtml"/></navPoint>
 <navPoint id="n2" playOrder="2"><navLabel><text>Chapter Two</text></navLabel><content src="two.xhtml"/></navPoint>

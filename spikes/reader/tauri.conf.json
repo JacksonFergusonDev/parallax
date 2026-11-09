@@ -1,7 +1,7 @@
 {
-  "productName": "ERC Spike",
+  "productName": "Parallax Spike",
   "version": "0.1.0",
-  "identifier": "dev.erc.spike",
+  "identifier": "dev.parallax.spike",
   "build": {
     "frontendDist": "dist"
   },

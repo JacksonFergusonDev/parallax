@@ -4,7 +4,9 @@
 use std::path::Path;
 use std::sync::Mutex;
 
-use erc_metadata::{CachedFetcher, Confidence, Fetch, FetchError, Options, Query, Source, lookup};
+use parallax_metadata::{
+    CachedFetcher, Confidence, Fetch, FetchError, Options, Query, Source, lookup,
+};
 
 /// Serves recordings by which book a request is about; logs requests.
 struct Recorded {
@@ -59,7 +61,7 @@ fn query(title: &str, author: &str) -> Query {
     }
 }
 
-fn genres(l: &erc_metadata::Lookup) -> Vec<&str> {
+fn genres(l: &parallax_metadata::Lookup) -> Vec<&str> {
     l.genres.iter().map(|g| g.name.as_str()).collect()
 }
 
@@ -151,13 +153,13 @@ fn responses_are_cached() {
     assert_eq!(lookup(&second, &q, &Options::default()), a);
 }
 
-/// Hits the real services: `cargo test -p erc-metadata -- --ignored`.
+/// Hits the real services: `cargo test -p parallax-metadata -- --ignored`.
 /// Titles with bracketed notes found nothing on Wikidata before they were
 /// searched without them.
 #[test]
 #[ignore = "hits the real services"]
 fn live_bracketed_titles_find_their_series() {
-    let fetch = erc_metadata::HttpFetcher::new().unwrap();
+    let fetch = parallax_metadata::HttpFetcher::new().unwrap();
     for (title, number) in [
         ("We Are Legion (We Are Bob)", "1"),
         ("For We Are Many", "2"),

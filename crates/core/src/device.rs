@@ -2,13 +2,13 @@
 
 use std::{collections::BTreeMap, path::Path};
 
-use erc_device::{DeviceBook, ReadStatus};
-use erc_device_kobo::{
+use parallax_device::{DeviceBook, ReadStatus};
+use parallax_device_kobo::{
     AnnotationKind, BOOKS_DIR, DuplicateCollection, KoboDb, KoboDevice, Mismatch, ONBOARD_PREFIX,
     duplicate_collections, files_not_in_database, merge_duplicate_collections, missing_files,
     orphaned_images, remove_book_with_progress, set_read_status,
 };
-use erc_library::{Format, Library};
+use parallax_library::{Format, Library};
 use serde::Serialize;
 
 use crate::comic_send::{ComicTarget, is_prepared_copy};
@@ -108,7 +108,7 @@ pub fn device_catalog(
                 percent_read: 0,
                 last_read: None,
                 reading_time_secs: None,
-                added: erc_device_kobo::parse_kobo_date(Some(sent_at)),
+                added: parallax_device_kobo::parse_kobo_date(Some(sent_at)),
                 file_size: Some(file.len()),
             },
         });
@@ -130,7 +130,7 @@ pub struct OnDevice {
 pub fn books_on_device(
     library: &Library,
     device: &KoboDevice,
-) -> erc_library::Result<Vec<OnDevice>> {
+) -> parallax_library::Result<Vec<OnDevice>> {
     let copies = library.device_copies(&device.version().serial)?;
     let target = std::cell::OnceCell::new();
     Ok(copies
@@ -175,7 +175,7 @@ pub fn remove_from_device(
     device: &KoboDevice,
     backup_root: &Path,
     content_ids: &[String],
-) -> erc_device_kobo::Result<Vec<RemoveOutcome>> {
+) -> parallax_device_kobo::Result<Vec<RemoveOutcome>> {
     remove_from_device_with_progress(library, device, backup_root, content_ids, |_, _, _| {})
 }
 
@@ -186,7 +186,7 @@ pub fn remove_from_device_with_progress(
     backup_root: &Path,
     content_ids: &[String],
     mut progress: impl FnMut(usize, usize, f64),
-) -> erc_device_kobo::Result<Vec<RemoveOutcome>> {
+) -> parallax_device_kobo::Result<Vec<RemoveOutcome>> {
     let serial = device.version().serial.clone();
     let copies = library
         .and_then(|l| l.device_copies(&serial).ok())
@@ -224,7 +224,7 @@ pub fn remove_from_device_with_progress(
 /// Copies the reading progress Nickel shows for library books on `device`
 /// into the library, so it's visible with the Kobo unplugged. Only reads the
 /// device. Returns how many books were updated.
-pub fn sync_reading(library: &Library, device: &KoboDevice) -> erc_device_kobo::Result<usize> {
+pub fn sync_reading(library: &Library, device: &KoboDevice) -> parallax_device_kobo::Result<usize> {
     let serial = device.version().serial.clone();
     let copies = library.device_copies(&serial).unwrap_or_default();
     if copies.is_empty() {
@@ -284,7 +284,7 @@ pub struct Health {
     pub orphaned_image_bytes: u64,
 }
 
-pub fn health(device: &KoboDevice) -> erc_device_kobo::Result<Health> {
+pub fn health(device: &KoboDevice) -> parallax_device_kobo::Result<Health> {
     let images = orphaned_images(device)?;
     Ok(Health {
         missing_files: missing_files(device)?,
@@ -304,7 +304,7 @@ pub fn health(device: &KoboDevice) -> erc_device_kobo::Result<Health> {
 pub fn merge_collections(
     device: &KoboDevice,
     backup_root: &Path,
-) -> erc_device_kobo::Result<usize> {
+) -> parallax_device_kobo::Result<usize> {
     if duplicate_collections(device.open_db()?.connection())?.is_empty() {
         return Ok(0);
     }
@@ -312,7 +312,7 @@ pub fn merge_collections(
     let removed = writer.transaction(merge_duplicate_collections);
     if let Ok(n) = removed {
         writer.log(
-            erc_device_kobo::LogEntry::new("collection")
+            parallax_device_kobo::LogEntry::new("collection")
                 .detail(format!("merged duplicate collections ({n} copies removed)")),
         );
     }
@@ -330,7 +330,7 @@ pub fn change_reading_status(
     status: ReadStatus,
     reset_position: bool,
     reset_time: bool,
-) -> erc_device_kobo::Result<usize> {
+) -> parallax_device_kobo::Result<usize> {
     let mut writer = device.open_writer(backup_root)?;
     let changed = set_read_status(&mut writer, content_ids, status, reset_position, reset_time);
     writer.close()?;
@@ -347,7 +347,7 @@ pub fn change_reading_status(
 pub fn sync_annotations(
     library: &mut Library,
     device: &KoboDevice,
-) -> erc_device_kobo::Result<usize> {
+) -> parallax_device_kobo::Result<usize> {
     let serial = device.version().serial.clone();
     let copies = library.device_copies(&serial).unwrap_or_default();
     if copies.is_empty() {
@@ -356,10 +356,10 @@ pub fn sync_annotations(
     let all = device.open_db()?.annotations(None)?;
     let mut changed = 0;
     for copy in &copies {
-        let items: Vec<erc_library::Annotation> = all
+        let items: Vec<parallax_library::Annotation> = all
             .iter()
             .filter(|a| a.book == copy.content_id)
-            .map(|a| erc_library::Annotation {
+            .map(|a| parallax_library::Annotation {
                 id: a.id.clone(),
                 device_serial: serial.clone(),
                 kind: match a.kind {

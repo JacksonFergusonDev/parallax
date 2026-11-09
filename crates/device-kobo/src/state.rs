@@ -1,13 +1,13 @@
-//! What ERC has done to a Kobo, kept on the Kobo itself in `/.erc/`.
+//! What Parallax has done to a Kobo, kept on the Kobo itself in `/.parallax/`.
 //!
 //! Inspired by calibre's `driveinfo.calibre` (who manages this device) and
 //! `metadata.calibre` (its view of every book), so another computer, a later
-//! ERC version or a person debugging can tell which books ERC wrote and what
+//! Parallax version or a person debugging can tell which books Parallax wrote and what
 //! it did:
 //!
-//! - `device.json`: an id ERC gives the device, plus the ERC version, firmware
+//! - `device.json`: an id Parallax gives the device, plus the Parallax version, firmware
 //!   and database version at the first and the latest write;
-//! - `books.json`: every book ERC copied, with its SHA-256 and size at write
+//! - `books.json`: every book Parallax copied, with its SHA-256 and size at write
 //!   time, so changes made by something else can be spotted;
 //! - `log.jsonl`: an append-only list of operations, newest last, capped at
 //!   [`LOG_KEPT`] entries.
@@ -28,17 +28,19 @@ use sha2::{Digest, Sha256};
 use crate::KoboDevice;
 use crate::db::ONBOARD_PREFIX;
 
-pub const STATE_DIR: &str = ".erc";
+pub const STATE_DIR: &str = ".parallax";
+const LEGACY_STATE_DIR: &str = ".erc";
 /// Log entries kept; older ones are dropped.
 pub const LOG_KEPT: usize = 2000;
 const FORMAT: u32 = 1;
-/// The ERC release doing the writing (all crates share the workspace version).
-pub const ERC_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// The Parallax release doing the writing (all crates share the workspace version).
+pub const PARALLAX_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Stamp {
     pub at: String,
-    pub erc_version: String,
+    #[serde(alias = "erc_version")]
+    pub parallax_version: String,
     pub firmware: String,
     pub db_version: Option<u32>,
 }
@@ -64,7 +66,8 @@ pub struct ManagedBook {
     pub size: u64,
     pub first_written: String,
     pub last_written: String,
-    pub erc_version: String,
+    #[serde(alias = "erc_version")]
+    pub parallax_version: String,
     pub writes: u32,
 }
 
@@ -77,7 +80,8 @@ struct BooksFile {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LogEntry {
     pub at: String,
-    pub erc_version: String,
+    #[serde(alias = "erc_version")]
+    pub parallax_version: String,
     /// e.g. `send`, `replace`, `remove`, `collection`, `series`, `tidy`.
     pub op: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -96,7 +100,7 @@ impl LogEntry {
     pub fn new(op: &str) -> Self {
         Self {
             at: now(),
-            erc_version: ERC_VERSION.to_owned(),
+            parallax_version: PARALLAX_VERSION.to_owned(),
             op: op.to_owned(),
             content_ids: Vec::new(),
             detail: None,
@@ -151,10 +155,10 @@ pub struct Record {
     pub books: Vec<BookChange>,
 }
 
-/// What `/.erc/` says, for display. Problems reading it are listed rather
+/// What `/.parallax/` says, for display. Problems reading it are listed rather
 /// than returned as errors.
 #[derive(Debug, Clone, Default, Serialize)]
-pub struct ErcState {
+pub struct DeviceState {
     pub device: Option<DeviceRecord>,
     pub books: Vec<ManagedBook>,
     /// Newest first.
@@ -162,17 +166,17 @@ pub struct ErcState {
     pub problems: Vec<String>,
 }
 
-/// How a managed book compares with what ERC wrote.
+/// How a managed book compares with what Parallax wrote.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BookCheck {
     Unchanged,
-    /// Different size: replaced or edited by something other than ERC.
+    /// Different size: replaced or edited by something other than Parallax.
     Changed,
     Missing,
 }
 
-impl ErcState {
+impl DeviceState {
     /// Compares each managed book's file with what was recorded. Cheap: a
     /// size check, not a hash.
     pub fn check(&self, mount: &Path) -> Vec<(String, BookCheck)> {
@@ -195,21 +199,29 @@ impl KoboDevice {
         self.mount().join(STATE_DIR)
     }
 
-    /// Books Parallax wrote, without loading the operation log.
-    pub fn managed_books(&self) -> Result<Vec<ManagedBook>, String> {
-        read_json::<BooksFile>(&self.state_dir().join("books.json"))
-            .map(|file| file.map_or_else(Vec::new, |file| file.books))
+    fn read_state_dir(&self) -> PathBuf {
+        let dir = self.state_dir();
+        if fs::symlink_metadata(&dir).is_err_and(|err| err.kind() == std::io::ErrorKind::NotFound) {
+            self.mount().join(LEGACY_STATE_DIR)
+        } else {
+            dir
+        }
     }
 
-    /// Reads `/.erc/` without changing anything.
-    pub fn erc_state(&self) -> ErcState {
-        let dir = self.state_dir();
-        let mut state = ErcState::default();
+    /// Books Parallax wrote, without loading the operation log.
+    pub fn managed_books(&self) -> Result<Vec<ManagedBook>, String> {
+        read_books(&self.read_state_dir())
+    }
+
+    /// Reads `/.parallax/` without changing anything.
+    pub fn parallax_state(&self) -> DeviceState {
+        let dir = self.read_state_dir();
+        let mut state = DeviceState::default();
         match read_json::<DeviceRecord>(&dir.join("device.json")) {
             Ok(d) => state.device = d,
             Err(e) => state.problems.push(format!("device.json: {e}")),
         }
-        match self.managed_books() {
+        match read_books(&dir) {
             Ok(books) => state.books = books,
             Err(e) => state.problems.push(format!("books.json: {e}")),
         }
@@ -224,7 +236,7 @@ impl KoboDevice {
         state
     }
 
-    /// Writes `record` to `/.erc/`. Best effort; see the module docs.
+    /// Writes `record` to `/.parallax/`. Best effort; see the module docs.
     pub fn record(&self, record: Record) {
         if record.entries.is_empty() && record.books.is_empty() {
             return;
@@ -234,14 +246,25 @@ impl KoboDevice {
 
     fn try_record(&self, record: Record) -> std::io::Result<()> {
         let dir = self.state_dir();
-        let created = !dir.exists();
-        fs::create_dir_all(&dir)?;
-        if created {
-            crate::transfer::remove_apple_double(&dir);
+        match fs::symlink_metadata(&dir) {
+            Ok(_) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                let legacy = self.mount().join(LEGACY_STATE_DIR);
+                match fs::rename(&legacy, &dir) {
+                    Ok(()) => crate::transfer::remove_apple_double(&legacy),
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                        fs::create_dir_all(&dir)?;
+                    }
+                    Err(_) if dir.is_dir() => {} // Another session moved it.
+                    Err(err) => return Err(err),
+                }
+                crate::transfer::remove_apple_double(&dir);
+            }
+            Err(err) => return Err(err),
         }
         let stamp = Stamp {
             at: now(),
-            erc_version: ERC_VERSION.to_owned(),
+            parallax_version: PARALLAX_VERSION.to_owned(),
             firmware: self.version().firmware.to_string(),
             db_version: self.open_db().ok().map(|db| db.db_version()),
         };
@@ -305,6 +328,11 @@ impl KoboDevice {
     }
 }
 
+fn read_books(dir: &Path) -> Result<Vec<ManagedBook>, String> {
+    read_json::<BooksFile>(&dir.join("books.json"))
+        .map(|file| file.map_or_else(Vec::new, |file| file.books))
+}
+
 fn apply_change(books: &mut BTreeMap<String, ManagedBook>, change: BookChange) {
     match change {
         BookChange::Removed { content_id } => {
@@ -333,7 +361,7 @@ fn apply_change(books: &mut BTreeMap<String, ManagedBook>, change: BookChange) {
                     sha256,
                     size,
                     last_written: at,
-                    erc_version: ERC_VERSION.to_owned(),
+                    parallax_version: PARALLAX_VERSION.to_owned(),
                 },
             );
         }

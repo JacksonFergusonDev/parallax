@@ -22,7 +22,7 @@ use crate::{Converter, Error, Result};
 pub const EXTENSIONS: [&str; 5] = ["azw3", "azw", "mobi", "prc", "kfx"];
 
 /// First argument that turns the current binary into a converter.
-const CHILD_ARG: &str = "--erc-amazon-to-epub";
+const CHILD_ARG: &str = "--parallax-amazon-to-epub";
 const EXIT_DRM: i32 = 3;
 const EXIT_FAILED: i32 = 4;
 

@@ -1,4 +1,4 @@
-//! `erc`: a developer CLI that exercises the core crates end to end without
+//! `parallax-cli`: a developer CLI that exercises the core crates end to end without
 //! the desktop UI. Device commands are read-only unless their help says they
 //! write; database writes go through the backed-up write session.
 //! `library` commands share the desktop app's library and backups.
@@ -11,32 +11,32 @@ use output::{Reporter, failure, success, table, warning};
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
-use erc_convert::amazon::ChildProcess;
-use erc_convert::{Kepubify, ToKepub};
-use erc_core::calibre;
-use erc_core::collections::{self, CollectionChange, folder_groups, reconcile_series};
-use erc_core::device::{
+use parallax_convert::amazon::ChildProcess;
+use parallax_convert::{Kepubify, ToKepub};
+use parallax_core::calibre;
+use parallax_core::collections::{self, CollectionChange, folder_groups, reconcile_series};
+use parallax_core::device::{
     change_reading_status, health, merge_collections, remove_from_device, sync_annotations,
     sync_reading,
 };
-use erc_core::duplicates::{Reason, device_duplicates, library_duplicates};
-use erc_core::enhance;
-use erc_core::health::check_library;
-use erc_core::import::{DeviceImport, import_from_device};
-use erc_core::ingest::import_file;
-use erc_core::rules;
-use erc_core::send::{SendOutcome, send_books, send_library_books, update_on_device};
-use erc_device::{DeviceBook, ReadStatus};
-use erc_device_kobo::{
+use parallax_core::duplicates::{Reason, device_duplicates, library_duplicates};
+use parallax_core::enhance;
+use parallax_core::health::check_library;
+use parallax_core::import::{DeviceImport, import_from_device};
+use parallax_core::ingest::import_file;
+use parallax_core::rules;
+use parallax_core::send::{SendOutcome, send_books, send_library_books, update_on_device};
+use parallax_device::{DeviceBook, ReadStatus};
+use parallax_device_kobo::{
     BookCheck, KoboDb, KoboDevice, MACOS_VOLUMES, ONBOARD_PREFIX, remove_orphaned_images,
     tidy_apple_double,
 };
-use erc_epub::{Contributor, MetadataEdit};
-use erc_library::{ImportOutcome, Library, Rule, RuleKind};
+use parallax_epub::{Contributor, MetadataEdit};
+use parallax_library::{ImportOutcome, Library, Rule, RuleKind};
 use serde::Serialize;
 
 #[derive(Parser)]
-#[command(name = "erc", version, about = "Parallax developer CLI")]
+#[command(name = "parallax-cli", version, about = "Parallax developer CLI")]
 struct Cli {
     /// Print JSON instead of a table.
     #[arg(long, global = true)]
@@ -321,7 +321,12 @@ enum LibraryCommand {
 /// The desktop app's data folder (Tauri's app data dir on macOS).
 fn app_data_dir() -> Result<PathBuf> {
     let home = std::env::var_os("HOME").context("HOME is not set")?;
-    Ok(PathBuf::from(home).join("Library/Application Support/dev.erc.companion"))
+    let dir = PathBuf::from(home)
+        .join("Library/Application Support")
+        .join(parallax_core::app_data::BUNDLE_ID);
+    parallax_core::app_data::migrate(&dir)
+        .with_context(|| format!("migrating Parallax data to {}", dir.display()))?;
+    Ok(dir)
 }
 
 fn default_library_root() -> Result<PathBuf> {
@@ -403,7 +408,7 @@ enum KoboCommand {
         #[arg(long)]
         library: Option<PathBuf>,
     },
-    /// What ERC has done to the device, from its `/.erc/` records.
+    /// What Parallax has done to the device, from its `/.parallax/` records.
     History {
         #[arg(long)]
         mount: Option<PathBuf>,
@@ -473,7 +478,7 @@ fn find_kobo(mount: Option<&Path>) -> Result<KoboDevice> {
 }
 
 fn main() -> Result<()> {
-    erc_convert::amazon::run_child_if_asked();
+    parallax_convert::amazon::run_child_if_asked();
     let cli = Cli::parse();
     if cli.json {
         console::set_colors_enabled(false);
@@ -525,7 +530,7 @@ fn main() -> Result<()> {
             println!("{} books", books.len());
         }
         Command::EpubInfo { file } => {
-            let epub = erc_epub::Epub::open(&file)?;
+            let epub = parallax_epub::Epub::open(&file)?;
             let metadata = epub.metadata();
             let cover = epub
                 .cover()?
@@ -744,7 +749,7 @@ fn main() -> Result<()> {
         Command::Kobo(KoboCommand::Stats { mount }) => {
             let kobo = find_kobo(mount.as_deref())?;
             let library = Library::open(default_library_root()?).ok();
-            let stats = erc_core::stats::reading_stats(&kobo, library.as_ref())?;
+            let stats = parallax_core::stats::reading_stats(&kobo, library.as_ref())?;
             if cli.json {
                 return print_json(&stats);
             }
@@ -800,29 +805,29 @@ fn main() -> Result<()> {
         }
         Command::Kobo(KoboCommand::History { mount, limit }) => {
             let kobo = find_kobo(mount.as_deref())?;
-            let mut state = kobo.erc_state();
+            let mut state = kobo.parallax_state();
             if cli.json {
                 state.log.truncate(limit);
                 return print_json(&state);
             }
             match &state.device {
                 Some(d) => {
-                    println!("ERC device id   {}", d.device_id);
+                    println!("Parallax device id   {}", d.device_id);
                     println!(
-                        "first write     {} (ERC {}, firmware {})",
-                        d.first_write.at, d.first_write.erc_version, d.first_write.firmware
+                        "first write     {} (Parallax {}, firmware {})",
+                        d.first_write.at, d.first_write.parallax_version, d.first_write.firmware
                     );
                     println!(
-                        "latest write    {} (ERC {}, firmware {})",
-                        d.last_write.at, d.last_write.erc_version, d.last_write.firmware
+                        "latest write    {} (Parallax {}, firmware {})",
+                        d.last_write.at, d.last_write.parallax_version, d.last_write.firmware
                     );
                 }
-                None => println!("ERC has not changed this Kobo yet."),
+                None => println!("Parallax has not changed this Kobo yet."),
             }
             let checks = state.check(kobo.mount());
             let count = |c: BookCheck| checks.iter().filter(|(_, k)| *k == c).count();
             println!(
-                "books           {} written by ERC ({} changed since, {} gone)",
+                "books           {} written by Parallax ({} changed since, {} gone)",
                 checks.len(),
                 count(BookCheck::Changed),
                 count(BookCheck::Missing)
@@ -991,7 +996,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
         }
         LibraryCommand::Covers { id } => {
             let book = lib.book(id)?;
-            let found = erc_covers::search(&erc_covers::CoverQuery {
+            let found = parallax_covers::search(&parallax_covers::CoverQuery {
                 title: book.title.clone(),
                 author: book.authors.first().cloned(),
                 isbn: book.isbn().map(str::to_owned),
@@ -1013,11 +1018,11 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                 .cover_source(id)?
                 .context("this book has no cover to upscale")?;
             let started = std::time::Instant::now();
-            let engine = erc_upscale::CoreMl::load(&model)?;
-            let up = erc_upscale::upscale_cover(
+            let engine = parallax_upscale::CoreMl::load(&model)?;
+            let up = parallax_upscale::upscale_cover(
                 &engine,
                 &source,
-                erc_library::CUSTOM_COVER_MAX_HEIGHT,
+                parallax_library::CUSTOM_COVER_MAX_HEIGHT,
                 |done, total| eprint!("\rtile {done} of {total}"),
                 &std::sync::atomic::AtomicBool::new(false),
             )?;
@@ -1042,7 +1047,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             let book = if reset {
                 lib.reset_cover(id)?
             } else if let Some(url) = url {
-                lib.set_cover(id, &erc_covers::download(&url)?)?
+                lib.set_cover(id, &parallax_covers::download(&url)?)?
             } else if let Some(file) = file {
                 lib.set_cover(id, &std::fs::read(&file)?)?
             } else {
@@ -1119,7 +1124,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             let books = ids
                 .iter()
                 .map(|&id| lib.book(id))
-                .collect::<erc_library::Result<Vec<_>>>()?;
+                .collect::<parallax_library::Result<Vec<_>>>()?;
             let progress = Reporter::new(json);
             let proposals = enhance::propose(
                 &books,
@@ -1276,10 +1281,10 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             let books = ids
                 .iter()
                 .map(|&id| lib.book(id))
-                .collect::<erc_library::Result<Vec<_>>>()?;
+                .collect::<parallax_library::Result<Vec<_>>>()?;
             let files: Vec<_> = ids.iter().map(|&id| lib.book_files(id)).collect();
-            let duplicates = erc_core::duplicates::library_duplicates(lib)?;
-            let review = erc_core::review::review(&books, &files, duplicates);
+            let duplicates = parallax_core::duplicates::library_duplicates(lib)?;
+            let review = parallax_core::review::review(&books, &files, duplicates);
             if json {
                 return print_json(&review);
             }
@@ -1299,8 +1304,8 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             let book = lib.book(id)?;
             let items = lib.annotations(id)?;
             let text = match format {
-                AnnotationFormat::Markdown => erc_core::annotations::markdown(&book, &items),
-                AnnotationFormat::Json => erc_core::annotations::json(&book, &items),
+                AnnotationFormat::Markdown => parallax_core::annotations::markdown(&book, &items),
+                AnnotationFormat::Json => parallax_core::annotations::json(&book, &items),
             };
             match out {
                 Some(path) => {
@@ -1390,7 +1395,8 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             } else {
                 find_kobo(None).ok()
             };
-            let plan = erc_core::genres::plan(lib, kobo.as_ref()).map_err(anyhow::Error::msg)?;
+            let plan =
+                parallax_core::genres::plan(lib, kobo.as_ref()).map_err(anyhow::Error::msg)?;
             if json && !apply {
                 return print_json(&plan);
             }
@@ -1432,7 +1438,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                 println!("Run with --apply to make these changes.");
                 return Ok(());
             }
-            let choice = erc_core::genres::TidyChoice {
+            let choice = parallax_core::genres::TidyChoice {
                 tags: tags
                     .iter()
                     .map(|t| (t.from.clone(), t.to.clone()))
@@ -1443,8 +1449,9 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                     .map(|c| (c.from.clone(), c.to.clone()))
                     .collect(),
             };
-            let result = erc_core::genres::apply_tidy(lib, kobo.as_ref(), &backup_root()?, &choice)
-                .map_err(anyhow::Error::msg)?;
+            let result =
+                parallax_core::genres::apply_tidy(lib, kobo.as_ref(), &backup_root()?, &choice)
+                    .map_err(anyhow::Error::msg)?;
             if json {
                 return print_json(&result);
             }

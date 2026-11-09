@@ -42,7 +42,7 @@ pub trait Fetch: Sync {
 
 /// Sent to every service.
 pub const USER_AGENT: &str = concat!(
-    "E-Reader-Companion/",
+    "Parallax/",
     env!("CARGO_PKG_VERSION"),
     " (personal e-book manager)"
 );
@@ -51,7 +51,7 @@ pub const USER_AGENT: &str = concat!(
 /// Open Library allows 3 requests a second with it, and Wikimedia may block
 /// clients without it.
 const CONTACT_USER_AGENT: &str = concat!(
-    "E-Reader-Companion/",
+    "Parallax/",
     env!("CARGO_PKG_VERSION"),
     " (personal e-book manager; jackson.ferguson0@gmail.com)"
 );

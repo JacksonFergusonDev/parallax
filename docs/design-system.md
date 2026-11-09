@@ -10,7 +10,9 @@ Keep the icon's proportions, padding, colors, and rounded container intact. Do n
 
 The web copy is `app/public/parallax.svg`. Keep the SVG copies identical. The desktop raster has transparent padding so the rounded square fills about 83% of the Dock icon slot. From the repository root, regenerate it with `inkscape app/src-tauri/icons/source/icon.svg --export-area=-19:-19:219:219 --export-width=1024 --export-height=1024 --export-filename=app/src-tauri/icons/source/icon.png`, then run `pnpm --dir app tauri icon src-tauri/icons/source/icon.png`. Keep the desktop outputs.
 
-Use `Parallax` for the desktop executable so macOS shows the product name when running it directly during development. The internal application identifier `dev.erc.companion`, Rust crate names, `erc` CLI executable, database paths, and `.erc` device records identify existing user data and integrations. Historical project briefs and completed milestone records retain their original names.
+Use `Parallax` for the desktop executable so macOS shows the product name when running it directly during development. Use `dev.parallax.app` for the desktop bundle identifier, `parallax-cli` for the CLI, `parallax-*` for workspace packages, and `.parallax` for Parallax records on Kobo devices.
+
+The desktop and CLI executable names must differ beyond letter case so both can build into the same directory on macOS.
 
 ## Typography and density
 

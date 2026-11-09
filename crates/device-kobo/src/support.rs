@@ -1,4 +1,4 @@
-//! Which Kobos ERC changes, decided before anything is written.
+//! Which Kobos Parallax changes, decided before anything is written.
 //!
 //! Reading works on any Kobo whose database is new enough. Changing one also
 //! needs a database schema calibre has validated, Kobo's own firmware (not a
@@ -16,7 +16,7 @@ use crate::db::{MAX_TESTED_DB_VERSION, MIN_SUPPORTED_DB_VERSION, columns};
 use crate::error::{Error, Result};
 use crate::version::VersionInfo;
 
-/// Newest firmware major version ERC writes to. Kobo's own firmware has been
+/// Newest firmware major version Parallax writes to. Kobo's own firmware has been
 /// 4.x since 2016; 5.x is Tolino's.
 pub const MAX_WRITE_FIRMWARE_MAJOR: u32 = 4;
 
@@ -57,11 +57,11 @@ const REQUIRED: [(&str, &[&str]); 3] = [
     ),
 ];
 
-/// What ERC can do with a connected Kobo.
+/// What Parallax can do with a connected Kobo.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Support {
     pub db_version: Option<u32>,
-    /// Why ERC won't change this Kobo; `None` when it will.
+    /// Why Parallax won't change this Kobo; `None` when it will.
     pub read_only: Option<String>,
     /// The database has series columns (schema 65+).
     pub series: bool,
@@ -70,7 +70,7 @@ pub struct Support {
 }
 
 impl KoboDevice {
-    /// What ERC can do with this Kobo. Never fails: an unreadable database
+    /// What Parallax can do with this Kobo. Never fails: an unreadable database
     /// makes the device read-only.
     pub fn support(&self) -> Support {
         let unreadable = |reason: String| Support {
@@ -92,7 +92,7 @@ impl KoboDevice {
         }
     }
 
-    /// Fails unless ERC may change this Kobo. Every change goes through
+    /// Fails unless Parallax may change this Kobo. Every change goes through
     /// here: database writes when a [`crate::DeviceWriter`] opens, file
     /// changes before they start.
     pub fn check_writable(&self) -> Result<()> {
@@ -116,7 +116,7 @@ pub(crate) fn assess(version: &VersionInfo, conn: &Connection) -> Result<Support
     })
 }
 
-/// Why ERC must not change this Kobo, as the error a write returns.
+/// Why Parallax must not change this Kobo, as the error a write returns.
 pub(crate) fn write_blocker(version: &VersionInfo, conn: &Connection) -> Result<Option<Error>> {
     let db = db_version(conn)?;
     if db < MIN_SUPPORTED_DB_VERSION {
@@ -134,7 +134,7 @@ pub(crate) fn write_blocker(version: &VersionInfo, conn: &Connection) -> Result<
     let major = version.firmware.0.first().copied().unwrap_or(0);
     if major > MAX_WRITE_FIRMWARE_MAJOR {
         return Ok(Some(Error::UnsupportedDevice(format!(
-            "firmware {} is newer than any ERC knows how to change (up to {MAX_WRITE_FIRMWARE_MAJOR}.x)",
+            "firmware {} is newer than any Parallax knows how to change (up to {MAX_WRITE_FIRMWARE_MAJOR}.x)",
             version.firmware
         ))));
     }
@@ -156,7 +156,7 @@ pub(crate) fn write_blocker(version: &VersionInfo, conn: &Connection) -> Result<
     }
     if integer_booleans(conn)? {
         return Ok(Some(Error::UnsupportedDevice(
-            "its database stores yes/no values as numbers, which ERC doesn't write".into(),
+            "its database stores yes/no values as numbers, which Parallax doesn't write".into(),
         )));
     }
     Ok(None)

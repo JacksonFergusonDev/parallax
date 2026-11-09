@@ -39,7 +39,7 @@ Suggested stored shape, in resolution order:
 
 - The highest-value immediate change is capturing the `Start*`/`End*` columns in the import now. Those rows can vanish when a book is removed from the device, and the app currently discards the information needed for precise mapping.
 - `Annotation.position` should not be compared across formats, because its spine index comes from the device's copy, which may include kepubify's dummy title page (see the CFI section). Key on the file href instead.
-- Record the kepubify version per sent book. `.erc/books.json` already holds `sha256` and `erc_version` per `docs/device-notes.md`, but no converter version is listed.
+- Record the kepubify version per sent book. `.parallax/books.json` already holds `sha256` and `parallax_version` per `docs/device-notes.md`, but no converter version is listed.
 
 ### Gaps
 

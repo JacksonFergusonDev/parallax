@@ -1,5 +1,5 @@
 [package]
-name = "erc-epub"
+name = "parallax-epub"
 description = "EPUB metadata and cover access with minimal, byte-preserving edits"
 version.workspace = true
 edition.workspace = true

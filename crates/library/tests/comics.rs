@@ -6,8 +6,8 @@ use std::fs::{self, File};
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 
-use erc_comic::{Cbz, Manga};
-use erc_library::{COMICS_KIND, Direction, Error, Format, ImportOutcome, Kind, Library};
+use parallax_comic::{Cbz, Manga};
+use parallax_library::{COMICS_KIND, Direction, Error, Format, ImportOutcome, Kind, Library};
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
@@ -39,7 +39,7 @@ fn cbz(dir: &Path, name: &str, info: Option<&str>) -> PathBuf {
     path
 }
 
-fn added(outcome: ImportOutcome) -> erc_library::Book {
+fn added(outcome: ImportOutcome) -> parallax_library::Book {
     match outcome {
         ImportOutcome::Added { book, .. } => book,
         ImportOutcome::AlreadyInLibrary { .. } => panic!("expected a new book"),
@@ -140,8 +140,8 @@ fn seven_zip_is_converted_and_known_by_its_original() {
     // ComicInfo says right to left.
     assert_eq!((book.kind, book.direction), (Kind::Manga, Direction::Rtl));
     assert_eq!(
-        erc_comic::sniff(&lib.book_file(book.id)).unwrap(),
-        erc_comic::Format::Zip
+        parallax_comic::sniff(&lib.book_file(book.id)).unwrap(),
+        parallax_comic::Format::Zip
     );
     assert!(matches!(
         lib.import(&src).unwrap(),

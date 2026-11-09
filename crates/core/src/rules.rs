@@ -12,8 +12,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
-use erc_device_kobo::KoboDevice;
-use erc_library::{Library, Rule, RuleKind};
+use parallax_device_kobo::KoboDevice;
+use parallax_library::{Library, Rule, RuleKind};
 use serde::Serialize;
 
 use crate::collections::{CollectionChange, apply};
@@ -47,7 +47,7 @@ pub fn plan(
     rules: &[Rule],
     library: &Library,
     device: &KoboDevice,
-) -> erc_device_kobo::Result<Vec<PlannedCollection>> {
+) -> parallax_device_kobo::Result<Vec<PlannedCollection>> {
     let rules: Vec<&Rule> = rules.iter().filter(|r| r.enabled).collect();
     if rules.is_empty() {
         return Ok(Vec::new());
@@ -122,7 +122,7 @@ fn keys(kind: RuleKind, item: &Item) -> Vec<String> {
             let mut genres: Vec<String> = item
                 .tags
                 .iter()
-                .filter_map(|t| erc_metadata::genres::canonical(t))
+                .filter_map(|t| parallax_metadata::genres::canonical(t))
                 .map(str::to_owned)
                 .collect();
             // A book without genre tags (most books nobody has tagged) gets
@@ -141,7 +141,7 @@ fn keys(kind: RuleKind, item: &Item) -> Vec<String> {
 fn items(
     library: &Library,
     device: &KoboDevice,
-    device_books: Vec<erc_device::DeviceBook>,
+    device_books: Vec<parallax_device::DeviceBook>,
     memberships: &HashMap<String, Vec<String>>,
 ) -> Vec<Item> {
     let copies = library
@@ -199,7 +199,7 @@ pub fn apply_plan(
     device: &KoboDevice,
     backup_root: &Path,
     plan: &[PlannedCollection],
-) -> erc_device_kobo::Result<usize> {
+) -> parallax_device_kobo::Result<usize> {
     if plan.is_empty() {
         return Ok(0);
     }
@@ -230,7 +230,7 @@ pub fn run(
     device: &KoboDevice,
     backup_root: &Path,
     trigger: Trigger,
-) -> erc_device_kobo::Result<usize> {
+) -> parallax_device_kobo::Result<usize> {
     let rules = library.rules().unwrap_or_default();
     let mut planned = plan(&rules, library, device)?;
     if trigger == Trigger::Automatic {

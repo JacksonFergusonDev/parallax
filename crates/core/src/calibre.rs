@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use erc_convert::Converter;
-use erc_epub::{Epub, Identifier, Metadata, has_drm, strip_kobo_markup};
-use erc_library::{ImportOutcome, Library};
+use parallax_convert::Converter;
+use parallax_epub::{Epub, Identifier, Metadata, has_drm, strip_kobo_markup};
+use parallax_library::{ImportOutcome, Library};
 use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;
 
@@ -57,7 +57,7 @@ impl CalibreBook {
             .map(|(_, p)| p.as_path())
     }
 
-    /// The file ERC can import, if any, best format first.
+    /// The file Parallax can import, if any, best format first.
     fn source(&self) -> Option<(&Path, Source)> {
         [
             ("EPUB", Source::Epub),
@@ -408,7 +408,7 @@ fn import_one(
         }
         Source::Amazon => match amazon.convert(source, &clean) {
             Ok(()) => &clean,
-            Err(erc_convert::Error::DrmProtected(_)) => return Ok(drm()),
+            Err(parallax_convert::Error::DrmProtected(_)) => return Ok(drm()),
             Err(e) => return Err(e.to_string()),
         },
     };

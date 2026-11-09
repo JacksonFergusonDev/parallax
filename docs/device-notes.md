@@ -26,13 +26,13 @@
 - Series is set on 1 of 93 sideloaded books (`SeriesID` = series name, as expected for sideloads).
 - Reading data: ReadStatus 0/1/2 = 73/34/4. `___PercentRead`, `DateLastRead` and `TimeSpentReading` are populated for books that have been opened. Enough for MVP status badges.
 
-## ERC records (`/.erc/`, M10)
+## Parallax records (`/.parallax/`, M10)
 
-Written only during ERC changes, never on connect. All writes are temp-file + rename, and `._` companions are removed.
+Written only during Parallax changes, never on connect. All writes are temp-file + rename, and `._` companions are removed.
 
-- `device.json`: `device_id` (UUID ERC assigns on its first write), `serial`, `first_write` and `last_write` stamps (`at`, `erc_version`, `firmware`, `db_version`).
-- `books.json`: every book file ERC wrote: `content_id`, `path`, `library_book` (desktop library id, when sent from the library), `sha256` and `size` at write time, `first_written`, `last_written`, `erc_version`, `writes`. Removed books are dropped. A size mismatch means something else changed the file.
-- `log.jsonl`: one JSON object per operation (`at`, `erc_version`, `op` = send/replace/remove/collection/series/tidy/restore, `content_ids`, `detail`, `backup` = the database backup file taken first, `error` when the write session failed). Newest last, capped at 2000 entries.
+- `device.json`: `device_id` (UUID Parallax assigns on its first write), `serial`, `first_write` and `last_write` stamps (`at`, `parallax_version`, `firmware`, `db_version`).
+- `books.json`: every book file Parallax wrote: `content_id`, `path`, `library_book` (desktop library id, when sent from the library), `sha256` and `size` at write time, `first_written`, `last_written`, `parallax_version`, `writes`. Removed books are dropped. A size mismatch means something else changed the file.
+- `log.jsonl`: one JSON object per operation (`at`, `parallax_version`, `op` = send/replace/remove/collection/series/tidy/restore, `content_ids`, `detail`, `backup` = the database backup file taken first, `error` when the write session failed). Newest last, capped at 2000 entries.
 - An unreadable file is renamed to `<name>.unreadable-<timestamp>` and rebuilt; recording never fails the change itself.
 
 ## Backups (on the computer, not the Kobo)

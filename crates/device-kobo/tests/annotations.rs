@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use erc_device_kobo::{AnnotationKind, KoboDb, KoboDevice};
+use parallax_device_kobo::{AnnotationKind, KoboDb, KoboDevice};
 use rusqlite::{Connection, params};
 
 const SCHEMA: &str = include_str!("../../../tests/fixtures/kobo/schema-db174.sql");

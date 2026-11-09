@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
-use erc_epub::{Epub, MetadataEdit, inspect};
+use parallax_epub::{Epub, MetadataEdit, inspect};
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 

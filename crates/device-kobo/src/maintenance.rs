@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
-use erc_device::ReadStatus;
+use parallax_device::ReadStatus;
 use rusqlite::{Transaction, params};
 use serde::Serialize;
 

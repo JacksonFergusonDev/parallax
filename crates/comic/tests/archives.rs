@@ -5,7 +5,7 @@ use std::fs::{self, File};
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 
-use erc_comic::{
+use parallax_comic::{
     Cbz, ComicInfo, Error, FolderKind, Format, Manga, SkipReason, chapters_to_cbz, classify_folder,
     convert_to_cbz, folder_to_cbz, sniff, write_comic_info,
 };

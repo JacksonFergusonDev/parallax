@@ -7,9 +7,9 @@ use std::sync::Mutex;
 
 use std::path::Path;
 
-use erc_comic::{Cbz, SkipReason};
-use erc_epub::{Inspection, inspect};
-use erc_library::{Book, BookFiles, CoverQuality, Library};
+use parallax_comic::{Cbz, SkipReason};
+use parallax_epub::{Inspection, inspect};
+use parallax_library::{Book, BookFiles, CoverQuality, Library};
 use rayon::prelude::*;
 use serde::Serialize;
 
@@ -47,7 +47,7 @@ pub struct Finding {
 pub fn check_library(
     library: &Library,
     on_progress: impl FnMut(usize, usize) + Send,
-) -> erc_library::Result<Vec<Finding>> {
+) -> parallax_library::Result<Vec<Finding>> {
     let books = library.books()?;
     let files: Vec<BookFiles> = books.iter().map(|b| library.book_files(b.id)).collect();
     let mut out = check_files(&books, &files, on_progress);
@@ -273,9 +273,9 @@ mod tests {
             pages_estimated: true,
             original_name: "b.epub".into(),
             file_size: 1,
-            format: erc_library::Format::Epub,
-            kind: erc_library::Kind::Book,
-            direction: erc_library::Direction::Ltr,
+            format: parallax_library::Format::Epub,
+            kind: parallax_library::Kind::Book,
+            direction: parallax_library::Direction::Ltr,
             has_cover: true,
             custom_cover: false,
             cover_upscaled: false,

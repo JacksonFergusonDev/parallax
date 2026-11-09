@@ -1,8 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use erc_device::ReadStatus;
-use erc_device_kobo::{
+use parallax_device::ReadStatus;
+use parallax_device_kobo::{
     DeviceReport, Error, KoboDevice, add_to_collection, create_collection, remove_orphaned_images,
     set_read_status, set_series,
 };
@@ -76,7 +76,7 @@ fn insert_book(conn: &Connection) {
     .unwrap();
 }
 
-/// Every kind of change ERC makes, in one session; the writer's integrity
+/// Every kind of change Parallax makes, in one session; the writer's integrity
 /// check runs on close.
 fn exercise_writes(kobo: &KoboDevice, backups: &Path) {
     let mut writer = kobo.open_writer(backups).unwrap();
@@ -297,7 +297,7 @@ fn reports() -> Vec<PathBuf> {
     found
 }
 
-/// Rebuilds each reported device's database from its schema and checks ERC
+/// Rebuilds each reported device's database from its schema and checks Parallax
 /// reaches the same verdict, then makes every kind of change on the ones it
 /// supports. A new report in tests/fixtures/kobo/reports/ is all a new model
 /// needs to be covered.

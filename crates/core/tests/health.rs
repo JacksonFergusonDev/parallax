@@ -5,8 +5,8 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Mutex;
 
-use erc_core::health::{Check, Finding, check_library};
-use erc_library::{ImportOutcome, Library};
+use parallax_core::health::{Check, Finding, check_library};
+use parallax_library::{ImportOutcome, Library};
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 

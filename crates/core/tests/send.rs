@@ -1,11 +1,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use erc_convert::Kepubify;
-use erc_core::send::{Progress, send_books, send_library_books};
-use erc_device_kobo::KoboDevice;
-use erc_epub::{Epub, MetadataEdit};
-use erc_library::{ImportOutcome, Library};
+use parallax_convert::Kepubify;
+use parallax_core::send::{Progress, send_books, send_library_books};
+use parallax_device_kobo::KoboDevice;
+use parallax_epub::{Epub, MetadataEdit};
+use parallax_library::{ImportOutcome, Library};
 
 const VERSION: &str =
     "N000000000001,4.1.15,4.38.23697,4.1.15,4.1.15,00000000-0000-0000-0000-000000000388";
@@ -16,7 +16,7 @@ fn fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
-/// A Kobo database with no books; ERC only writes to a Kobo it can read.
+/// A Kobo database with no books; Parallax only writes to a Kobo it can read.
 fn empty_database(mount: &Path) {
     rusqlite::Connection::open(mount.join(".kobo/KoboReader.sqlite"))
         .unwrap()
@@ -147,7 +147,7 @@ fn sends_library_books_with_edited_metadata() {
 
     library.remove(book.id).unwrap();
     let catalog =
-        erc_core::device::device_catalog(&library, &kobo, &kobo.open_db().unwrap()).unwrap();
+        parallax_core::device::device_catalog(&library, &kobo, &kobo.open_db().unwrap()).unwrap();
     assert_eq!(catalog.len(), 1);
     assert_eq!(catalog[0].book.id, sent.content_id);
     assert!(catalog[0].pending_import);
@@ -155,8 +155,10 @@ fn sends_library_books_with_edited_metadata() {
 
 #[test]
 fn updates_and_removes_books_on_device() {
-    use erc_core::device::{books_on_device, device_catalog, remove_from_device_with_progress};
-    use erc_core::send::update_on_device;
+    use parallax_core::device::{
+        books_on_device, device_catalog, remove_from_device_with_progress,
+    };
+    use parallax_core::send::update_on_device;
     use rusqlite::Connection;
 
     let dir = tempfile::tempdir().unwrap();
@@ -194,7 +196,7 @@ fn updates_and_removes_books_on_device() {
         .unwrap()
         .execute(
             "INSERT INTO content (ContentID, ContentType, MimeType, ___UserID, Title, Accessibility, IsDownloaded, ___PercentRead)
-             VALUES (?1, 6, 'application/x-kobo-epub+zip', 'kepub_user', 'ERC Test Book', -1, 'true', 55)",
+             VALUES (?1, 6, 'application/x-kobo-epub+zip', 'kepub_user', 'Parallax Test Book', -1, 'true', 55)",
             [&content_id],
         )
         .unwrap();
@@ -264,8 +266,8 @@ fn updates_and_removes_books_on_device() {
 
 #[test]
 fn sends_into_collection_and_applies_series_after_import() {
-    use erc_core::collections::{CollectionChange, apply, pending_series, reconcile_series};
-    use erc_core::device::device_catalog;
+    use parallax_core::collections::{CollectionChange, apply, pending_series, reconcile_series};
+    use parallax_core::device::device_catalog;
     use rusqlite::Connection;
 
     let dir = tempfile::tempdir().unwrap();
@@ -322,7 +324,7 @@ fn sends_into_collection_and_applies_series_after_import() {
         .unwrap()
         .execute(
             "INSERT INTO content (ContentID, ContentType, MimeType, ___UserID, Title, Accessibility, IsDownloaded)
-             VALUES (?1, 6, 'application/x-kobo-epub+zip', 'kepub_user', 'ERC Test Book', -1, 'true')",
+             VALUES (?1, 6, 'application/x-kobo-epub+zip', 'kepub_user', 'Parallax Test Book', -1, 'true')",
             [&content_id],
         )
         .unwrap();
@@ -350,8 +352,8 @@ fn sends_into_collection_and_applies_series_after_import() {
 
 #[test]
 fn rules_group_sent_books_before_and_after_import() {
-    use erc_core::rules::{Trigger, plan, run};
-    use erc_library::{Rule, RuleKind};
+    use parallax_core::rules::{Trigger, plan, run};
+    use parallax_library::{Rule, RuleKind};
     use rusqlite::Connection;
 
     let dir = tempfile::tempdir().unwrap();
@@ -543,9 +545,9 @@ fn comic_sends_follow_three_kobo_screen_profiles() {
 }
 
 fn send_update_comic_on(mount: &Path, root: &Path) {
-    use erc_core::collections::reconcile_series;
-    use erc_core::device::books_on_device;
-    use erc_core::send::{COMIC_SPREADS, update_on_device};
+    use parallax_core::collections::reconcile_series;
+    use parallax_core::device::books_on_device;
+    use parallax_core::send::{COMIC_SPREADS, update_on_device};
     use rusqlite::Connection;
 
     let kobo = comic_kobo(mount, "388");
@@ -557,7 +559,7 @@ fn send_update_comic_on(mount: &Path, root: &Path) {
     };
     let backups = root.join("backups");
     let converter = Kepubify::locate().unwrap();
-    let estimate = erc_core::comic_send::estimate(&library, &kobo, &[book.id])
+    let estimate = parallax_core::comic_send::estimate(&library, &kobo, &[book.id])
         .unwrap()
         .unwrap();
     assert_eq!((estimate.width, estimate.height), (1264, 1680));
@@ -657,8 +659,8 @@ fn sends_and_updates_a_comic_on_fat32() {
 
 #[test]
 fn comics_added_from_the_kobo_are_never_replaced() {
-    use erc_core::device::books_on_device;
-    use erc_core::send::{COMIC_SPREADS, update_on_device};
+    use parallax_core::device::books_on_device;
+    use parallax_core::send::{COMIC_SPREADS, update_on_device};
 
     let dir = tempfile::tempdir().unwrap();
     let mount = dir.path().join("kobo");
@@ -702,7 +704,7 @@ fn comics_added_from_the_kobo_are_never_replaced() {
 
 #[test]
 fn a_guessed_screen_changing_does_not_mark_comics_out_of_date() {
-    use erc_core::device::books_on_device;
+    use parallax_core::device::books_on_device;
 
     let dir = tempfile::tempdir().unwrap();
     let mount = dir.path().join("kobo");

@@ -45,7 +45,7 @@ impl KoboDevice {
         self.send_file_for(src, dest, None)
     }
 
-    /// [`KoboDevice::send_file`] for a desktop library book, so `/.erc/`
+    /// [`KoboDevice::send_file`] for a desktop library book, so `/.parallax/`
     /// records which library book the copy came from.
     pub fn send_file_for(
         &self,
@@ -121,7 +121,7 @@ impl KoboDevice {
         fs::create_dir_all(parent).map_err(|e| io_err(parent, e))?;
         created_dirs.reverse();
         let file_name = target.file_name().unwrap_or_default().to_string_lossy();
-        let partial = parent.join(format!(".{file_name}.erc-part"));
+        let partial = parent.join(format!(".{file_name}.parallax-part"));
 
         let (bytes, expected) = copy_plain_with_progress(src, &partial, progress)?;
         if bytes != expected {

@@ -8,10 +8,10 @@
 
 use std::path::Path;
 
-use erc_device::DeviceBook;
-use erc_device_kobo::KoboDevice;
-use erc_epub::{Epub, has_drm, strip_kobo_markup};
-use erc_library::{ImportOutcome, Library};
+use parallax_device::DeviceBook;
+use parallax_device_kobo::KoboDevice;
+use parallax_epub::{Epub, has_drm, strip_kobo_markup};
+use parallax_library::{ImportOutcome, Library};
 use serde::Serialize;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -44,7 +44,7 @@ pub fn import_from_device(
     device: &KoboDevice,
     content_ids: Option<&[String]>,
     mut on_progress: impl FnMut(usize, usize, &str),
-) -> erc_device_kobo::Result<Vec<DeviceImportOutcome>> {
+) -> parallax_device_kobo::Result<Vec<DeviceImportOutcome>> {
     let books: Vec<DeviceBook> = device
         .open_db()?
         .books()?
@@ -52,7 +52,7 @@ pub fn import_from_device(
         .filter(|b| content_ids.is_none_or(|ids| ids.contains(&b.id)))
         .collect();
     let serial = device.version().serial.clone();
-    let erc = device.erc_state();
+    let state = device.parallax_state();
     let total = books.len();
     // Only adds books, so worth doing without a snapshot if one can't be made.
     if total > 0 {
@@ -63,12 +63,12 @@ pub fn import_from_device(
         .enumerate()
         .map(|(i, book)| {
             on_progress(i + 1, total, &book.title);
-            let from_erc = erc
+            let managed_id = state
                 .books
                 .iter()
                 .find(|b| b.content_id == book.id)
                 .and_then(|b| b.library_book);
-            let result = import_one(library, device, &serial, &book, from_erc);
+            let result = import_one(library, device, &serial, &book, managed_id);
             DeviceImportOutcome {
                 content_id: book.id,
                 title: book.title,
@@ -89,7 +89,7 @@ fn import_one(
     device: &KoboDevice,
     serial: &str,
     book: &DeviceBook,
-    from_erc: Option<i64>,
+    managed_id: Option<i64>,
 ) -> Result<DeviceImport, String> {
     let copies = library.device_copies(serial).map_err(|e| e.to_string())?;
     if copies.iter().any(|c| c.content_id == book.id) {
@@ -130,8 +130,8 @@ fn import_one(
         });
     }
     // Sent from this library on another computer, or before its record here
-    // was lost: ERC's own note on the device names the library book.
-    if let Some(id) = from_erc.filter(|&id| library.book(id).is_ok()) {
+    // was lost: Parallax's own note on the device names the library book.
+    if let Some(id) = managed_id.filter(|&id| library.book(id).is_ok()) {
         link(library, id)?;
         return Ok(DeviceImport::Linked { book_id: id });
     }
@@ -152,7 +152,7 @@ fn import_one(
         ImportOutcome::Added { book: added, .. } => {
             // Nickel ignores series in sideloaded EPUBs, so a series shown on
             // the Kobo came from somewhere the EPUB doesn't record (calibre,
-            // or ERC's reconcile); keep it.
+            // or Parallax's reconcile); keep it.
             if added.series.is_none()
                 && let Some(series) = &book.series
             {

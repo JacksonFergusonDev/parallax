@@ -1,8 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use erc_device::ReadStatus;
-use erc_device_kobo::{
+use parallax_device::ReadStatus;
+use parallax_device_kobo::{
     KoboDevice, duplicate_collections, files_not_in_database, image_id_for,
     merge_duplicate_collections, missing_files, orphaned_images, qhash, remove_orphaned_images,
     set_read_status,
@@ -82,7 +82,7 @@ fn reading_status_follows_kobo_utilities() {
     w.close().unwrap();
     assert_eq!(row(&db), (0, 0, None, None, "true".into(), 0));
 
-    let log = kobo.erc_state().log;
+    let log = kobo.parallax_state().log;
     assert_eq!(log[0].op, "reading status");
     assert_eq!(
         log[0].detail.as_deref(),
@@ -187,7 +187,7 @@ fn only_covers_of_vanished_books_are_cleaned() {
             .exists()
     );
     assert!(kobo.mount().join(".kobo-images/readme.txt").exists());
-    assert_eq!(kobo.erc_state().log[0].op, "clean images");
+    assert_eq!(kobo.parallax_state().log[0].op, "clean images");
     assert!(orphaned_images(&kobo).unwrap().is_empty());
 }
 

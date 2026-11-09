@@ -3,20 +3,20 @@
 
 use std::path::Path;
 
-use erc_comic::{FolderKind, chapters_to_cbz, classify_folder, folder_to_cbz};
-use erc_convert::{Converter, amazon};
-use erc_library::{ImportOutcome, Library};
+use parallax_comic::{FolderKind, chapters_to_cbz, classify_folder, folder_to_cbz};
+use parallax_convert::{Converter, amazon};
+use parallax_library::{ImportOutcome, Library};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
-    Comic(#[from] erc_comic::Error),
+    Comic(#[from] parallax_comic::Error),
     #[error("Choose a folder of comic pages or chapter archives: {0}")]
     ComicFolder(std::path::PathBuf),
     #[error(transparent)]
-    Library(#[from] erc_library::Error),
+    Library(#[from] parallax_library::Error),
     #[error(transparent)]
-    Convert(#[from] erc_convert::Error),
+    Convert(#[from] parallax_convert::Error),
 }
 
 /// Imports `path`, using `converter` to make an EPUB if it's an Amazon book.
@@ -32,7 +32,7 @@ pub fn import_file(
     if let Some(book) = library.book_from_file(path)? {
         return Ok(ImportOutcome::AlreadyInLibrary { book });
     }
-    let workdir = tempfile::tempdir().map_err(erc_convert::Error::from)?;
+    let workdir = tempfile::tempdir().map_err(parallax_convert::Error::from)?;
     let epub = workdir.path().join("book.epub");
     converter.convert(path, &epub)?;
     Ok(library.import_converted(&epub, path)?)
@@ -44,7 +44,7 @@ pub fn import_comic_folder(library: &mut Library, path: &Path) -> Result<ImportO
     let name = path
         .file_name()
         .ok_or_else(|| Error::ComicFolder(path.into()))?;
-    let workdir = tempfile::tempdir().map_err(erc_convert::Error::from)?;
+    let workdir = tempfile::tempdir().map_err(parallax_convert::Error::from)?;
     let mut file = name.to_os_string();
     file.push(".cbz");
     let cbz = workdir.path().join(file);

@@ -4,8 +4,8 @@
 use std::fs;
 use std::path::Path;
 
-use erc_comic::{Cbz, ComicInfo, Manga, NameInfo, Role, parse_file_name, write_comic_info};
-use erc_epub::{Contributor, Identifier};
+use parallax_comic::{Cbz, ComicInfo, Manga, NameInfo, Role, parse_file_name, write_comic_info};
+use parallax_epub::{Contributor, Identifier};
 use rusqlite::params;
 
 use crate::format::{Direction, Format, Kind};
@@ -177,9 +177,9 @@ fn kind_and_direction(manga: Option<Manga>, default_is_manga: bool) -> (Kind, Di
 /// A comic archive rather than an EPUB: a zip with no EPUB container, or a
 /// RAR or 7z archive. Unreadable files aren't comics (the EPUB import then
 /// reports why).
-pub(crate) fn comic_format(path: &Path) -> Option<erc_comic::Format> {
-    let format = erc_comic::sniff(path).ok()?;
-    if format != erc_comic::Format::Zip {
+pub(crate) fn comic_format(path: &Path) -> Option<parallax_comic::Format> {
+    let format = parallax_comic::sniff(path).ok()?;
+    if format != parallax_comic::Format::Zip {
         return Some(format);
     }
     let zip = zip::ZipArchive::new(fs::File::open(path).ok()?).ok()?;
@@ -194,9 +194,9 @@ impl Library {
     pub(crate) fn import_any_comic(
         &mut self,
         path: &Path,
-        format: erc_comic::Format,
+        format: parallax_comic::Format,
     ) -> Result<ImportOutcome> {
-        if format == erc_comic::Format::Zip {
+        if format == parallax_comic::Format::Zip {
             return self.import_comic(path, path);
         }
         let (hash, _) = hash_file(path)?;
@@ -205,7 +205,7 @@ impl Library {
         }
         let work = tempfile::tempdir().map_err(|e| io_err(path, e))?;
         let cbz = work.path().join("book.cbz");
-        erc_comic::convert_to_cbz(path, &cbz)?;
+        parallax_comic::convert_to_cbz(path, &cbz)?;
         self.import_comic(&cbz, path)
     }
 
@@ -295,7 +295,7 @@ impl Library {
             return Err(Error::NotAComic(id));
         }
         let mut comic = Cbz::open(&self.book_file(id))?;
-        Ok(erc_comic::shape::Shapes::count(
+        Ok(parallax_comic::shape::Shapes::count(
             (0..comic.pages().len()).map(|i| comic.page_dimensions(i).ok().flatten()),
         )
         .spreads)

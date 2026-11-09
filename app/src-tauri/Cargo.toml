@@ -1,5 +1,5 @@
 [package]
-name = "erc-app"
+name = "parallax-app"
 description = "Parallax desktop app"
 version.workspace = true
 edition.workspace = true
@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [lib]
 # The `_lib` suffix avoids a name clash with the bin target on Windows (cargo#8519).
-name = "erc_app_lib"
+name = "parallax_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
@@ -26,16 +26,16 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-window-state = "2"
-erc-comic.workspace = true
-erc-convert.workspace = true
-erc-core.workspace = true
-erc-covers.workspace = true
-erc-device.workspace = true
-erc-device-kobo.workspace = true
-erc-epub.workspace = true
-erc-library.workspace = true
-erc-metadata.workspace = true
-erc-upscale.workspace = true
+parallax-comic.workspace = true
+parallax-convert.workspace = true
+parallax-core.workspace = true
+parallax-covers.workspace = true
+parallax-device.workspace = true
+parallax-device-kobo.workspace = true
+parallax-epub.workspace = true
+parallax-library.workspace = true
+parallax-metadata.workspace = true
+parallax-upscale.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

@@ -2,8 +2,8 @@ use std::fs::{self, File};
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 
-use erc_epub::{Contributor, Epub, MetadataEdit};
-use erc_library::{Error, ImportOutcome, Library};
+use parallax_epub::{Contributor, Epub, MetadataEdit};
+use parallax_library::{Error, ImportOutcome, Library};
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
@@ -62,7 +62,7 @@ fn epub(
     path
 }
 
-fn added(outcome: ImportOutcome) -> (erc_library::Book, Option<i64>) {
+fn added(outcome: ImportOutcome) -> (parallax_library::Book, Option<i64>) {
     match outcome {
         ImportOutcome::Added {
             book,
@@ -278,7 +278,7 @@ fn custom_cover_is_used_on_export_and_can_be_reset() {
 
 #[test]
 fn stores_rules() {
-    use erc_library::{Rule, RuleKind};
+    use parallax_library::{Rule, RuleKind};
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("lib");
     let saved = {
@@ -361,7 +361,7 @@ fn contributors_are_stored_edited_exported_and_backfilled() {
 
 #[test]
 fn cover_quality_follows_the_kobo_screen_height() {
-    use erc_library::{CUSTOM_COVER_MAX_HEIGHT, CoverQuality};
+    use parallax_library::{CUSTOM_COVER_MAX_HEIGHT, CoverQuality};
     assert_eq!(CoverQuality::of_height(1199), CoverQuality::Low);
     assert_eq!(CoverQuality::of_height(1200), CoverQuality::Decent);
     // The upscaler refuses from this height, so "excellent" must start here.
@@ -623,16 +623,16 @@ mod snapshots {
     fn keeps_a_limited_number_of_snapshots() {
         let dir = tempfile::tempdir().unwrap();
         let lib = Library::open(dir.path().join("lib")).unwrap();
-        for _ in 0..erc_library::SNAPSHOTS_KEPT + 3 {
+        for _ in 0..parallax_library::SNAPSHOTS_KEPT + 3 {
             lib.snapshot("tidy", None).unwrap();
         }
-        assert_eq!(lib.snapshots().len(), erc_library::SNAPSHOTS_KEPT);
+        assert_eq!(lib.snapshots().len(), parallax_library::SNAPSHOTS_KEPT);
     }
 }
 
 #[test]
 fn reader_positions_are_kept_clamped_and_go_with_the_book() {
-    use erc_library::ReaderPosition;
+    use parallax_library::ReaderPosition;
 
     let dir = tempfile::tempdir().unwrap();
     let mut lib = Library::open(dir.path().join("lib")).unwrap();
@@ -658,7 +658,7 @@ fn reader_positions_are_kept_clamped_and_go_with_the_book() {
 
 #[test]
 fn reader_highlights_stay_with_their_own_book() {
-    use erc_library::HighlightDraft;
+    use parallax_library::HighlightDraft;
 
     let dir = tempfile::tempdir().unwrap();
     let mut lib = Library::open(dir.path().join("lib")).unwrap();

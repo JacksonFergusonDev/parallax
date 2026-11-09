@@ -9,7 +9,7 @@ import test from "node:test";
 const script = fileURLToPath(new URL("./dev.sh", import.meta.url));
 
 async function fixture(t, { mode = "conflict", released = false, count = 1 } = {}) {
-  const dir = await mkdtemp(join(tmpdir(), "erc-dev-test-"));
+  const dir = await mkdtemp(join(tmpdir(), "parallax-dev-test-"));
   const children = Array.from({ length: count }, () =>
     spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
       stdio: "ignore",

@@ -11,7 +11,7 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
-use erc_device::{Screen, ScreenSource};
+use parallax_device::{Screen, ScreenSource};
 
 pub(crate) struct Model {
     pub id: &'static str,

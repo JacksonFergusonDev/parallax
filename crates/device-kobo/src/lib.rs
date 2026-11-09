@@ -20,7 +20,7 @@ mod writer;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use erc_device::{Capabilities, DeviceInfo, DeviceKind};
+use parallax_device::{Capabilities, DeviceInfo, DeviceKind};
 
 pub use annotations::{Annotation, AnnotationKind};
 pub use backups::{
@@ -47,8 +47,8 @@ pub use ops::{
 pub use report::{CoverFiles, DeviceReport, REPORT_FORMAT};
 pub use screen::ASSUMED_SCREEN;
 pub use state::{
-    BookChange, BookCheck, DeviceRecord, ERC_VERSION, ErcState, LOG_KEPT, LogEntry, ManagedBook,
-    Record, STATE_DIR, Stamp,
+    BookChange, BookCheck, DeviceRecord, DeviceState, LOG_KEPT, LogEntry, ManagedBook,
+    PARALLAX_VERSION, Record, STATE_DIR, Stamp,
 };
 pub use stats::FinishedEvent;
 pub use support::{MAX_WRITE_FIRMWARE_MAJOR, Support};

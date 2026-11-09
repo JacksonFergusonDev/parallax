@@ -274,14 +274,14 @@ export interface PlannedCollection {
 
 export interface Stamp {
   at: string;
-  erc_version: string;
+  parallax_version: string;
   firmware: string;
   db_version: number | null;
 }
 
 export interface LogEntry {
   at: string;
-  erc_version: string;
+  parallax_version: string;
   op: string;
   content_ids?: string[];
   detail?: string;
@@ -314,7 +314,7 @@ export interface Snapshot {
   blocked?: string;
 }
 
-/** ERC's own records on the device, from `/.erc/`. */
+/** Parallax's own records on the device, from `/.parallax/`. */
 export interface DeviceHistory {
   device: {
     device_id: string;

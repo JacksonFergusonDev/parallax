@@ -56,11 +56,11 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
 
 ### C1. Kobo screen profiles (done)
 
-- `screen::MODELS` lists every id above. `DeviceInfo.screen` (`erc_device::Screen`: width, height, colour, and source `model`, `covers` or `assumed`) comes from the model id, then the tallest of up to 24 `N3_FULL` covers (width from a known model of that height, or 3:4), then 1072 × 1448.
+- `screen::MODELS` lists every id above. `DeviceInfo.screen` (`parallax_device::Screen`: width, height, colour, and source `model`, `covers` or `assumed`) comes from the model id, then the tallest of up to 24 `N3_FULL` covers (width from a known model of that height, or 3:4), then 1072 × 1448.
 - About this Kobo shows the screen and says when it was measured or assumed.
 - Tests: unique ids and portrait screens; known models; the Libra 2 report's cover sizes give 1264 × 1680; covers measured on disk; the assumed fallback; the About text.
 
-### C2. Comic archive crate, `erc-comic` (done)
+### C2. Comic archive crate, `parallax-comic` (done)
 
 `crates/comic`, with no app code using it yet:
 
@@ -123,7 +123,7 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
 
 ### C5. Prepare for Kobo (done)
 
-- **`erc_comic::prepare::prepare`** writes a temporary KEPUB and uses rayon in bounded batches. [KCC image notes](../research_notes/Bindery%20and%20Kindle%20Comic%20Converter/kcc_image_pipeline.md) map spread and chroma logic to `image.py`. The [spike implementation](../spikes/kobo-comics/src/main.rs) is the reference for resize, PNG and EPUB packaging.
+- **`parallax_comic::prepare::prepare`** writes a temporary KEPUB and uses rayon in bounded batches. [KCC image notes](../research_notes/Bindery%20and%20Kindle%20Comic%20Converter/kcc_image_pipeline.md) map spread and chroma logic to `image.py`. The [spike implementation](../spikes/kobo-comics/src/main.rs) is the reference for resize, PNG and EPUB packaging.
   - decode;
   - test for colour;
   - greyscale, unless the page is colour on a colour Kobo;
@@ -147,7 +147,7 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
   - output images match the processing;
   - kepubify kept fixed layout and direction;
   - page count matches the source plus splits.
-- **Performance:** the spike took about 8 s per volume. Pages are read in order, processed on the rayon pool as soon as memory allows (32 MP decoded, 64 MB encoded in flight), and written back in order, so no core waits for a batch. On an M3, preparing Berserk v01 (219 pages) for a Libra 2 takes about 4.3 s in release, against 5.1 s with batches and 16 s on one thread. About 73% of the work is decoding its progressive JPEGs: libjpeg-turbo was no faster and ImageIO slower, and the remaining resize and greyscale steps are too small a share for GPU or Accelerate to pay off. Development builds optimise erc-comic, which was 34 s unoptimised. Progress is reported per input page.
+- **Performance:** the spike took about 8 s per volume. Pages are read in order, processed on the rayon pool as soon as memory allows (32 MP decoded, 64 MB encoded in flight), and written back in order, so no core waits for a batch. On an M3, preparing Berserk v01 (219 pages) for a Libra 2 takes about 4.3 s in release, against 5.1 s with batches and 16 s on one thread. About 73% of the work is decoding its progressive JPEGs: libjpeg-turbo was no faster and ImageIO slower, and the remaining resize and greyscale steps are too small a share for GPU or Accelerate to pay off. Development builds optimise parallax-comic, which was 34 s unoptimised. Progress is reported per input page.
 - **Dithering:** serpentine Floyd–Steinberg diffusion to the 16 greys, as Pillow and so KCC do, is on by default and can be turned off in Settings › Kobo. On a Libra 2 comparison of four Berserk pages it looked very subtly better. On Berserk v01 it halved tone error at reading distance for 4% more space, and ordered (Bayer) dithering gave no gain. Turning it on changes the update fingerprint, so comics sent earlier are offered for update.
 - **Colour pages on greyscale screens:** every page is checked for colour (KCC's chroma histograms on every second pixel of every second row, which decided all 1,403 pages of seven Berserk volumes as the full check did). Greyscale pages keep the plain path. On a greyscale Kobo, colour pages go through `prepare/tone.rs`, each step chosen in Libra 2 comparisons of five colour pages:
   - colour-aware greys, a simplified form of Grundland and Dodgson's Decolorize. Chroma along the direction luma loses most is added to luminance at 0.75 of the lost contrast; 0.5 was invisible on the device and 1.0 darkened brown skin too far;

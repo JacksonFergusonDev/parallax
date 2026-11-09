@@ -12,7 +12,7 @@ Manual checks only a person holding the Kobo can do. Record results in the table
 | B | Database trigger adds the row *as* the Kobo imports the book | The seriesmeta-style option |
 | C | Row written on the *next* connection, after import (plus series) | The "unplug and replug" baseline that calibre uses |
 
-What the script changes on the device: it adds a folder `ERC-Spike/` with 3 small EPUBs, 3 collections named `ERC Spike A/B/C`, and one trigger with a side table. It backs up `KoboReader.sqlite` into `.spike-backups/` in this repo before every write. `cleanup` removes everything it added.
+What the script changes on the device: it adds a folder `Parallax-Spike/` with 3 small EPUBs, 3 collections named `Parallax Spike A/B/C`, and one trigger with a side table. It backs up `KoboReader.sqlite` into `.spike-backups/` in this repo before every write. `cleanup` removes everything it added.
 
 ### Before you start
 
@@ -34,8 +34,8 @@ diskutil eject /Volumes/KOBOeReader
 
 | Check | Before restart | After restart (only if needed) |
 |---|---|---|
-| ERC Spike A exists and contains "ERC Spike A" | | |
-| ERC Spike B exists and contains "ERC Spike B" | | |
+| Parallax Spike A exists and contains "Parallax Spike A" | | |
+| Parallax Spike B exists and contains "Parallax Spike B" | | |
 | All 3 test books appear in My Books and open | | |
 
 ### Round 2 — C (replug flow)
@@ -58,8 +58,8 @@ diskutil eject /Volumes/KOBOeReader
 
 | Check | Result |
 |---|---|
-| ERC Spike C exists and contains "ERC Spike C" (without a restart) | |
-| "ERC Spike C" shows series "ERC Spike Series", book 1 | |
+| Parallax Spike C exists and contains "Parallax Spike C" (without a restart) | |
+| "Parallax Spike C" shows series "Parallax Spike Series", book 1 | |
 | A and B are still in their collections | |
 
 ### Round 3 — clean up
@@ -88,7 +88,7 @@ If anything looks wrong at any point, plug in and run `scripts/spike-s1.sh resto
 
 Batched so you can do several in one sitting when Claude asks:
 
-- M1: `erc kobo ls` output matches the library on the device.
+- M1: `parallax-cli kobo ls` output matches the library on the device.
 - M2: a book sent by the app opens and shows KEPUB features (pages per chapter, reading stats).
 - M3 (**done 2026-11-01**): edit a library book's title and series, send it, and confirm the Kobo shows the new title and series.
 - M4 (**done 2026-11-01**): a replaced cover shows on the device. Re-check: "Find cover online…" and "Find series and genres online…" for We Are Legion (We Are Bob) now offer only that book's covers and find Bobiverse #1.
@@ -102,7 +102,7 @@ Batched so you can do several in one sitting when Claude asks:
   - Rename one collection and delete another; eject and confirm.
 - M8, On Kobo tab → "Automatic collections…": add "A collection for each author" with at least 3 books. The preview should list collections such as Brandon Sanderson (7) and Pierce Brown (5). Apply, eject, and check them on the Kobo. Sending a new book by one of those authors should file it automatically. Connecting never creates collections by itself: a rule that would make new ones waits for Apply.
 - M9: Library and On Kobo each switch between Covers and List; clicking a list header sorts descending, then ascending, then back to the default. Scrolling past the end of a list doesn't move the rest of the window.
-- M10: after any change from the app (send, update, remove, collections), On Kobo → "About this Kobo…" lists it under Activity. After ejecting, the Kobo's library shows no new or blank books (the records live in a hidden `.erc` folder, which Nickel should ignore). `erc kobo history` shows the same.
+- M10: after any change from the app (send, update, remove, collections), On Kobo → "About this Kobo…" lists it under Activity. After ejecting, the Kobo's library shows no new or blank books (the records live in a hidden `.parallax` folder, which Nickel should ignore). `parallax-cli kobo history` shows the same.
 - M11: On Kobo → "Add all to library": every book you sideloaded appears in the Library tab with its cover, marked On Kobo, and none needs updating. Open one in another reader (Apple Books) to confirm it reads normally.
 - M12: On Kobo → "Find duplicates…" should say no duplicates on your Kobo today. To try the review, duplicate an unread KEPUB in Finder on the Kobo (⌘D), eject and reconnect so Nickel lists both, then remove the copy from the review, click "Remove macOS clutter" and eject: only the original remains, with its reading progress.
 - M13: On Kobo → "Enhance and organise…": books are added to the library, then series and genres are proposed (genres use your folder names, e.g. Sci-Fi). Save, click "Update N on Kobo", then "Make collections from series and genres…", add series and tag rules, Apply, eject: series show on book details and the genre collections appear, with reading progress intact.
@@ -130,10 +130,10 @@ Batched so you can do several in one sitting when Claude asks:
 
 **Question:** do collections the app creates survive a Kobo sync, and does deleting one stick?
 
-1. After the M6 checks, keep one app-made collection with books in it (say "ERC Sync Test").
+1. After the M6 checks, keep one app-made collection with books in it (say "Parallax Sync Test").
 2. On the Kobo, turn Wi-Fi on and sync (Settings → Sync, or the sync icon). Wait for it to finish.
 3. Check: the collection still exists and still holds its books. (Expected: the name syncs to your account; sideloaded books in it stay because the membership is local.)
-4. Connect, delete "ERC Sync Test" in the app, eject, sync again.
+4. Connect, delete "Parallax Sync Test" in the app, eject, sync again.
 5. Check: it doesn't come back after the sync. If it does, tell Claude; deletions of synced collections may need a different approach.
 
 | Check | Result |

@@ -62,7 +62,7 @@ export function screenText(screen: Screen): string {
   return size;
 }
 
-/** ERC's records on the device: who wrote what, with which version, and when. */
+/** Parallax's records on the device: who wrote what, with which version, and when. */
 export function AboutKobo({ device, titles, onClose }: Props) {
   const [history, setHistory] = useState<DeviceHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -104,8 +104,8 @@ export function AboutKobo({ device, titles, onClose }: Props) {
           <div>
             <h2>About this Kobo</h2>
             <p className="muted">
-              Parallax keeps a record of its changes in a hidden .erc folder on
-              the Kobo.
+              Parallax keeps a record of its changes in a hidden .parallax
+              folder on the Kobo.
             </p>
           </div>
         </div>
@@ -128,11 +128,13 @@ export function AboutKobo({ device, titles, onClose }: Props) {
             <>
               <dt>First change</dt>
               <dd>
-                {when(d.first_write.at)} · version {d.first_write.erc_version}
+                {when(d.first_write.at)} · version{" "}
+                {d.first_write.parallax_version}
               </dd>
               <dt>Latest change</dt>
               <dd>
-                {when(d.last_write.at)} · version {d.last_write.erc_version}
+                {when(d.last_write.at)} · version{" "}
+                {d.last_write.parallax_version}
                 {d.last_write.firmware !== device.firmware &&
                   ` · firmware was ${d.last_write.firmware}`}
               </dd>

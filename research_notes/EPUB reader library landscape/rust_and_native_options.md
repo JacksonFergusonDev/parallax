@@ -10,11 +10,11 @@ State as of 2026-11-07. Evidence labels used below:
 
 Overall conclusion: use webview rendering, with Rust owning parsing, serving, indexing and search. No native engine is credible for this app today. The most important new finding is that HTML-mode sanitisers are unsafe on XHTML (see the sanitising section), so the security boundary should be a CSP response header, not a rewriter.
 
-## Rust EPUB parsing crates: replace, complement or extend erc-epub?
+## Rust EPUB parsing crates: replace, complement or extend parallax-epub?
 
 ### Takeaway
 
-Keep erc-epub for byte-preserving metadata edits. Don't replace it. For the reader's read-side model, `rbook` is the best fit (Apache-2.0, EPUB 2/3 nav, NCX, landmarks, page-list, lazy resources, same `zip` major version). Its one real gap is font deobfuscation, which boko already implements. Extending erc-epub alone is simple for manifest and spine, but it stops being simple at navigation documents, because erc-epub's own code notes that these are often malformed.
+Keep parallax-epub for byte-preserving metadata edits. Don't replace it. For the reader's read-side model, `rbook` is the best fit (Apache-2.0, EPUB 2/3 nav, NCX, landmarks, page-list, lazy resources, same `zip` major version). Its one real gap is font deobfuscation, which boko already implements. Extending parallax-epub alone is simple for manifest and spine, but it stops being simple at navigation documents, because parallax-epub's own code notes that these are often malformed.
 
 ### Cited Findings
 
@@ -36,7 +36,7 @@ Keep erc-epub for byte-preserving metadata edits. Don't replace it. For the read
 
 **Feature coverage [source]**. This is grep-level presence checking on the published crate source, not behavioural testing on real books.
 
-| Capability | rbook 0.7.12 | epub 2.1.6 | iepub 1.3.8 | lib-epub 0.3.3 | boko 0.6.0 (vendored) | erc-epub today |
+| Capability | rbook 0.7.12 | epub 2.1.6 | iepub 1.3.8 | lib-epub 0.3.3 | boko 0.6.0 (vendored) | parallax-epub today |
 |---|---|---|---|---|---|---|
 | Public manifest | Yes | Yes (`resources` map with mime and properties) | Not checked | Not checked | `list_assets` paths only | No |
 | Spine | Yes, with `page_direction` | Yes, with `linear` and `properties` | Not checked | Not checked | Yes, but `SpineEntry` is only `id` and `size_estimate`; `page-progression-direction` is parsed; no `linear` match | Private `Parts`, hrefs only; ignores `linear` |
@@ -49,7 +49,7 @@ Keep erc-epub for byte-preserving metadata edits. Don't replace it. For the read
 | CFI | No | No | No | No | No | No |
 | `unsafe` in crate | 0 files | 0 files | 1 file | 0 files | 0 lines | Forbidden by lint |
 
-Sources: [rbook crate](https://docs.rs/crate/rbook/0.7.12), [epub crate](https://docs.rs/crate/epub/2.1.6), [iepub crate](https://docs.rs/crate/iepub/1.3.8), [lib-epub crate](https://docs.rs/crate/lib-epub/0.3.3); boko from `vendor/boko/src/book.rs`, `vendor/boko/src/import/epub.rs`, `vendor/boko/src/import/mod.rs`, `vendor/boko/src/epub/parser.rs`; erc-epub from `crates/epub/src/lib.rs`, `crates/epub/src/extent.rs`.
+Sources: [rbook crate](https://docs.rs/crate/rbook/0.7.12), [epub crate](https://docs.rs/crate/epub/2.1.6), [iepub crate](https://docs.rs/crate/iepub/1.3.8), [lib-epub crate](https://docs.rs/crate/lib-epub/0.3.3); boko from `vendor/boko/src/book.rs`, `vendor/boko/src/import/epub.rs`, `vendor/boko/src/import/mod.rs`, `vendor/boko/src/epub/parser.rs`; parallax-epub from `crates/epub/src/lib.rs`, `crates/epub/src/extent.rs`.
 
 #### rbook details [source]
 
@@ -62,7 +62,7 @@ Sources: [rbook crate](https://docs.rs/crate/rbook/0.7.12), [epub crate](https:/
 
 - Reading needs `&mut self` (`get_resource(&mut self, ...)`), because the document holds a cursor and archive. It uses `xml-rs` and `regex`. — [epub crate source, src/doc.rs](https://docs.rs/crate/epub/2.1.6/source/src/doc.rs)
 
-**What erc-epub exposes today [source]** (`crates/epub/src/lib.rs`, `crates/epub/src/extent.rs`)
+**What parallax-epub exposes today [source]** (`crates/epub/src/lib.rs`, `crates/epub/src/extent.rs`)
 
 - Public API: `Epub::{open, metadata, cover, cover_media_type, write_with_metadata, write, extent}`, plus `inspect`, `is_clutter`, `has_drm`, `strip_kobo_markup`.
 - The stated design goal is "minimal, byte-preserving edits": OPF edits are text splices and other zip entries are copied without recompression. No crate surveyed advertises this.
@@ -89,15 +89,15 @@ Sources: [rbook crate](https://docs.rs/crate/rbook/0.7.12), [epub crate](https:/
 
 ### Inferences
 
-- Recommendation (judgement, not tested on real books): add `rbook` with `default-features = false` plus `threadsafe`, wrapped behind a small reader-facing type in erc-epub or a new crate. Keep erc-epub's edit path unchanged. Port or reuse boko's font deobfuscation, because publishers' obfuscated fonts will otherwise fail to load.
+- Recommendation (judgement, not tested on real books): add `rbook` with `default-features = false` plus `threadsafe`, wrapped behind a small reader-facing type in parallax-epub or a new crate. Keep parallax-epub's edit path unchanged. Port or reuse boko's font deobfuscation, because publishers' obfuscated fonts will otherwise fail to load.
 - Apache-2.0 is GPLv3-compatible, so rbook is licence-safe for a GPL-3.0-only workspace (`Cargo.toml` line 10). `epub` and boko are GPL-3.0-or-later, which is also fine here.
 - boko is the tempting zero-new-dependency choice, and it would give MOBI/AZW3/KFX through the same API. But it lacks page-list and `linear`, it has no public manifest, and it is a patched fork whose purpose is conversion. A reader for Amazon formats is better served by converting to EPUB first, which the app already does, than by a second reading path.
-- If new dependencies are unwanted, extending erc-epub is a realistic fallback: promoting `Parts` is small work, and the risk sits in tolerant nav/NCX parsing. Readest's choice shows this is workable.
+- If new dependencies are unwanted, extending parallax-epub is a realistic fallback: promoting `Parts` is small work, and the risk sits in tolerant nav/NCX parsing. Readest's choice shows this is workable.
 - `rbook`'s and the workspace's `zip` should unify on 9.x, with extra deflate feature flags. This wasn't compile-tested.
 
 ### Gaps
 
-- No crate was run against a real library, so tolerance of malformed nav documents (the failure erc-epub's comment describes) is unverified for all of them. A differential test of rbook against boko on real books would settle it.
+- No crate was run against a real library, so tolerance of malformed nav documents (the failure parallax-epub's comment describes) is unverified for all of them. A differential test of rbook against boko on real books would settle it.
 - `iepub` and `lib-epub` manifest and spine API shapes weren't examined, since their low adoption and page-list gaps ruled them out.
 - `epub-stream` and `epub-parser` sources weren't inspected.
 
@@ -173,7 +173,7 @@ Use `register_asynchronous_uri_scheme_protocol` with a `book://<book-id>/...` sc
   - **C. Direct `book://` iframe in the main page**: rejected, because the parent can't reach the DOM.
 - I'd pick B if the chosen JS reader tolerates it, otherwise A with a strict CSP. Foliate's internal blob URLs would inherit the `book://<id>` origin under B, which is an inference based on the blob result above.
 - The app CSP will need `frame-src` (and `connect-src` if fetching) for `book:`. The `devUrl` origin differs from production, so CORS replies should echo the actual `Origin`, or use `*`, in both modes.
-- Handlers should do blocking work on a thread pool that can't be starved by a busy main thread, and tolerate cancelled requests. Keep one open archive per book with a small LRU, not erc-epub's reopen-per-call pattern.
+- Handlers should do blocking work on a thread pool that can't be starved by a busy main thread, and tolerate cancelled requests. Keep one open archive per book with a small LRU, not parallax-epub's reopen-per-call pattern.
 - Custom-scheme responses appear not to get Tauri's CSP automatically, because the header is attached in Tauri's own protocol. The handler must set it.
 
 ### Gaps
@@ -226,7 +226,7 @@ Use a plain per-book scan for in-book search, and SQLite FTS5 for cross-library 
 [registry]
 
 - A self-closed `<title/>` makes HTML-mode parsers treat the rest of the document as title text: `lol_html` saw no elements after it, and `ammonia` (built on html5ever) escaped the entire chapter into text. [probe] See the next section.
-- erc-epub already has a hand-written scanner (`scan()` in `crates/epub/src/extent.rs`). It skips to `<body`, handles comments, `script` and `style`, and counts CJK separately. [source]
+- parallax-epub already has a hand-written scanner (`scan()` in `crates/epub/src/extent.rs`). It skips to `<body`, handles comments, `script` and `style`, and counts CJK separately. [source]
 
 ### Inferences
 
@@ -385,7 +385,7 @@ Yes, but nothing established. `epub-stack` has the most spec-shaped implementati
 - `twn39/epub-rs` (MIT): keyword `cfi`, 0 stars, last push 2026-08-22, and its claims rest on its own README. The name `epub-rs` isn't on crates.io (lookup of the normalised name returned not found). [registry] — [twn39/epub-rs](https://github.com/twn39/epub-rs)
 - `orhnk/epubcfi.rs`: "EpubCFI generator for rust", 0 stars, last push 2024-11-21 (dated). [registry] — [orhnk/epubcfi.rs](https://github.com/orhnk/epubcfi.rs)
 - The crate names `epub-cfi`, `epubcfi` and `cfi` are not on crates.io. [registry]
-- `rbook`, `epub`, `iepub`, `lib-epub`, boko, erc-epub and the app have no CFI code. [source]
+- `rbook`, `epub`, `iepub`, `lib-epub`, boko, parallax-epub and the app have no CFI code. [source]
 - foliate-js's `epubcfi.js` can be used "in any environment if you only need to parse or sort CFIs". — [foliate-js README](https://github.com/johnfactotum/foliate-js)
 - The current `annotations` table stores a `REAL` position plus device serial and bookmark ID, not a CFI. [source] — `crates/library/src/schema.rs`
 

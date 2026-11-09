@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use erc_device_kobo::{Error, KoboDevice};
+use parallax_device_kobo::{Error, KoboDevice};
 
 const SCHEMA: &str = include_str!("../../../tests/fixtures/kobo/schema-db174.sql");
 const VERSION: &str =
@@ -170,7 +170,7 @@ fn leaves_no_apple_double_files_on_fat32() {
         kobo.send_file(&src, "KEpub/Genre/New Book.kepub.epub")
             .unwrap();
         let mut apple_double = Vec::new();
-        for sub in ["", "KEpub", "KEpub/Genre", ".erc"] {
+        for sub in ["", "KEpub", "KEpub/Genre", ".parallax"] {
             for e in fs::read_dir(mount.join(sub)).unwrap().flatten() {
                 let name = e.file_name().to_string_lossy().into_owned();
                 if name.starts_with("._") {
