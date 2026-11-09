@@ -1,6 +1,6 @@
 # Comics and manga plan
 
-Status: **C1 done** (2026-11-08); C2 next. The plan for first-class comics and manga in Parallax, across the library, sending to any supported Kobo, and the reader. It builds on [the Kobo comics spike](kobo-comics-spike.md) and [the bindery and KCC research](../reports/Bindery%20and%20Kindle%20Comic%20Converter.md).
+Status: **C1 and C2 done** (2026-11-08); C3 next. The plan for first-class comics and manga in Parallax, across the library, sending to any supported Kobo, and the reader. It builds on [the Kobo comics spike](kobo-comics-spike.md) and [the bindery and KCC research](../reports/Bindery%20and%20Kindle%20Comic%20Converter.md).
 
 ## 1. What's already decided
 
@@ -60,26 +60,31 @@ Each milestone ends with `just check` passing and is committed on its own. Sizes
 - About this Kobo shows the screen and says when it was measured or assumed.
 - Tests: unique ids and portrait screens; known models; the Libra 2 report's cover sizes give 1264 × 1680; covers measured on disk; the assumed fallback; the About text.
 
-### C2. Comic archive crate, `erc-comic` (2–3 days)
+### C2. Comic archive crate, `erc-comic` (done)
 
-- **Reading archives:**
-  - CBZ and ZIP through `zip`.
-  - CBR and CB7 through libarchive. The macOS SDK ships `libarchive.tbd` but no headers, so the first task is choosing between linking the system libarchive with vendored headers (no bundling, needs its RAR5 support confirmed) and building it statically. Pick whichever passes a RAR4 and a RAR5 fixture.
-- **Pages:**
-  - Image entries only, in natural order (`p2` before `p10`, chapter folders in order).
-  - Skip `__MACOSX`, dot files and `Thumbs.db`.
-  - Hoist a single wrapper folder.
-  - Reject absolute paths, `..` entries, zero-sized or undecodable images and absurd dimensions.
-- **ComicInfo.xml:**
-  - Read Series, Number, Volume, Title, Summary, Year, Writer, Penciller, Inker, Colorist, Letterer, CoverArtist, Publisher, LanguageISO, Manga and PageCount, plus `Pages/Page[@Type="FrontCover"]`.
-  - Write it back when metadata is edited.
-- **Filenames:** parse series, volume (`v01`, `Vol. 1`), chapter (`c012`, `#12`), year and scan-group noise when there's no ComicInfo.
-- **Shape analysis:** count spreads (aspect over 1.16 against the device), very wide pages (≥ 1.8), and long strips for webtoons.
-- **Chapter bundling** (bindery's rules): a folder of images is one volume; a folder of chapter archives becomes one volume only when asked; mixed folders are refused.
-- **Tests:**
-  - Bindery's edge cases: unpadded numbers, wrapper folders, hidden folders, dash-leading names.
-  - KCC's: zip-slip entries, zero-height images, `!` in names, spreads just either side of the thresholds.
-  - Small generated fixtures, never real manga in the repo.
+`crates/comic`, with no app code using it yet:
+
+- **Archives.** `sniff` recognises the format from its first bytes, since extensions are often wrong. `Cbz` lists pages and reads them one at a time. `convert_to_cbz` turns CBR, CB7, or anything else libarchive reads into a stored CBZ, keeping ComicInfo.xml and listing what it left out.
+- **libarchive decision.** CBR and CB7 are read by the libarchive built into macOS (3.7.4 here: RAR4, RAR5 and 7z), through `compress-tools`. A pkg-config shim, `scripts/pkg-config-libarchive.sh`, set as `PKG_CONFIG` in `.cargo/config.toml`, links it as `-larchive` against the SDK's `libarchive.tbd`. Nothing is bundled, and unrar isn't used.
+- **Pages.**
+  - Images (JPEG, PNG, GIF, WebP) in natural order of their full paths.
+  - `__MACOSX`, dot files, `Thumbs.db` and `desktop.ini` are skipped as hidden.
+  - Absolute paths, `..` and drive letters are skipped as unsafe, and case-insensitive duplicates are skipped. Every skipped file is listed with its reason.
+  - A single wrapper folder is reported.
+  - Limits: 20,000 files, 256 MB per page, 200 MP per image.
+  - Page sizes come from headers: about 40 ms for a 230-page volume.
+- **ComicInfo.xml.**
+  - Every simple field is kept and `<Pages>` is kept verbatim.
+  - Getters cover the common fields, plus credits by role, `Manga`, and the FrontCover page.
+  - `write_comic_info` rewrites a CBZ beside itself with every other entry copied raw, then swaps it in.
+- **File names.** `parse_file_name` reads series, volume (`v01`, `Vol. 12`, `Volume 3`), chapter (`c097`, `ch.45.5`), issue (`#12`), bare trailing numbers, year in brackets, and a title after a dash (`v01 - Title`). It ignores scan-group brackets and keeps numbers that belong to the series ("Mob Psycho 100").
+- **Shapes.** Spreads are wider than 1.16 and Wide pages ≥ 1.8 (KCC's thresholds), Strips are ≥ 2.5 tall, and `Shapes::is_webtoon` is true when most pages are strips.
+- **Bundling.** `classify_folder` gives Images, ChapterArchives, Mixed or NotComic, following bindery's rules. `folder_to_cbz` and `chapters_to_cbz` write `NNN - <chapter>/` folders in natural order; chapters may be zip, RAR or 7z.
+- **Tests.**
+  - 26 unit tests and 10 integration tests. Fixtures in `tests/fixtures/comics`: a bsdtar-made 7z comic, and libarchive's own RAR4 and RAR5 files, since RAR can't be made without the proprietary tool.
+  - Edge cases from bindery and KCC: unpadded numbers, wrappers, hidden folders, dash-leading names, `..` entries, zero-height images, thresholds, and truncated archives.
+- **Checked on real files.** The three Berserk volumes: 219, 233 and 227 pages in order, "Berserk" with volumes 1–3 and years, and 9, 7 and 13 spreads (v01 matches the spike's count).
+- **Not covered.** A real CBR comic, since there's no RAR comic to test with, and password-protected archives beyond mapping libarchive's error.
 
 ### C3. Comics in the library (3–4 days)
 

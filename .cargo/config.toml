@@ -1,0 +1,4 @@
+# erc-comic reads CBR and CB7 through compress-tools, which finds libarchive
+# with pkg-config. This shim points it at macOS's own libarchive.
+[env]
+PKG_CONFIG = { value = "scripts/pkg-config-libarchive.sh", relative = true }

@@ -67,6 +67,7 @@ rusqlite = { version = "0.41", features = ["bundled", "backup", "fallible_uint"]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
+compress-tools = "0.16"
 thiserror = "2"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 sha2 = "0.11"
@@ -75,6 +76,7 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 rayon = "1"
 uuid = { version = "1", features = ["v4"] }
 erc-convert = { path = "crates/convert" }
+erc-comic = { path = "crates/comic" }
 erc-core = { path = "crates/core" }
 erc-covers = { path = "crates/covers" }
 erc-upscale = { path = "crates/upscale" }
