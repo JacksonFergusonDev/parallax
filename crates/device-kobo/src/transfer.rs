@@ -195,7 +195,7 @@ pub(crate) fn copy_plain(src: &Path, dest: &Path) -> Result<u64> {
     copy_plain_with_progress(src, dest, |_, _| {}).map(|(written, _)| written)
 }
 
-fn copy_plain_with_progress(
+pub(crate) fn copy_plain_with_progress(
     src: &Path,
     dest: &Path,
     mut progress: impl FnMut(u64, u64),

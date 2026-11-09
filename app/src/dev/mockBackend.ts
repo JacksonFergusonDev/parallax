@@ -378,10 +378,23 @@ export function installMockBackend(label = "main") {
         case "remove_from_device": {
           const ids = a.contentIds as string[];
           await sleep(600);
-          for (let completed = 0; completed <= ids.length; completed++) {
-            reportBooks({ completed, total: ids.length, title: null });
-            await sleep(220);
+          for (let completed = 0; completed < ids.length; completed++) {
+            for (const file_fraction of [0, 0.2, 0.4, 0.6, 0.8, 0.99]) {
+              reportBooks({
+                completed,
+                total: ids.length,
+                title: null,
+                file_fraction,
+              });
+              await sleep(100);
+            }
           }
+          reportBooks({
+            completed: ids.length,
+            total: ids.length,
+            title: null,
+            file_fraction: 0,
+          });
           if (ids.some((id) => id.includes("Old Book"))) health.missing = false;
           storeBooks = storeBooks.filter((b) => !ids.includes(b.id));
           for (const id of [...onDevice.keys()])

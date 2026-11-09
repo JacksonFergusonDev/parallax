@@ -6,7 +6,7 @@ use erc_device::ReadStatus;
 use erc_device_kobo::{
     AnnotationKind, DuplicateCollection, KoboDevice, Mismatch, duplicate_collections,
     files_not_in_database, merge_duplicate_collections, missing_files, orphaned_images,
-    remove_book, set_read_status,
+    remove_book_with_progress, set_read_status,
 };
 use erc_library::{Format, Library};
 use serde::Serialize;
@@ -68,16 +68,16 @@ pub fn remove_from_device(
     backup_root: &Path,
     content_ids: &[String],
 ) -> erc_device_kobo::Result<Vec<RemoveOutcome>> {
-    remove_from_device_with_progress(library, device, backup_root, content_ids, |_, _| {})
+    remove_from_device_with_progress(library, device, backup_root, content_ids, |_, _, _| {})
 }
 
-/// Reports the number of processed removals after each attempt.
+/// Reports completed removals, batch size and the fraction of the current book saved.
 pub fn remove_from_device_with_progress(
     library: Option<&Library>,
     device: &KoboDevice,
     backup_root: &Path,
     content_ids: &[String],
-    mut progress: impl FnMut(usize, usize),
+    mut progress: impl FnMut(usize, usize, f64),
 ) -> erc_device_kobo::Result<Vec<RemoveOutcome>> {
     let serial = device.version().serial.clone();
     let copies = library
@@ -85,19 +85,26 @@ pub fn remove_from_device_with_progress(
         .unwrap_or_default();
     let mut writer = device.open_writer(backup_root)?;
     let total = content_ids.len();
-    progress(0, total);
+    progress(0, total, 0.0);
     let outcomes = content_ids
         .iter()
         .enumerate()
         .map(|(index, content_id)| {
-            let result = remove_book(&mut writer, content_id).map_err(|e| e.to_string());
+            let result = remove_book_with_progress(&mut writer, content_id, |bytes, file_size| {
+                if file_size > 0 {
+                    // Reserve completion for the removal after the copy is saved.
+                    let fraction = (bytes as f64 / file_size as f64).min(0.99);
+                    progress(index, total, fraction);
+                }
+            })
+            .map_err(|e| e.to_string());
             if result.is_ok()
                 && let (Some(lib), Some(copy)) =
                     (library, copies.iter().find(|c| &c.content_id == content_id))
             {
                 let _ = lib.remove_device_copy(copy.book_id, &serial);
             }
-            progress(index + 1, total);
+            progress(index + 1, total, 0.0);
             RemoveOutcome {
                 content_id: content_id.clone(),
                 result,

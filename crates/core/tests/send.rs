@@ -148,7 +148,7 @@ fn sends_library_books_with_edited_metadata() {
 
 #[test]
 fn updates_and_removes_books_on_device() {
-    use erc_core::device::{books_on_device, remove_from_device};
+    use erc_core::device::{books_on_device, remove_from_device_with_progress};
     use erc_core::send::update_on_device;
     use rusqlite::Connection;
 
@@ -215,14 +215,21 @@ fn updates_and_removes_books_on_device() {
         sent[0].result.as_ref().unwrap().device_path
     );
 
-    let removed = remove_from_device(
+    let mut removal = Vec::new();
+    let removed = remove_from_device_with_progress(
         Some(&library),
         &kobo,
         &backups,
         std::slice::from_ref(&content_id),
+        |completed, total, fraction| removal.push((completed, total, fraction)),
     )
     .unwrap();
     assert!(removed[0].result.is_ok());
+    assert_eq!(removal.first(), Some(&(0, 1, 0.0)));
+    assert!(removal.iter().any(|&(completed, total, fraction)| {
+        completed == 0 && total == 1 && fraction > 0.0 && fraction < 1.0
+    }));
+    assert_eq!(removal.last(), Some(&(1, 1, 0.0)));
     assert!(books_on_device(&library, &kobo).unwrap().is_empty());
     assert!(!mount.join(&on_device[0].device_path).exists());
 }

@@ -78,6 +78,15 @@ impl KoboDevice {
 /// `delete_via_sql`), then its file, cached covers and now-empty folder.
 /// Works for books Nickel hasn't imported yet too.
 pub fn remove_book(writer: &mut DeviceWriter, content_id: &str) -> Result<()> {
+    remove_book_with_progress(writer, content_id, |_, _| {})
+}
+
+/// As for `remove_book`, reporting bytes copied into the undo backup.
+pub fn remove_book_with_progress(
+    writer: &mut DeviceWriter,
+    content_id: &str,
+    progress: impl FnMut(u64, u64),
+) -> Result<()> {
     let device = writer.device();
     let path = device.path_for(content_id).ok_or_else(|| Error::Io {
         path: PathBuf::from(content_id),
@@ -89,7 +98,7 @@ pub fn remove_book(writer: &mut DeviceWriter, content_id: &str) -> Result<()> {
     if path.is_file()
         && let Some(rel) = content_id.strip_prefix(ONBOARD_PREFIX)
     {
-        writer.hold_removed(&path, rel)?;
+        writer.hold_removed(&path, rel, progress)?;
     }
     let image_id = writer.transaction(|tx| {
         let image_id: Option<String> = tx

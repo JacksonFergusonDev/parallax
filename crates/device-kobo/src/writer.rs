@@ -89,8 +89,13 @@ impl<'a> DeviceWriter<'a> {
 
     /// Keeps a copy of a book file on this computer before it's removed, so
     /// going back to this session's backup can bring it back too.
-    pub(crate) fn hold_removed(&self, path: &Path, device_path: &str) -> Result<()> {
-        hold_removed(&self.backup, path, device_path)
+    pub(crate) fn hold_removed(
+        &self,
+        path: &Path,
+        device_path: &str,
+        progress: impl FnMut(u64, u64),
+    ) -> Result<()> {
+        hold_removed(&self.backup, path, device_path, progress)
     }
 
     /// Adds an operation to this session's entry in `/.erc/log.jsonl`.

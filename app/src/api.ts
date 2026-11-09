@@ -456,6 +456,8 @@ export interface BookProgress {
   completed: number;
   total: number;
   title: string | null;
+  /** Bytes saved for undo as a fraction of the book currently being removed. */
+  file_fraction?: number;
 }
 
 export type ReportBookProgress = (progress: BookProgress) => void;

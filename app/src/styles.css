@@ -800,6 +800,20 @@ label .hint {
   accent-color: var(--accent);
 }
 
+.removal-progress {
+  overflow: hidden;
+  border-radius: var(--radius-small);
+  background: var(--sunken);
+}
+
+.removal-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  transition: transform var(--duration-fast) linear;
+}
+
 .copy-progress {
   height: var(--space-1);
   min-width: 0;

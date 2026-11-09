@@ -171,7 +171,7 @@ afterEach(async () => {
 });
 
 describe("book operation progress", () => {
-  it("shows Kobo backup activity, then counts completed removals", async () => {
+  it("fills the Kobo removal bar during each book after backup", async () => {
     const other = { ...koboBook, id: "file:///mnt/onboard/second.epub" };
     currentBooks = [koboBook, other];
     vi.mocked(ask).mockResolvedValueOnce(true);
@@ -201,11 +201,23 @@ describe("book operation progress", () => {
     const { progress: channel } = calls("remove_from_device")[0][1] as {
       progress: { onmessage: (message: BookProgress) => void };
     };
-    await act(async () =>
-      channel.onmessage({ completed: 1, total: 2, title: null }),
-    );
+    const update = async (completed: number, file_fraction: number) =>
+      act(async () =>
+        channel.onmessage({ completed, total: 2, title: null, file_fraction }),
+      );
+    await update(0, 0);
+    const bar = view.querySelector('[role="progressbar"]')!;
+    expect(bar.getAttribute("aria-valuenow")).toBe("0");
+    expect(view.textContent).toContain("Removing 1 of 2");
+    await update(0, 0.5);
+    expect(bar.getAttribute("aria-valuenow")).toBe("0.5");
+    await update(1, 0);
     expect(view.textContent).toContain("Removing 2 of 2");
-    expect([progress().value, progress().max]).toEqual([1, 2]);
+    expect(bar.getAttribute("aria-valuenow")).toBe("1");
+    await update(1, 0.25);
+    expect(bar.getAttribute("aria-valuenow")).toBe("1.25");
+    await update(2, 0);
+    expect(bar.getAttribute("aria-valuenow")).toBe("2");
 
     currentBooks = [];
     await act(async () =>
@@ -216,7 +228,7 @@ describe("book operation progress", () => {
         })),
       ),
     );
-    expect(view.querySelector("progress")).toBeNull();
+    expect(view.querySelector('[role="progressbar"]')).toBeNull();
     expect(view.textContent).toContain("Removed 2 books");
   });
 

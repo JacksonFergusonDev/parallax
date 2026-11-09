@@ -60,6 +60,8 @@ struct BookProgress {
     completed: usize,
     total: usize,
     title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file_fraction: Option<f64>,
 }
 
 fn report_books(
@@ -73,6 +75,7 @@ fn report_books(
             completed,
             total,
             title: title.map(str::to_owned),
+            file_fraction: None,
         });
     }
 }
@@ -430,7 +433,16 @@ async fn remove_from_device(
             &kobo,
             &backups,
             &content_ids,
-            |completed, total| report_books(progress.as_ref(), completed, total, None),
+            |completed, total, fraction| {
+                if let Some(channel) = &progress {
+                    let _ = channel.send(BookProgress {
+                        completed,
+                        total,
+                        title: None,
+                        file_fraction: Some(fraction),
+                    });
+                }
+            },
         )
         .map_err(err)
     })

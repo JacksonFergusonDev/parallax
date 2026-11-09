@@ -422,7 +422,12 @@ impl KoboDevice {
 
 /// Copies a book file about to be removed next to `backup`, the backup of the
 /// change removing it. `path` is the file, `rel` its path on the device.
-pub(crate) fn hold_removed(backup: &Path, path: &Path, rel: &str) -> Result<()> {
+pub(crate) fn hold_removed(
+    backup: &Path,
+    path: &Path,
+    rel: &str,
+    progress: impl FnMut(u64, u64),
+) -> Result<()> {
     let dir = removed_dir(backup);
     fs::create_dir_all(&dir).map_err(|e| io_err(&dir, e))?;
     let mut held = read_manifest(&dir);
@@ -430,7 +435,7 @@ pub(crate) fn hold_removed(backup: &Path, path: &Path, rel: &str) -> Result<()> 
     let file = format!("{}-{name}", held.len());
     let dest = dir.join(&file);
     let _ = fs::remove_file(&dest);
-    crate::transfer::copy_plain(path, &dest)?;
+    crate::transfer::copy_plain_with_progress(path, &dest, progress)?;
     held.push(RemovedFile {
         path: rel.to_owned(),
         file,
