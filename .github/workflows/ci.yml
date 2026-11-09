@@ -32,3 +32,26 @@ jobs:
         with:
           just-version: 1.59.0
       - run: just check
+
+  # Apple silicon is the main target and `check` runs there. This job builds
+  # and tests the Rust workspace on an Intel Mac, so code paths that differ
+  # by architecture (SIMD in image decoding and resizing, our own vectorised
+  # loops) are exercised on x86_64 too.
+  rust-x86_64:
+    runs-on: macos-15-intel
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Confirm the runner is x86_64
+        run: test "$(uname -m)" = x86_64
+      - run: scripts/fetch-kepubify.sh
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
