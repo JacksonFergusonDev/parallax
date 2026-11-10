@@ -50,6 +50,7 @@ const device: DeviceInfo = {
   },
   screen: { width: 1264, height: 1680, colour: false, source: "model" },
   read_only: null,
+  tested: true,
 };
 const localBook: Book = {
   id: 1,

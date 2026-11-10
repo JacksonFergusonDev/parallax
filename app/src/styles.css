@@ -3370,3 +3370,73 @@ button.icon {
 .app-main {
   display: contents;
 }
+
+/* An untested or read-only Kobo, explained once per model. */
+.kobo-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: start;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-6);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.kobo-notice.warn {
+  background: color-mix(in srgb, var(--warn) 10%, var(--surface));
+}
+
+.kobo-notice-icon {
+  flex: none;
+  width: var(--icon-large);
+  height: var(--icon-large);
+  margin-top: 1px;
+  color: var(--accent);
+}
+
+.kobo-notice.warn .kobo-notice-icon {
+  color: var(--warn);
+}
+
+.kobo-notice-text {
+  min-width: 0;
+}
+
+.kobo-notice-text p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.kobo-notice-text .muted {
+  max-width: 90ch;
+  font-size: var(--text-small);
+}
+
+.kobo-notice-title {
+  font-weight: 600;
+}
+
+.kobo-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.kobo-notice-close {
+  grid-column: 4;
+  grid-row: 1;
+  min-height: var(--control-compact);
+}
+
+/* Narrow windows: the actions go under the text, the close button stays. */
+@media (max-width: 1100px) {
+  .kobo-notice-actions {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}
+
+.kobo-notice-close svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}

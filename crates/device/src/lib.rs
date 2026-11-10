@@ -63,6 +63,10 @@ pub struct DeviceInfo {
     /// Why the app won't change this device (an untested model, firmware or
     /// database); `None` when it will. Reading still works.
     pub read_only: Option<String>,
+    /// A device of this model has been through the hardware checks. An
+    /// untested one can still be changed when `read_only` is `None`: that
+    /// verdict comes from its database, not its model.
+    pub tested: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

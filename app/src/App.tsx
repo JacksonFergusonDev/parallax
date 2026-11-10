@@ -134,6 +134,8 @@ import {
 import { useBookProgress, type PrepareRemoval } from "./bookProgress";
 import { BookProgressBar } from "./components/BookProgressBar";
 import { SetupFlow } from "./setup/SetupFlow";
+import { KoboNotice } from "./components/KoboNotice";
+import { useKoboNotice } from "./koboNotice";
 import { useSetup } from "./setup/setup";
 import "./styles.css";
 
@@ -162,6 +164,8 @@ export default function App() {
   const setup = useSetup(loaded, books.length);
   usePresentation(appRef, loaded && detected && themed && setup.known);
   const [device, setDevice] = useState<DeviceInfo | null>(null);
+  // Setup has its own word about an untested Kobo.
+  const koboNotice = useKoboNotice(setup.open ? null : device);
   const activeKobo = useRef<DeviceInfo | null>(null);
   const copyRequest = useRef(0);
   const [copies, setCopies] = useState<{
@@ -1200,6 +1204,14 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
           />
           <DeviceBadge device={device} onOpen={() => setAboutOpen(true)} />
         </header>
+        {koboNotice.notice && (
+          <KoboNotice
+            notice={koboNotice.notice}
+            standing={koboNotice.standing}
+            onClose={koboNotice.close}
+            onDismiss={koboNotice.dismiss}
+          />
+        )}
 
         {/* Retain loaded data, decoded images and scroll positions across tabs.
           Disconnecting unmounts the device panel, so reconnects read fresh data. */}

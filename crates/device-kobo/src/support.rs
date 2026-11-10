@@ -16,6 +16,11 @@ use crate::db::{MAX_TESTED_DB_VERSION, MIN_SUPPORTED_DB_VERSION, columns};
 use crate::error::{Error, Result};
 use crate::version::VersionInfo;
 
+/// Models with recorded hardware checks (engineering/hardware-results.md),
+/// by short model id. Add one only after running the hardware checklist on
+/// a physical device of that model.
+pub const TESTED_MODELS: [&str; 1] = ["388"];
+
 /// Newest firmware major version Parallax writes to. Kobo's own firmware has been
 /// 4.x since 2016; 5.x is Tolino's.
 pub const MAX_WRITE_FIRMWARE_MAJOR: u32 = 4;

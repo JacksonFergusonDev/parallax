@@ -8,6 +8,8 @@ When you connect a Kobo, open **On Kobo › About this Kobo…** and look for **
 
 Parallax allows writes on Kobo firmware 4.x or earlier with database schema 53–222 and the required database columns and value types. Tolino models are read-only. Older schemas may lack individual features such as series or reading time. These checks apply to every connected device, including models without recorded hardware tests.
 
+Parallax tells you when a model has no recorded hardware checks yet, once per model, during setup or in a banner under the toolbar. An untested Kobo that passes the checks above can still be changed, with a backup before every change. **About this Kobo…** shows whether hardware checks have been run on the model.
+
 **About this Kobo…** also shows the screen size used when preparing comics. Parallax looks up the model, measures the device’s full-screen cover cache when the model is unknown, or falls back to 1072 × 1448. The screen entry identifies whether that size was looked up, measured, or assumed.
 
 ## Share a device report

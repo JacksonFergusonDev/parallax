@@ -21,7 +21,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 
 let mounts = 0;
-const kobo = (read_only: string | null = null): DeviceInfo => ({
+const kobo = (read_only: string | null = null, tested = true): DeviceInfo => ({
   kind: "kobo",
   model: "Kobo Libra 2",
   firmware: "4.38.23697",
@@ -36,6 +36,7 @@ const kobo = (read_only: string | null = null): DeviceInfo => ({
   },
   screen: { width: 1264, height: 1680, colour: false, source: "model" },
   read_only,
+  tested,
 });
 
 const deviceBook = (id: string) => ({
@@ -100,6 +101,8 @@ describe("first-run setup", () => {
       switch (command) {
         case "settings_all":
           return { ...stored };
+        case "setting_get":
+          return stored[a.key as string] ?? null;
         case "reader_settings_get":
           return { ...DEFAULT_SETTINGS };
         case "setting_set":
@@ -213,6 +216,23 @@ describe("first-run setup", () => {
     await settle();
   };
 
+  it("says nothing about a tested Kobo", async () => {
+    await render({ device: kobo() });
+    await click("Get Started");
+    expect(host.textContent).not.toContain("hasn't been tested");
+    expect(stored.kobo_notices).toBeUndefined();
+  });
+
+  it("explains an untested Kobo once, here rather than later", async () => {
+    await render({ device: kobo(null, false) });
+    await click("Get Started");
+    expect(host.textContent).toContain(
+      "Parallax hasn't been tested on a Kobo Libra 2 yet",
+    );
+    expect(host.textContent).toContain("sending, updating and organising");
+    expect(stored.kobo_notices).toBe("Kobo Libra 2");
+  });
+
   it("checks the Kobo once it's connected", async () => {
     await render({ device: kobo() });
     await click("Get Started");
@@ -276,7 +296,10 @@ describe("first-run setup", () => {
   it("doesn't check a Kobo it won't change", async () => {
     await render({ device: kobo("an untested model") });
     await click("Get Started");
-    expect(host.textContent).toContain("won't change anything on it");
+    expect(host.textContent).toContain(
+      "Parallax can't change this Kobo Libra 2 yet",
+    );
+    expect(stored.kobo_notices).toBe("Kobo Libra 2");
     await click("Continue");
     await click("Continue");
     expect(calls("kobo_health")).toHaveLength(0);

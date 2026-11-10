@@ -118,6 +118,12 @@ export function AboutKobo({ device, titles, onClose }: Props) {
           <dd>{device.serial}</dd>
           <dt>Screen</dt>
           <dd className="wrap">{screenText(device.screen)}</dd>
+          <dt>Hardware checks</dt>
+          <dd className="wrap">
+            {device.tested
+              ? "Tested on this model"
+              : "Not yet run on this model"}
+          </dd>
           <dt>Changes</dt>
           <dd className="wrap">
             {device.read_only

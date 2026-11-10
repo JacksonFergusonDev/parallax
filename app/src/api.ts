@@ -21,6 +21,8 @@ export interface DeviceInfo {
   screen: Screen;
   /** Why the app won't change this device; null when it will. */
   read_only: string | null;
+  /** A device of this model has been through the hardware checks. */
+  tested: boolean;
 }
 
 export interface Screen {
@@ -732,6 +734,7 @@ export type SettingKey =
   | "kobo_rules"
   | "eject_after_send"
   | "setup"
+  | "kobo_notices"
   | "comics_kind"
   | "comic_spreads"
   | "comic_crop"
@@ -754,6 +757,9 @@ export const COMIC_PAGE_SETTINGS = [
   "comic_colour_contrast",
   "comic_midtone_darkening",
 ] as const satisfies readonly SettingKey[];
+/** Opens a Help page in the browser, as the Help menu does. */
+export const openHelp = (page: "devices" | "issue") =>
+  invoke<void>("open_help", { page });
 export const getSetting = (key: SettingKey) =>
   invoke<string | null>("setting_get", { key });
 export const setSetting = (key: SettingKey, value: string | null) =>

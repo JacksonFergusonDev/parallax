@@ -49,6 +49,11 @@ impl VersionInfo {
         crate::screen::screen(self.short_model_id(), mount)
     }
 
+    /// Whether this model has been through the hardware checks.
+    pub fn is_tested(&self) -> bool {
+        crate::support::TESTED_MODELS.contains(&self.short_model_id())
+    }
+
     /// Tolino readers run Kobo's software but store data differently
     /// (calibre `KOBOTOUCH.isTolinoDevice`).
     pub fn is_tolino(&self) -> bool {
@@ -111,6 +116,18 @@ mod tests {
         assert_eq!(v.model_name(), "Tolino Shine Color");
         assert!(v.is_tolino());
         assert!(!VersionInfo::parse(LIBRA2).unwrap().is_tolino());
+    }
+
+    #[test]
+    fn knows_which_models_have_been_tested() {
+        assert!(VersionInfo::parse(LIBRA2).unwrap().is_tested());
+        let clara =
+            VersionInfo::parse("N1,x,4.38.0,x,x,00000000-0000-0000-0000-000000000391").unwrap();
+        assert!(!clara.is_tested());
+        // Every tested model is one Parallax can name.
+        for id in crate::support::TESTED_MODELS {
+            assert!(crate::screen::find(id).is_some(), "{id}");
+        }
     }
 
     #[test]

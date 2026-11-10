@@ -1598,6 +1598,7 @@ pub fn run() {
             settings::reader_settings_get,
             settings::reader_settings_set,
             menu::menu_state,
+            menu::open_help,
             device_duplicates,
             dismiss_duplicates,
             list_collections,

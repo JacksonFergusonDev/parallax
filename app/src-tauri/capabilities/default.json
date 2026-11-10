@@ -62,6 +62,7 @@
     "allow-reader-settings-get",
     "allow-reader-settings-set",
     "allow-menu-state",
+    "allow-open-help",
     "allow-device-duplicates",
     "allow-dismiss-duplicates",
     "allow-list-collections",

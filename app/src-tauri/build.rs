@@ -57,6 +57,7 @@ const COMMANDS: &[&str] = &[
     "reader_settings_get",
     "reader_settings_set",
     "menu_state",
+    "open_help",
     "device_duplicates",
     "dismiss_duplicates",
     "list_collections",

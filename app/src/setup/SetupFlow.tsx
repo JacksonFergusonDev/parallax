@@ -7,6 +7,7 @@ import {
   Check as CheckIcon,
   FileUp,
   FolderOpen,
+  Info,
   LibraryBig,
   Send,
   ShieldCheck,
@@ -21,6 +22,7 @@ import {
   type DeviceInfo,
 } from "../api";
 import { appTheme } from "../design/theme";
+import { koboNotice, rememberKoboNotice } from "../koboNotice";
 import { summarizeDeviceImport } from "../device";
 import { useBookProgress } from "../bookProgress";
 import { BookProgressBar } from "../components/BookProgressBar";
@@ -308,6 +310,13 @@ function Connect({
   const count = useKoboRead(device, bookCount)?.value ?? null;
   const writable = device && device.read_only === null ? device : null;
   const issues = useKoboRead(writable, issueCount)?.value ?? null;
+  const notice = device && koboNotice(device);
+  const readOnly = !!device?.read_only;
+  // Said here, so the main window needn't say it again after setup.
+  const noticeFor = notice && device ? device.model : null;
+  useEffect(() => {
+    if (noticeFor) void rememberKoboNotice(noticeFor).catch(console.error);
+  }, [noticeFor]);
 
   return (
     <>
@@ -336,6 +345,18 @@ function Connect({
           <li>Parallax finds it on its own, usually within a few seconds.</li>
         </ol>
       )}
+      {notice && (
+        <p className={`setup-note ${readOnly ? "warn" : "info"}`}>
+          {readOnly ? (
+            <TriangleAlert aria-hidden="true" />
+          ) : (
+            <Info aria-hidden="true" />
+          )}
+          <span>
+            <strong>{notice.title}.</strong> {notice.body}
+          </span>
+        </p>
+      )}
       {issues !== null && (
         <p className={`setup-note ${issues === 0 ? "" : "info"}`}>
           {issues === 0 ? (
@@ -347,15 +368,6 @@ function Connect({
             {issues === 0
               ? "Parallax checked your Kobo and everything looks good."
               : `Parallax found ${plural(issues, "small thing")} worth tidying on your Kobo. Check This Kobo… in the Kobo menu fixes them.`}
-          </span>
-        </p>
-      )}
-      {device?.read_only && (
-        <p className="setup-note warn">
-          <TriangleAlert aria-hidden="true" />
-          <span>
-            Parallax can read this Kobo and add its books to your library, but
-            won't change anything on it: {device.read_only}.
           </span>
         </p>
       )}

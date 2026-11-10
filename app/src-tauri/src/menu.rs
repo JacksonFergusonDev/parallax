@@ -533,6 +533,18 @@ pub fn show_library<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Opens a Help page from the main window, as its Help menu item does.
+#[tauri::command]
+pub fn open_help(app: AppHandle, page: &str) -> crate::CmdResult<()> {
+    match page {
+        "devices" | "issue" => {
+            run(&app, &format!("help.{page}"));
+            Ok(())
+        }
+        _ => Err(format!("unknown help page {page}")),
+    }
+}
+
 fn open_url(url: &str) {
     let _ = std::process::Command::new("open").arg(url).status();
 }

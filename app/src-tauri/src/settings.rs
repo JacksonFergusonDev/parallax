@@ -32,6 +32,9 @@ pub const EJECT_AFTER_SEND: &str = "eject_after_send";
 /// Where first-run setup stands: `started` once shown, then `skipped` or
 /// `done`. Not a preference, so Reset leaves it alone.
 pub const SETUP: &str = "setup";
+/// Models, one per line, whose "not tested yet" notice was dismissed for
+/// good. Like `setup`, Reset leaves it alone.
+pub const KOBO_NOTICES: &str = "kobo_notices";
 
 /// The event main and Settings windows get when a setting changes.
 const CHANGED: &str = "setting-changed";
@@ -47,7 +50,7 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 20] = [
+const SETTINGS: [(&str, Allowed); 21] = [
     (parallax_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (parallax_core::enhance::METRON_TOKEN, Allowed::Text(256)),
     (
@@ -65,6 +68,7 @@ const SETTINGS: [(&str, Allowed); 20] = [
     (KOBO_RULES, Allowed::OneOf(&["off"])),
     (EJECT_AFTER_SEND, Allowed::OneOf(&["on"])),
     (SETUP, Allowed::OneOf(&["started", "skipped", "done"])),
+    (KOBO_NOTICES, Allowed::Text(2000)),
     (parallax_library::COMICS_KIND, Allowed::OneOf(&["comic"])),
     (
         COMIC_SPREADS,
@@ -400,6 +404,7 @@ mod tests {
         assert_eq!(checked(SETUP, Some("done".into())), Ok(Some("done".into())));
         assert!(checked(SETUP, Some("later".into())).is_err());
         assert!(!PREFERENCES.contains(&SETUP));
+        assert!(!PREFERENCES.contains(&KOBO_NOTICES));
     }
 
     #[test]

@@ -33,6 +33,10 @@ Create a test collection and send a disposable book to it. Eject, read a few pag
 4. On a colour Kobo, check colour pages and greyscale pages and record any rainbow artefacts. On an older 600 × 800 or 758 × 1024 model, confirm that the fixed-layout KEPUB opens and record page-turn speed.
 5. If testing landscape two-up with spread pinning enabled in the model profile, record the model and firmware and whether the split halves face each other.
 
+## Marking a model as tested
+
+After running the relevant checks on a physical device of a new model and recording them in [hardware results](hardware-results.md), add its short model id to `TESTED_MODELS` in `crates/device-kobo/src/support.rs`. Untested models still get changes when the database checks pass. The flag only controls the "not tested yet" notice and **About this Kobo…**.
+
 ## Checks still open
 
 - Repeat the production comics send and update checks on the Libra 2. Verify direction, chapter presentation, series, reading position, and the final page-processing settings. Colour and older models still need their own runs.

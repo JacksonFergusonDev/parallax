@@ -131,6 +131,7 @@ impl KoboDevice {
             },
             screen: self.version.screen(&self.mount),
             read_only: support.read_only,
+            tested: self.version.is_tested(),
         }
     }
 }

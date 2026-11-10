@@ -172,9 +172,15 @@ const koboFrom =
       ? Date.now() + 5000
       : 0;
 
+// `?untested` connects a model without recorded hardware checks.
+const untested = params.has("untested") || params.has("readonly");
 const device: DeviceInfo = {
   kind: "kobo",
-  model: "Kobo Libra 2",
+  model: params.has("readonly")
+    ? "Tolino Shine Color"
+    : untested
+      ? "Kobo Clara BW"
+      : "Kobo Libra 2",
   firmware: "4.38.23697",
   serial: "N000000000001",
   mount: "/Volumes/KOBOeReader",
@@ -189,6 +195,7 @@ const device: DeviceInfo = {
   read_only: new URLSearchParams(location.search).has("readonly")
     ? "the Tolino Shine Color runs Tolino's version of Kobo's software, which stores data differently"
     : null,
+  tested: !untested,
 };
 const dismissed = new Set<string>();
 const settings = new Map<string, string>();
@@ -1359,6 +1366,15 @@ export function installMockBackend(label = "main") {
         case "backup_delete_all":
           backupBytes = 0;
           return { policy: backupPolicy, used_bytes: backupBytes };
+        case "open_help":
+          window.open(
+            a.page === "devices"
+              ? "https://github.com/JacksonFergusonDev/parallax/blob/main/docs/device-support.md"
+              : "https://github.com/JacksonFergusonDev/parallax/issues/new",
+            "_blank",
+            "noopener,noreferrer",
+          );
+          return null;
         case "show_folder":
           return null;
         case "reader_settings_get":
