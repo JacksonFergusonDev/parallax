@@ -108,7 +108,9 @@ def test_restores_tauri_inputs_only_when_they_still_match(
     permission.parent.mkdir(parents=True)
     permission.write_text("generated permission")
     set_time(cache.CAPABILITIES, CACHED_TIME)
-    set_time(cache.PERMISSIONS, CACHED_TIME)
+    set_time(cache.SNAPSHOT, CACHED_TIME)
+    for path in (cache.PERMISSIONS, permission.parent, permission):
+        set_time(path, CHECKOUT_TIME)
     cache.mark_finished()
 
     shutil.rmtree(cache.PERMISSIONS)
@@ -125,5 +127,6 @@ def test_restores_tauri_inputs_only_when_they_still_match(
     else:
         assert permission.read_text() == "generated permission"
         assert cache.PERMISSIONS.stat().st_mtime_ns == CACHED_TIME
+        assert permission.stat().st_mtime_ns == CACHED_TIME
         assert cache.CAPABILITIES.stat().st_mtime_ns == CACHED_TIME
         assert os.access(cache.CAPABILITIES, os.X_OK)

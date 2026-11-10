@@ -51,6 +51,15 @@ def restore_tauri_inputs(paths: set[Path], reused: set[Path]) -> None:
         and not PERMISSIONS.is_symlink()
     ):
         shutil.copytree(saved, PERMISSIONS)
+        # Tauri may create these inputs during the first build, after Cargo
+        # records its start time. The generator inputs already matched, so
+        # replay its output as if it existed when that build started.
+        prepared = SNAPSHOT.stat().st_mtime_ns
+        for path in (PERMISSIONS, *PERMISSIONS.rglob("*")):
+            timestamp = path.stat()
+            os.utime(
+                path, ns=(timestamp.st_atime_ns, min(timestamp.st_mtime_ns, prepared))
+            )
 
 
 def prepare() -> None:
