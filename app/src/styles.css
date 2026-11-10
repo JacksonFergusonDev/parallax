@@ -2525,7 +2525,7 @@ form.enhance-key input {
 }
 
 .reading-section h3 .muted {
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-ui);
   font-size: var(--text-small);
   font-weight: 500;
 }

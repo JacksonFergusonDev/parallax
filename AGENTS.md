@@ -21,6 +21,7 @@
 
 ## Writing conventions
 
+- Follow the Writing section of house-style's guidelines (`app/node_modules/house-style/GUIDELINES.md`, the release pinned in `app/package.json`) for UI copy, docs, release notes and the site. In-app copy is written for users, so say "you", lead with the answer, and use no em dashes.
 - Never hard-wrap Markdown. Write each paragraph and list item as a single line and let the editor soft-wrap. rumdl enforces this (`.rumdl.toml`) and its pre-commit hook joins wrapped lines automatically.
 
 ## Device work
