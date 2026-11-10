@@ -60,8 +60,8 @@ repos:
         always_run: true
         stages: [pre-push]
 
-  # Desktop UI (app/), mirroring `just check`. Hooks run from the repository
-  # root, so each one moves into app/ and drops the app/ prefix from file names.
+  # Desktop UI (app/). Hooks run from the repository root, so file-based hooks
+  # move into app/ and drop the app/ prefix from file names.
   - repo: local
     hooks:
       - id: prettier
@@ -101,38 +101,59 @@ repos:
         always_run: true
         stages: [pre-push]
 
-  # Python development scripts
+  # Python development scripts (tools pinned by scripts/uv.lock)
   - repo: local
     hooks:
-      - id: python-scripts
-        name: Python script checks
-        entry: just check-scripts
+      - id: uv-lock-check
+        name: uv lock check
+        entry: uv lock --project scripts --check
         language: system
-        files: ^(scripts/(.*\.py|pyproject\.toml|uv\.lock|\.python-version)|justfile)$
+        files: ^scripts/(pyproject\.toml|uv\.lock|\.python-version)$
+        pass_filenames: false
+
+      - id: ruff-format
+        name: ruff format check
+        entry: uv run --directory scripts --locked ruff format --check .
+        language: system
+        files: ^scripts/(.*\.py|pyproject\.toml|uv\.lock|\.python-version)$
+        pass_filenames: false
+
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --directory scripts --locked ruff check .
+        language: system
+        files: ^scripts/(.*\.py|pyproject\.toml|uv\.lock|\.python-version)$
+        pass_filenames: false
+
+      - id: mypy
+        name: mypy
+        entry: uv run --directory scripts --locked mypy
+        language: system
+        files: ^scripts/(.*\.py|pyproject\.toml|uv\.lock|\.python-version)$
+        pass_filenames: false
+
+      - id: pytest
+        name: pytest
+        entry: uv run --directory scripts --locked pytest -q
+        language: system
+        files: ^scripts/(.*\.py|pyproject\.toml|uv\.lock|\.python-version)$
         pass_filenames: false
 
   # Markdown and GitHub Actions
-  - repo: local
+  - repo: https://github.com/rvben/rumdl-pre-commit
+    rev: v0.3.2
     hooks:
       - id: rumdl-check
-        name: rumdl check
-        entry: rumdl check --fix
-        language: system
-        types: [markdown]
-        require_serial: true
-
+        args: [--fix]
       - id: rumdl-fmt
-        name: rumdl fmt
-        entry: rumdl fmt
-        language: system
-        types: [markdown]
-        require_serial: true
 
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.32.0
+    hooks:
       - id: zizmor
-        name: zizmor
-        entry: uvx zizmor --offline .github/
-        language: system
+        args: [--offline, .github/]
         pass_filenames: false
+        types: [file]
         files: ^\.github/(workflows/.*\.ya?ml|actions/.*)$
 
   # Check for accidental commits of secrets
