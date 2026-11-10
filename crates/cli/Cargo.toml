@@ -1,10 +1,12 @@
 [package]
 name = "parallax-cli"
-description = "Developer CLI over the Parallax core"
+description = "Manage your Parallax library and Kobo from the terminal"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 license.workspace = true
+repository = "https://github.com/JacksonFergusonDev/parallax"
+homepage = "https://parallax.jacksonferguson.me"
 
 [[bin]]
 name = "parallax-cli"
@@ -32,3 +34,11 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+# Lets `cargo binstall --git https://github.com/JacksonFergusonDev/parallax
+# parallax-cli` fetch the release workflow's prebuilt archive instead of
+# compiling. The archive holds parallax-cli and kepubify at its root.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ version }-{ target }.tar.gz"
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "tgz"

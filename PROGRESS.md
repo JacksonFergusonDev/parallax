@@ -11,10 +11,12 @@
 - An untested or read-only Kobo is explained once per model, in setup's Connect step or as a banner in the main window with **Don't Show Again**. `TESTED_MODELS` in `crates/device-kobo/src/support.rs` lists models with hardware results, and **About This Kobo…** shows whether hardware checks have been run on that model. Browser mock: `?untested` or `?readonly`.
 - Tuned Renovate to open weekly dependency PRs for manual review, group Tauri updates, and keep the scripts interpreter on Python 3.12 for Core ML tooling.
 - Adopted TypeScript 7 for builds and type-checking with the TypeScript 6 API for ESLint. Registered GitHub's `ubuntu-26.04-arm` label with actionlint until the tool supports it directly.
+- The interface uses house-style's DM Sans, and copy follows house-style's writing rules.
+- Added the site in `site/` (house-style, like Star Ground's), a tag-driven release workflow (universal Mac app, per-architecture CLI archives, GitHub release from CHANGELOG.md, site redeploy, Homebrew formula), and in-app update checks with signed updates. See [releasing](engineering/releasing.md).
 
 ## Current
 
-- Preparing the first release. The engineering index consolidates contributor references and links to the pre-release research and plans in Git history. `docs/` holds user-facing material for the future Zensical site.
+- Preparing the first release. Before tagging v0.1.0: store `TAURI_SIGNING_PRIVATE_KEY`, enable Pages with GitHub Actions, add the `parallax` DNS CNAME, and optionally add Developer ID and `TAP_GITHUB_TOKEN` secrets ([releasing](engineering/releasing.md)). The engineering index consolidates contributor references and links to the pre-release research and plans in Git history. `docs/` holds user-facing material to bring onto the site.
 
 ## Unresolved
 
@@ -25,7 +27,7 @@
 ## Next
 
 - Run the outstanding release hardware checks and collect reports from additional Kobo models.
-- Set up the Zensical site from the user-facing pages in `docs/`.
+- Bring the user-facing pages in `docs/` onto the site. Add app screenshots to the site's landing page.
 - Kindle device support is deferred. Optional Hardcover metadata, Kobo position mapping, PDF comics, and additional comic processing remain future work.
 
 ## Postponed: Kobo compatibility check

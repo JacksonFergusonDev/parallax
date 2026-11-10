@@ -1,0 +1,348 @@
+# Releases Parallax when a version tag is pushed (`just release 1.2.3`, then
+# `git push origin HEAD v1.2.3`). It reruns CI on the tagged commit, builds a
+# universal Mac app and the CLI for each Mac architecture, publishes them as a
+# GitHub release with CHANGELOG.md's notes, then redeploys the site so its
+# download button names the new version, and updates the Homebrew formula.
+#
+# Secrets (engineering/releasing.md says how to make each):
+# - TAURI_SIGNING_PRIVATE_KEY: signs the update archive. Required; without it
+#   installed copies couldn't verify the update.
+# - APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
+#   APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID: Developer ID signing and
+#   notarization. Optional; without them the app is signed ad hoc, and macOS
+#   makes people allow it in System Settings › Privacy & Security.
+# - TAP_GITHUB_TOKEN: pushes to JacksonFergusonDev/homebrew-tap. Optional;
+#   without it the formula update is skipped.
+name: Release
+
+on:
+  push:
+    tags: [ "v*" ]
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify:
+    name: Check the tag and notes
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+
+      - name: Check the manifests match the tag
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(uv run --directory scripts --no-project python release.py check "$TAG")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write the release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: uv run --directory scripts --no-project python release.py notes "$TAG" > "$RUNNER_TEMP/notes.md"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: notes
+          path: ${{ runner.temp }}/notes.md
+          if-no-files-found: error
+
+  ci:
+    name: CI
+    needs: verify
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml # zizmor: ignore[self-repository] actionlint resolves the local workflow with this syntax.
+
+  # One app for Apple silicon and Intel, so the site needs one download button:
+  # browsers can't reliably tell the two kinds of Mac apart.
+  app:
+    name: Build the Mac app
+    needs: [ verify, ci ]
+    runs-on: macos-26
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust for both Mac architectures
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+
+      - name: Fetch kepubify for both architectures
+        run: uv run --directory scripts --no-project python fetch_kepubify.py --target universal-apple-darwin
+
+      # Built fresh rather than restored from a cache a pull request could write.
+      - name: Build the cover upscaler
+        run: uv run --directory scripts --no-project python build_upscale_model.py
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: app/package.json
+
+      - name: Install Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+          package-manager-cache: false
+
+      - name: Install frontend dependencies
+        run: pnpm --dir app install --frozen-lockfile
+
+      # Tauri signs and notarizes when the APPLE_* variables are set, and
+      # signs ad hoc with the identity "-" otherwise.
+      - name: Choose how to sign
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        run: |
+          if [[ -z "$APPLE_CERTIFICATE" ]]; then
+            echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+            echo "::warning::No Developer ID certificate: the app is signed ad hoc and not notarized."
+          fi
+
+      - name: Build the app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          if [[ -n "$SIGNING_IDENTITY" ]]; then export APPLE_SIGNING_IDENTITY="$SIGNING_IDENTITY"; fi
+          # Empty variables would read as set; leave the missing ones unset.
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!name}" ]]; then unset "$name"; fi
+          done
+          pnpm --dir app tauri build --target universal-apple-darwin --bundles app,dmg \
+            --config src-tauri/tauri.upscale.conf.json --config src-tauri/tauri.release.conf.json
+
+      - name: Collect the release files
+        run: |
+          bundle=target/universal-apple-darwin/release/bundle
+          out="$RUNNER_TEMP/app"
+          mkdir -p "$out"
+          cp "$bundle/dmg/Parallax_${VERSION}_universal.dmg" "$out/"
+          cp "$bundle/macos/Parallax.app.tar.gz" "$out/Parallax_${VERSION}_universal.app.tar.gz"
+          cp "$bundle/macos/Parallax.app.tar.gz.sig" "$out/Parallax_${VERSION}_universal.app.tar.gz.sig"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: app
+          path: ${{ runner.temp }}/app/
+          if-no-files-found: error
+
+  cli:
+    name: Build the CLI / ${{ matrix.target }}
+    needs: [ verify, ci ]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install native Rust toolchain
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable-${{ matrix.target }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+
+      - name: Fetch kepubify for this architecture
+        run: uv run --directory scripts --no-project python fetch_kepubify.py --target "$TARGET"
+
+      - name: Build the CLI
+        run: cargo build --locked --release -p parallax-cli --target "$TARGET"
+
+      - name: Package it with kepubify
+        run: |
+          stage="$RUNNER_TEMP/stage"
+          mkdir -p "$stage" "$RUNNER_TEMP/cli"
+          cp "target/$TARGET/release/parallax-cli" "$stage/"
+          cp "app/src-tauri/binaries/kepubify-$TARGET" "$stage/kepubify"
+          cp LICENSE "$stage/"
+          "$stage/parallax-cli" --version | grep -F "$VERSION"
+          archive="$RUNNER_TEMP/cli/parallax-cli-${VERSION}-${TARGET}.tar.gz"
+          tar -czf "$archive" -C "$stage" parallax-cli kepubify LICENSE
+          (cd "$RUNNER_TEMP/cli" && shasum -a 256 "$(basename "$archive")" > "$(basename "$archive").sha256")
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: cli-${{ matrix.target }}
+          path: ${{ runner.temp }}/cli/
+          if-no-files-found: error
+
+  publish:
+    name: Publish the GitHub release
+    needs: [ verify, app, cli ]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          path: ${{ runner.temp }}/release
+          merge-multiple: true
+
+      # The updater reads this from the latest release. Apple silicon and
+      # Intel Macs both install the universal app.
+      - name: Write the update manifest
+        working-directory: ${{ runner.temp }}/release
+        run: |
+          archive="Parallax_${VERSION}_universal.app.tar.gz"
+          url="https://github.com/${GH_REPO}/releases/download/${TAG}/${archive}"
+          jq -n \
+            --arg version "$VERSION" \
+            --rawfile notes notes.md \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --rawfile signature "${archive}.sig" \
+            --arg url "$url" \
+            '{version: $version, notes: $notes, pub_date: $date,
+              platforms: {
+                "darwin-aarch64": {signature: $signature, url: $url},
+                "darwin-x86_64": {signature: $signature, url: $url}}}' \
+            > latest.json
+
+      # A draft until every file is up, so nobody sees a release half there.
+      # A prerelease never becomes "latest", so the updater and the site's
+      # download button keep offering the newest stable version.
+      - name: Publish
+        working-directory: ${{ runner.temp }}/release
+        run: |
+          flags=(--draft --verify-tag --title "Parallax ${VERSION}" --notes-file notes.md)
+          if [[ "$PRERELEASE" == "true" ]]; then flags+=(--prerelease); fi
+          gh release create "$TAG" "${flags[@]}" \
+            Parallax_*_universal.dmg Parallax_*_universal.app.tar.gz Parallax_*_universal.app.tar.gz.sig \
+            parallax-cli-*.tar.gz parallax-cli-*.tar.gz.sha256 latest.json
+          if [[ "$PRERELEASE" == "true" ]]; then
+            gh release edit "$TAG" --draft=false
+          else
+            gh release edit "$TAG" --draft=false --latest
+          fi
+
+  site:
+    name: Site
+    needs: publish
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/site.yml # zizmor: ignore[self-repository] actionlint resolves the local workflow with this syntax.
+
+  homebrew:
+    name: Update the Homebrew formula
+    needs: [ verify, publish ]
+    if: needs.verify.outputs.prerelease == 'false'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions: {}
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+    steps:
+      - name: Skip without a tap token
+        if: env.TAP_TOKEN == ''
+        run: echo "::warning::TAP_GITHUB_TOKEN isn't set, so the Homebrew formula wasn't updated."
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.TAP_TOKEN != ''
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        if: env.TAP_TOKEN != ''
+        with:
+          pattern: cli-*
+          path: ${{ runner.temp }}/cli
+          merge-multiple: true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.TAP_TOKEN != ''
+        with:
+          repository: JacksonFergusonDev/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          path: tap
+          persist-credentials: true # zizmor: ignore[artipacked] the push below needs it; nothing uploads this checkout.
+
+      - name: Install uv
+        if: env.TAP_TOKEN != ''
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+
+      - name: Write and push the formula
+        if: env.TAP_TOKEN != ''
+        run: |
+          uv run --directory scripts --no-project python homebrew_formula.py \
+            "$VERSION" "$RUNNER_TEMP/cli" "$GITHUB_WORKSPACE/tap/Formula/parallax-cli.rb"
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/parallax-cli.rb
+          git diff --cached --quiet && exit 0
+          git commit -m "feat(parallax-cli): update to ${VERSION}"
+          git push

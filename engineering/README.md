@@ -1,12 +1,13 @@
 # Parallax engineering
 
-[User documentation](../docs/device-support.md) lives in `docs/`, the source directory for the future Zensical site. This directory holds contributor references and the evidence behind decisions. See [PROGRESS.md](../PROGRESS.md) for the current maintainer handoff.
+[User documentation](../docs/device-support.md) lives in `docs/`; the public site is built from `site/`. This directory holds contributor references and the evidence behind decisions. See [PROGRESS.md](../PROGRESS.md) for the current maintainer handoff.
 
 ## Maintained references
 
 - [Design system](design-system.md) covers shared UI tokens, identity, layout, and visual verification.
 - [App caching](app-caching.md) covers retained views, cache invalidation, and asynchronous refresh.
 - [Kobo engineering notes](device-notes.md) cover the database, device writes, backups, and how to add a device report.
+- [Releasing](releasing.md) covers cutting a release, signing keys and secrets, the site's deployment, and how the CLI is distributed.
 - [Hardware checks](hardware-checks.md) provide repeatable procedures. [Hardware results](hardware-results.md) record which device, firmware, and workflows were actually tested.
 
 ## Decisions and measurements

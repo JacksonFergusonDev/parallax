@@ -1,5 +1,11 @@
-"""Install the native kepubify binary with the sidecar name Tauri expects."""
+"""Install the native kepubify binary with the sidecar name Tauri expects.
 
+With no arguments, fetches kepubify for the host Rust target. `--target`
+fetches another, and `--target universal-apple-darwin` joins the two Mac
+builds with `lipo`, as a universal app build needs.
+"""
+
+import argparse
 import subprocess
 import sys
 from pathlib import Path
@@ -8,6 +14,8 @@ from download import download_verified
 
 VERSION = "v4.0.4"
 DESTINATION = Path(__file__).resolve().parents[1] / "app/src-tauri/binaries"
+UNIVERSAL = "universal-apple-darwin"
+MAC_TARGETS = ("aarch64-apple-darwin", "x86_64-apple-darwin")
 
 # Upstream publishes no checksums. These were recorded on first download.
 RELEASES = {
@@ -38,26 +46,59 @@ RELEASES = {
 }
 
 
-def main() -> int:
+def host_target() -> str:
+    version = subprocess.check_output(["rustc", "-vV"], text=True)
+    target = next(
+        (
+            line.removeprefix("host: ").strip()
+            for line in version.splitlines()
+            if line.startswith("host: ")
+        ),
+        "",
+    )
+    if not target:
+        raise ValueError("rustc did not report a host target")
+    return target
+
+
+def sidecar(target: str) -> Path:
+    """Where Tauri looks for the sidecar built for `target`."""
+    suffix = ".exe" if target.endswith("-windows-msvc") else ""
+    return DESTINATION / f"kepubify-{target}{suffix}"
+
+
+def fetch(target: str) -> Path:
+    if target not in RELEASES:
+        raise ValueError(f"kepubify has no configured sidecar for {target}")
+    asset, sha256 = RELEASES[target]
+    url = f"https://github.com/pgaskin/kepubify/releases/download/{VERSION}/{asset}"
+    destination = sidecar(target)
+    if download_verified(url, destination, sha256, executable=True):
+        print(f"fetched kepubify {VERSION} for {target}")
+    return destination
+
+
+def fetch_universal() -> Path:
+    parts = [fetch(target) for target in MAC_TARGETS]
+    destination = sidecar(UNIVERSAL)
+    subprocess.run(
+        ["lipo", "-create", "-output", str(destination), *map(str, parts)],
+        check=True,
+    )
+    print(f"joined kepubify {VERSION} into {destination.name}")
+    return destination
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--target", help="Rust target (default: the host's)")
+    args = parser.parse_args(argv)
     try:
-        version = subprocess.check_output(["rustc", "-vV"], text=True)
-        target = next(
-            (
-                line.removeprefix("host: ").strip()
-                for line in version.splitlines()
-                if line.startswith("host: ")
-            ),
-            "",
-        )
-        if not target:
-            raise ValueError("rustc did not report a host target")
-        if target not in RELEASES:
-            raise ValueError(f"kepubify has no configured sidecar for {target}")
-        asset, sha256 = RELEASES[target]
-        url = f"https://github.com/pgaskin/kepubify/releases/download/{VERSION}/{asset}"
-        name = f"kepubify-{target}{Path(asset).suffix}"
-        if download_verified(url, DESTINATION / name, sha256, executable=True):
-            print(f"fetched kepubify {VERSION} for {target}")
+        target = args.target or host_target()
+        if target == UNIVERSAL:
+            fetch_universal()
+        else:
+            fetch(target)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
