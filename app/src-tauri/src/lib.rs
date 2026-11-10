@@ -1502,7 +1502,7 @@ pub fn run() {
     let mut context = tauri::generate_context!();
     #[cfg(feature = "e2e")]
     e2e::prepare(&mut context);
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         // Move the data before the window state plugin reads its saved layout.
         .plugin(
@@ -1636,13 +1636,17 @@ pub fn run() {
             _ => {}
         })
         .build(context)
-        .expect("error while building tauri application")
-        .run(|app, event| {
-            // The Dock icon brings the library back when only readers are open.
-            if let tauri::RunEvent::Reopen { .. } = event {
-                let _ = menu::show_library(app);
-            }
-        });
+        .expect("error while building tauri application");
+
+    #[cfg(target_os = "macos")]
+    app.run(|app, event| {
+        // The Dock icon brings the library back when only readers are open.
+        if let tauri::RunEvent::Reopen { .. } = event {
+            let _ = menu::show_library(app);
+        }
+    });
+    #[cfg(not(target_os = "macos"))]
+    app.run(|_, _| {});
 }
 
 #[cfg(test)]
