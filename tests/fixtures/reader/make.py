@@ -2,7 +2,7 @@
 """Builds the books scripts/reader-e2e.mjs reads.
 
 hostile.epub tries every way found in the reader spike to run a script, load
-something from the network, or leave its frame (docs/reader-spike.md). Each
+something from the network, or leave its frame (engineering/decisions/epub-reader.md). Each
 script that runs saves reader settings of 200% and dark, which a reader window
 is allowed to do, so the test sees it; tries commands a reader isn't granted;
 and requests BEACON/exec/<name>. Anything that loads requests BEACON/net/...

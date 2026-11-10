@@ -1,1 +1,0 @@
-{"identifier": "reader", "windows": ["reader-*"], "permissions": ["allow-reader-list", "allow-reader-entry", "allow-reader-file", "allow-reader-config", "allow-reader-save-position", "allow-report", "allow-reader-books", "allow-reader-close", "allow-spike-input", "allow-spike-snapshot"]}

@@ -192,7 +192,7 @@ fn rejects_ancient_schema() {
 }
 
 /// Runs against the gitignored copy of the reference device's database when
-/// present (see docs/device-notes.md); skipped elsewhere, e.g. CI.
+/// present (see engineering/device-notes.md); skipped elsewhere, e.g. CI.
 #[test]
 fn reads_reference_device_db() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))

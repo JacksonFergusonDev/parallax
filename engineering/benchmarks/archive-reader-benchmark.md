@@ -4,7 +4,7 @@ Measured on November 9, 2026 on an Apple M3 with 8 CPU cores and 16 GiB RAM, run
 
 ## What Parallax links
 
-`compress-tools` is a Rust interface to libarchive. Parallax uses it to read RAR and 7z book bundles and to convert CBR and CB7 comics to stored CBZ. The Rust `zip` reader handles ZIP bundles, CBZ and EPUB separately. `otool -L` on the local Parallax binary reports `/usr/lib/libarchive.2.dylib`. The pkg-config shim links against the macOS SDK, and macOS supplies the runtime library. A port to another OS would need to provide libarchive for that target or change the archive readers. [Linker shim](../scripts/pkg-config-libarchive.sh) · [compress-tools](https://github.com/OSSystems/compress-tools-rs)
+`compress-tools` is a Rust interface to libarchive. Parallax uses it to read RAR and 7z book bundles and to convert CBR and CB7 comics to stored CBZ. The Rust `zip` reader handles ZIP bundles, CBZ and EPUB separately. `otool -L` on the local Parallax binary reports `/usr/lib/libarchive.2.dylib`. The pkg-config shim links against the macOS SDK, and macOS supplies the runtime library. A port to another OS would need to provide libarchive for that target or change the archive readers. [Linker shim](../../scripts/pkg-config-libarchive.sh) · [compress-tools](https://github.com/OSSystems/compress-tools-rs)
 
 ## Method
 

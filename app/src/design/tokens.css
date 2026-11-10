@@ -1,4 +1,4 @@
-/* Parallax's shared UI contract. See docs/design-system.md. Book content and
+/* Parallax's shared UI contract. See engineering/design-system.md. Book content and
    cover artwork have independent typography; these tokens describe the UI. */
 :root {
   --art-type-9: 9px;

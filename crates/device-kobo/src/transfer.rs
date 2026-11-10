@@ -187,7 +187,7 @@ impl KoboDevice {
 /// macOS attaches `com.apple.provenance` to every file a process creates and
 /// it cannot be removed; on FAT32 that becomes a `._<name>` companion file.
 /// Deleting the companion is safe and it is not recreated (verified on the
-/// reference Kobo, see docs/device-notes.md).
+/// reference Kobo, see engineering/device-notes.md).
 pub(crate) fn remove_apple_double(path: &Path) {
     if let (Some(parent), Some(name)) = (path.parent(), path.file_name()) {
         let mut companion = std::ffi::OsString::from("._");

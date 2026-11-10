@@ -1,9 +1,0 @@
-target/
-node_modules/
-dist/
-gen/
-books/
-results/
-www/
-permissions/
-front/foliate/

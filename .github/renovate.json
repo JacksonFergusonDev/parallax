@@ -6,7 +6,6 @@
     ":prHourlyLimit2"
   ],
   "ignorePaths": [
-    "spikes/**",
     "vendor/**"
   ],
   "schedule": [

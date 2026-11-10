@@ -4,4 +4,4 @@ An unmodified copy of [readest/foliate-js](https://github.com/readest/foliate-js
 
 Only the files the EPUB path needs are kept. `app/vite.config.ts` points imports of the other formats (MOBI, FB2, comics, PDF) and the zip library at a stub, because the reader loads books through Rust. `fixed-layout.js` also needs `construct-style-sheets-polyfill`, which is in `app/package.json`.
 
-After updating, run the hostile EPUB in `spikes/reader` against the new copy. See [docs/reader-spike.md](../../docs/reader-spike.md).
+After updating, run `just test-reader` from the repository root to check the reader in the desktop app. See the [EPUB reader decision record](../../engineering/decisions/epub-reader.md).

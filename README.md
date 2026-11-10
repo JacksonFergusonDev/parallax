@@ -2,7 +2,7 @@
 
 ![Parallax icon](app/src-tauri/icons/64x64.png)
 
-A desktop library for reading books and comics and keeping them organised on a Kobo: import, fix metadata and covers, convert to KEPUB, send, and manage the Kobo's own collections. Kindle support is planned.
+Parallax is a desktop library for reading books and comics and organising them on a Kobo. Import books, improve their metadata and covers, convert them to KEPUB, and manage the Kobo’s own collections. You can import DRM-free Kindle-format books. Support for Kindle devices is deferred.
 
 Licensed under GPLv3. Device logic is ported from [calibre](https://calibre-ebook.com)'s Kobo driver; EPUB to KEPUB conversion uses [kepubify](https://pgaskin.net/kepubify/), and Amazon formats are read with [boko](https://github.com/zacharydenton/boko).
 
@@ -14,17 +14,17 @@ Licensed under GPLv3. Device logic is ported from [calibre](https://calibre-eboo
 4. **Read** in the side panel opens a book in its own window and remembers where you stopped. **Search** (⌘F) finds a word or line in it. Select text to highlight it or add a note, listed under the pen button with **Copy all**; footnotes open over the page; **Back** (⌘[) returns after a jump; the speaker button reads aloud; **Aa** sets theme, size, pages or scrolling, line length, margins and spacing. Books are shown with their scripts blocked and no internet access.
 5. The **On Kobo** tab (⌘2) shows what's on the device, with reading progress, and lets you manage collections, remove books, and turn folders into collections.
 
-Choose **Library tools › Add comic folder…** to bundle pages or chapter archives as a volume. The comic reader supports spreads, vertical scroll, zoom and bookmarks. Parallax prepares comic pages for the Kobo screen when sending. See the [hardware checklist](docs/hardware-checks.md#comics) for model verification.
+Choose **Library tools › Add comic folder…** to bundle pages or chapter archives as a volume. The comic reader supports spreads, vertical scroll, zoom and bookmarks. Parallax prepares comic pages for the Kobo screen when sending. See [device support](docs/device-support.md) for hardware verification and compatibility.
 
 Every change to the Kobo's database is backed up first, compressed, to `~/Library/Application Support/dev.parallax.app/device-backups/`. Removed books are held on your Mac for 30 days, and the library is saved before removals and bulk changes. **Revert changes…**, in both the Library and On Kobo tabs, lists these points by time and goes back to one. How things are now is saved first, so a revert can be undone too.
 
 When upgrading, Parallax moves the existing library and backups into the new app data folder if it does not already exist. Existing Kobo history stays readable and moves to `.parallax` the next time Parallax records a change.
 
-Brand and UI rules: [Parallax design system](docs/design-system.md).
-
 ## Development
 
 Requires Rust (stable), Node and pnpm, [just](https://github.com/casey/just), and [uv](https://docs.astral.sh/uv/).
+
+Run `prek install` in a fresh checkout to enable the repository's Git hooks.
 
 ```bash
 just          # list available recipes
@@ -54,7 +54,7 @@ cargo run -p parallax-cli -- library ls --json
 cargo run -p parallax-cli -- library enhance  # preview metadata proposals
 ```
 
-Project plan and progress: [docs/PLAN.md](docs/PLAN.md), [PROGRESS.md](PROGRESS.md). Device findings: [docs/device-notes.md](docs/device-notes.md). Manual device checks: [docs/hardware-checks.md](docs/hardware-checks.md). App caching and invalidation: [docs/app-caching.md](docs/app-caching.md).
+See the [engineering index](engineering/README.md) for the design system, architecture decisions, and hardware verification. The [maintainer handoff](PROGRESS.md) tracks current work and release checks.
 
 ## Cover upscaling
 

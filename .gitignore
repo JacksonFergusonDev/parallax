@@ -1,5 +1,7 @@
 /target
 .DS_Store
+# Local artifacts from retired experiments.
+/spikes/
 .spike-backups/
 tests/fixtures/private/
 app/src-tauri/binaries/
