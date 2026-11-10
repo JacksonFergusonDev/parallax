@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { duringSetup } from "../menu";
 import {
   COUNTED,
+  customised,
   healthIssues,
   nextStep,
   previousStep,
@@ -38,7 +39,24 @@ describe("setup steps", () => {
   });
 
   it("counts every step but the welcome and the finish", () => {
-    expect(COUNTED).toEqual(["connect", "books", "kobo", "appearance", "tour"]);
+    expect(COUNTED).toEqual([
+      "connect",
+      "books",
+      "settings",
+      "appearance",
+      "tour",
+    ]);
+  });
+});
+
+describe("recommended settings", () => {
+  it("are every offered setting left unset", () => {
+    expect(customised({})).toEqual([]);
+    expect(customised({ eject_after_send: null, theme: "dark" })).toEqual([]);
+    expect(customised({ open_view: "last", comics_kind: "comic" })).toEqual([
+      "comics_kind",
+      "open_view",
+    ]);
   });
 });
 

@@ -204,26 +204,73 @@ describe("first-run setup", () => {
     expect(host.textContent).toContain("Added 2 books to your library");
   });
 
-  it("saves Kobo preferences and the theme as they're chosen", async () => {
+  const input = (text: string) =>
+    [...host.querySelectorAll("label")]
+      .find((l) => l.textContent?.includes(text))!
+      .querySelector("input") as HTMLInputElement;
+  const toggle = async (text: string) => {
+    await act(async () => input(text).click());
+    await settle();
+  };
+
+  it("checks the Kobo once it's connected", async () => {
+    await render({ device: kobo() });
+    await click("Get Started");
+    expect(host.textContent).toContain("everything looks good");
+  });
+
+  it("recommends settings, with every one open to customise", async () => {
     await render({ device: kobo() });
     await click("Get Started");
     await click("Continue");
     await click("Continue");
-    expect(title()).toBe("Looking after your Kobo");
-    expect(host.textContent).toContain("everything looks good");
+    expect(title()).toBe("Choose your settings");
+    expect(input("Recommended settings").checked).toBe(true);
+    expect(host.textContent).not.toContain("Eject the Kobo");
 
-    const eject = [...host.querySelectorAll("label")]
-      .find((l) => l.textContent?.includes("Eject the Kobo"))!
-      .querySelector("input") as HTMLInputElement;
-    expect(eject.checked).toBe(false);
-    await act(async () => eject.click());
-    await settle();
-    expect(stored.eject_after_send).toBe("on");
+    await toggle("Customise");
+    expect(input("Eject the Kobo").checked).toBe(false);
+    await toggle("Eject the Kobo");
+    await toggle("Review books when they're added");
+    await toggle("Read in one window");
+    expect(stored).toMatchObject({
+      eject_after_send: "on",
+      review_on_add: "off",
+      reader_windows: "one",
+    });
 
+    // Leaving and coming back keeps the choices open.
     await click("Continue");
     expect(title()).toBe("Choose a look");
     await click("Sepia");
     expect(stored.theme).toBe("sepia");
+    await click("Back");
+    expect(input("Customise").checked).toBe(true);
+
+    // Going back to the recommendation undoes what was changed, not the look.
+    await toggle("Recommended settings");
+    expect(stored).toMatchObject({
+      eject_after_send: null,
+      review_on_add: null,
+      reader_windows: null,
+      theme: "sepia",
+    });
+    expect(host.textContent).not.toContain("Eject the Kobo");
+  });
+
+  it("opens on Customise when settings were already changed", async () => {
+    stored.open_view = "last";
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await render();
+    await click("Get Started");
+    await click("Continue Without a Kobo");
+    await click("Continue");
+    expect(input("Customise").checked).toBe(true);
+    const open = [...host.querySelectorAll("select")].find((s) =>
+      s.labels?.[0]?.textContent?.includes("Open Parallax to"),
+    )!;
+    expect(open.value).toBe("last");
   });
 
   it("doesn't check a Kobo it won't change", async () => {
@@ -262,6 +309,7 @@ describe("first-run setup", () => {
     for (let i = 0; i < 5; i++) await click("Continue");
     expect(title()).toBe("You're all set");
     expect(host.textContent).toContain("Kobo Libra 2 set up");
+    expect(host.textContent).toContain("Recommended settings");
     expect(host.textContent).toContain("5 books in your library");
     expect(button("Skip Setup")).toBeUndefined();
     await click("Open Library");

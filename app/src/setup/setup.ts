@@ -1,7 +1,12 @@
 // First-run setup: whether it shows, and the steps it walks through. The
 // `setup` setting is `started` once it has shown, then `skipped` or `done`.
 import { useCallback, useEffect, useState } from "react";
-import { getSetting, setSetting, type KoboHealth } from "../api";
+import {
+  getSetting,
+  setSetting,
+  type KoboHealth,
+  type SettingKey,
+} from "../api";
 
 export type SetupOutcome = "skipped" | "done";
 
@@ -21,7 +26,7 @@ export const STEPS = [
   "welcome",
   "connect",
   "books",
-  "kobo",
+  "settings",
   "appearance",
   "tour",
   "done",
@@ -35,6 +40,23 @@ export const nextStep = (step: Step): Step =>
   STEPS[Math.min(STEPS.indexOf(step) + 1, STEPS.length - 1)];
 export const previousStep = (step: Step): Step =>
   STEPS[Math.max(STEPS.indexOf(step) - 1, 0)];
+
+/** The settings setup offers. Unset is the recommended value of each. */
+export const SETUP_SETTINGS = [
+  "kobo_series",
+  "kobo_rules",
+  "eject_after_send",
+  "review_on_add",
+  "comics_kind",
+  "open_view",
+  "reader_windows",
+] as const satisfies readonly SettingKey[];
+
+type Values = Partial<Record<SettingKey, string | null>>;
+
+/** Those of `SETUP_SETTINGS` changed from what's recommended. */
+export const customised = (values: Values) =>
+  SETUP_SETTINGS.filter((key) => values[key] != null);
 
 /** Things worth tidying on a Kobo. Books it hasn't imported yet are normal. */
 export function healthIssues(health: KoboHealth): number {

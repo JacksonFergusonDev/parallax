@@ -25,10 +25,11 @@ import { summarizeDeviceImport } from "../device";
 import { useBookProgress } from "../bookProgress";
 import { BookProgressBar } from "../components/BookProgressBar";
 import { ThemePicker } from "../components/ThemePicker";
-import { Check } from "../settings/panes";
+import { Check, Choices } from "../settings/panes";
 import { useSettings } from "../settings/useSettings";
 import {
   COUNTED,
+  customised,
   healthIssues,
   nextStep,
   previousStep,
@@ -63,6 +64,9 @@ export function SetupFlow(props: Props) {
   /** What adding the Kobo's books did, kept when moving between steps. */
   const [imported, setImported] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Customising rather than taking the recommended settings; until the
+   * user picks, it follows whether any setting is already changed. */
+  const [custom, setCustom] = useState<boolean | null>(null);
   const settings = useSettings(setError);
   const heading = useRef<HTMLHeadingElement>(null);
   const titleId = useId();
@@ -128,13 +132,14 @@ export function SetupFlow(props: Props) {
               onImported={setImported}
             />
           )}
-          {step === "kobo" && (
-            <KoboStep
+          {step === "settings" && settings.values && (
+            <SettingsStep
               titleId={titleId}
               heading={heading}
-              device={device}
               values={settings.values}
               set={settings.set}
+              custom={custom ?? customised(settings.values).length > 0}
+              onCustom={setCustom}
             />
           )}
           {step === "appearance" && (
@@ -154,6 +159,9 @@ export function SetupFlow(props: Props) {
               heading={heading}
               kobo={kobo}
               imported={imported}
+              recommended={
+                !!settings.values && customised(settings.values).length === 0
+              }
               libraryBooks={props.libraryBooks}
             />
           )}
@@ -298,6 +306,8 @@ function Connect({
   ...props
 }: StepProps & { device: DeviceInfo | null }) {
   const count = useKoboRead(device, bookCount)?.value ?? null;
+  const writable = device && device.read_only === null ? device : null;
+  const issues = useKoboRead(writable, issueCount)?.value ?? null;
 
   return (
     <>
@@ -325,6 +335,20 @@ function Connect({
           </li>
           <li>Parallax finds it on its own, usually within a few seconds.</li>
         </ol>
+      )}
+      {issues !== null && (
+        <p className={`setup-note ${issues === 0 ? "" : "info"}`}>
+          {issues === 0 ? (
+            <CheckIcon aria-hidden="true" />
+          ) : (
+            <Wrench aria-hidden="true" />
+          )}
+          <span>
+            {issues === 0
+              ? "Parallax checked your Kobo and everything looks good."
+              : `Parallax found ${plural(issues, "small thing")} worth tidying on your Kobo. Check This Kobo… in the Kobo menu fixes them.`}
+          </span>
+        </p>
       )}
       {device?.read_only && (
         <p className="setup-note warn">
@@ -478,53 +502,151 @@ function Books({
   );
 }
 
-function KoboStep({
-  device,
+type SettingsProps = ReturnType<typeof useSettings>;
+
+function SettingsStep({
   values,
   set,
+  custom,
+  onCustom,
   ...props
 }: StepProps & {
-  device: DeviceInfo | null;
-  values: ReturnType<typeof useSettings>["values"];
-  set: ReturnType<typeof useSettings>["set"];
+  values: NonNullable<SettingsProps["values"]>;
+  set: SettingsProps["set"];
+  custom: boolean;
+  onCustom: (custom: boolean) => void;
 }) {
-  const writable = device && device.read_only === null ? device : null;
-  const issues = useKoboRead(writable, issueCount)?.value ?? null;
+  const openId = useId();
+  const comicsId = useId();
+  const recommend = () => {
+    for (const key of customised(values)) set(key, null);
+    onCustom(false);
+  };
+  const choice = (
+    on: boolean,
+    pick: () => void,
+    name: string,
+    hint: string,
+  ) => (
+    <label className={`setup-choice ${on ? "on" : ""}`}>
+      <input type="radio" name="setup-settings" checked={on} onChange={pick} />
+      <span>
+        <span className="setup-choice-name">{name}</span>
+        <span className="setup-choice-hint">{hint}</span>
+      </span>
+    </label>
+  );
 
   return (
     <>
-      <Title {...props}>Looking after your Kobo</Title>
-      <p className="setup-lead">
-        Choose what Parallax does on its own. You can change these any time in
-        Settings.
-      </p>
-      {values && (
-        <div className="setup-checks">
-          <Check
-            values={values}
-            set={set}
-            name="kobo_series"
-            hint="The Kobo ignores series in books copied to it, so Parallax adds them once the Kobo has imported them."
-          >
-            Add series to books when a Kobo connects
-          </Check>
-          <Check
-            values={values}
-            set={set}
-            name="kobo_rules"
-            hint="Your grouping rules file books into the Kobo's existing collections after sending and when it connects."
-          >
-            Apply grouping rules automatically
-          </Check>
-          <Check
-            values={values}
-            set={set}
-            name="eject_after_send"
-            defaultOn={false}
-            hint="So the Kobo is ready to unplug once every book has been sent."
-          >
-            Eject the Kobo after sending books
-          </Check>
+      <Title {...props}>Choose your settings</Title>
+      <div className="setup-choices" role="radiogroup" aria-label="Settings">
+        {choice(
+          !custom,
+          recommend,
+          "Recommended settings",
+          "What suits most people. You can change anything later in Settings.",
+        )}
+        {choice(
+          custom,
+          () => onCustom(true),
+          "Customise",
+          "Choose how Parallax looks after your Kobo, new books and reading.",
+        )}
+      </div>
+      {custom && (
+        <div className="setup-custom">
+          <fieldset>
+            <legend>Your Kobo</legend>
+            <Check
+              values={values}
+              set={set}
+              name="kobo_series"
+              hint="The Kobo ignores series in books copied to it, so Parallax adds them once the Kobo has imported them."
+            >
+              Add series to books when a Kobo connects
+            </Check>
+            <Check
+              values={values}
+              set={set}
+              name="kobo_rules"
+              hint="Your grouping rules file books into the Kobo's existing collections after sending and when it connects."
+            >
+              Apply grouping rules automatically
+            </Check>
+            <Check
+              values={values}
+              set={set}
+              name="eject_after_send"
+              defaultOn={false}
+              hint="So the Kobo is ready to unplug once every book has been sent."
+            >
+              Eject the Kobo after sending books
+            </Check>
+          </fieldset>
+          <fieldset>
+            <legend>New books</legend>
+            <Check
+              values={values}
+              set={set}
+              name="review_on_add"
+              hint="Points out missing covers, series and duplicates after books are added."
+            >
+              Review books when they're added
+            </Check>
+            <div className="setup-field">
+              <label htmlFor={comicsId}>Import comics as</label>
+              <select
+                id={comicsId}
+                value={values.comics_kind ?? "manga"}
+                onChange={(e) =>
+                  set(
+                    "comics_kind",
+                    e.target.value === "comic" ? "comic" : null,
+                  )
+                }
+              >
+                <option value="manga">Manga (right to left)</option>
+                <option value="comic">Comics (left to right)</option>
+              </select>
+              <p className="hint">Used when a comic doesn't say which it is.</p>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Reading</legend>
+            <div className="setup-field">
+              <label htmlFor={openId}>Open Parallax to</label>
+              <select
+                id={openId}
+                value={values.open_view ?? "library"}
+                onChange={(e) =>
+                  set(
+                    "open_view",
+                    e.target.value === "library" ? null : e.target.value,
+                  )
+                }
+              >
+                <option value="library">Library</option>
+                <option value="reading">Reading</option>
+                <option value="last">Where you left off</option>
+              </select>
+            </div>
+            <Choices
+              name="setup-reader-windows"
+              value={values.reader_windows === "one" ? "one" : "each"}
+              options={[
+                { value: "each", label: "Open each book in its own window" },
+                {
+                  value: "one",
+                  label: "Read in one window",
+                  hint: "Opening a book closes the one you were reading. Your place is kept.",
+                },
+              ]}
+              onChange={(next) =>
+                set("reader_windows", next === "one" ? "one" : null)
+              }
+            />
+          </fieldset>
         </div>
       )}
       <p className="setup-note">
@@ -534,20 +656,6 @@ function KoboStep({
           Kobo's database. Backups are listed in Settings › Backups.
         </span>
       </p>
-      {writable && issues !== null && (
-        <p className={`setup-note ${issues === 0 ? "" : "info"}`}>
-          {issues === 0 ? (
-            <CheckIcon aria-hidden="true" />
-          ) : (
-            <Wrench aria-hidden="true" />
-          )}
-          <span>
-            {issues === 0
-              ? "Parallax checked your Kobo and everything looks good."
-              : `Parallax found ${plural(issues, "small thing")} worth tidying on your Kobo. Check This Kobo… in the Kobo menu fixes them.`}
-          </span>
-        </p>
-      )}
     </>
   );
 }
@@ -631,16 +739,19 @@ function Tour(props: StepProps) {
 function Done({
   kobo,
   imported,
+  recommended,
   libraryBooks,
   ...props
 }: StepProps & {
   kobo: string | null;
   imported: string | null;
+  recommended: boolean;
   libraryBooks: number;
 }) {
   const lines = [
     kobo && `${kobo} set up`,
     imported,
+    recommended ? "Recommended settings" : "Your own settings",
     libraryBooks > 0 && `${plural(libraryBooks, "book")} in your library`,
   ].filter((line): line is string => Boolean(line));
   return (
