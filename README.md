@@ -37,7 +37,7 @@ just test-reader # reader and Settings in a real macOS WebView (opens windows)
 just build    # macOS .app bundle
 ```
 
-CI runs the Rust workspace on Apple silicon and Intel Macs, builds and tests the frontend on Linux, and exercises the reader and Settings in WKWebView on Apple silicon. Run the **Portability** workflow from the Actions tab to test the Rust workspace and desktop builds on Linux and Windows on x64 and arm64. The Kobo tests use fixtures and temporary directories.
+CI builds and tests the frontend on Ubuntu. Apple silicon and Intel Macs run the same Rust checks and executable builds, while a separate Apple silicon job exercises the reader and Settings in WKWebView. Run the **Portability** workflow from the Actions tab to test the Rust workspace and desktop builds on Linux and Windows on x64 and arm64. The Kobo tests use fixtures and temporary directories.
 
 `just dev` prompts before stopping processes that occupy Vite’s port (1420). Accepting retries app startup without repeating setup; declining or closing input leaves those processes running.
 

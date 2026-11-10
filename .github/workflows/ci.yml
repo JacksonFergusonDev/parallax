@@ -45,6 +45,15 @@ jobs:
         with:
           enable-cache: false
 
+      - name: Install Rustfmt
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+          components: rustfmt
+
+      - name: Check Rust formatting
+        run: cargo fmt --all --check
+
       - name: Check justfile format
         run: just --fmt --check --unstable
 
@@ -83,6 +92,50 @@ jobs:
     with:
       targets: >-
         [
-          {"platform": "macOS arm64", "os": "macos-15", "target": "aarch64-apple-darwin", "webview": true},
+          {"platform": "macOS arm64", "os": "macos-15", "target": "aarch64-apple-darwin"},
           {"platform": "macOS x64", "os": "macos-15-intel", "target": "x86_64-apple-darwin"}
         ]
+
+  webview:
+    name: WKWebView integration
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install native Rust toolchain
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable-aarch64-apple-darwin
+
+      # The test feature builds a different set of Rust artifacts from the
+      # native jobs. Give this job its own cache to keep both sets warm.
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: aarch64-apple-darwin
+
+      - name: Fetch native kepubify
+        run: bash scripts/fetch-kepubify.sh
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: app/package.json
+
+      - name: Install Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm --dir app install --frozen-lockfile
+
+      - name: Test reader and Settings in WKWebView
+        env:
+          CARGO_TARGET_DIR: target
+        run: node --test scripts/reader-e2e.mjs
