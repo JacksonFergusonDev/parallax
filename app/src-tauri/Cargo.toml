@@ -13,7 +13,8 @@ path = "src/main.rs"
 [lib]
 # The `_lib` suffix avoids a name clash with the bin target on Windows (cargo#8519).
 name = "parallax_app_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# Keep the desktop library's output names distinct across feature sets.
+crate-type = ["rlib"]
 
 [features]
 # Test hooks for scripts/reader-e2e.mjs. Never in a normal or release build.
