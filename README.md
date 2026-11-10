@@ -40,7 +40,7 @@ just build    # macOS .app bundle
 
 The Python project and lockfile live in `scripts/`. uv selects Python 3.12 and installs the locked Ruff, mypy and pytest tools for `just check-scripts`. The Core ML converter uses a separate environment and is installed only when the model needs to be built.
 
-CI builds and tests the frontend on Ubuntu. Apple silicon and Intel Macs run the same Rust checks and executable builds, while a separate Apple silicon job exercises the reader and Settings in WKWebView. Run the **Portability** workflow from the Actions tab to test the Rust workspace and desktop builds on Linux and Windows on x64 and arm64. The Kobo tests use fixtures and temporary directories.
+CI builds and tests the frontend on Ubuntu. Apple silicon and Intel Macs run the same Rust checks and executable builds. Two parallel Apple silicon jobs exercise EPUB reading and security, and Settings, menus, and comics in WKWebView. Locally, `just test-reader` runs all 11 cases. Run the **Portability** workflow from the Actions tab to test the Rust workspace and desktop builds on Linux and Windows on x64 and arm64. The Kobo tests use fixtures and temporary directories.
 
 `just dev` prompts before stopping processes that occupy Vite’s port (1420). Accepting retries app startup without repeating setup; declining or closing input leaves those processes running.
 

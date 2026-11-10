@@ -25,6 +25,17 @@ const bin = join(targetDir, "debug");
 const BEACON_PORT = 8931;
 const RUN_TIMEOUT_MS = 120_000;
 const view = "document.querySelector('foliate-view')";
+const shard = process.env.READER_E2E_SHARD;
+assert.ok(
+  shard === undefined || ["epub", "desktop"].includes(shard),
+  `Unknown READER_E2E_SHARD: ${shard}`,
+);
+
+// Keep cases that share a library or Settings state together. Without a
+// shard, just test-reader runs every case in its original order.
+function scenario(group, name, runCase) {
+  if (shard === undefined || shard === group) test(name, runCase);
+}
 
 function run(command, args, { env = {}, timeout = 600_000 } = {}) {
   return new Promise((resolve, reject) => {
@@ -140,14 +151,16 @@ before(async () => {
   const support = join(home, "Library/Application Support");
   await rename(join(support, "dev.parallax.app"), join(support, "dev.erc.companion"));
 
-  server = createServer((request, response) => {
-    requests.push(request.url);
-    response.end();
-  });
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(BEACON_PORT, "127.0.0.1", resolve);
-  });
+  if (shard !== "desktop") {
+    server = createServer((request, response) => {
+      requests.push(request.url);
+      response.end();
+    });
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(BEACON_PORT, "127.0.0.1", resolve);
+    });
+  }
 });
 
 after(async () => {
@@ -155,7 +168,7 @@ after(async () => {
   if (home) await rm(home, { recursive: true, force: true });
 });
 
-test("a hostile book runs no scripts and reaches no network", async () => {
+scenario("epub", "a hostile book runs no scripts and reaches no network", async () => {
   requests = [];
   // Search reads every section off screen as well as showing them, and lands
   // on the last one.
@@ -167,7 +180,7 @@ test("a hostile book runs no scripts and reaches no network", async () => {
   assert.equal(position(ids.Hostile)?.href, "c3.xhtml");
 });
 
-test("control: with the CSP loosened, the same scripts are caught", async () => {
+scenario("epub", "control: with the CSP loosened, the same scripts are caught", async () => {
   requests = [];
   await read(ids.Hostile, everySection, { PARALLAX_E2E_LOOSE: "1" });
   assert.match(readerSettings() ?? "", /"fontSize":200/, "scripts ran but weren't seen");
@@ -176,7 +189,7 @@ test("control: with the CSP loosened, the same scripts are caught", async () => 
   assert.equal(query("SELECT id FROM books").length, 2, "a book was removed");
 });
 
-test("reopening returns to the same place after the text reflows", async () => {
+scenario("epub", "reopening returns to the same place after the text reflows", async () => {
   const db = new DatabaseSync(libraryFile());
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('reader', ?)").run(
     JSON.stringify({ fontSize: 120, theme: "sepia" }),
@@ -194,7 +207,7 @@ test("reopening returns to the same place after the text reflows", async () => {
   assert.equal(reopened.cfi, left.cfi);
 });
 
-test("searching for a line goes to it", async () => {
+scenario("epub", "searching for a line goes to it", async () => {
   await read(ids.Long, searchFor("Paragraph 4.7."));
   const found = position(ids.Long);
   assert.equal(found?.href, "c3.xhtml", "search didn't go to chapter 4");
@@ -204,7 +217,7 @@ test("searching for a line goes to it", async () => {
   assert.ok(Number(from) <= 16 && 16 <= Number(to), `page ${found.cfi} doesn't show the line`);
 });
 
-test("a highlight with a note is kept for its book", async () => {
+scenario("epub", "a highlight with a note is kept for its book", async () => {
   const page = `${view}.renderer.getContents()[0].doc`;
   await read(ids.Long, [
     // Select the first paragraph the way a mouse would, and let go.
@@ -228,7 +241,7 @@ test("a highlight with a note is kept for its book", async () => {
   );
 });
 
-test("the Settings window changes settings, and backups at once", async () => {
+scenario("desktop", "the Settings window changes settings, and backups at once", async () => {
   await inSettings([
     // The window reopens on the tab it was last left on.
     clickText('[role="tab"]', "General"),
@@ -253,7 +266,7 @@ test("the Settings window changes settings, and backups at once", async () => {
   assert.deepEqual(policy, { keep: "history", max_bytes: null });
 });
 
-test("Settings reloads the saved theme and backup limit from the backend", async () => {
+scenario("desktop", "Settings reloads the saved theme and backup limit from the backend", async () => {
   await inSettings([
     clickText('[role="tab"]', "Backups"),
     `window.restoredBackupLimit = document.querySelector('.settings-pane select')?.value === 'none'`,
@@ -264,7 +277,7 @@ test("Settings reloads the saved theme and backup limit from the backend", async
   assert.equal(setting("theme"), "dark", "the saved theme or backup limit wasn't restored");
 });
 
-test("a reader on Auto shows the app's theme", async () => {
+scenario("epub", "a reader on Auto shows the app's theme", async () => {
   const db = new DatabaseSync(libraryFile());
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('theme', 'sepia')").run();
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('reader', ?)").run(
@@ -279,7 +292,7 @@ test("a reader on Auto shows the app's theme", async () => {
   assert.match(readerSettings() ?? "", /"fontSize":110/, "the reader wasn't sepia");
 });
 
-test("menu commands reach the reader in front", async () => {
+scenario("desktop", "menu commands reach the reader in front", async () => {
   const db = new DatabaseSync(libraryFile());
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('reader', ?)").run(
     JSON.stringify({ fontSize: 100, theme: "light" }),
@@ -341,7 +354,7 @@ const arrow = (key) =>
 const setComicPage = (page) =>
   `document.getElementById('slider').value = '${page}'; document.getElementById('slider').dispatchEvent(new Event('change'));`;
 
-test("comic reader turns in RTL, saves bookmarks and resumes the last page", async () => {
+scenario("desktop", "comic reader turns in RTL, saves bookmarks and resumes the last page", async () => {
   const id = await addComic("Reader comic RTL", "rtl");
   await read(id, [
     atComicPage(0, arrow("ArrowLeft")),
@@ -362,7 +375,7 @@ test("comic reader turns in RTL, saves bookmarks and resumes the last page", asy
   assert.equal(position(id)?.href, "comic-page/3");
 });
 
-test("comic reader turns in LTR and switches to vertical scroll", async () => {
+scenario("desktop", "comic reader turns in LTR and switches to vertical scroll", async () => {
   const id = await addComic("Reader comic LTR", "ltr");
   await read(id, [
     atComicPage(0, arrow("ArrowRight")),
