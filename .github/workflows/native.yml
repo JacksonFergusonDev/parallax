@@ -79,9 +79,11 @@ jobs:
       - name: Test Rust workspace
         run: cargo test --locked --workspace --no-fail-fast
 
-      - name: Build desktop executable
+      - name: Build desktop and CLI executables
         if: ${{ !matrix.webview }}
-        run: cargo build --locked -p parallax-app --bin Parallax
+        # Keep workspace-wide feature resolution from the test step so Cargo
+        # can reuse the libraries it already compiled.
+        run: cargo build --locked --workspace --bins
 
       - name: Install pnpm for WebView tests
         if: matrix.webview
