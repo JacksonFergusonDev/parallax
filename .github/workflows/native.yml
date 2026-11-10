@@ -30,6 +30,7 @@ jobs:
           persist-credentials: false
 
       - name: Install native Rust toolchain
+        id: rust
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable-${{ matrix.target }}
@@ -42,7 +43,8 @@ jobs:
           rustc -vV
           test "$(rustc -vV | awk '/^host: / {print $2}' | tr -d '\r')" = "$EXPECTED_TARGET"
 
-      - name: Restore Rust cache
+      - name: Restore Rust dependencies for portability
+        if: runner.os != 'macOS'
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: ${{ matrix.target }}
@@ -69,6 +71,13 @@ jobs:
       - name: Fetch native kepubify
         run: bash scripts/fetch-kepubify.sh
 
+      - name: Restore full macOS Rust cache
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/macos-rust-cache # zizmor: ignore[self-repository] actionlint resolves the local action with this syntax.
+        with:
+          target: ${{ matrix.target }}
+          rust-version: ${{ steps.rust.outputs.cachekey }}
+
       - name: Lint Rust workspace
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
@@ -79,3 +88,7 @@ jobs:
         # Keep workspace-wide feature resolution from the test step so Cargo
         # can reuse the libraries it already compiled.
         run: cargo build --locked --workspace --bins
+
+      - name: Mark the completed build for caching
+        if: runner.os == 'macOS'
+        run: python3 scripts/restore-cargo-input-times.py --finished

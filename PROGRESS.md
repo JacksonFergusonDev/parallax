@@ -93,7 +93,7 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 ## Current
 
-- macOS-first CI: PRs and pushes to main run shared frontend checks, identical Rust checks and executable builds on Apple silicon and Intel Macs, and a parallel WKWebView integration job on Apple silicon. The manual Portability workflow retains the Linux and Windows matrices. Runner timings and cache findings are recorded in [PR #2](https://github.com/JacksonFergusonDev/parallax/pull/2). Revisit vcpkg binary caching when Windows release work resumes.
+- macOS-first CI: PRs and pushes to main run shared frontend checks, identical Rust checks and executable builds on Apple silicon and Intel Macs, and a parallel WKWebView integration job on Apple silicon. The macOS jobs cache the full Cargo target directory and preserve timestamps for unchanged build inputs across checkouts. The manual Portability workflow retains the Linux and Windows matrices. Runner timings and cache findings are recorded in [PR #2](https://github.com/JacksonFergusonDev/parallax/pull/2). Revisit vcpkg binary caching when Windows release work resumes.
 - Kobo MVP (M0–M8) and phase 1.5 (M9–M16) complete and verified on the real Libra 2: the user confirmed every app feature works (2026-11-04), after the round 1 fixes (search titles, cover matching, Amazon/Indigo covers, selection, collections from Library).
 - Awaiting device reports from other Kobo models (docs/device-support.md); only the Libra 2 is verified.
 - Kindle (phase 2) deferred indefinitely (2026-11-04): the user has no Kindle and wants to keep improving the app for Kobo users. Keep the `Device` trait and capability flags as they are; no Kindle work until asked.

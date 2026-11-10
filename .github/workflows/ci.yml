@@ -106,16 +106,10 @@ jobs:
           persist-credentials: false
 
       - name: Install native Rust toolchain
+        id: rust
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable-aarch64-apple-darwin
-
-      # The test feature builds a different set of Rust artifacts from the
-      # native jobs. Give this job its own cache to keep both sets warm.
-      - name: Restore Rust cache
-        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          key: aarch64-apple-darwin
 
       - name: Fetch native kepubify
         run: bash scripts/fetch-kepubify.sh
@@ -135,7 +129,23 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm --dir app install --frozen-lockfile
 
+      - name: Build frontend for WKWebView
+        run: pnpm --dir app build
+
+      - name: Restore full macOS Rust cache
+        uses: ./.github/actions/macos-rust-cache # zizmor: ignore[self-repository] actionlint resolves the local action with this syntax.
+        with:
+          target: aarch64-apple-darwin
+          rust-version: ${{ steps.rust.outputs.cachekey }}
+
+      - name: Build WKWebView test executables
+        run: cargo build --locked -p parallax-app -p parallax-cli --features parallax-app/e2e
+
       - name: Test reader and Settings in WKWebView
         env:
           CARGO_TARGET_DIR: target
+          READER_E2E_NO_BUILD: "1"
         run: node --test scripts/reader-e2e.mjs
+
+      - name: Mark the completed build for caching
+        run: python3 scripts/restore-cargo-input-times.py --finished
