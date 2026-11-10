@@ -735,6 +735,8 @@ export type SettingKey =
   | "eject_after_send"
   | "setup"
   | "kobo_notices"
+  | "updates_auto"
+  | "updates_skipped"
   | "comics_kind"
   | "comic_spreads"
   | "comic_crop"
@@ -758,7 +760,7 @@ export const COMIC_PAGE_SETTINGS = [
   "comic_midtone_darkening",
 ] as const satisfies readonly SettingKey[];
 /** Opens a Help page in the browser, as the Help menu does. */
-export const openHelp = (page: "devices" | "issue") =>
+export const openHelp = (page: "devices" | "issue" | "releases") =>
   invoke<void>("open_help", { page });
 export const getSetting = (key: SettingKey) =>
   invoke<string | null>("setting_get", { key });
@@ -777,6 +779,33 @@ export const onSettingChange = (
   handler: (change: SettingChange) => void,
 ): Promise<UnlistenFn> =>
   listen<SettingChange>("setting-changed", (e) => handler(e.payload));
+
+/** A newer Parallax, found by the update check (src-tauri/src/updates.rs). */
+export interface UpdateInfo {
+  version: string;
+  current: string;
+  /** The release notes, in Markdown. */
+  notes: string | null;
+}
+export interface UpdateProgress {
+  downloaded: number;
+  total: number | null;
+}
+/** The update a check already found, if the window missed its event. */
+export const updateAvailable = () =>
+  invoke<UpdateInfo | null>("update_available");
+/** Downloads and installs the update, then restarts Parallax. */
+export const installUpdate = () => invoke<void>("update_install");
+export const skipUpdate = (version: string) =>
+  invoke<void>("update_skip", { version });
+export const onUpdateAvailable = (
+  handler: (update: UpdateInfo) => void,
+): Promise<UnlistenFn> =>
+  listen<UpdateInfo>("update-available", (e) => handler(e.payload));
+export const onUpdateProgress = (
+  handler: (progress: UpdateProgress) => void,
+): Promise<UnlistenFn> =>
+  listen<UpdateProgress>("update-progress", (e) => handler(e.payload));
 
 export interface BackupPolicy {
   keep: "history" | "latest";

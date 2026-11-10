@@ -3371,7 +3371,8 @@ button.icon {
   display: contents;
 }
 
-/* An untested or read-only Kobo, explained once per model. */
+/* A banner under the toolbar: an untested or read-only Kobo, explained once
+   per model, or a newer version of Parallax (UpdateNotice). */
 .kobo-notice {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;

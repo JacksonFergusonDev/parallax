@@ -136,6 +136,8 @@ import { BookProgressBar } from "./components/BookProgressBar";
 import { SetupFlow } from "./setup/SetupFlow";
 import { KoboNotice } from "./components/KoboNotice";
 import { useKoboNotice } from "./koboNotice";
+import { UpdateNotice } from "./components/UpdateNotice";
+import { useUpdate } from "./updates";
 import { useSetup } from "./setup/setup";
 import "./styles.css";
 
@@ -166,6 +168,7 @@ export default function App() {
   const [device, setDevice] = useState<DeviceInfo | null>(null);
   // Setup has its own word about an untested Kobo.
   const koboNotice = useKoboNotice(setup.open ? null : device);
+  const update = useUpdate();
   const activeKobo = useRef<DeviceInfo | null>(null);
   const copyRequest = useRef(0);
   const [copies, setCopies] = useState<{
@@ -1204,6 +1207,16 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
           />
           <DeviceBadge device={device} onOpen={() => setAboutOpen(true)} />
         </header>
+        {update.update && !setup.open && (
+          <UpdateNotice
+            update={update.update}
+            stage={update.stage}
+            busy={busy !== null}
+            onInstall={() => void update.install()}
+            onSkip={() => void update.skip().catch(console.error)}
+            onClose={update.close}
+          />
+        )}
         {koboNotice.notice && (
           <KoboNotice
             notice={koboNotice.notice}

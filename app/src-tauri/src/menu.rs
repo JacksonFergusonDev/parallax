@@ -15,6 +15,7 @@ use tauri::{AppHandle, Emitter, EventTarget, Manager, Runtime, State, WebviewWin
 use crate::{about, reader, settings};
 
 pub(crate) const REPOSITORY: &str = "https://github.com/JacksonFergusonDev/parallax";
+pub(crate) const SITE: &str = "https://parallax.jacksonferguson.me";
 const MAIN: &str = "main";
 /// The event the main window gets with a menu command's id.
 const COMMAND: &str = "menu-command";
@@ -81,6 +82,7 @@ const SORTS: [(&str, &str); 11] = [
 ];
 
 const ABOUT: Command = command("about", "About Parallax", App);
+const CHECK_UPDATES: Command = command("updates.check", "Check for Updates…", App);
 const SETTINGS: Command = key(command("settings", "Settings…", App), "CmdOrCtrl+,");
 
 const FILE: &[Command] = &[
@@ -165,6 +167,7 @@ const HELP: &[Command] = &[
     command("help.welcome", "Welcome to Parallax…", Main),
     command("help.guide", "Parallax Help", App),
     command("help.devices", "Supported Kobo Models", App),
+    command("help.releases", "Release Notes", App),
     command("help.issue", "Report an Issue…", App),
 ];
 
@@ -351,6 +354,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         built: HashMap::new(),
     };
     let about_item = items.command(&ABOUT)?;
+    let updates_item = items.command(&CHECK_UPDATES)?;
     let settings_item = items.command(&SETTINGS)?;
     let file = items.group(FILE)?;
     let find = items.command(&FIND)?;
@@ -385,7 +389,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         true,
         &join(
             &[
-                &[&about_item],
+                &[&about_item, &updates_item],
                 &[&settings_item],
                 &[&services],
                 &[&hide, &hide_others, &show_all],
@@ -484,7 +488,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         "Help",
         true,
         &join(
-            &[&refs(&help[..1]), &refs(&help[1..3]), &refs(&help[3..])],
+            &[&refs(&help[..1]), &refs(&help[1..4]), &refs(&help[4..])],
             &sep,
         ),
     )?;
@@ -537,7 +541,7 @@ pub fn show_library<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 #[tauri::command]
 pub fn open_help(app: AppHandle, page: &str) -> crate::CmdResult<()> {
     match page {
-        "devices" | "issue" => {
+        "devices" | "issue" | "releases" => {
             run(&app, &format!("help.{page}"));
             Ok(())
         }
@@ -568,6 +572,10 @@ pub fn run(app: &AppHandle, id: &str) {
                 eprintln!("Could not open About Parallax: {error}");
             }
         }
+        ("updates.check", _) => {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move { crate::updates::check(&app, true).await });
+        }
         ("settings", _) => {
             let _ = settings::open_window(app);
         }
@@ -576,6 +584,7 @@ pub fn run(app: &AppHandle, id: &str) {
         }
         ("help.guide", _) => open_url(&format!("{REPOSITORY}#readme")),
         ("help.devices", _) => open_url(&format!("{REPOSITORY}/blob/main/docs/device-support.md")),
+        ("help.releases", _) => open_url(&format!("{SITE}/download/#versions")),
         ("help.issue", _) => open_url(&format!("{REPOSITORY}/issues/new")),
         (_, Some(Reader)) => to_reader(app, id),
         (_, Some(Front)) => {

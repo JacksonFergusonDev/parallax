@@ -51,5 +51,13 @@
     "externalBin": [
       "binaries/kepubify"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE5QTRGMzFDNjg4N0FFN0IKUldSN3JvZG9IUE9rR1ZGMmcxSDhVSXNIL0VlbFB3Z0ZvL3lkS3Q5WmNPd2JJN1pKdUE3SmtHUE0K",
+      "endpoints": [
+        "https://github.com/JacksonFergusonDev/parallax/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

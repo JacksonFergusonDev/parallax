@@ -327,6 +327,7 @@ const SETTING_KEYS = [
   "kobo_series",
   "kobo_rules",
   "eject_after_send",
+  "updates_auto",
 ];
 
 /** `?theme=sepia` in the URL starts the mock with that theme. */
@@ -1334,6 +1335,25 @@ export function installMockBackend(label = "main") {
         }
         case "open_metadata_source":
           window.open(a.url as string, "_blank", "noopener,noreferrer");
+          return null;
+        // `?update` offers a newer version; installing it fails at the end,
+        // as the browser can't restart, so the banner's retry shows too.
+        case "update_available":
+          return params.has("update") && !settings.has("updates_skipped")
+            ? {
+                version: "0.2.0",
+                current: "0.1.0",
+                notes: "Adds Check for Updates… to the Parallax menu.",
+              }
+            : null;
+        case "update_install":
+          for (let downloaded = 0; downloaded <= 40; downloaded += 4) {
+            await emit("update-progress", { downloaded, total: 40 });
+            await sleep(150);
+          }
+          throw "the browser preview can't restart Parallax";
+        case "update_skip":
+          settings.set("updates_skipped", a.version as string);
           return null;
         case "setting_get":
           return settings.get(a.key as string) ?? null;

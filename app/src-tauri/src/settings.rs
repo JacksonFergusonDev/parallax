@@ -50,7 +50,7 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 21] = [
+const SETTINGS: [(&str, Allowed); 23] = [
     (parallax_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (parallax_core::enhance::METRON_TOKEN, Allowed::Text(256)),
     (
@@ -69,6 +69,8 @@ const SETTINGS: [(&str, Allowed); 21] = [
     (EJECT_AFTER_SEND, Allowed::OneOf(&["on"])),
     (SETUP, Allowed::OneOf(&["started", "skipped", "done"])),
     (KOBO_NOTICES, Allowed::Text(2000)),
+    (crate::updates::AUTO, Allowed::OneOf(&["off"])),
+    (crate::updates::SKIPPED, Allowed::Text(64)),
     (parallax_library::COMICS_KIND, Allowed::OneOf(&["comic"])),
     (
         COMIC_SPREADS,
@@ -84,7 +86,7 @@ const SETTINGS: [(&str, Allowed); 21] = [
 ];
 
 /// Settings that are preferences, which Reset puts back. Credentials stay.
-const PREFERENCES: [&str; 17] = [
+const PREFERENCES: [&str; 18] = [
     parallax_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
@@ -93,6 +95,7 @@ const PREFERENCES: [&str; 17] = [
     KOBO_SERIES,
     KOBO_RULES,
     EJECT_AFTER_SEND,
+    crate::updates::AUTO,
     parallax_library::COMICS_KIND,
     COMIC_SPREADS,
     COMIC_CROP,
@@ -212,12 +215,17 @@ pub fn setting_set(
     key: String,
     value: Option<String>,
 ) -> CmdResult<()> {
-    let value = checked(&key, value)?;
+    store(&app, &state, &key, value)
+}
+
+/// Checks and saves a setting, and tells the windows that follow settings.
+pub fn store(app: &AppHandle, state: &AppState, key: &str, value: Option<String>) -> CmdResult<()> {
+    let value = checked(key, value)?;
     state
         .library()
-        .set_setting(&key, value.as_deref())
+        .set_setting(key, value.as_deref())
         .map_err(err)?;
-    announce(&app, &key, visible_setting(&key, value).as_deref());
+    announce(app, key, visible_setting(key, value).as_deref());
     Ok(())
 }
 
