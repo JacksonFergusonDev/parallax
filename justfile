@@ -23,12 +23,14 @@ sync:
     printf "\n{{ blue }}=== Installing Dependencies ==={{ nc }}\n"
     {{ script_python }} fetch_kepubify.py
     pnpm --dir app install --frozen-lockfile
+    pnpm --dir site install --frozen-lockfile
 
 # Format Rust, frontend, and Python code
 format: sync
     printf "\n{{ blue }}=== Formatting Code ==={{ nc }}\n"
     cargo fmt --all
     pnpm --dir app format
+    pnpm --dir site format
     {{ script_tools }} ruff format .
 
 # Check formatting without editing files
@@ -72,8 +74,18 @@ typecheck-scripts:
 test-scripts:
     {{ script_tools }} pytest -q
 
+# Check the site's formatting and types, and test it against fixed releases
+check-site: sync
+    pnpm --dir site format:check
+    pnpm --dir site check
+    pnpm --dir site test
+
+# Run the site locally at http://127.0.0.1:4600
+site: sync
+    pnpm --dir site dev
+
 # Run the standard local checks before pushing
-ci: fmt-check lint typecheck test
+ci: fmt-check lint typecheck test check-site
     printf "\n{{ green }}✔ Local CI pipeline completed successfully.{{ nc }}\n"
 
 alias setup := sync

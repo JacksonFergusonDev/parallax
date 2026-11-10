@@ -1,0 +1,58 @@
+---
+// Every page: house-style's project site shell around the page.
+import Icon from 'house-style/astro/Icon.astro';
+import SiteBar from 'house-style/astro/SiteBar.astro';
+import SiteFooter from 'house-style/astro/SiteFooter.astro';
+import Head from '../components/Head.astro';
+import { links } from '../lib/site';
+
+interface Props {
+  title?: string;
+  description: string;
+  noindex?: boolean;
+}
+const props = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <Head {...props} />
+  </head>
+  <body>
+    <a class="hs-skip-link" href="#main">
+      Skip to content
+    </a>
+    <SiteBar
+      name="Parallax"
+      logo="/favicon.svg"
+      github={links.github}
+      nav={[
+        { label: 'Features', href: '/#features', wide: true },
+        { label: 'Kobo', href: '/#kobo', wide: true },
+        { label: 'CLI', href: '/#cli', wide: true },
+        { label: 'Versions', href: links.download },
+      ]}
+    >
+      <a slot="end" class="hs-bar-link hs-bar-link--accent" href={links.download}>
+        Download <Icon name="arrow-right" size={14} />
+      </a>
+    </SiteBar>
+    <main id="main" class="page">
+      <slot />
+    </main>
+    <SiteFooter
+      license={links.license}
+      links={[
+        { label: 'GitHub', href: links.github, icon: 'brand-github' },
+        { label: 'LinkedIn', href: links.linkedin, icon: 'brand-linkedin' },
+        { label: 'Email', href: links.email, icon: 'brand-email' },
+      ]}
+    >
+      <p>
+        Parallax is free software under the GPLv3. Kobo is a trademark of Rakuten Kobo Inc.;
+        Parallax isn't affiliated with or endorsed by Kobo.
+      </p>
+    </SiteFooter>
+  </body>
+</html>

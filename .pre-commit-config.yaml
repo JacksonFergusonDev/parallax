@@ -24,10 +24,10 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
-        exclude: ^app/pnpm-lock\.yaml$
+        exclude: ^(app|site)/pnpm-lock\.yaml$
       - id: check-yaml
         # pnpm 12 locks the package manager and project in separate documents.
-        files: ^app/pnpm-lock\.yaml$
+        files: ^(app|site)/pnpm-lock\.yaml$
         args: [--allow-multiple-documents]
       - id: check-json
         # tsconfig files are JSON with comments.
@@ -91,6 +91,13 @@ repos:
         entry: bash -c 'cd app && pnpm install --frozen-lockfile --offline'
         language: system
         files: ^app/(package\.json|pnpm-lock\.yaml)$
+        pass_filenames: false
+
+      - id: site-pnpm-lock-check
+        name: site pnpm lockfile up to date
+        entry: bash -c 'cd site && pnpm install --frozen-lockfile --offline'
+        language: system
+        files: ^site/(package\.json|pnpm-lock\.yaml)$
         pass_filenames: false
 
       - id: vitest

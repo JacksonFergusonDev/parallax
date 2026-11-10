@@ -1,0 +1,119 @@
+---
+import Icon from 'house-style/astro/Icon.astro';
+import JumpLinks from 'house-style/astro/JumpLinks.astro';
+import SectionMarker from 'house-style/astro/SectionMarker.astro';
+import DownloadButton from '../components/DownloadButton.astro';
+import InstallCli from '../components/InstallCli.astro';
+import StarField from '../components/StarField.astro';
+import Base from '../layouts/Base.astro';
+import { links } from '../lib/site';
+---
+
+<Base description="Parallax is a Mac app for reading books and comics and organising them on a Kobo. It converts books to KEPUB, fixes their metadata and covers, manages the Kobo's collections, and backs up the Kobo before every change.">
+  <section class="hs-hero" aria-labelledby="hero-title">
+    <StarField />
+    <h1 id="hero-title">Your books, your reader, your Kobo, in one library.</h1>
+    <p class="lede">
+      Parallax is a Mac app for reading books and comics and organising them on a Kobo. Drop in
+      EPUBs, DRM-free Kindle books or comic archives, tidy their details, read them on the Mac, and
+      send them to the Kobo as KEPUBs in the collections you choose.
+    </p>
+    <DownloadButton />
+    <JumpLinks
+      jumps={[
+        { label: 'Features', href: '#features' },
+        { label: 'Kobo', href: '#kobo' },
+        { label: 'CLI', href: '#cli' },
+      ]}
+    />
+  </section>
+
+  <section id="features" class="hs-grid section" aria-labelledby="features-title">
+    <SectionMarker number={1} label="Features" />
+    <h2 id="features-title">A library that keeps the files you give it.</h2>
+    <p class="section-lede">
+      Parallax copies each book into its own library and never edits your originals. Everything
+      below works without a Kobo connected.
+    </p>
+    <ul class="outputs">
+      <li>
+        <h3>Import almost anything</h3>
+        <p>
+          EPUB, KEPUB, DRM-free Kindle formats (AZW3, MOBI, AZW, PRC, KFX), and comic archives (CBZ,
+          CBR, CB7). ZIP, RAR and 7z bundles can hold folders of books.
+        </p>
+      </li>
+      <li>
+        <h3>Fix titles, series and covers</h3>
+        <p>
+          Edit details in the side panel, look up series and genres from public sources, and search
+          five cover sources. Small covers can be upscaled on the Mac.
+        </p>
+      </li>
+      <li>
+        <h3>Read on the Mac</h3>
+        <p>
+          Each book opens in its own window and remembers where you stopped. Search, highlight, add
+          notes, and set the theme, size and margins. Books run with their scripts blocked and no
+          internet access.
+        </p>
+      </li>
+      <li>
+        <h3>Comics, prepared for the screen</h3>
+        <p>
+          The comic reader handles spreads, vertical scroll, zoom and bookmarks. When sending,
+          Parallax resizes and adjusts the pages for the Kobo's screen.
+        </p>
+      </li>
+    </ul>
+  </section>
+
+  <section id="kobo" class="hs-grid section" aria-labelledby="kobo-title">
+    <SectionMarker number={2} label="Kobo" />
+    <h2 id="kobo-title">Every change to the Kobo can be undone.</h2>
+    <p class="section-lede">
+      Connect the Kobo by USB, select books and choose <strong>Send to Kobo</strong>. Parallax
+      converts them to KEPUB, the format with the Kobo's own page counts and reading stats, puts
+      them in a collection if you ask, and ejects the Kobo so it imports them.
+    </p>
+    <p class="section-lede">
+      Before it changes the Kobo's database, Parallax saves a compressed backup on your Mac. Removed
+      books are kept for 30 days. <strong>Revert changes…</strong> lists every saved point by time
+      and goes back to any of them, and a revert can itself be undone.
+    </p>
+    <dl class="facts">
+      <div>
+        <dt>KEPUB</dt>
+        <dd>Converted on send</dd>
+      </div>
+      <div>
+        <dt>30 days</dt>
+        <dd>Removed books kept</dd>
+      </div>
+      <div>
+        <dt>Libra 2</dt>
+        <dd>Tested on hardware</dd>
+      </div>
+    </dl>
+    <p class="section-lede">
+      Other Kobo models are likely to work, but haven't been checked on a real device yet. Parallax
+      says so when you connect one, and the device support page lists what has been tested.
+    </p>
+    <p class="note">
+      <a class="text-link" href={links.deviceSupport}>
+        Device support <Icon name="arrow-up-right" size={16} />
+      </a>
+    </p>
+  </section>
+
+  <section id="cli" class="hs-grid section" aria-labelledby="cli-title">
+    <SectionMarker number={3} label="CLI" />
+    <h2 id="cli-title">The same engine, from the terminal.</h2>
+    <p class="section-lede">
+      <code>parallax-cli</code> shares the app's library and its Kobo code. List and send books,
+      manage collections, read EPUB details, and preview metadata fixes from scripts. Add
+      <code>--json</code> for output a program can read.
+    </p>
+    <InstallCli />
+  </section>
+</Base>

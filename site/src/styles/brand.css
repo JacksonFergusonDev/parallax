@@ -1,0 +1,4 @@
+/* Parallax's accent: the gold of its icon. Loaded after house-style's tokens. */
+:root {
+  --accent: #f5c568;
+}
