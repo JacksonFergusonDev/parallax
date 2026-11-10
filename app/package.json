@@ -40,5 +40,5 @@
     "vitest": "^5.0.5"
   },
   "license": "GPL-3.0-only",
-  "packageManager": "pnpm@12.16.1"
+  "packageManager": "pnpm@12.17.0"
 }
