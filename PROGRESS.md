@@ -93,7 +93,7 @@ Read this first each session. Plan: `docs/PLAN.md`. Device facts: `docs/device-n
 
 ## Current
 
-- CI expansion: align repository tooling with Protostar and Star Ground, run the Rust workspace natively on Linux, Windows, and macOS on x64 and arm64, and run the desktop integration suite in Apple silicon WKWebView. Record first-run and warm-run timings before changing cache policy.
+- macOS-first CI: PRs and pushes to main run shared frontend checks plus Apple silicon and Intel Mac checks. The manual Portability workflow retains the verified Linux and Windows matrices. Runner timings, cache findings, and the sharding assessment are recorded in [PR #2](https://github.com/JacksonFergusonDev/parallax/pull/2). Revisit vcpkg binary caching when Windows release work resumes.
 - Kobo MVP (M0–M8) and phase 1.5 (M9–M16) complete and verified on the real Libra 2: the user confirmed every app feature works (2026-11-04), after the round 1 fixes (search titles, cover matching, Amazon/Indigo covers, selection, collections from Library).
 - Awaiting device reports from other Kobo models (docs/device-support.md); only the Libra 2 is verified.
 - Kindle (phase 2) deferred indefinitely (2026-11-04): the user has no Kindle and wants to keep improving the app for Kobo users. Keep the `Device` trait and capability flags as they are; no Kindle work until asked.

@@ -1,0 +1,21 @@
+name: Portability
+
+# The initial release targets macOS. Run the Linux and Windows desktop suite on demand.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portability:
+    name: Portability
+    uses: ./.github/workflows/native.yml # zizmor: ignore[self-repository] actionlint resolves the local workflow with this syntax.
+    with:
+      targets: >-
+        [
+          {"platform": "Linux x64", "os": "ubuntu-24.04", "target": "x86_64-unknown-linux-gnu"},
+          {"platform": "Linux arm64", "os": "ubuntu-24.04-arm", "target": "aarch64-unknown-linux-gnu"},
+          {"platform": "Windows x64", "os": "windows-2025", "target": "x86_64-pc-windows-msvc", "vcpkg-triplet": "x64-windows-static-md"},
+          {"platform": "Windows arm64", "os": "windows-11-arm", "target": "aarch64-pc-windows-msvc", "vcpkg-triplet": "arm64-windows-static-md"}
+        ]
