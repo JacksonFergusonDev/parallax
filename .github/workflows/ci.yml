@@ -113,7 +113,7 @@ jobs:
 
   webview:
     name: WKWebView integration / ${{ matrix.label }}
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 25
     strategy:
       fail-fast: false
