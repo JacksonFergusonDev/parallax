@@ -26,11 +26,7 @@
     "dependencies",
     "chore"
   ],
-  "major": {
-    "dependencyDashboardApproval": true
-  },
   "vulnerabilityAlerts": {
-    "dependencyDashboardApproval": false,
     "schedule": [
       "at any time"
     ]
