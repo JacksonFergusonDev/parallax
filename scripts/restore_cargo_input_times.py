@@ -3,18 +3,18 @@
 import hashlib
 import json
 import os
-from pathlib import Path
 import stat
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 SNAPSHOT = Path("target/.ci-cargo-inputs.json")
 FINISHED = Path("target/.ci-cargo-finished")
 GENERATED = (Path("app/dist"), Path("app/src-tauri/binaries"))
 
 
-def inputs():
+def inputs() -> list[Path]:
     """Include checked-out sources and generated assets that Tauri consumes."""
     paths = subprocess.check_output(["git", "ls-files", "-z"]).split(b"\0")
     files = {Path(os.fsdecode(path)) for path in paths if path}
@@ -23,8 +23,8 @@ def inputs():
     return sorted(path for path in files if path.is_symlink() or path.is_file())
 
 
-def prepare():
-    cached = {}
+def prepare() -> None:
+    cached: dict[str, list[str | int] | None] = {}
     fresh_time = time.time_ns()
     if SNAPSHOT.is_file() and FINISHED.is_file():
         cached = json.loads(SNAPSHOT.read_text())
@@ -40,7 +40,7 @@ def prepare():
         and all(cached.values())
         and not any(path.is_symlink() for path in files)
     )
-    current = {}
+    current: dict[str, tuple[str, int, int] | None] = {}
     reused = 0
     for path in files:
         name = path.as_posix()
@@ -50,14 +50,14 @@ def prepare():
         info = path.stat()
         with path.open("rb") as source:
             digest = hashlib.file_digest(source, "sha256").hexdigest()
-        identity = [digest, stat.S_IMODE(info.st_mode)]
+        mode = stat.S_IMODE(info.st_mode)
         previous = cached.get(name)
-        if can_restore and previous[:2] == identity:
-            os.utime(path, ns=(info.st_atime_ns, previous[2]))
+        if can_restore and previous is not None and previous[:2] == [digest, mode]:
+            os.utime(path, ns=(info.st_atime_ns, int(previous[2])))
             reused += 1
         elif cached:
             os.utime(path, ns=(info.st_atime_ns, fresh_time))
-        current[name] = [*identity, path.stat().st_mtime_ns]
+        current[name] = (digest, mode, path.stat().st_mtime_ns)
 
     SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
     SNAPSHOT.write_text(json.dumps(current) + "\n")

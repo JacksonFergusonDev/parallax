@@ -24,18 +24,21 @@ Brand and UI rules: [Parallax design system](docs/design-system.md).
 
 ## Development
 
-Requires Rust (stable), Node and pnpm, and [just](https://github.com/casey/just).
+Requires Rust (stable), Node and pnpm, [just](https://github.com/casey/just), and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 just          # list available recipes
 just sync     # native kepubify sidecar and locked UI dependencies
 just dev      # run the app with hot reload
 just dev-optimized # build and run it as a release behaves (slower to build, no hot reload)
+just check-scripts # Python formatting, lint, types and tests
 just ci       # formatting, lints, type checks and tests (run before committing)
 just test-fat # extra tests that mount FAT32 disk images
 just test-reader # reader and Settings in a real macOS WebView (opens windows)
 just build    # macOS .app bundle
 ```
+
+The Python project and lockfile live in `scripts/`. uv selects Python 3.12 and installs the locked Ruff, mypy and pytest tools for `just check-scripts`. The Core ML converter uses a separate environment and is installed only when the model needs to be built.
 
 CI builds and tests the frontend on Ubuntu. Apple silicon and Intel Macs run the same Rust checks and executable builds, while a separate Apple silicon job exercises the reader and Settings in WKWebView. Run the **Portability** workflow from the Actions tab to test the Rust workspace and desktop builds on Linux and Windows on x64 and arm64. The Kobo tests use fixtures and temporary directories.
 
@@ -57,4 +60,4 @@ Project plan and progress: [docs/PLAN.md](docs/PLAN.md), [PROGRESS.md](PROGRESS.
 
 "Upscale cover…" enlarges a cover and removes compression noise with [4xBHI_dat2_real](https://huggingface.co/Phips/4xBHI_dat2_real) by Philip Hofmann, used under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The weights are converted to Core ML at half precision with a fixed tile size. Every result is reviewed before and after, and nothing changes until it's kept. It's offered for covers under 1680 pixels tall, and needs macOS 15 or later.
 
-The model isn't in the repository. `just upscale-model` builds it from the pinned upstream weights (about five minutes and 9 GB of memory, once), and `just build`, `just dev` and `just dev-optimized` run that for you. The app hides the feature when the model is missing.
+The model isn't in the repository. `just upscale-model` builds it on Apple Silicon from the pinned upstream weights (about five minutes and 9 GB of memory, once), and `just build`, `just dev` and `just dev-optimized` run that for you. The app hides the feature when the model is missing.

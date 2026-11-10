@@ -5,6 +5,9 @@ set quiet
 # Homebrew installs rustup as keg-only. Use the system PATH elsewhere.
 export PATH := if os() == "macos" { "/opt/homebrew/opt/rustup/bin:" + env_var("PATH") } else { env_var("PATH") }
 
+script_python := "uv run --directory scripts --no-project python"
+script_tools := "uv run --directory scripts --locked"
+
 # --- ANSI Colors ---
 
 blue := '\033[1;34m'
@@ -18,37 +21,56 @@ default:
 # Install locked frontend dependencies and fetch the native kepubify sidecar
 sync:
     printf "\n{{ blue }}=== Installing Dependencies ==={{ nc }}\n"
-    bash scripts/fetch-kepubify.sh
+    {{ script_python }} fetch_kepubify.py
     pnpm --dir app install --frozen-lockfile
 
-# Format Rust and frontend code
+# Format Rust, frontend, and Python code
 format: sync
     printf "\n{{ blue }}=== Formatting Code ==={{ nc }}\n"
     cargo fmt --all
     pnpm --dir app format
+    {{ script_tools }} ruff format .
 
 # Check formatting without editing files
-fmt-check: sync
+fmt-check: sync fmt-check-scripts
     cargo fmt --all --check
     pnpm --dir app format:check
 
-# Run Rust and frontend linters
-lint: sync
+# Run Rust, frontend, and Python linters
+lint: sync lint-scripts
     printf "\n{{ blue }}=== Running Linters ==={{ nc }}\n"
     cargo clippy --locked --workspace --all-targets -- -D warnings
     pnpm --dir app lint
 
-# Check TypeScript types
-typecheck: sync
+# Check TypeScript and Python types
+typecheck: sync typecheck-scripts
     printf "\n{{ blue }}=== Running Type Checks ==={{ nc }}\n"
     pnpm --dir app typecheck
 
 # Run the development script, Rust workspace, and frontend tests
-test: sync
+test: sync test-scripts
     printf "\n{{ blue }}=== Running Tests ==={{ nc }}\n"
-    if [[ "{{ os() }}" != windows ]]; then node --test scripts/dev.test.mjs; fi
     cargo test --locked --workspace
     pnpm --dir app test
+
+# Check Python scripts without setting up Rust or the frontend
+check-scripts: fmt-check-scripts lint-scripts typecheck-scripts test-scripts
+
+[private]
+fmt-check-scripts:
+    {{ script_tools }} ruff format --check .
+
+[private]
+lint-scripts:
+    {{ script_tools }} ruff check .
+
+[private]
+typecheck-scripts:
+    {{ script_tools }} mypy
+
+[private]
+test-scripts:
+    {{ script_tools }} pytest -q
 
 # Run the standard local checks before pushing
 ci: fmt-check lint typecheck test
@@ -60,11 +82,11 @@ alias check := ci
 
 # Build the Core ML cover upscaler (slow, once)
 upscale-model:
-    scripts/build-upscale-model.sh
+    {{ script_python }} build_upscale_model.py
 
 # Run the desktop app with hot reload
 dev: sync upscale-model
-    scripts/dev.sh
+    {{ script_python }} dev.py
 
 # Build and run the app as a release behaves, without hot reload
 dev-optimized: sync upscale-model

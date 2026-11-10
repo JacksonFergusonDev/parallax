@@ -1,4 +1,0 @@
-coremltools==9.0
-numpy==2.5.4
-spandrel==0.4.2
-torch==2.15.0

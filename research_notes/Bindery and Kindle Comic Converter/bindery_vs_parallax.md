@@ -201,7 +201,7 @@ Bindery is MIT, which is compatible with GPL-3.0-only. Parallax can copy or adap
 
 - Bindery is "MIT License, Copyright (c) 2026 jarynclouatre" — [LICENSE](https://github.com/jarynclouatre/bindery/blob/730dd98/LICENSE)
 - Parallax is `license = "GPL-3.0-only"`, and its LICENSE file is the GNU GPL — `Cargo.toml` L10, `LICENSE`. PROGRESS.md already follows the practice of citing ported sources in a comment: "port calibre's Kobo logic … cite it in a comment" — `PROGRESS.md` "Notes for agents"
-- Bindery's tools have their own licences: kepubify (already bundled by Parallax, pinned v4.0.4 by SHA-256 in `scripts/fetch-kepubify.sh` L7-L24) and KCC. Bindery doesn't vendor either; it installs them at image build time — [Dockerfile](https://github.com/jarynclouatre/bindery/blob/730dd98/Dockerfile)
+- Bindery's tools have their own licences: kepubify (already bundled by Parallax, pinned v4.0.4 by SHA-256 in `scripts/fetch_kepubify.py`) and KCC. Bindery doesn't vendor either; it installs them at image build time — [Dockerfile](https://github.com/jarynclouatre/bindery/blob/730dd98/Dockerfile)
 
 ### Inferences
 

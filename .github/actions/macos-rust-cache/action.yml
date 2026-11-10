@@ -43,4 +43,4 @@ runs:
 
     - name: Restore timestamps of unchanged build inputs
       shell: bash
-      run: python3 scripts/restore-cargo-input-times.py
+      run: python3 scripts/restore_cargo_input_times.py

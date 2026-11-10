@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use image::imageops::FilterType;
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
 
-/// Tile side the model was converted with (scripts/convert-upscale-model.py).
+/// Tile side the model was converted with (scripts/convert_upscale_model.py).
 pub const TILE: u32 = 288;
 /// Context kept around each tile's middle and thrown away afterwards.
 const OVERLAP: u32 = 16;

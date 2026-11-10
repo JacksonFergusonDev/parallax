@@ -68,8 +68,13 @@ jobs:
           "VCPKG_ROOT=$root" >> $env:GITHUB_ENV
           "VCPKGRS_TRIPLET=$env:VCPKGRS_TRIPLET" >> $env:GITHUB_ENV
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+
       - name: Fetch native kepubify
-        run: bash scripts/fetch-kepubify.sh
+        run: uv run --directory scripts --no-project python fetch_kepubify.py
 
       - name: Restore full macOS Rust cache
         if: runner.os == 'macOS'
@@ -91,4 +96,4 @@ jobs:
 
       - name: Mark the completed build for caching
         if: runner.os == 'macOS'
-        run: python3 scripts/restore-cargo-input-times.py --finished
+        run: python3 scripts/restore_cargo_input_times.py --finished

@@ -101,6 +101,16 @@ repos:
         always_run: true
         stages: [pre-push]
 
+  # Python development scripts
+  - repo: local
+    hooks:
+      - id: python-scripts
+        name: Python script checks
+        entry: just check-scripts
+        language: system
+        files: ^(scripts/(.*\.py|pyproject\.toml|uv\.lock|\.python-version)|justfile)$
+        pass_filenames: false
+
   # Markdown and GitHub Actions
   - repo: local
     hooks:

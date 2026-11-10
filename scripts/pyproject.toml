@@ -1,0 +1,37 @@
+[project]
+name = "parallax-scripts"
+version = "0.1.0"
+description = "Parallax development and build scripts"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "ruff>=0.17.4",
+]
+upscale = [
+    "coremltools==9.0 ; python_full_version == '3.12.*' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "numpy==2.5.4 ; python_full_version == '3.12.*' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "spandrel==0.4.2 ; python_full_version == '3.12.*' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "torch==2.15.0 ; python_full_version == '3.12.*' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+]
+
+[tool.ruff.lint]
+select = ["A", "B", "C4", "E", "F", "I", "PT", "RUF", "SIM", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+files = ["."]
+strict = true
+
+# The model converter runs in a separate environment with the upscale group.
+[[tool.mypy.overrides]]
+module = ["coremltools", "coremltools.*", "numpy", "spandrel", "torch"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers"
+testpaths = ["tests"]
+pythonpath = ["."]
