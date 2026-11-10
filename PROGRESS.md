@@ -7,6 +7,7 @@
 - Implemented Kobo library management, native collections, reading stats, backups, and device reports. The reference Libra 2 results cover the workflows tested on each date.
 - The desktop EPUB and comic readers, comic preparation for Kobo, comic metadata lookups, and ZIP, RAR, and 7z bundle import are implemented.
 - Development scripts and fixture generators use locked Python tooling. CI checks both Mac architectures, with the WKWebView suite split across two Apple silicon jobs and Linux and Windows builds in the manual Portability workflow.
+- Tuned Renovate for weekly dependency updates, dashboard approval for major upgrades, coordinated Tauri updates, and the Python 3.12 requirement for Core ML tooling.
 
 ## Current
 

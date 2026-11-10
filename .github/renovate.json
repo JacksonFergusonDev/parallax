@@ -5,19 +5,32 @@
     ":semanticCommits",
     ":prHourlyLimit2"
   ],
+  "ignorePresets": [
+    ":pinDevDependencies"
+  ],
   "ignorePaths": [
     "vendor/**"
   ],
+  "timezone": "America/Vancouver",
   "schedule": [
-    "before 4am on monday"
+    "* * * * 1"
   ],
+  "lockFileMaintenance": {
+    "schedule": [
+      "* * * * 1"
+    ]
+  },
   "internalChecksFilter": "strict",
   "rebaseWhen": "conflicted",
   "labels": [
     "dependencies",
     "chore"
   ],
+  "major": {
+    "dependencyDashboardApproval": true
+  },
   "vulnerabilityAlerts": {
+    "dependencyDashboardApproval": false,
     "schedule": [
       "at any time"
     ]
@@ -71,6 +84,36 @@
         "patch"
       ],
       "groupName": "frontend-dev-tools"
+    },
+    {
+      "description": "Update the Tauri Rust and frontend packages together.",
+      "matchManagers": [
+        "cargo",
+        "npm"
+      ],
+      "matchPackageNames": [
+        "tauri",
+        "tauri-*",
+        "@tauri-apps/*"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "Tauri"
+    },
+    {
+      "description": "Keep the scripts interpreter on the Python minor required by the Core ML dependency markers.",
+      "matchManagers": [
+        "pyenv"
+      ],
+      "matchFileNames": [
+        "scripts/.python-version"
+      ],
+      "matchDepNames": [
+        "python"
+      ],
+      "allowedVersions": "/^3\\.12(?:\\.|$)/"
     }
   ]
 }
