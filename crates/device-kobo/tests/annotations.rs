@@ -145,7 +145,7 @@ fn reads_highlights_in_reading_order_with_chapter_titles() {
     fs::write(annots.join("._Plain.epub.annot"), b"x").unwrap();
     let files = kobo.annotation_files();
     assert_eq!(files.len(), 1);
-    assert_eq!(files[0].0, "Books/Plain.epub.annot");
+    assert_eq!(Path::new(&files[0].0), Path::new("Books/Plain.epub.annot"));
 }
 
 #[test]
