@@ -1,0 +1,484 @@
+/* First-run setup: one card centred over the window, a fixed footer with
+   Skip on the left and Back/Continue on the right. */
+
+.setup {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6) var(--space-4);
+  overflow: auto;
+  background:
+    radial-gradient(
+      60% 50% at 50% 30%,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      transparent
+    ),
+    var(--bg);
+}
+
+.setup-card {
+  width: min(640px, 100%);
+  /* One height for every step, so the buttons don't move between them. */
+  height: min(520px, 100%);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-large);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 18%);
+}
+
+.setup-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-8) var(--space-6);
+  animation: setup-in var(--duration-normal) var(--ease-out);
+}
+
+@keyframes setup-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.setup-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: var(--text-display);
+  font-weight: 550;
+  font-variation-settings: "opsz" 48;
+  letter-spacing: -0.01em;
+}
+
+.setup-title:focus {
+  outline: none;
+}
+
+.setup-lead {
+  margin: 0;
+  max-width: 52ch;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.setup-hint {
+  font-size: var(--text-small);
+  margin: 0;
+}
+
+.setup-welcome {
+  margin-block: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding-block: var(--space-6);
+  text-align: center;
+}
+
+.setup-mark {
+  width: 72px;
+  height: 72px;
+}
+
+/* The footer stays put while the step above it scrolls. */
+.setup-footer {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--border);
+}
+
+.setup-skip {
+  justify-self: start;
+  border-color: transparent;
+  background: none;
+  color: var(--muted);
+}
+
+.setup-nav {
+  /* The last column, whether or not the dots are showing. */
+  grid-column: -2;
+  justify-self: end;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.setup-dots {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.setup-dots li {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background var(--duration-normal) var(--ease-out);
+}
+
+.setup-dots li.past {
+  background: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.setup-dots li.now {
+  background: var(--accent);
+}
+
+.setup .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Connect */
+
+.setup-art {
+  width: min(280px, 100%);
+  align-self: center;
+  margin-block: var(--space-2);
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.setup-art .art-line {
+  stroke: var(--muted);
+  stroke-width: 2;
+}
+
+.setup-art .art-fill {
+  fill: var(--sunken);
+}
+
+.setup-art .art-text {
+  stroke: var(--border);
+  stroke-width: 3;
+}
+
+.setup-art .art-cable {
+  stroke: var(--border);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 6;
+  transition: stroke var(--duration-normal) var(--ease-out);
+}
+
+.setup-art.connected .art-cable {
+  stroke: var(--accent);
+  stroke-dasharray: none;
+}
+
+.setup-art .art-pulse {
+  fill: var(--border);
+}
+
+.setup-art.connected .art-pulse {
+  fill: var(--ok);
+}
+
+.setup-steps {
+  margin: 0;
+  padding-left: var(--space-6);
+  display: grid;
+  gap: var(--space-2);
+  line-height: 1.5;
+}
+
+.setup-device {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.setup-device svg {
+  width: var(--icon-large);
+  height: var(--icon-large);
+  flex: none;
+  color: var(--accent);
+}
+
+.setup-device p {
+  margin: 0;
+}
+
+.setup-device-name {
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+
+.setup-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 1.45em;
+  margin: 0;
+  color: var(--muted);
+}
+
+.setup-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: setup-spin 900ms linear infinite;
+}
+
+@keyframes setup-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setup-spinner {
+    animation: none;
+    border-color: var(--accent);
+  }
+}
+
+/* Notes with an icon, such as the backup promise or a read-only Kobo. */
+.setup-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-small);
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.setup-note svg {
+  flex: none;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  margin-top: 1px;
+  color: var(--ok);
+}
+
+.setup-note.warn svg {
+  color: var(--warn);
+}
+
+.setup-note.info svg {
+  color: var(--accent);
+}
+
+/* Books */
+
+.setup-panel {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.setup-panel p {
+  margin: 0;
+}
+
+.setup-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.setup-done-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.setup-done-line svg {
+  flex: none;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  margin-top: 2px;
+  color: var(--ok);
+}
+
+.setup-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.setup-sources button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.setup-sources svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+.setup .notice {
+  white-space: normal;
+  margin: 0;
+}
+
+/* Kobo preferences */
+
+.setup-checks {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.setup-checks .settings-check {
+  display: grid;
+  gap: 2px;
+}
+
+.setup-checks input {
+  margin: 0;
+}
+
+.setup-checks .settings-check label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 500;
+}
+
+.setup-checks .settings-check .hint {
+  padding-left: calc(var(--icon-size) + var(--space-2));
+  max-width: 52ch;
+}
+
+/* Appearance */
+
+.setup-themes {
+  padding-block: var(--space-2);
+}
+
+/* Tour */
+
+.setup-tour {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.setup-tour li {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--sunken) 60%, var(--surface));
+}
+
+.setup-tour p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.setup-tour .muted {
+  font-size: var(--text-small);
+}
+
+.setup-tour-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--control-height);
+  height: var(--control-height);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.setup-tour-icon svg {
+  width: var(--icon-large);
+  height: var(--icon-large);
+}
+
+.setup-tour-name {
+  font-weight: 600;
+}
+
+.setup-tour kbd {
+  margin-left: var(--space-1);
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* Done */
+
+.setup-done-mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
+  color: var(--ok);
+}
+
+.setup-done-mark svg {
+  width: 28px;
+  height: 28px;
+}
+
+.setup-summary {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Small windows: tighter padding, and the dots give way to the buttons. */
+@media (max-width: 640px), (max-height: 620px) {
+  .setup {
+    padding: var(--space-3);
+  }
+
+  .setup-body {
+    padding: var(--space-6) var(--space-6) var(--space-4);
+  }
+
+  .setup-welcome {
+    padding-block: var(--space-2);
+  }
+}
+
+@media (max-width: 560px) {
+  .setup-dots {
+    display: none;
+  }
+
+  .setup-footer {
+    grid-template-columns: auto 1fr;
+  }
+}

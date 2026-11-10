@@ -162,6 +162,7 @@ const BOOK_HISTORY: &[Command] = &[
 const LIBRARY_WINDOW: Command = key(command("window.library", "Library", App), "CmdOrCtrl+0");
 
 const HELP: &[Command] = &[
+    command("help.welcome", "Welcome to Parallax…", Main),
     command("help.guide", "Parallax Help", App),
     command("help.devices", "Supported Kobo Models", App),
     command("help.issue", "Report an Issue…", App),
@@ -482,7 +483,10 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         app,
         "Help",
         true,
-        &join(&[&refs(&help[..2]), &refs(&help[2..])], &sep),
+        &join(
+            &[&refs(&help[..1]), &refs(&help[1..3]), &refs(&help[3..])],
+            &sep,
+        ),
     )?;
 
     let menu = Menu::with_items(

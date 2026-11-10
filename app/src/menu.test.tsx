@@ -100,7 +100,7 @@ describe("menu ids", () => {
     const used = ["./App.tsx", "./components/DeviceView.tsx", "./menu.ts"]
       .flatMap((path) => [
         ...read(path).matchAll(
-          /"((?:file|edit|view|library|kobo|sort)\.\w+)"/g,
+          /"((?:file|edit|view|library|kobo|sort|help)\.\w+)"/g,
         ),
       ])
       .map((m) => m[1]);

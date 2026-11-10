@@ -7,6 +7,7 @@
 - Implemented Kobo library management, native collections, reading stats, backups, and device reports. The reference Libra 2 results cover the workflows tested on each date.
 - The desktop EPUB and comic readers, comic preparation for Kobo, comic metadata lookups, and ZIP, RAR, and 7z bundle import are implemented.
 - Development scripts and fixture generators use locked Python tooling. CI checks both Mac architectures, with the WKWebView suite split across two Apple silicon jobs and Linux and Windows builds in the manual Portability workflow.
+- Added first-run setup. It walks through connecting a Kobo, importing its books, Kobo preferences, appearance and a short tour. It shows on each launch until skipped or finished, libraries from before it are marked done quietly, and Help › Welcome to Parallax reopens it. Browser mock: `?setup`, plus `&kobo=later` or `&kobo=none`.
 - Tuned Renovate to open weekly dependency PRs for manual review, group Tauri updates, and keep the scripts interpreter on Python 3.12 for Core ML tooling.
 
 ## Current

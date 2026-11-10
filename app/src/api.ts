@@ -731,6 +731,7 @@ export type SettingKey =
   | "kobo_series"
   | "kobo_rules"
   | "eject_after_send"
+  | "setup"
   | "comics_kind"
   | "comic_spreads"
   | "comic_crop"

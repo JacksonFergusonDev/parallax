@@ -127,3 +127,16 @@ export function resetMenu() {
   registry.clear();
   reported = "";
 }
+
+/** Commands that still make sense while first-run setup fills the window. */
+const SETUP_COMMANDS = new Set(["file.add", "file.calibre", "kobo.eject"]);
+
+/** `commands` with everything setup would hide turned off. */
+export function duringSetup(commands: MenuCommands): MenuCommands {
+  return Object.fromEntries(
+    Object.entries(commands).map(([id, command]) => [
+      id,
+      SETUP_COMMANDS.has(id) ? command : { ...command, enabled: false },
+    ]),
+  );
+}

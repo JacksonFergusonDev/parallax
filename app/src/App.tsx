@@ -125,9 +125,16 @@ import {
 } from "./importReview";
 import { usePresentation } from "./presentation";
 import { rememberView, usePreferences, type View } from "./preferences";
-import { sortCommands, useMenuCommands } from "./menu";
+import {
+  duringSetup,
+  sortCommands,
+  useMenuCommands,
+  type MenuCommands,
+} from "./menu";
 import { useBookProgress, type PrepareRemoval } from "./bookProgress";
 import { BookProgressBar } from "./components/BookProgressBar";
+import { SetupFlow } from "./setup/SetupFlow";
+import { useSetup } from "./setup/setup";
 import "./styles.css";
 
 const DEVICE_POLL_MS = 2000;
@@ -152,7 +159,8 @@ export default function App() {
   const [view, setView] = useState<View>("library");
   // Opens on the view Settings says, once it's known.
   const themed = usePreferences(setView);
-  usePresentation(appRef, loaded && detected && themed);
+  const setup = useSetup(loaded, books.length);
+  usePresentation(appRef, loaded && detected && themed && setup.known);
   const [device, setDevice] = useState<DeviceInfo | null>(null);
   const activeKobo = useRef<DeviceInfo | null>(null);
   const copyRequest = useRef(0);
@@ -769,6 +777,8 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
   };
 
   useEffect(() => {
+    // Setup has the window to itself, so its shortcuts would act unseen.
+    if (setup.open) return;
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       // App-wide shortcuts work even while typing.
@@ -806,7 +816,7 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [visible, chooseFiles]);
+  }, [visible, chooseFiles, setup.open]);
 
   const save = async (id: number, edit: MetadataEdit) => {
     const updated = await updateBook(id, edit);
@@ -1041,7 +1051,8 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
     setView("library");
     run();
   };
-  useMenuCommands({
+  const commands: MenuCommands = {
+    "help.welcome": { run: setup.show, enabled: !setup.open },
     "file.add": { run: () => void chooseFiles() },
     "file.calibre": { run: () => setFromCalibre(true) },
     "edit.find": {
@@ -1106,7 +1117,8 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
       run: () => void eject(),
       enabled: device !== null && busy === null,
     },
-  });
+  };
+  useMenuCommands(setup.open ? duringSetup(commands) : commands);
 
   const transferStatus = (id: number) => {
     const status = device ? statuses[id] : undefined;
@@ -1130,277 +1142,288 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
 
   return (
     <div ref={appRef} className={`app ${dragging ? "dragging" : ""}`}>
-      <header className="topbar">
-        <div className="brand" aria-label="Parallax">
-          <img src="/parallax.svg" alt="" />
-          <span>Parallax</span>
-        </div>
-        <div className="tabs" role="tablist">
-          <button
-            role="tab"
-            aria-selected={activeView === "library"}
-            title="Library (⌘1)"
-            className={activeView === "library" ? "active" : ""}
-            onClick={() => setView("library")}
-          >
-            <LibraryBig />
-            Library
-          </button>
-          {device && (
+      {/* Setup covers the window; what's behind it keeps its state. */}
+      <div className="app-main" inert={setup.open}>
+        <header className="topbar">
+          <div className="brand" aria-label="Parallax">
+            <img src="/parallax.svg" alt="" />
+            <span>Parallax</span>
+          </div>
+          <div className="tabs" role="tablist">
             <button
               role="tab"
-              aria-selected={activeView === "device"}
-              title="On Kobo (⌘2)"
-              className={activeView === "device" ? "active" : ""}
+              aria-selected={activeView === "library"}
+              title="Library (⌘1)"
+              className={activeView === "library" ? "active" : ""}
+              onClick={() => setView("library")}
+            >
+              <LibraryBig />
+              Library
+            </button>
+            {device && (
+              <button
+                role="tab"
+                aria-selected={activeView === "device"}
+                title="On Kobo (⌘2)"
+                className={activeView === "device" ? "active" : ""}
+                onClick={() => {
+                  setSelected(new Set());
+                  setView("device");
+                }}
+              >
+                <Tablet />
+                On Kobo
+              </button>
+            )}
+            <button
+              role="tab"
+              aria-selected={activeView === "reading"}
+              title="Reading (⌘3)"
+              className={activeView === "reading" ? "active" : ""}
               onClick={() => {
                 setSelected(new Set());
-                setView("device");
+                setView("reading");
               }}
             >
-              <Tablet />
-              On Kobo
+              <BookOpen />
+              Reading
             </button>
-          )}
-          <button
-            role="tab"
-            aria-selected={activeView === "reading"}
-            title="Reading (⌘3)"
-            className={activeView === "reading" ? "active" : ""}
-            onClick={() => {
-              setSelected(new Set());
-              setView("reading");
-            }}
-          >
-            <BookOpen />
-            Reading
-          </button>
-        </div>
-        <input
-          ref={searchRef}
-          className="search"
-          type="search"
-          aria-label="Search"
-          placeholder="Search title, author, series, tag  (⌘F)"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <DeviceBadge device={device} onOpen={() => setAboutOpen(true)} />
-      </header>
-
-      {/* Retain loaded data, decoded images and scroll positions across tabs.
-          Disconnecting unmounts the device panel, so reconnects read fresh data. */}
-      {activeView === "reading" && (
-        <div className="tab-panel" role="tabpanel" aria-label="Reading">
-          <div className="scroll reading-scroll">
-            <ReadingView mount={device?.mount ?? null} library={books} />
           </div>
-        </div>
-      )}
-      {device && (
+          <input
+            ref={searchRef}
+            className="search"
+            type="search"
+            aria-label="Search"
+            placeholder="Search title, author, series, tag  (⌘F)"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <DeviceBadge device={device} onOpen={() => setAboutOpen(true)} />
+        </header>
+
+        {/* Retain loaded data, decoded images and scroll positions across tabs.
+          Disconnecting unmounts the device panel, so reconnects read fresh data. */}
+        {activeView === "reading" && (
+          <div className="tab-panel" role="tabpanel" aria-label="Reading">
+            <div className="scroll reading-scroll">
+              <ReadingView mount={device?.mount ?? null} library={books} />
+            </div>
+          </div>
+        )}
+        {device && (
+          <div
+            className="tab-panel"
+            role="tabpanel"
+            aria-label="On Kobo"
+            hidden={activeView !== "device"}
+          >
+            <DeviceView
+              key={JSON.stringify([device.mount, device.serial])}
+              revision={deviceRevision}
+              device={device}
+              query={query}
+              libraryByContentId={libraryByContentId}
+              koboChanges={koboChanges}
+              onRemove={(ids, report) => removeOnKobo(device, ids, report)}
+              onUpdate={(ids) => updateOnKobo(device, ids)}
+              onLibraryChanged={refresh}
+              onBooksAdded={(ids) => {
+                void refresh().then(() => reviewAdded(ids, [], "kobo"));
+              }}
+              about={aboutOpen}
+              onAboutChange={setAboutOpen}
+              onRevert={() => setReverting("kobo")}
+              active={activeView === "device"}
+              onShow={() => setView("device")}
+              onChanged={() => {
+                refreshOnDevice(device);
+                listCollections(device.mount)
+                  .then(setCollections)
+                  .catch(() => {});
+              }}
+              onEjected={() => {
+                setDevice(null);
+                setChanges(null);
+                setStatuses({});
+                setNotice({
+                  kind: "info",
+                  text: "Ejected. Unplug your Kobo; it will refresh its library.",
+                });
+              }}
+            />
+          </div>
+        )}
         <div
           className="tab-panel"
           role="tabpanel"
-          aria-label="On Kobo"
-          hidden={activeView !== "device"}
+          aria-label="Library"
+          hidden={activeView !== "library"}
         >
-          <DeviceView
-            key={JSON.stringify([device.mount, device.serial])}
-            revision={deviceRevision}
-            device={device}
-            query={query}
-            libraryByContentId={libraryByContentId}
-            koboChanges={koboChanges}
-            onRemove={(ids, report) => removeOnKobo(device, ids, report)}
-            onUpdate={(ids) => updateOnKobo(device, ids)}
-            onLibraryChanged={refresh}
-            onBooksAdded={(ids) => {
-              void refresh().then(() => reviewAdded(ids, [], "kobo"));
-            }}
-            about={aboutOpen}
-            onAboutChange={setAboutOpen}
-            onRevert={() => setReverting("kobo")}
-            active={activeView === "device"}
-            onShow={() => setView("device")}
-            onChanged={() => {
-              refreshOnDevice(device);
-              listCollections(device.mount)
-                .then(setCollections)
-                .catch(() => {});
-            }}
-            onEjected={() => {
-              setDevice(null);
-              setChanges(null);
-              setStatuses({});
-              setNotice({
-                kind: "info",
-                text: "Ejected. Unplug your Kobo; it will refresh its library.",
-              });
-            }}
-          />
-        </div>
-      )}
-      <div
-        className="tab-panel"
-        role="tabpanel"
-        aria-label="Library"
-        hidden={activeView !== "library"}
-      >
-        <div className="body">
-          <main className="content">
-            {books.length > 0 && (
-              <section
-                className="library-toolbar"
-                aria-label="Library controls"
-              >
-                <div className="view-toolbar">
-                  <span className="muted">
-                    {visible.length === books.length
-                      ? `${books.length} ${books.length === 1 ? "book" : "books"}`
-                      : `${visible.length} of ${books.length}`}
-                  </span>
-                  <ActionMenu
-                    label="Library tools"
-                    icon={<SlidersHorizontal />}
-                    items={[
-                      {
-                        label: "Add comic folder…",
-                        onPick: () => void chooseComicFolder(),
-                        disabled: busy !== null,
-                      },
-                      {
-                        label: "Find duplicates…",
-                        onPick: findDuplicates,
-                      },
-                      {
-                        label: "Check library…",
-                        onPick: () => setChecking(true),
-                      },
-                      {
-                        label: "Revert changes…",
-                        onPick: () => setReverting("library"),
-                      },
-                      {
-                        label: "Import from calibre…",
-                        onPick: () => setFromCalibre(true),
-                      },
-                      { label: "Tidy genres…", onPick: () => setTidying(true) },
-                      {
-                        label: selected.size
-                          ? `Find metadata for ${selected.size}…`
-                          : "Find metadata…",
-                        onPick: enhance,
-                      },
-                    ]}
-                  />
-                  <span className="spacer" />
-                  {selected.size > 0 && (
-                    <span className="muted">{selected.size} selected</span>
-                  )}
-                  <button
-                    className="group-series"
-                    aria-pressed={bySeries}
-                    onClick={() => setBySeries((value) => !value)}
-                  >
-                    Group by series
-                  </button>
-                  <ViewControls
-                    mode={mode}
-                    onMode={setMode}
-                    sort={sort}
-                    onSort={setSort}
-                    columns={sortColumns}
-                    note={colorsLoading ? "Reading cover colours…" : null}
-                  />
-                </div>
-                <LibraryFilters
-                  filter={shownFilter}
-                  facets={facets}
-                  connected={device !== null}
-                  onChange={changeFilter}
-                />
-              </section>
-            )}
-            <div
-              className="scroll"
-              onClick={(e) =>
-                e.target === e.currentTarget && setSelected(new Set())
-              }
-            >
-              {loaded && books.length === 0 ? (
-                <div className="dropzone">
-                  <ShelfArt />
-                  <p className="dropzone-title">Your shelves are empty</p>
-                  <p className="muted">
-                    Drop EPUBs, DRM-free Kindle books, comics, or archives of
-                    books here.
-                  </p>
-                  <div className="dropzone-actions">
+          <div className="body">
+            <main className="content">
+              {books.length > 0 && (
+                <section
+                  className="library-toolbar"
+                  aria-label="Library controls"
+                >
+                  <div className="view-toolbar">
+                    <span className="muted">
+                      {visible.length === books.length
+                        ? `${books.length} ${books.length === 1 ? "book" : "books"}`
+                        : `${visible.length} of ${books.length}`}
+                    </span>
+                    <ActionMenu
+                      label="Library tools"
+                      icon={<SlidersHorizontal />}
+                      items={[
+                        {
+                          label: "Add comic folder…",
+                          onPick: () => void chooseComicFolder(),
+                          disabled: busy !== null,
+                        },
+                        {
+                          label: "Find duplicates…",
+                          onPick: findDuplicates,
+                        },
+                        {
+                          label: "Check library…",
+                          onPick: () => setChecking(true),
+                        },
+                        {
+                          label: "Revert changes…",
+                          onPick: () => setReverting("library"),
+                        },
+                        {
+                          label: "Import from calibre…",
+                          onPick: () => setFromCalibre(true),
+                        },
+                        {
+                          label: "Tidy genres…",
+                          onPick: () => setTidying(true),
+                        },
+                        {
+                          label: selected.size
+                            ? `Find metadata for ${selected.size}…`
+                            : "Find metadata…",
+                          onPick: enhance,
+                        },
+                      ]}
+                    />
+                    <span className="spacer" />
+                    {selected.size > 0 && (
+                      <span className="muted">{selected.size} selected</span>
+                    )}
                     <button
-                      className="secondary"
-                      onClick={() => void chooseComicFolder()}
-                      disabled={busy !== null}
+                      className="group-series"
+                      aria-pressed={bySeries}
+                      onClick={() => setBySeries((value) => !value)}
                     >
-                      Add comic folder…
+                      Group by series
                     </button>
-                    <button className="secondary" onClick={chooseFiles}>
-                      Choose files…
-                    </button>
-                    <button
-                      className="secondary"
-                      onClick={() => setFromCalibre(true)}
-                    >
-                      Import from calibre…
-                    </button>
+                    <ViewControls
+                      mode={mode}
+                      onMode={setMode}
+                      sort={sort}
+                      onSort={setSort}
+                      columns={sortColumns}
+                      note={colorsLoading ? "Reading cover colours…" : null}
+                    />
                   </div>
-                </div>
-              ) : visible.length === 0 && loaded ? (
-                <div className="empty">
-                  {isFiltered(shownFilter) ? (
-                    <>
-                      <p className="dropzone-title">Nothing on this shelf</p>
-                      <p className="muted">
-                        No books match these filters
-                        {query.trim() && ` and “${query}”`}.
-                      </p>
+                  <LibraryFilters
+                    filter={shownFilter}
+                    facets={facets}
+                    connected={device !== null}
+                    onChange={changeFilter}
+                  />
+                </section>
+              )}
+              <div
+                className="scroll"
+                onClick={(e) =>
+                  e.target === e.currentTarget && setSelected(new Set())
+                }
+              >
+                {loaded && books.length === 0 ? (
+                  <div className="dropzone">
+                    <ShelfArt />
+                    <p className="dropzone-title">Your shelves are empty</p>
+                    <p className="muted">
+                      Drop EPUBs, DRM-free Kindle books, comics, or archives of
+                      books here.
+                    </p>
+                    <div className="dropzone-actions">
                       <button
                         className="secondary"
-                        onClick={() => changeFilter(NO_FILTER)}
+                        onClick={() => void chooseComicFolder()}
+                        disabled={busy !== null}
                       >
-                        Clear filters
+                        Add comic folder…
                       </button>
-                    </>
-                  ) : (
-                    <>
-                      <p className="dropzone-title">
-                        Nothing on the shelf by that name
-                      </p>
-                      <p className="muted">No books match “{query}”.</p>
-                    </>
-                  )}
-                </div>
-              ) : bySeries && mode === "grid" ? (
-                groups.map(({ name, members }) => (
-                  <section className="series-shelf" key={name ?? ""}>
-                    <h2>
-                      {name ?? "Without a series"}{" "}
-                      <span className="muted">· {members.length}</span>
-                    </h2>
-                    <div className="grid">{members.map(renderCard)}</div>
-                  </section>
-                ))
-              ) : mode === "grid" ? (
-                <div className="grid">{visible.map(renderCard)}</div>
-              ) : (
-                <div
-                  className="book-list library-list"
-                  role="table"
-                  style={
-                    { "--tracks": listTracks(columns) } as React.CSSProperties
-                  }
-                >
-                  <SortHeader columns={columns} sort={sort} onSort={setSort} />
-                  {(bySeries ? groups : [{ name: null, members: visible }]).map(
-                    ({ name, members }) => (
+                      <button className="secondary" onClick={chooseFiles}>
+                        Choose files…
+                      </button>
+                      <button
+                        className="secondary"
+                        onClick={() => setFromCalibre(true)}
+                      >
+                        Import from calibre…
+                      </button>
+                    </div>
+                  </div>
+                ) : visible.length === 0 && loaded ? (
+                  <div className="empty">
+                    {isFiltered(shownFilter) ? (
+                      <>
+                        <p className="dropzone-title">Nothing on this shelf</p>
+                        <p className="muted">
+                          No books match these filters
+                          {query.trim() && ` and “${query}”`}.
+                        </p>
+                        <button
+                          className="secondary"
+                          onClick={() => changeFilter(NO_FILTER)}
+                        >
+                          Clear filters
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="dropzone-title">
+                          Nothing on the shelf by that name
+                        </p>
+                        <p className="muted">No books match “{query}”.</p>
+                      </>
+                    )}
+                  </div>
+                ) : bySeries && mode === "grid" ? (
+                  groups.map(({ name, members }) => (
+                    <section className="series-shelf" key={name ?? ""}>
+                      <h2>
+                        {name ?? "Without a series"}{" "}
+                        <span className="muted">· {members.length}</span>
+                      </h2>
+                      <div className="grid">{members.map(renderCard)}</div>
+                    </section>
+                  ))
+                ) : mode === "grid" ? (
+                  <div className="grid">{visible.map(renderCard)}</div>
+                ) : (
+                  <div
+                    className="book-list library-list"
+                    role="table"
+                    style={
+                      { "--tracks": listTracks(columns) } as React.CSSProperties
+                    }
+                  >
+                    <SortHeader
+                      columns={columns}
+                      sort={sort}
+                      onSort={setSort}
+                    />
+                    {(bySeries
+                      ? groups
+                      : [{ name: null, members: visible }]
+                    ).map(({ name, members }) => (
                       <div role="rowgroup" key={name ?? ""}>
                         {bySeries && (
                           <div role="row" className="series-row">
@@ -1420,205 +1443,221 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
                           />
                         ))}
                       </div>
-                    ),
-                  )}
-                </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </main>
+            <div className="panel-slot">
+              {panel ? (
+                <EditPanel
+                  key={`${panel.book.id}-${enhanced}`}
+                  book={panel.book}
+                  cover={panel.cover}
+                  canUpscale={canUpscale}
+                  onSave={save}
+                  onEnhance={(id) => setEnhancing([id])}
+                  onChanged={(updated) => {
+                    setBooks((bs) =>
+                      bs.map((b) => (b.id === updated.id ? updated : b)),
+                    );
+                    if (shownFilter.kind && updated.kind !== shownFilter.kind) {
+                      setSelected((current) => {
+                        const next = new Set(current);
+                        next.delete(updated.id);
+                        return next;
+                      });
+                    }
+                    refreshOnDevice(device);
+                  }}
+                  onClose={() => setSelected(new Set())}
+                />
+              ) : (
+                <aside className="panel panel-empty" aria-label="Book details">
+                  <BookOpen aria-hidden="true" />
+                  <h2>
+                    {selectedBooks.length > 1
+                      ? `${selectedBooks.length} books selected`
+                      : selectedBooks.length === 1
+                        ? "Loading book details…"
+                        : "Select a book"}
+                  </h2>
+                  <p className="muted">
+                    {selectedBooks.length > 1
+                      ? "Select one book to view and edit its details."
+                      : "View and edit its details here."}
+                  </p>
+                </aside>
               )}
             </div>
-          </main>
-          <div className="panel-slot">
-            {panel ? (
-              <EditPanel
-                key={`${panel.book.id}-${enhanced}`}
-                book={panel.book}
-                cover={panel.cover}
-                canUpscale={canUpscale}
-                onSave={save}
-                onEnhance={(id) => setEnhancing([id])}
-                onChanged={(updated) => {
-                  setBooks((bs) =>
-                    bs.map((b) => (b.id === updated.id ? updated : b)),
-                  );
-                  if (shownFilter.kind && updated.kind !== shownFilter.kind) {
-                    setSelected((current) => {
-                      const next = new Set(current);
-                      next.delete(updated.id);
-                      return next;
-                    });
-                  }
-                  refreshOnDevice(device);
-                }}
-                onClose={() => setSelected(new Set())}
-              />
-            ) : (
-              <aside className="panel panel-empty" aria-label="Book details">
-                <BookOpen aria-hidden="true" />
-                <h2>
-                  {selectedBooks.length > 1
-                    ? `${selectedBooks.length} books selected`
-                    : selectedBooks.length === 1
-                      ? "Loading book details…"
-                      : "Select a book"}
-                </h2>
-                <p className="muted">
-                  {selectedBooks.length > 1
-                    ? "Select one book to view and edit its details."
-                    : "View and edit its details here."}
-                </p>
-              </aside>
-            )}
           </div>
-        </div>
 
-        <footer className="actions">
-          {batchTransfer && !reviews[0] && (
-            <BatchTransferBar progress={batchTransfer} />
-          )}
-          <button
-            className="secondary"
-            onClick={chooseFiles}
-            disabled={busy !== null}
-          >
-            <Plus />
-            {busy === "importing" ? "Adding…" : "Add books…"}
-          </button>
-          {bookOperation ? (
-            <BookProgressBar operation={bookOperation} />
-          ) : reviewOffer ? (
-            <span className="notice notice-info review-offer">
-              {plural(reviewOffer.ids.length, "book")} added ·{" "}
-              {flaggedCount(reviewOffer)} could use attention
-              <button
-                className="link"
-                onClick={() => {
-                  setReviews((queue) => [...queue, reviewOffer]);
-                  setReviewOffer(null);
-                }}
+          <footer className="actions">
+            {batchTransfer && !reviews[0] && (
+              <BatchTransferBar progress={batchTransfer} />
+            )}
+            <button
+              className="secondary"
+              onClick={chooseFiles}
+              disabled={busy !== null}
+            >
+              <Plus />
+              {busy === "importing" ? "Adding…" : "Add books…"}
+            </button>
+            {bookOperation ? (
+              <BookProgressBar operation={bookOperation} />
+            ) : reviewOffer ? (
+              <span className="notice notice-info review-offer">
+                {plural(reviewOffer.ids.length, "book")} added ·{" "}
+                {flaggedCount(reviewOffer)} could use attention
+                <button
+                  className="link"
+                  onClick={() => {
+                    setReviews((queue) => [...queue, reviewOffer]);
+                    setReviewOffer(null);
+                  }}
+                >
+                  Review
+                </button>
+                <button className="link" onClick={() => setReviewOffer(null)}>
+                  Not now
+                </button>
+              </span>
+            ) : notice ? (
+              <span
+                className={`notice notice-${notice.kind}`}
+                title={notice.text}
               >
-                Review
-              </button>
-              <button className="link" onClick={() => setReviewOffer(null)}>
-                Not now
-              </button>
-            </span>
-          ) : notice ? (
-            <span
-              className={`notice notice-${notice.kind}`}
-              title={notice.text}
-            >
-              {notice.text}
-            </span>
-          ) : (
-            <span className="notice notice-info">{SELECTION_HINT}</span>
-          )}
-          <span className="spacer" />
-          {selected.size > 0 && (
-            <button
-              className="secondary danger"
-              onClick={remove}
-              disabled={busy !== null}
-            >
-              <Trash2 />
-              Remove
-            </button>
-          )}
-          {device && hasChangesToSee && (
-            <button
-              className="secondary"
-              onClick={eject}
-              disabled={busy !== null}
-            >
-              <Eject />
-              {busy === "ejecting" ? "Ejecting…" : "Eject Kobo"}
-            </button>
-          )}
-          {toUpdate.length > 0 && (
-            <button
-              className="secondary"
-              onClick={() =>
-                transfer(
-                  "updating",
-                  toUpdate.map((b) => b.id),
-                )
-              }
-              disabled={!device || busy !== null}
-              title="Replace the copies on your Kobo with your edits, keeping reading progress"
-            >
-              <RefreshCw />
-              {busy === "updating"
-                ? "Updating…"
-                : `Update ${toUpdate.length} on Kobo`}
-            </button>
-          )}
-          {device && toSend.length > 0 && (
-            <>
-              <select
-                className="collection-select"
-                aria-label="Collection for sent books"
-                value={sendCollection}
-                onChange={(e) => setSendCollection(e.target.value)}
+                {notice.text}
+              </span>
+            ) : (
+              <span className="notice notice-info">{SELECTION_HINT}</span>
+            )}
+            <span className="spacer" />
+            {selected.size > 0 && (
+              <button
+                className="secondary danger"
+                onClick={remove}
                 disabled={busy !== null}
               >
-                <option value="">No collection</option>
-                {collections.map((c) => (
-                  <option key={c.name} value={c.name}>
-                    Into “{c.name}”
-                  </option>
-                ))}
-                <option value={NEW_COLLECTION}>New collection…</option>
-              </select>
-              {sendCollection === NEW_COLLECTION && (
-                <input
-                  className="new-collection"
-                  placeholder="Collection name"
-                  value={newCollection}
-                  onChange={(e) => setNewCollection(e.target.value)}
-                  autoFocus
+                <Trash2 />
+                Remove
+              </button>
+            )}
+            {device && hasChangesToSee && (
+              <button
+                className="secondary"
+                onClick={eject}
+                disabled={busy !== null}
+              >
+                <Eject />
+                {busy === "ejecting" ? "Ejecting…" : "Eject Kobo"}
+              </button>
+            )}
+            {toUpdate.length > 0 && (
+              <button
+                className="secondary"
+                onClick={() =>
+                  transfer(
+                    "updating",
+                    toUpdate.map((b) => b.id),
+                  )
+                }
+                disabled={!device || busy !== null}
+                title="Replace the copies on your Kobo with your edits, keeping reading progress"
+              >
+                <RefreshCw />
+                {busy === "updating"
+                  ? "Updating…"
+                  : `Update ${toUpdate.length} on Kobo`}
+              </button>
+            )}
+            {device && toSend.length > 0 && (
+              <>
+                <select
+                  className="collection-select"
+                  aria-label="Collection for sent books"
+                  value={sendCollection}
+                  onChange={(e) => setSendCollection(e.target.value)}
+                  disabled={busy !== null}
+                >
+                  <option value="">No collection</option>
+                  {collections.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      Into “{c.name}”
+                    </option>
+                  ))}
+                  <option value={NEW_COLLECTION}>New collection…</option>
+                </select>
+                {sendCollection === NEW_COLLECTION && (
+                  <input
+                    className="new-collection"
+                    placeholder="Collection name"
+                    value={newCollection}
+                    onChange={(e) => setNewCollection(e.target.value)}
+                    autoFocus
+                  />
+                )}
+              </>
+            )}
+            {device &&
+              device.read_only === null &&
+              toSend.length === 0 &&
+              alreadyOnKobo.length > 0 && (
+                <CollectionMenu
+                  label={`Add ${alreadyOnKobo.length} to collection`}
+                  collections={collections}
+                  disabled={busy !== null}
+                  onPick={addToCollection}
+                  onNew={() => setNaming(true)}
                 />
               )}
-            </>
-          )}
-          {device &&
-            device.read_only === null &&
-            toSend.length === 0 &&
-            alreadyOnKobo.length > 0 && (
-              <CollectionMenu
-                label={`Add ${alreadyOnKobo.length} to collection`}
-                collections={collections}
-                disabled={busy !== null}
-                onPick={addToCollection}
-                onNew={() => setNaming(true)}
-              />
-            )}
-          <button
-            className="primary"
-            onClick={() =>
-              transfer(
-                "sending",
-                toSend.map((b) => b.id),
-              )
-            }
-            disabled={
-              !device ||
-              device.read_only !== null ||
-              toSend.length === 0 ||
-              busy !== null
-            }
-            title={
-              !device
-                ? "Connect your Kobo to send books"
-                : (device.read_only ?? undefined)
-            }
-          >
-            <Send />
-            {busy === "sending"
-              ? "Sending…"
-              : toSend.length > 0
-                ? `Send ${toSend.length} to Kobo`
-                : "Send to Kobo"}
-          </button>
-        </footer>
+            <button
+              className="primary"
+              onClick={() =>
+                transfer(
+                  "sending",
+                  toSend.map((b) => b.id),
+                )
+              }
+              disabled={
+                !device ||
+                device.read_only !== null ||
+                toSend.length === 0 ||
+                busy !== null
+              }
+              title={
+                !device
+                  ? "Connect your Kobo to send books"
+                  : (device.read_only ?? undefined)
+              }
+            >
+              <Send />
+              {busy === "sending"
+                ? "Sending…"
+                : toSend.length > 0
+                  ? `Send ${toSend.length} to Kobo`
+                  : "Send to Kobo"}
+            </button>
+          </footer>
+        </div>
       </div>
+      {setup.open && (
+        <SetupFlow
+          device={device}
+          libraryBooks={books.length}
+          onKobo={onDevice.size}
+          adding={busy === "importing"}
+          onLibraryChanged={refresh}
+          onChooseFiles={() => void chooseFiles()}
+          onChooseComicFolder={() => void chooseComicFolder()}
+          onCalibre={() => setFromCalibre(true)}
+          onFinish={(outcome) => {
+            setup.finish(outcome);
+            setView("library");
+          }}
+        />
+      )}
       {naming && (
         <NameDialog
           title={`New collection with ${alreadyOnKobo.length} ${alreadyOnKobo.length === 1 ? "book" : "books"}`}

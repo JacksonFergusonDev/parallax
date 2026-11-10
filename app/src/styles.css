@@ -3365,3 +3365,8 @@ button.icon {
     min-width: 104px;
   }
 }
+
+/* Groups the window's own contents so first-run setup can make them inert. */
+.app-main {
+  display: contents;
+}

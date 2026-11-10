@@ -29,6 +29,9 @@ pub const KOBO_SERIES: &str = "kobo_series";
 pub const KOBO_RULES: &str = "kobo_rules";
 /// `on` to eject the Kobo once books are sent.
 pub const EJECT_AFTER_SEND: &str = "eject_after_send";
+/// Where first-run setup stands: `started` once shown, then `skipped` or
+/// `done`. Not a preference, so Reset leaves it alone.
+pub const SETUP: &str = "setup";
 
 /// The event main and Settings windows get when a setting changes.
 const CHANGED: &str = "setting-changed";
@@ -44,7 +47,7 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 19] = [
+const SETTINGS: [(&str, Allowed); 20] = [
     (parallax_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (parallax_core::enhance::METRON_TOKEN, Allowed::Text(256)),
     (
@@ -61,6 +64,7 @@ const SETTINGS: [(&str, Allowed); 19] = [
     (KOBO_SERIES, Allowed::OneOf(&["off"])),
     (KOBO_RULES, Allowed::OneOf(&["off"])),
     (EJECT_AFTER_SEND, Allowed::OneOf(&["on"])),
+    (SETUP, Allowed::OneOf(&["started", "skipped", "done"])),
     (parallax_library::COMICS_KIND, Allowed::OneOf(&["comic"])),
     (
         COMIC_SPREADS,
@@ -389,6 +393,13 @@ mod tests {
             Ok(Some("off".into()))
         );
         assert!(checked(KOBO_RULES, Some("on".into())).is_err());
+    }
+
+    #[test]
+    fn setup_survives_reset() {
+        assert_eq!(checked(SETUP, Some("done".into())), Ok(Some("done".into())));
+        assert!(checked(SETUP, Some("later".into())).is_err());
+        assert!(!PREFERENCES.contains(&SETUP));
     }
 
     #[test]

@@ -159,6 +159,19 @@ for (const [series, volume, kind] of [
   });
 }
 
+const params = new URLSearchParams(location.search);
+// `?setup` starts as a first launch: an empty library and setup not seen.
+const firstLaunch = params.has("setup");
+const bookTemplate = books[0];
+if (firstLaunch) books = [];
+// `?kobo=later` connects the Kobo a few seconds in; `?kobo=none` never does.
+const koboFrom =
+  params.get("kobo") === "none"
+    ? Infinity
+    : params.get("kobo") === "later"
+      ? Date.now() + 5000
+      : 0;
+
 const device: DeviceInfo = {
   kind: "kobo",
   model: "Kobo Libra 2",
@@ -311,8 +324,10 @@ const SETTING_KEYS = [
 
 /** `?theme=sepia` in the URL starts the mock with that theme. */
 function seedSettings() {
-  const theme = new URLSearchParams(location.search).get("theme");
+  const theme = params.get("theme");
   if (theme) settings.set("theme", theme);
+  // Outside `?setup`, the mock is a library that's long past first launch.
+  if (!firstLaunch) settings.set("setup", "done");
 }
 
 export function installMockBackend(label = "main") {
@@ -344,7 +359,7 @@ export function installMockBackend(label = "main") {
       };
       switch (cmd) {
         case "list_devices":
-          return [device];
+          return Date.now() >= koboFrom ? [device] : [];
         case "library_list":
           return books;
         case "books_on_device":
@@ -980,12 +995,12 @@ export function installMockBackend(label = "main") {
               });
               continue;
             }
-            const id = Math.max(...books.map((x) => x.id)) + 1;
+            const id = Math.max(0, ...books.map((x) => x.id)) + 1;
             const now = new Date().toISOString();
             books = [
               ...books,
               {
-                ...books[0],
+                ...bookTemplate,
                 id,
                 title: sideload.title,
                 authors: [sideload.author ?? "Unknown"],

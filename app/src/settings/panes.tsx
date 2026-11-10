@@ -6,7 +6,8 @@ import {
   showFolder,
   type SettingKey,
 } from "../api";
-import { APP_THEMES, appTheme, type AppTheme } from "../design/theme";
+import { appTheme } from "../design/theme";
+import { ThemePicker } from "../components/ThemePicker";
 import type { Values } from "./useSettings";
 
 export interface PaneProps {
@@ -112,54 +113,6 @@ export function Choices<T extends string>({
           </label>
           {option.hint && <p className="hint">{option.hint}</p>}
         </div>
-      ))}
-    </div>
-  );
-}
-
-/** Each theme as a small picture of itself. */
-function ThemePicker({
-  value,
-  onChange,
-}: {
-  value: AppTheme;
-  onChange: (theme: AppTheme) => void;
-}) {
-  const sample = (theme: string) => (
-    <span className="theme-sample" data-theme={theme}>
-      <span className="theme-sample-bar" />
-      <span className="theme-sample-text" />
-      <span className="theme-sample-text short" />
-      <span className="theme-sample-accent" />
-    </span>
-  );
-  return (
-    <div className="theme-picker" role="radiogroup" aria-label="Appearance">
-      {APP_THEMES.map((theme) => (
-        <button
-          key={theme.value}
-          role="radio"
-          aria-checked={value === theme.value}
-          className="theme-option"
-          onClick={() => onChange(theme.value)}
-        >
-          <span className="theme-preview" aria-hidden="true">
-            {theme.value === "system" ? (
-              <>
-                {sample("light")}
-                {sample("dark")}
-              </>
-            ) : theme.value === "contrast" ? (
-              <>
-                {sample("contrast")}
-                {sample("contrast-dark")}
-              </>
-            ) : (
-              sample(theme.value)
-            )}
-          </span>
-          <span>{theme.label}</span>
-        </button>
       ))}
     </div>
   );
