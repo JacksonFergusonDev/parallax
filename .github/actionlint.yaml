@@ -1,0 +1,4 @@
+# GitHub hosts this runner. Remove the entry when actionlint recognizes the label.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04-arm

@@ -10,6 +10,7 @@
 - Added first-run setup. It walks through connecting a Kobo, importing its books, settings (recommended, or customised), appearance and a short tour. It shows on each launch until skipped or finished, libraries from before it are marked done quietly, and Help › Welcome to Parallax reopens it. Browser mock: `?setup`, plus `&kobo=later` or `&kobo=none`.
 - An untested or read-only Kobo is explained once per model, in setup's Connect step or as a banner in the main window with **Don't Show Again**. `TESTED_MODELS` in `crates/device-kobo/src/support.rs` lists models with hardware results, and **About This Kobo…** shows whether hardware checks have been run on that model. Browser mock: `?untested` or `?readonly`.
 - Tuned Renovate to open weekly dependency PRs for manual review, group Tauri updates, and keep the scripts interpreter on Python 3.12 for Core ML tooling.
+- Adopted TypeScript 7 for builds and type-checking with the TypeScript 6 API for ESLint. Registered GitHub's `ubuntu-26.04-arm` label with actionlint until the tool supports it directly.
 
 ## Current
 
