@@ -6,6 +6,7 @@ links across chapters, and a link to the start of a chapter. calibre gives a
 target with no id only an `aid`, which is what the link fix in vendor/boko is
 about; the image fix shows on combo.mobi.
 """
+
 import struct
 import subprocess
 import tempfile
@@ -13,11 +14,11 @@ import zipfile
 import zlib
 from pathlib import Path
 
-HERE = Path(__file__).parent
+FIXTURES = Path(__file__).resolve().parents[1] / "tests/fixtures/amazon"
 
 
-def png(width, height, rgb):
-    def chunk(tag, data):
+def png(width: int, height: int, rgb: tuple[int, int, int]) -> bytes:
+    def chunk(tag: bytes, data: bytes) -> bytes:
         body = tag + data
         return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
 
@@ -31,7 +32,7 @@ def png(width, height, rgb):
     )
 
 
-def page(title, body):
+def page(title: str, body: str) -> str:
     return f"""<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"><head><title>{title}</title>
 <link rel="stylesheet" type="text/css" href="style.css"/></head>
@@ -98,7 +99,7 @@ with tempfile.TemporaryDirectory() as tmp:
         ("old.mobi", ["--mobi-file-type", "old"]),
     ):
         subprocess.run(
-            ["ebook-convert", epub, HERE / name, *args],
+            ["ebook-convert", epub, FIXTURES / name, *args],
             check=True,
             capture_output=True,
         )

@@ -9,16 +9,18 @@ and requests BEACON/exec/<name>. Anything that loads requests BEACON/net/...
 
 long.epub is plain text long enough to turn pages and reopen in the middle.
 """
+
 import html
 import zipfile
+from collections.abc import Sequence
 from pathlib import Path
 
-HERE = Path(__file__).parent
+FIXTURES = Path(__file__).resolve().parents[1] / "tests/fixtures/reader"
 BEACON = "http://127.0.0.1:8931"
 SVG = 'xmlns="http://www.w3.org/2000/svg"'
 
 
-def payload(name):
+def payload(name: str) -> str:
     reader = "(parent.__TAURI_INTERNALS__||parent.parent.__TAURI_INTERNALS__)"
     return (
         f"new Image().src='{BEACON}/exec/{name}';"
@@ -29,11 +31,11 @@ def payload(name):
     )
 
 
-def attr(name):
+def attr(name: str) -> str:
     return html.escape(payload(name), quote=True)
 
 
-def document(body, head=""):
+def document(body: str, head: str = "") -> str:
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>t</title>'
@@ -90,17 +92,24 @@ LEAVING_HEAD = (
 )
 
 
-def write_epub(path, title, chapters, extra=(), scripted=False):
+def write_epub(
+    path: Path,
+    title: str,
+    chapters: Sequence[str],
+    extra: Sequence[tuple[str, str, str]] = (),
+    scripted: bool = False,
+) -> None:
     manifest = "".join(
         f'<item id="c{i}" href="c{i}.xhtml" media-type="application/xhtml+xml"'
-        f'{" properties=\"scripted\"" if scripted else ""}/>'
+        f"{' properties="scripted"' if scripted else ''}/>"
         for i in range(len(chapters))
     )
     for name, media_type, _ in extra:
         manifest += f'<item id="{name.replace(".", "-")}" href="{name}" media-type="{media_type}"/>'
     spine = "".join(f'<itemref idref="c{i}"/>' for i in range(len(chapters)))
     toc = "".join(
-        f'<li><a href="c{i}.xhtml">Chapter {i + 1}</a></li>' for i in range(len(chapters))
+        f'<li><a href="c{i}.xhtml">Chapter {i + 1}</a></li>'
+        for i in range(len(chapters))
     )
     files = {
         "META-INF/container.xml": '<?xml version="1.0"?><container version="1.0" '
@@ -133,15 +142,17 @@ def write_epub(path, title, chapters, extra=(), scripted=False):
             z.writestr(info, data)
 
 
-def main():
-    inner = document(f"<script>{payload('innerdoc').replace('parent.', 'parent.parent.')}</script>")
+def main() -> None:
+    inner = document(
+        f"<script>{payload('innerdoc').replace('parent.', 'parent.parent.')}</script>"
+    )
     css = (
         f"@import url({BEACON}/net/bookimport);"
         f"p{{background:url({BEACON}/net/bookcssbg)}}"
         f"@font-face{{font-family:y;src:url({BEACON}/net/bookfont)}}"
     )
     write_epub(
-        HERE / "hostile.epub",
+        FIXTURES / "hostile.epub",
         "Hostile",
         [
             document(SCRIPTS),
@@ -161,12 +172,14 @@ def main():
         "page has its own text, and the reader can be reopened partway through."
     )
     write_epub(
-        HERE / "long.epub",
+        FIXTURES / "long.epub",
         "Long",
         [
             document(
                 f"<h1>Chapter {c + 1}</h1>"
-                + "".join(f"<p>Paragraph {c + 1}.{p + 1}. {words}</p>" for p in range(80))
+                + "".join(
+                    f"<p>Paragraph {c + 1}.{p + 1}. {words}</p>" for p in range(80)
+                )
             )
             for c in range(6)
         ],

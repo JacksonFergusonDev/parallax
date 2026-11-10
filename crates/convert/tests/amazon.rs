@@ -1,5 +1,5 @@
 //! Amazon books to EPUB through boko, on small books made by calibre (see
-//! tests/fixtures/amazon/make.py).
+//! scripts/make_amazon_fixtures.py).
 
 use std::fs::{self, File};
 use std::io::Read;

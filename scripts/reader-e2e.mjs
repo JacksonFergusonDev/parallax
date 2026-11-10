@@ -21,7 +21,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const fixtures = join(root, "tests/fixtures/reader");
 const targetDir = resolve(root, process.env.CARGO_TARGET_DIR ?? "target/e2e");
 const bin = join(targetDir, "debug");
-/** The address hostile.epub sends requests to; see its make.py. */
+/** The address hostile.epub sends requests to (see make_reader_fixtures.py). */
 const BEACON_PORT = 8931;
 const RUN_TIMEOUT_MS = 120_000;
 const view = "document.querySelector('foliate-view')";
