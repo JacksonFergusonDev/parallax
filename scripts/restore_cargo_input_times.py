@@ -23,6 +23,12 @@ def inputs() -> list[Path]:
     return sorted(path for path in files if path.is_symlink() or path.is_file())
 
 
+def build_scope(path: Path, packages: set[Path]) -> Path | None:
+    if path.is_relative_to(GENERATED[0]):
+        return Path("app/src-tauri")
+    return next((parent for parent in path.parents if parent in packages), None)
+
+
 def prepare() -> None:
     cached: dict[str, list[str | int] | None] = {}
     fresh_time = time.time_ns()
@@ -33,13 +39,18 @@ def prepare() -> None:
         fresh_time = max(fresh_time, FINISHED.stat().st_mtime_ns + 1_000_000_000)
 
     files = inputs()
-    # An added or deleted file can affect module resolution even when it was
-    # absent from Cargo's previous list of inputs. Recheck the entire tree.
-    can_restore = (
-        cached.keys() == {path.as_posix() for path in files}
-        and all(cached.values())
-        and not any(path.is_symlink() for path in files)
-    )
+    paths = set(files)
+    old_paths = {Path(name) for name in cached}
+    packages = {
+        path.parent
+        for path in paths | old_paths
+        if path.name == "Cargo.toml" and path.parent != Path(".")
+    }
+    # A new or deleted file can affect module resolution inside its crate
+    # even when it was absent from Cargo's previous list of inputs.
+    changed_scopes = {build_scope(path, packages) for path in paths ^ old_paths}
+    changed_scopes.discard(None)
+    can_restore = all(cached.values()) and not any(path.is_symlink() for path in files)
     current: dict[str, tuple[str, int, int] | None] = {}
     reused = 0
     for path in files:
@@ -52,7 +63,12 @@ def prepare() -> None:
             digest = hashlib.file_digest(source, "sha256").hexdigest()
         mode = stat.S_IMODE(info.st_mode)
         previous = cached.get(name)
-        if can_restore and previous is not None and previous[:2] == [digest, mode]:
+        if (
+            can_restore
+            and previous is not None
+            and previous[:2] == [digest, mode]
+            and build_scope(path, packages) not in changed_scopes
+        ):
             os.utime(path, ns=(info.st_atime_ns, int(previous[2])))
             reused += 1
         elif cached:

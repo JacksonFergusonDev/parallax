@@ -1,0 +1,95 @@
+"""Check that cache restores preserve Cargo's freshness checks."""
+
+import os
+from pathlib import Path
+
+import pytest
+
+import restore_cargo_input_times as cache
+
+CACHED_TIME = 1_000_000_000
+CHECKOUT_TIME = 2_000_000_000
+LIBRARY = Path("crates/library/src/lib.rs")
+COMIC = Path("crates/comic/src/lib.rs")
+APP = Path("app/src-tauri/src/lib.rs")
+SCRIPT = Path("scripts/dev.sh")
+ASSET = Path("app/dist/index.html")
+
+
+def set_time(path: Path, timestamp: int) -> None:
+    os.utime(path, ns=(timestamp, timestamp))
+
+
+@pytest.fixture
+def checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> set[Path]:
+    monkeypatch.chdir(tmp_path)
+    files = {
+        LIBRARY,
+        COMIC,
+        APP,
+        SCRIPT,
+        ASSET,
+        Path("crates/library/Cargo.toml"),
+        Path("crates/comic/Cargo.toml"),
+        Path("app/src-tauri/Cargo.toml"),
+    }
+    monkeypatch.setattr(cache, "inputs", lambda: sorted(files))
+    for path in files:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("initial contents")
+        set_time(path, CACHED_TIME)
+    cache.prepare()
+    cache.FINISHED.touch()
+    set_time(cache.FINISHED, CACHED_TIME)
+    for path in files:
+        set_time(path, CHECKOUT_TIME)
+    return files
+
+
+def test_script_migration_preserves_unchanged_rust_inputs(checkout: set[Path]) -> None:
+    replacement = SCRIPT.with_suffix(".py")
+    SCRIPT.rename(replacement)
+    checkout.remove(SCRIPT)
+    checkout.add(replacement)
+    COMIC.write_text("edited Rust source")
+
+    cache.prepare()
+
+    assert LIBRARY.stat().st_mtime_ns == CACHED_TIME
+    assert APP.stat().st_mtime_ns == CACHED_TIME
+    assert COMIC.stat().st_mtime_ns > CHECKOUT_TIME
+
+
+@pytest.mark.parametrize("remove", [False, True])
+def test_source_inventory_changes_invalidate_the_affected_crate(
+    checkout: set[Path], remove: bool
+) -> None:
+    module = LIBRARY.with_name("new_module.rs")
+    if remove:
+        module.write_text("old module")
+        checkout.add(module)
+        cache.prepare()
+        module.unlink()
+        checkout.remove(module)
+    else:
+        module.write_text("new module")
+        checkout.add(module)
+
+    cache.prepare()
+
+    assert LIBRARY.stat().st_mtime_ns > CHECKOUT_TIME
+    assert COMIC.stat().st_mtime_ns == CACHED_TIME
+    assert APP.stat().st_mtime_ns == CACHED_TIME
+
+
+def test_generated_asset_inventory_only_invalidates_desktop(
+    checkout: set[Path],
+) -> None:
+    asset = ASSET.with_name("new.html")
+    asset.write_text("new generated asset")
+    checkout.add(asset)
+
+    cache.prepare()
+
+    assert APP.stat().st_mtime_ns > CHECKOUT_TIME
+    assert LIBRARY.stat().st_mtime_ns == CACHED_TIME
