@@ -25,6 +25,7 @@ pub struct SentBook {
 
 impl KoboDevice {
     /// Bytes available to a new file on the mounted volume.
+    #[cfg(unix)]
     pub fn free_bytes(&self) -> Result<u64> {
         let fs = nix::sys::statvfs::statvfs(self.mount())
             .map_err(|e| io_err(self.mount(), io::Error::from_raw_os_error(e as i32)))?;
@@ -35,6 +36,12 @@ impl KoboDevice {
         };
         let bytes = u128::from(block) * u128::from(fs.blocks_available());
         Ok(u64::try_from(bytes).unwrap_or(u64::MAX))
+    }
+
+    /// Bytes available to a new file on the mounted volume.
+    #[cfg(windows)]
+    pub fn free_bytes(&self) -> Result<u64> {
+        fs4::available_space(self.mount()).map_err(|e| io_err(self.mount(), e))
     }
 
     /// Copies `src` to `dest` (relative to the mount point). Writes to a

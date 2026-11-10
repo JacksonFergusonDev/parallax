@@ -27,6 +27,13 @@ fn book(dir: &Path) -> PathBuf {
 }
 
 #[test]
+fn reads_free_space_on_the_volume_containing_the_kobo() {
+    let dir = tempfile::tempdir().unwrap();
+    let kobo = fake_kobo(dir.path());
+    assert!(kobo.free_bytes().unwrap() > 0);
+}
+
+#[test]
 fn sends_book_atomically() {
     let dir = tempfile::tempdir().unwrap();
     let kobo = fake_kobo(dir.path());
