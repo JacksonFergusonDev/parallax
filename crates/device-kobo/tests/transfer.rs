@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+#[cfg(target_os = "macos")]
 use std::process::Command;
 
 use parallax_device_kobo::{Error, KoboDevice};
@@ -23,6 +24,13 @@ fn book(dir: &Path) -> PathBuf {
     let src = dir.join("src.kepub.epub");
     fs::write(&src, vec![7u8; 3 * 1024 * 1024 + 17]).unwrap();
     src
+}
+
+#[test]
+fn reads_free_space_on_the_volume_containing_the_kobo() {
+    let dir = tempfile::tempdir().unwrap();
+    let kobo = fake_kobo(dir.path());
+    assert!(kobo.free_bytes().unwrap() > 0);
 }
 
 #[test]

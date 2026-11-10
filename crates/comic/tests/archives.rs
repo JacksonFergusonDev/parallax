@@ -163,6 +163,7 @@ fn writing_comic_info_keeps_pages_byte_for_byte() {
     assert_eq!(cbz.comic_info().unwrap().series(), Some("Added"));
     assert_eq!(cbz.read_page(0).unwrap(), a);
     assert_eq!(cbz.read_page(1).unwrap(), b);
+    drop(cbz);
 
     info.set("Series", Some("Changed"));
     write_comic_info(&path, &info).unwrap();

@@ -11,7 +11,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -19,7 +19,8 @@ import { crc32, deflateSync } from "node:zlib";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const fixtures = join(root, "tests/fixtures/reader");
-const bin = join(root, "target/e2e/debug");
+const targetDir = resolve(root, process.env.CARGO_TARGET_DIR ?? "target/e2e");
+const bin = join(targetDir, "debug");
 /** The address hostile.epub sends requests to; see its make.py. */
 const BEACON_PORT = 8931;
 const RUN_TIMEOUT_MS = 120_000;
@@ -116,10 +117,11 @@ before(async () => {
     await run("pnpm", ["--dir", "app", "build"]);
     await run("cargo", [
       "build",
+      "--locked",
       "-p", "parallax-app",
       "-p", "parallax-cli",
       "--features", "parallax-app/e2e",
-      "--target-dir", "target/e2e",
+      "--target-dir", targetDir,
     ]);
   }
   home = await mkdtemp(join(tmpdir(), "parallax-reader-e2e-"));
@@ -249,6 +251,17 @@ test("the Settings window changes settings, and backups at once", async () => {
     ),
   );
   assert.deepEqual(policy, { keep: "history", max_bytes: null });
+});
+
+test("Settings reloads the saved theme and backup limit from the backend", async () => {
+  await inSettings([
+    clickText('[role="tab"]', "Backups"),
+    `window.restoredBackupLimit = document.querySelector('.settings-pane select')?.value === 'none'`,
+    clickText('[role="tab"]', "General"),
+    `if (window.restoredBackupLimit && document.documentElement.dataset.theme === 'sepia') ` +
+      clickText(".theme-option", "Dark"),
+  ]);
+  assert.equal(setting("theme"), "dark", "the saved theme or backup limit wasn't restored");
 });
 
 test("a reader on Auto shows the app's theme", async () => {

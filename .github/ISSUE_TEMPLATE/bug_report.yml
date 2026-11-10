@@ -1,0 +1,61 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in Parallax.
+title: "bug: <short description>"
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Parallax version
+      description: See About Parallax in the desktop app, or run `parallax-cli --version`.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and architecture
+      placeholder: "macOS 15.7, Apple silicon"
+    validations:
+      required: true
+  - type: dropdown
+    id: interface
+    attributes:
+      label: Where did it happen?
+      options:
+        - Desktop app
+        - Reader
+        - Command line
+        - Build or installation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: kobo
+    attributes:
+      label: Kobo model and firmware, if relevant
+      placeholder: "Libra 2, 4.38.23852"
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the steps or the command you ran. Include the book format if it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Remove personal paths, device serial numbers, and book contents before posting.

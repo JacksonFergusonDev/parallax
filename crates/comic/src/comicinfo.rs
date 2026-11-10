@@ -371,6 +371,7 @@ pub fn write_comic_info(cbz: &Path, info: &ComicInfo) -> Result<()> {
         .flush()
         .map_err(io(cbz))?;
     tmp.as_file().sync_all().map_err(io(cbz))?;
+    drop(src);
     tmp.persist(cbz).map_err(|e| Error::Io {
         path: cbz.to_path_buf(),
         source: e.error,

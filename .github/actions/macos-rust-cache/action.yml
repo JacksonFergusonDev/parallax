@@ -1,0 +1,46 @@
+name: Cache macOS Rust build
+description: Reuse the complete Cargo target directory and its compiled workspace crates
+inputs:
+  target:
+    description: Native Rust target triple
+    required: true
+  rust-version:
+    description: Rust toolchain cache key
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Identify the build environment and source tree
+      id: key
+      shell: bash
+      env:
+        RUST_VERSION: ${{ inputs.rust-version }}
+        RUST_TARGET: ${{ inputs.target }}
+      run: |
+        prefix="macos-target-v1-$RUST_TARGET-$GITHUB_JOB-$ImageVersion-$RUST_VERSION-$(git hash-object Cargo.lock)-"
+        echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+        echo "tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+
+    - name: Restore full Cargo target
+      id: target
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          target/
+          ~/.cargo/registry/
+          ~/.cargo/git/
+        key: ${{ steps.key.outputs.prefix }}${{ steps.key.outputs.tree }}
+        restore-keys: ${{ steps.key.outputs.prefix }}
+
+    # Seed the first full archive from the old dependency cache when available.
+    - name: Restore dependency cache on a full cache miss
+      if: steps.target.outputs.cache-hit == ''
+      uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      with:
+        key: ${{ inputs.target }}
+        save-if: false
+
+    - name: Restore timestamps of unchanged build inputs
+      shell: bash
+      run: python3 scripts/restore-cargo-input-times.py

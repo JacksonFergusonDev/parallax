@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use parallax_device_kobo::{
     BACKUPS_KEPT, BackupPolicy, BookCheck, DisplayMetadata, Error, Keep, KoboDevice, LOG_KEPT,
@@ -784,6 +783,8 @@ fn removes_from_reference_db_copy() {
 #[test]
 #[ignore = "mounts a disk image: just test-fat"]
 fn writes_cleanly_on_fat32() {
+    use std::process::Command;
+
     let dir = tempfile::tempdir().unwrap();
     let image = dir.path().join("kobo.dmg");
     let mnt = dir.path().join("mnt");

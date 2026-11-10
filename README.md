@@ -27,14 +27,17 @@ Brand and UI rules: [Parallax design system](docs/design-system.md).
 Requires Rust (stable), Node and pnpm, and [just](https://github.com/casey/just).
 
 ```bash
-just setup    # kepubify sidecar + UI dependencies
+just          # list available recipes
+just sync     # native kepubify sidecar and locked UI dependencies
 just dev      # run the app with hot reload
 just dev-optimized # build and run it as a release behaves (slower to build, no hot reload)
-just check    # formatting, lints, type checks and tests (run before committing)
+just ci       # formatting, lints, type checks and tests (run before committing)
 just test-fat # extra tests that mount FAT32 disk images
-just test-reader # EPUB and comic readers in a real build (opens windows)
+just test-reader # reader and Settings in a real macOS WebView (opens windows)
 just build    # macOS .app bundle
 ```
+
+CI builds and tests the frontend on Ubuntu. Apple silicon and Intel Macs run the same Rust checks and executable builds, while a separate Apple silicon job exercises the reader and Settings in WKWebView. Run the **Portability** workflow from the Actions tab to test the Rust workspace and desktop builds on Linux and Windows on x64 and arm64. The Kobo tests use fixtures and temporary directories.
 
 `just dev` prompts before stopping processes that occupy Vite’s port (1420). Accepting retries app startup without repeating setup; declining or closing input leaves those processes running.
 
