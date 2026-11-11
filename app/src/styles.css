@@ -12,8 +12,6 @@
   /* For filtered covers: #book-warp would clip a box-shadow. */
   --drop-book: drop-shadow(0 1px 1px rgb(60 40 20 / 16%))
     drop-shadow(0 6px 8px rgb(60 40 20 / 20%));
-  --drop-book-lift: drop-shadow(0 2px 2px rgb(60 40 20 / 12%))
-    drop-shadow(0 18px 16px rgb(60 40 20 / 30%));
   /* Gentler than --ease-out: covers drift up rather than snap. */
   --ease-lift: cubic-bezier(0.33, 1, 0.68, 1);
   color: var(--fg);
@@ -32,8 +30,6 @@
     0 30px 48px -12px rgb(0 0 0 / 58%);
   --drop-book: drop-shadow(0 1px 1px rgb(0 0 0 / 40%))
     drop-shadow(0 6px 9px rgb(0 0 0 / 45%));
-  --drop-book-lift: drop-shadow(0 2px 2px rgb(0 0 0 / 35%))
-    drop-shadow(0 20px 18px rgb(0 0 0 / 55%));
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -359,8 +355,6 @@ button.badge.connected:hover {
   min-width: 0;
 }
 
-/* Covers read as physical books: #book-warp (BookWarpFilter) rolls the art
-   around the spine and shades it, and a soft shadow deepens on hover. */
 .book-warp-defs {
   position: absolute;
 }
@@ -369,14 +363,37 @@ button.badge.connected:hover {
   position: relative;
   aspect-ratio: 2 / 3;
   border-radius: 2px 5px 5px 2px;
-  filter: var(--drop-book);
   margin-bottom: var(--space-3);
   outline: 3px solid transparent;
   outline-offset: 3px;
+}
+
+/* WKWebView can fall behind while rasterizing filtered covers during scroll,
+   even when all thumbnails are loaded. Shade the grid spines with CSS. */
+.card > .cover {
+  box-shadow: var(--shadow-book);
   transition:
     outline-color 80ms,
     transform 420ms var(--ease-lift),
-    filter 420ms var(--ease-lift);
+    box-shadow 420ms var(--ease-lift);
+}
+
+.card > .cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgb(0 0 0 / 22%) 0,
+    rgb(255 255 255 / 18%) 2.5%,
+    rgb(0 0 0 / 12%) 5%,
+    transparent 9%,
+    transparent 94%,
+    rgb(255 255 255 / 6%) 100%
+  );
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 6%);
 }
 
 .cover img,
@@ -384,13 +401,19 @@ button.badge.connected:hover {
 .now-cover img,
 .now-cover .gen-cover {
   border-radius: inherit;
+}
+
+.duplicate-cards .cover img,
+.duplicate-cards .cover .gen-cover,
+.now-cover img,
+.now-cover .gen-cover {
   filter: url(#book-warp);
 }
 
-.card:hover .cover,
-.card.selected .cover {
+.card:hover > .cover,
+.card.selected > .cover {
   transform: translateY(-7px);
-  filter: var(--drop-book-lift);
+  box-shadow: var(--shadow-book-lift);
 }
 
 .picker-item:hover img {
@@ -2024,6 +2047,7 @@ select:focus-visible {
 }
 .duplicate-cards .cover {
   max-width: 120px;
+  filter: var(--drop-book);
 }
 .duplicate-facts {
   list-style: none;
