@@ -5,7 +5,8 @@
 # download button names the new version, and updates the Homebrew formula.
 #
 # Run it by hand (Actions › Release › Run workflow, or `gh workflow run
-# release.yml --ref BRANCH`) for a dry run: it checks the manifests agree,
+# release.yml --ref BRANCH`), or open a pull request that changes the release
+# files listed under `pull_request`, for a dry run: it checks the manifests agree,
 # reruns CI, builds and signs the app and both CLIs, writes latest.json and
 # the Homebrew formula, and uploads them all as workflow artifacts, but creates
 # no release, deploys no site and pushes nothing to the tap. It builds the
@@ -26,12 +27,22 @@ on:
   push:
     tags: [ "v*" ]
   workflow_dispatch:
+  # Pull requests that change how a release is built get a dry run too.
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - "scripts/release.py"
+      - "scripts/fetch_kepubify.py"
+      - "scripts/build_upscale_model.py"
+      - "scripts/homebrew_formula.py"
+      - "app/src-tauri/tauri*.conf.json"
 
 permissions: {}
 
+# A newer push to a pull request replaces its dry run; releases never cancel.
 concurrency:
-  group: release-${{ github.ref_name }}
-  cancel-in-progress: false
+  group: release-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
