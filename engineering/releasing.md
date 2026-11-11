@@ -49,8 +49,10 @@ Signing needs an Apple Developer Program membership. Create a **Developer ID App
 [`.github/workflows/site.yml`](../.github/workflows/site.yml) deploys `site/` to GitHub Pages when the site changes on `main`, when run by hand, and after each release. One-time setup:
 
 1. **Settings › Pages › Source:** GitHub Actions.
-2. A DNS `CNAME` record from `parallax.jacksonferguson.me` to `jacksonfergusondev.github.io`. `site/public/CNAME` names the domain.
-3. After the first deploy, tick **Enforce HTTPS**.
+2. A DNS `CNAME` record from `parallax.jacksonferguson.me` to `jacksonfergusondev.github.io`.
+3. **Settings › Pages › Custom domain:** `parallax.jacksonferguson.me`. Deploys from Actions ignore `site/public/CNAME`, so the domain must be set here.
+4. **Settings › Environments › github-pages › Deployment branches and tags:** add the tag rule `v*` beside `main`. GitHub only lets the default branch deploy to Pages, and the release workflow redeploys the site from its tag.
+5. Once the certificate is issued, tick **Enforce HTTPS**.
 
 ## Installing the CLI
 
