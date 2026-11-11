@@ -1622,32 +1622,33 @@ button.link.danger {
 }
 
 .library-toolbar .group-series,
-.library-toolbar .view-controls .segmented button,
+.library-toolbar .segmented button,
 .library-toolbar .menu-root > button {
   padding: var(--space-1) var(--space-2);
 }
 
 .library-toolbar .filter-bar {
   border-top: 1px solid var(--border);
-  padding: var(--space-3) var(--space-3);
+  padding: var(--space-1) var(--space-3);
 }
 
 .library-toolbar .view-controls {
   margin-left: auto;
 }
 
-.library-toolbar .sort-select {
+.library-toolbar .sort-select,
+.library-toolbar .filter-bar > button {
   min-height: var(--control-compact);
 }
 
-.library-toolbar .view-controls .segmented {
+.library-toolbar .segmented {
   gap: var(--space-1);
   padding: 0;
   border: 0;
   background: transparent;
 }
 
-.library-toolbar .view-controls .segmented button.active {
+.library-toolbar .segmented button.active {
   background: var(--sunken);
 }
 
@@ -3352,12 +3353,6 @@ button.icon {
 .group-series[aria-pressed="true"] {
   color: var(--accent);
   border-color: var(--accent);
-}
-
-@media (max-width: 900px) {
-  .library-toolbar .filter-select {
-    min-width: 104px;
-  }
 }
 
 /* Groups the window's own contents so first-run setup can make them inert. */

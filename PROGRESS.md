@@ -17,7 +17,7 @@
 - Release packaging runs alongside CI, with publishing gated on both. The macOS CI cache can reuse compiled dependencies across lockfile changes on the same runner image and Rust toolchain.
 - The WKWebView search scenarios wait for the reader to open and for a search result before navigating, so a slow launch or search can't skip those steps.
 - Moved slower checks to prek's pre-push stage, added app build and site checks to the hooks, and limited release preflight to release eligibility. Changelog-only releases still trigger the project-wide lint, type and test checks.
-- Compact Library toolbar controls free up vertical space for books. The site's library snapshot reflects the new layout.
+- Compact controls in the Library toolbar and filter row free up vertical space for books. The site's library snapshot reflects the new layout.
 
 ## Current
 

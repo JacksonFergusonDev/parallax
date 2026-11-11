@@ -436,12 +436,12 @@ button.link.danger { color: var(--danger); }
 .filter-bar .segmented button { white-space: nowrap; }
 .library-toolbar { flex-shrink: 0; margin: var(--space-3) var(--space-6) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .library-toolbar .view-toolbar { padding: var(--space-1) var(--space-3); }
-.library-toolbar .group-series, .library-toolbar .view-controls .segmented button, .library-toolbar .menu-root > button { padding: var(--space-1) var(--space-2); }
-.library-toolbar .filter-bar { border-top: 1px solid var(--border); padding: var(--space-3) var(--space-3); }
+.library-toolbar .group-series, .library-toolbar .segmented button, .library-toolbar .menu-root > button { padding: var(--space-1) var(--space-2); }
+.library-toolbar .filter-bar { border-top: 1px solid var(--border); padding: var(--space-1) var(--space-3); }
 .library-toolbar .view-controls { margin-left: auto; }
-.library-toolbar .sort-select { min-height: var(--control-compact); }
-.library-toolbar .view-controls .segmented { gap: var(--space-1); padding: 0px; border: 0px; background: transparent; }
-.library-toolbar .view-controls .segmented button.active { background: var(--sunken); }
+.library-toolbar .sort-select, .library-toolbar .filter-bar > button { min-height: var(--control-compact); }
+.library-toolbar .segmented { gap: var(--space-1); padding: 0px; border: 0px; background: transparent; }
+.library-toolbar .segmented button.active { background: var(--sunken); }
 .library-toolbar .menu-root > button { font-size: var(--text-small); background: transparent; border-color: transparent; box-shadow: none; }
 .library-toolbar .menu-root > button:hover, .library-toolbar .menu-root > button[aria-expanded="true"] { background: var(--sunken); }
 .library-toolbar .menu { inset: calc(100% + 6px) auto auto 0px; min-width: 240px; }
@@ -779,9 +779,6 @@ button.icon { min-height: var(--control-compact); min-width: var(--control-compa
 .series-shelf h2, .series-row { margin: 0px; color: var(--fg); font-size: var(--text-label); overflow-wrap: anywhere; }
 .series-row { padding: var(--space-2) var(--space-3); background: var(--sunken); }
 .group-series[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
-@media (max-width: 900px) {
-  .library-toolbar .filter-select { min-width: 104px; }
-}
 .app-main { display: contents; }
 .kobo-notice { display: grid; grid-template-columns: auto minmax(0px, 1fr) auto auto; align-items: start; gap: var(--space-2) var(--space-3); padding: var(--space-3) var(--space-6); border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
 .kobo-notice.warn { background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
