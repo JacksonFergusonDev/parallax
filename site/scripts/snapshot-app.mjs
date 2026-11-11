@@ -57,7 +57,7 @@ async function serialize() {
   };
   const urls = (text) => [...text.matchAll(/url\((['"]?)([^'")]+)\1\)/g)].map((m) => m[2]);
 
-  // Only the faces this window loaded, and of Fraunces only its Latin subset.
+  // Only the faces this window loaded, and only their Latin subsets.
   const fonts = [];
   const unquote = (value) => value.replace(/["']/g, '').trim();
   const loaded = new Set(

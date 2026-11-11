@@ -5,15 +5,15 @@ import homebrew_formula
 
 
 def test_render_points_each_architecture_at_its_archive() -> None:
-    formula = homebrew_formula.render("0.2.0", {"arm": "a" * 64, "intel": "b" * 64})
+    formula = homebrew_formula.render("0.1.0", {"arm": "a" * 64, "intel": "b" * 64})
 
-    assert 'version "0.2.0"' in formula
+    assert 'version "0.1.0"' in formula
     assert (
-        'url "https://github.com/JacksonFergusonDev/parallax/releases/download/v0.2.0/'
-        'parallax-cli-0.2.0-aarch64-apple-darwin.tar.gz"\n    sha256 "' + "a" * 64
+        'url "https://github.com/JacksonFergusonDev/parallax/releases/download/v0.1.0/'
+        'parallax-cli-0.1.0-aarch64-apple-darwin.tar.gz"\n    sha256 "' + "a" * 64
     ) in formula
     assert (
-        'parallax-cli-0.2.0-x86_64-apple-darwin.tar.gz"\n    sha256 "' + "b" * 64
+        'parallax-cli-0.1.0-x86_64-apple-darwin.tar.gz"\n    sha256 "' + "b" * 64
         in formula
     )
     # Ruby's interpolation survives Python's formatting.

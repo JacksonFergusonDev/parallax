@@ -1,9 +1,9 @@
 """Version bumps and release notes for a Parallax release.
 
-`bump 0.2.0` sets the version in every manifest and turns CHANGELOG.md's
+`bump 0.1.0` sets the version in every manifest and turns CHANGELOG.md's
 Unreleased section into that version's; `just release` runs it, commits and
-tags. `check v0.2.0` fails unless every manifest says 0.2.0, which the release
-workflow runs before building. `notes 0.2.0` prints that version's changelog
+tags. `check v0.1.0` fails unless every manifest says 0.1.0, which the release
+workflow runs before building. `notes 0.1.0` prints that version's changelog
 section, which becomes the GitHub release's notes and the in-app update's.
 """
 

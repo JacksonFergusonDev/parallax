@@ -1,7 +1,7 @@
 @import "./design/tokens.css";
 
-/* Parallax: warm paper, ink, and an observatory-gold accent. Fraunces
-   names books; system sans keeps controls and metadata quiet and precise. */
+/* Parallax: warm paper, ink, and an observatory-gold accent. DM Sans
+   throughout; weight and size, not a second typeface, set titles apart. */
 :root {
   --shadow-book:
     0 1px 1px rgb(60 40 20 / 10%), 0 3px 6px rgb(60 40 20 / 10%),
@@ -258,12 +258,8 @@ button.badge.connected:hover {
 }
 
 .dropzone-title {
-  font-family: var(--serif);
   font-size: var(--text-display);
   font-weight: 500;
-  font-variation-settings:
-    "opsz" 48,
-    "SOFT" 60;
   letter-spacing: -0.01em;
   margin: 0;
 }
@@ -434,12 +430,8 @@ button.badge.connected:hover {
 
 .gen-title {
   position: relative;
-  font-family: var(--serif);
   font-size: var(--art-type-19);
-  font-weight: 560;
-  font-variation-settings:
-    "SOFT" 60,
-    "opsz" 40;
+  font-weight: 600;
   line-height: 1.08;
   letter-spacing: -0.01em;
   text-wrap: balance;
@@ -515,7 +507,7 @@ button.badge.connected:hover {
 
 .gen-cover.mini .gen-title {
   font-size: var(--art-type-6-5);
-  font-weight: 650;
+  font-weight: 700;
   -webkit-line-clamp: 4;
 }
 
@@ -633,10 +625,8 @@ button.badge.connected:hover {
 }
 
 .card-title {
-  font-family: var(--serif);
   font-size: var(--text-body);
-  font-weight: 540;
-  font-variation-settings: "opsz" 20;
+  font-weight: 600;
   letter-spacing: -0.005em;
 }
 
@@ -1070,9 +1060,7 @@ button.link {
 }
 
 .modal-head h2 {
-  font-family: var(--serif);
-  font-weight: 550;
-  font-variation-settings: "opsz" 36;
+  font-weight: 600;
   font-size: var(--text-heading);
   margin: 0 0 var(--space-1);
 }
@@ -1288,9 +1276,8 @@ button.link {
 }
 
 .list-row .cell:nth-child(2) {
-  font-family: var(--serif);
   font-size: var(--text-body);
-  font-variation-settings: "opsz" 18;
+  font-weight: 500;
 }
 
 .thumb {
@@ -2281,7 +2268,6 @@ form.enhance-key input {
   margin: 0;
   padding-left: var(--space-3);
   border-left: 3px solid var(--accent);
-  font-family: Georgia, "Iowan Old Style", serif;
   line-height: 1.45;
 }
 .annotation-list figcaption {
@@ -2358,12 +2344,8 @@ form.enhance-key input {
 }
 
 .stat-value {
-  font-family: var(--serif);
   font-size: var(--text-display);
   font-weight: 500;
-  font-variation-settings:
-    "opsz" 72,
-    "SOFT" 50;
   line-height: 1.1;
   letter-spacing: -0.02em;
   font-variant-numeric: lining-nums;
@@ -2385,13 +2367,8 @@ form.enhance-key input {
 }
 
 .reading-headline {
-  font-family: var(--serif);
   font-size: var(--text-display);
-  font-weight: 450;
-  font-variation-settings:
-    "opsz" 96,
-    "SOFT" 80,
-    "WONK" 1;
+  font-weight: 500;
   letter-spacing: -0.02em;
   line-height: 1.15;
   margin: var(--space-1) 0 -14px;
@@ -2448,9 +2425,8 @@ form.enhance-key input {
 }
 
 .now-body .stat-title {
-  font-family: var(--serif);
   font-size: var(--text-body);
-  font-weight: 550;
+  font-weight: 600;
 }
 
 .now-author {
@@ -2516,10 +2492,8 @@ form.enhance-key input {
 }
 
 .reading-section h3 {
-  font-family: var(--serif);
   font-size: var(--text-heading);
-  font-weight: 550;
-  font-variation-settings: "opsz" 36;
+  font-weight: 600;
   letter-spacing: -0.01em;
   margin: 0 0 var(--space-3);
 }
@@ -2959,7 +2933,7 @@ form.enhance-key input {
   border-bottom: 1px solid var(--border);
 }
 .review-line {
-  font-weight: 550;
+  font-weight: 600;
 }
 .review-summary .warning .review-line {
   color: var(--warn);

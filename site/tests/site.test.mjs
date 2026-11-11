@@ -34,17 +34,17 @@ const downloads = (html) =>
 
 test('the download button fetches the newest stable release, not a beta', () => {
   assert.deepEqual(downloads(page('index.html')), [
-    'https://example.test/Parallax_0.2.0_universal.dmg',
+    'https://example.test/Parallax_0.1.1_universal.dmg',
   ]);
-  assert.match(page('index.html'), /Version 0\.2\.0 · 48\.2 MB/);
+  assert.match(page('index.html'), /Version 0\.1\.1 · 48\.2 MB/);
   assert.deepEqual(downloads(page('download/index.html')), [
-    'https://example.test/Parallax_0.2.0_universal.dmg',
+    'https://example.test/Parallax_0.1.1_universal.dmg',
   ]);
 });
 
 test('the download page lists every published version, newest first', () => {
   const html = page('download/index.html');
-  const order = ['v0.3.0-beta.1', 'v0.2.0', 'v0.1.0'].map((tag) => html.indexOf(`id="${tag}"`));
+  const order = ['v0.2.0-beta.1', 'v0.1.1', 'v0.1.0'].map((tag) => html.indexOf(`id="${tag}"`));
   assert.ok(
     order.every((i) => i > 0),
     'every release has an entry',
@@ -53,7 +53,7 @@ test('the download page lists every published version, newest first', () => {
     [...order].sort((a, b) => a - b),
     order,
   );
-  assert.ok(!html.includes('id="v0.4.0"'), 'drafts stay hidden');
+  assert.ok(!html.includes('id="v0.2.0"'), 'drafts stay hidden');
   assert.match(html, /cli-arm\.tar\.gz/);
   assert.match(html, /<strong>Check for Updates…<\/strong>/);
 });

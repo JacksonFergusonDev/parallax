@@ -195,9 +195,9 @@ mod tests {
 
     #[test]
     fn only_automatic_checks_respect_a_skipped_version() {
-        assert!(skipped(Some("0.2.0"), "0.2.0", false));
-        assert!(!skipped(Some("0.2.0"), "0.2.0", true));
-        assert!(!skipped(Some("0.2.0"), "0.3.0", false));
-        assert!(!skipped(None, "0.2.0", false));
+        assert!(skipped(Some("0.1.1"), "0.1.1", false));
+        assert!(!skipped(Some("0.1.1"), "0.1.1", true));
+        assert!(!skipped(Some("0.1.1"), "0.1.2", false));
+        assert!(!skipped(None, "0.1.1", false));
     }
 }

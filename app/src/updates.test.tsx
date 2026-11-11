@@ -18,7 +18,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-const update: UpdateInfo = { version: "0.2.0", current: "0.1.0", notes: null };
+const update: UpdateInfo = { version: "0.1.1", current: "0.1.0", notes: null };
 
 describe("downloadedShare", () => {
   it("is the fraction downloaded, or null without a size", () => {
@@ -64,7 +64,7 @@ describe("UpdateNotice", () => {
 
   it("offers the new version and installs on request", () => {
     const calls = show({ stage: "offered" });
-    expect(container.textContent).toContain("Parallax 0.2.0 is available");
+    expect(container.textContent).toContain("Parallax 0.1.1 is available");
     expect(container.textContent).toContain("You have 0.1.0.");
     act(() => button("Install and Restart").click());
     expect(calls.install).toBe(1);

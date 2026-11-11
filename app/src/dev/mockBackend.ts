@@ -1392,7 +1392,7 @@ export function installMockBackend(label = "main") {
         case "update_available":
           return params.has("update") && !settings.has("updates_skipped")
             ? {
-                version: "0.2.0",
+                version: "0.1.1",
                 current: "0.1.0",
                 notes: "Adds Check for Updates… to the Parallax menu.",
               }

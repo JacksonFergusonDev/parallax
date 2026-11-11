@@ -85,3 +85,14 @@ def test_bump_refuses_a_version_already_released(root: Path) -> None:
 def test_prerelease_versions_are_allowed(root: Path) -> None:
     release.bump("0.2.0-beta.1", root)
     assert release.check("v0.2.0-beta.1", root) == "0.2.0-beta.1"
+
+
+def test_first_release_keeps_the_manifests_version(root: Path) -> None:
+    # The repository starts at 0.1.0, so the first `just release 0.1.0` only
+    # dates the changelog.
+    (root / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## Unreleased\n\n- The first release.\n"
+    )
+    release.bump("0.1.0", root, datetime.date(2026, 12, 1))
+    assert release.check("v0.1.0", root) == "0.1.0"
+    assert release.notes("0.1.0", root) == "- The first release."
