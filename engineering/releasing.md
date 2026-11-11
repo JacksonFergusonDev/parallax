@@ -10,6 +10,8 @@ A release is one pushed tag. [`.github/workflows/release.yml`](../.github/workfl
 
 Add `--dry-run` to stop after preflight. Add `--no-push` to stop after committing and tagging. The pre-push checks run when you push the commit and tag.
 
+The release always updates `CHANGELOG.md`, even when the manifests already have the requested version. The changelog change triggers the Markdown and Ruff checks at commit time and the full Rust, app, site, and Python build, lint, type and test checks configured for pre-push. The pnpm lockfile hooks run when their respective package manifest or lockfile changes.
+
 To check a release builds without publishing anything, run the Release workflow by hand from the Actions tab, or `gh workflow run release.yml --ref BRANCH`. That dry run checks the manifests agree, reruns CI, builds and signs the app and both CLIs, and keeps `latest.json` and the Homebrew formula as workflow artifacts. It creates no release, deploys no site and pushes nothing to the tap. Pull requests that change the release workflow or its scripts get a dry run automatically. GitHub only offers the manual run for workflows on `main`.
 
 A version with a hyphen, such as `1.3.0-beta.1`, is published as a prerelease. It appears on the site's version list, but the download button, the in-app updater and Homebrew keep offering the newest stable version.

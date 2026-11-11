@@ -82,7 +82,8 @@ repos:
         pass_filenames: false
         stages: [pre-push]
 
-  # Project-wide checks use the same commands as CI.
+  # Project-wide checks use the same commands as CI. A release always changes
+  # CHANGELOG.md, even if the manifests already have the requested version.
   - repo: local
     hooks:
       - id: app-build
@@ -114,7 +115,7 @@ repos:
         name: eslint
         entry: pnpm --dir app lint
         language: system
-        files: ^app/
+        files: ^(app/|CHANGELOG\.md$)
         exclude: ^app/src-tauri/
         pass_filenames: false
         stages: [pre-push]
@@ -131,7 +132,7 @@ repos:
         name: site type check
         entry: pnpm --dir site check
         language: system
-        files: ^site/
+        files: ^(site/|CHANGELOG\.md$)
         pass_filenames: false
         stages: [pre-push]
 
@@ -144,7 +145,8 @@ repos:
         always_run: true
         stages: [pre-push]
 
-  # Python development scripts (tools pinned by scripts/uv.lock)
+  # Python development scripts (tools pinned by scripts/uv.lock).
+  # Changelog changes also trigger the Python checks used for releases.
   - repo: local
     hooks:
       - id: uv-lock-check
@@ -158,21 +160,21 @@ repos:
         name: ruff format check
         entry: uv run --directory scripts --locked ruff format --check .
         language: system
-        files: ^scripts/(.*\.py|pyproject\.toml|uv\.lock|\.python-version)$
+        files: ^(CHANGELOG\.md|scripts/(.*\.py|pyproject\.toml|uv\.lock|\.python-version))$
         pass_filenames: false
 
       - id: ruff-check
         name: ruff check
         entry: uv run --directory scripts --locked ruff check .
         language: system
-        files: ^scripts/(.*\.py|pyproject\.toml|uv\.lock|\.python-version)$
+        files: ^(CHANGELOG\.md|scripts/(.*\.py|pyproject\.toml|uv\.lock|\.python-version))$
         pass_filenames: false
 
       - id: mypy
         name: mypy
         entry: uv run --directory scripts --locked mypy
         language: system
-        files: ^scripts/(.*\.py|pyproject\.toml|uv\.lock|\.python-version)$
+        files: ^(CHANGELOG\.md|scripts/(.*\.py|pyproject\.toml|uv\.lock|\.python-version))$
         pass_filenames: false
         stages: [pre-push]
 
@@ -180,7 +182,7 @@ repos:
         name: pytest
         entry: uv run --directory scripts --locked pytest -q
         language: system
-        files: ^scripts/(.*\.py|pyproject\.toml|uv\.lock|\.python-version)$
+        files: ^(CHANGELOG\.md|scripts/(.*\.py|pyproject\.toml|uv\.lock|\.python-version))$
         pass_filenames: false
         stages: [pre-push]
 
