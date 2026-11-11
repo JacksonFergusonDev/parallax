@@ -88,9 +88,9 @@ site-snapshot: sync
 site: sync
     pnpm --dir site dev
 
-# Release VERSION: check main is clean and current, run CI, bump, commit, tag and push both (--dry-run, --no-push)
+# Release VERSION: check main is clean and current, bump, commit, tag and push both (--dry-run, --no-push)
 release version *flags:
-    {{ script_python }} release.py release {{ version }} --pre-flight "just ci" {{ flags }}
+    {{ script_python }} release.py release {{ version }} {{ flags }}
 
 # Run the standard local checks before pushing
 ci: fmt-check lint typecheck test check-site

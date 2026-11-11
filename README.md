@@ -56,7 +56,7 @@ When upgrading, Parallax moves the existing library and backups into the new app
 
 Requires Rust (stable), Node and pnpm, [just](https://github.com/casey/just), and [uv](https://docs.astral.sh/uv/).
 
-Run `prek install` in a fresh checkout to enable the repository's Git hooks.
+Run `just sync` to set up the checkout and `prek install` to enable the Git hooks. Commits run formatting and quick checks on changed files. Pushes run the slower builds, linters, type checks and tests. Run `just sync` after changing dependencies so the push hooks can verify the pnpm lockfiles offline.
 
 ```bash
 just          # list available recipes
@@ -64,7 +64,7 @@ just sync     # native kepubify sidecar and locked UI dependencies
 just dev      # run the app with hot reload
 just dev-optimized # build and run it as a release behaves (slower to build, no hot reload)
 just check-scripts # Python formatting, lint, types and tests
-just ci       # formatting, lints, type checks and tests (run before committing)
+just ci       # run the local formatting, lint, type and test suite on demand
 just test-fat # extra tests that mount FAT32 disk images
 just test-reader # reader and Settings in a real macOS WebView (opens windows)
 just build    # macOS .app bundle
