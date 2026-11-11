@@ -9,7 +9,7 @@ default_stages:
 fail_fast: true
 
 # Third-party source, kept as published (see vendor/boko/VENDORED.md).
-exclude: ^vendor/
+exclude: ^(vendor/|site/public/app-snapshot/)
 
 repos:
   # Generic hooks

@@ -1,0 +1,155 @@
+---
+/**
+ * A laptop showing the app's library window. The window is the app's own
+ * markup and CSS, frozen by scripts/snapshot-app.mjs into
+ * public/app-snapshot/, shown in a sandboxed frame with no scripts, and
+ * scaled to the screen, so its text stays sharp at any size. The frame loads
+ * after the page, so the first screen paints as text. Decorative: the hero's
+ * text says what the app does.
+ */
+---
+
+<figure class="laptop" aria-hidden="true">
+  <div class="laptop-lid">
+    <div class="laptop-screen" data-laptop-screen>
+      <div class="laptop-window">
+        <div class="laptop-titlebar">
+          <span></span>
+          <span></span>
+          <span></span>
+          <p>Parallax</p>
+        </div>
+        <iframe
+          data-src="/app-snapshot/index.html"
+          title="The Parallax library window"
+          tabindex="-1"
+          sandbox="allow-same-origin"
+          scrolling="no"
+          width="1280"
+          height="772"
+        ></iframe>
+      </div>
+    </div>
+  </div>
+  <div class="laptop-base"></div>
+</figure>
+
+<script>
+  import { afterLoad } from 'house-style/js/field.js';
+
+  const screen = document.querySelector<HTMLElement>('[data-laptop-screen]');
+  const frame = screen?.querySelector('iframe');
+  if (screen && frame) {
+    // The window is drawn at the app's 1280-pixel width and scaled to fit.
+    new ResizeObserver(() => {
+      screen.style.setProperty('--scale', String(screen.clientWidth / 1280));
+    }).observe(screen);
+    afterLoad(() => {
+      frame.addEventListener('load', () => frame.classList.add('is-loaded'), { once: true });
+      frame.src = frame.dataset.src ?? '';
+    });
+  }
+</script>
+
+<style>
+  .laptop {
+    /* The app's dark theme, which the window shows: its background and title bar. */
+    --app-bg: #191c21;
+    --app-bar: #22262d;
+
+    margin: 0;
+  }
+  .laptop-lid {
+    padding: 2.4%;
+    border: 1px solid var(--line);
+    border-radius: 14px 14px 4px 4px;
+    background: #050607;
+  }
+  .laptop-screen {
+    --scale: 0.45;
+
+    position: relative;
+    aspect-ratio: 1280 / 800;
+    overflow: hidden;
+    border-radius: 3px;
+    background: var(--app-bg);
+  }
+  .laptop-window {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1280px;
+    height: 800px;
+    transform: scale(var(--scale));
+    transform-origin: 0 0;
+  }
+  .laptop-titlebar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    height: 28px;
+    padding: 0 12px;
+    border-bottom: 1px solid #000;
+    background: var(--app-bar);
+  }
+  .laptop-titlebar span {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #ff5f57;
+  }
+  .laptop-titlebar span:nth-child(2) {
+    background: #febc2e;
+  }
+  .laptop-titlebar span:nth-child(3) {
+    background: #28c840;
+  }
+  .laptop-titlebar p {
+    position: absolute;
+    left: 0;
+    right: 0;
+    margin: 0;
+    color: #b2ad9f;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+  }
+  .laptop iframe {
+    display: block;
+    width: 1280px;
+    height: 772px;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .laptop iframe.is-loaded {
+    opacity: 1;
+    transition: opacity 0.4s;
+  }
+  .laptop-base {
+    position: relative;
+    width: 112%;
+    height: 14px;
+    margin-left: -6%;
+    border: 1px solid var(--line);
+    border-radius: 2px 2px 12px 12px;
+    background: linear-gradient(var(--panel), #050607);
+  }
+  /* The notch you open the lid with. */
+  .laptop-base::before {
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    width: 16%;
+    height: 5px;
+    border-radius: 0 0 6px 6px;
+    background: #050607;
+    transform: translateX(-50%);
+    content: '';
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .laptop iframe.is-loaded {
+      transition: none;
+    }
+  }
+</style>

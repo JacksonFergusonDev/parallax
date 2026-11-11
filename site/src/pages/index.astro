@@ -7,18 +7,24 @@ import InstallCli from '../components/InstallCli.astro';
 import StarField from '../components/StarField.astro';
 import Base from '../layouts/Base.astro';
 import { links } from '../lib/site';
+import AppLaptop from '../components/AppLaptop.astro';
 ---
 
 <Base description="Parallax is a Mac app for reading books and comics and organising them on a Kobo. It converts books to KEPUB, fixes their metadata and covers, manages the Kobo's collections, and backs up the Kobo before every change.">
   <section class="hs-hero" aria-labelledby="hero-title">
     <StarField />
-    <h1 id="hero-title">Your books, your reader, your Kobo, in one library.</h1>
-    <p class="lede">
-      Parallax is a Mac app for reading books and comics and organising them on a Kobo. Drop in
-      EPUBs, DRM-free Kindle books or comic archives, tidy their details, read them on the Mac, and
-      send them to the Kobo as KEPUBs in the collections you choose.
-    </p>
-    <DownloadButton />
+    <div class="hero-layout">
+      <div class="hero-copy">
+        <h1 id="hero-title">Your books, your reader, your Kobo, in one library.</h1>
+        <p class="lede">
+          Parallax is a Mac app for reading books and comics and organising them on a Kobo. Drop in
+          EPUBs, DRM-free Kindle books or comic archives, tidy their details, read them on the Mac,
+          and send them to the Kobo as KEPUBs in the collections you choose.
+        </p>
+        <DownloadButton />
+      </div>
+      <AppLaptop />
+    </div>
     <JumpLinks
       jumps={[
         { label: 'Features', href: '#features' },

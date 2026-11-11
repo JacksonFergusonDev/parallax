@@ -95,6 +95,30 @@ kbd {
   font-size: var(--fs-ui);
 }
 
+/* The hero's text beside the laptop on wide screens, above it on narrow ones. */
+.hero-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 56px;
+  align-items: center;
+}
+/* Where the window has room, the laptop reaches past the content column. */
+@media (min-width: 1360px) {
+  .hero-layout .laptop {
+    width: calc(100% + 96px);
+  }
+}
+@media (max-width: 1100px) {
+  .hero-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 64px;
+  }
+  .hero-layout .laptop {
+    width: min(100%, 680px);
+    margin-inline: auto;
+  }
+}
+
 /* Sections */
 .section {
   padding: 95px 0 90px;
