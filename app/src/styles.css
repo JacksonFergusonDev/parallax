@@ -1510,6 +1510,7 @@ button.danger-fill {
 .shelf {
   all: unset;
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
@@ -3294,8 +3295,7 @@ button.icon {
 .view-toolbar button,
 .segmented button,
 .sidebar-foot button.link,
-.menu button,
-.shelf-list button {
+.menu button {
   min-height: var(--control-compact);
 }
 .modal {
