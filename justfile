@@ -88,15 +88,9 @@ site-snapshot: sync
 site: sync
     pnpm --dir site dev
 
-# Bump to VERSION, date the changelog, commit and tag; pushing the tag releases it
-release version: ci
-    {{ script_python }} release.py bump {{ version }}
-    cargo update --workspace --offline --quiet
-    {{ script_python }} release.py check v{{ version }}
-    git add Cargo.toml Cargo.lock app/package.json app/src-tauri/tauri.conf.json CHANGELOG.md
-    git commit -m "chore(release): v{{ version }}"
-    git tag -a v{{ version }} -m "Parallax {{ version }}"
-    printf "\n{{ green }}Tagged v{{ version }}.{{ nc }} Push to release it: git push origin HEAD v{{ version }}\n"
+# Release VERSION: check main is clean and current, run CI, bump, commit, tag and push both (--dry-run, --no-push)
+release version *flags:
+    {{ script_python }} release.py release {{ version }} --pre-flight "just ci" {{ flags }}
 
 # Run the standard local checks before pushing
 ci: fmt-check lint typecheck test check-site

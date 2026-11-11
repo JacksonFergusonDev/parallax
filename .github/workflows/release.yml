@@ -1,5 +1,5 @@
-# Releases Parallax when a version tag is pushed (`just release 1.2.3`, then
-# `git push origin HEAD v1.2.3`). It reruns CI on the tagged commit, builds a
+# Releases Parallax when a version tag is pushed (`just release 1.2.3` pushes
+# `main` and the tag together). It reruns CI on the tagged commit, builds a
 # universal Mac app and the CLI for each Mac architecture, publishes them as a
 # GitHub release with CHANGELOG.md's notes, then redeploys the site so its
 # download button names the new version, and updates the Homebrew formula.

@@ -5,8 +5,7 @@ A release is one pushed tag. [`.github/workflows/release.yml`](../.github/workfl
 ## Cutting a release
 
 1. Add what changed for users under **Unreleased** in [`CHANGELOG.md`](../CHANGELOG.md), as changes land. These notes become the GitHub release notes, the update banner's **What's New** and the site's version list, so write them for users, following house-style's writing rules.
-2. On an up-to-date `main`, run `just release 1.2.3`. It runs `just ci`, sets the version in `Cargo.toml`, `Cargo.lock`, `app/package.json` and `tauri.conf.json`, dates the changelog section, commits `chore(release): v1.2.3` and tags `v1.2.3`.
-3. Push both: `git push origin HEAD v1.2.3`.
+2. On `main`, run `just release 1.2.3`. It first checks, changing nothing, that the checkout is clean, matches `origin/main`, and that neither the changelog nor origin has the version yet, then runs `just ci`. Then it sets the version in `Cargo.toml`, `Cargo.lock`, `app/package.json` and `tauri.conf.json`, dates the changelog section, commits `chore(release): v1.2.3`, tags `v1.2.3`, and pushes `main` and the tag in one atomic push, which starts the release workflow. If any step fails or you interrupt it, it deletes the tag and resets to where it started. Add `--dry-run` to run only the checks, or `--no-push` to stop after tagging.
 
 A version with a hyphen, such as `1.3.0-beta.1`, is published as a prerelease. It appears on the site's version list, but the download button, the in-app updater and Homebrew keep offering the newest stable version.
 
