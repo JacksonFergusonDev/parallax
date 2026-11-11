@@ -11,6 +11,7 @@
 - An untested or read-only Kobo is explained once per model, in setup's Connect step or as a banner in the main window with **Don't Show Again**. `TESTED_MODELS` in `crates/device-kobo/src/support.rs` lists models with hardware results, and **About This Kobo…** shows whether hardware checks have been run on that model. Browser mock: `?untested` or `?readonly`.
 - Tuned Renovate to open weekly dependency PRs for manual review, group Tauri updates, and keep the scripts interpreter on Python 3.12 for Core ML tooling.
 - Adopted TypeScript 7 for builds and type-checking with the TypeScript 6 API for ESLint. Registered GitHub's `ubuntu-26.04-arm` label with actionlint until the tool supports it directly.
+- Added a theme-aware README wordmark, with editable branding SVGs and an Inkscape export script.
 - The interface uses house-style's DM Sans, and copy follows house-style's writing rules.
 - Added the site in `site/` (house-style, like Star Ground's), a tag-driven release workflow (universal Mac app, per-architecture CLI archives, GitHub release from CHANGELOG.md, site redeploy, Homebrew formula), and in-app update checks with signed updates. See [releasing](engineering/releasing.md).
 
