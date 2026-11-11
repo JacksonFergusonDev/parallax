@@ -32,7 +32,7 @@ defaults:
 jobs:
   verify:
     name: Check the tag and notes
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 5
     permissions:
       contents: read
@@ -232,7 +232,7 @@ jobs:
   publish:
     name: Publish the GitHub release
     needs: [ verify, app, cli ]
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 10
     permissions:
       contents: write
@@ -297,7 +297,7 @@ jobs:
     name: Update the Homebrew formula
     needs: [ verify, publish ]
     if: needs.verify.outputs.prerelease == 'false'
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 10
     permissions: {}
     env:
