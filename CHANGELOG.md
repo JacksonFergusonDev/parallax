@@ -4,6 +4,8 @@ What changed in each release of Parallax, for people using it. The release workf
 
 ## Unreleased
 
+## 0.1.0 (2026-11-11)
+
 - The first release: a library for books and comics, a reader for each, and sending to a Kobo as KEPUB with collections, series and reading progress.
 - Every change to the Kobo's database is backed up first, and **Revert changes…** goes back to any saved point.
 - Parallax checks for new versions and asks before installing one. **Check for Updates…** in the Parallax menu checks now.
