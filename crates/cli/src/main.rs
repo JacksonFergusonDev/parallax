@@ -36,7 +36,11 @@ use parallax_library::{ImportOutcome, Library, Rule, RuleKind};
 use serde::Serialize;
 
 #[derive(Parser)]
-#[command(name = "parallax-cli", version, about = "Parallax developer CLI")]
+#[command(
+    name = "parallax-cli",
+    version,
+    about = "Manage your Parallax library and Kobo from the terminal"
+)]
 struct Cli {
     /// Print JSON instead of a table.
     #[arg(long, global = true)]

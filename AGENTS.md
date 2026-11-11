@@ -21,6 +21,7 @@
 
 ## Writing conventions
 
+- Follow the Writing section of house-style's guidelines (`app/node_modules/house-style/GUIDELINES.md`, the release pinned in `app/package.json`) for UI copy, docs, release notes and the site. In-app copy is written for users, so say "you", lead with the answer, and use no em dashes.
 - Never hard-wrap Markdown. Write each paragraph and list item as a single line and let the editor soft-wrap. rumdl enforces this (`.rumdl.toml`) and its pre-commit hook joins wrapped lines automatically.
 
 ## Device work
@@ -33,3 +34,9 @@
 - Follow [the Parallax design system](engineering/design-system.md) and use `app/src/design/tokens.css` for shared type, color, spacing, control dimensions, radii, and motion. Do not introduce literal UI font sizes or inline typography overrides.
 - Keep the main window and reader controls cohesive; publisher content and cover artwork retain the documented exceptions.
 - Verify presentation at default and minimum window sizes; adapt layout instead of shrinking text. Keep the design contract tests in the standard verification path.
+
+## Site
+
+- `site/` is the Astro site at parallax.jacksonferguson.me. Unlike the app, it adopts house-style in full, as Star Ground's and jacksonferguson.me do: follow all of `site/node_modules/house-style/GUIDELINES.md` (the release pinned in `site/package.json`), use its tokens, shell, components and icons, and set only Parallax's gold accent in `site/src/styles/brand.css`.
+- The hero shows the app's real library window, frozen from the browser mock by `just site-snapshot` into `site/public/app-snapshot/`. Rerun it after visible changes to the library window. Its books are the public-domain showcase in `site/scripts/showcase/`; only add covers with the same terms.
+- The download button and the versions page read GitHub releases at build time (`site/src/lib/releases.ts`). Releases redeploy the site; never hard-code a version or download URL.

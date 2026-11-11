@@ -12,10 +12,12 @@
 - Tuned Renovate to open weekly dependency PRs for manual review, group Tauri updates, and keep the scripts interpreter on Python 3.12 for Core ML tooling.
 - Adopted TypeScript 7 for builds and type-checking with the TypeScript 6 API for ESLint. Registered GitHub's `ubuntu-26.04-arm` label with actionlint until the tool supports it directly.
 - Added a theme-aware README wordmark, with editable branding SVGs and an Inkscape export script.
+- The interface uses DM Sans only (house-style's), and copy follows house-style's writing rules.
+- Added the site in `site/` (house-style, like Star Ground's), a tag-driven release workflow (universal Mac app, per-architecture CLI archives, GitHub release from CHANGELOG.md, site redeploy, Homebrew formula), and in-app update checks with signed updates. See [releasing](engineering/releasing.md).
 
 ## Current
 
-- Preparing the first release. The engineering index consolidates contributor references and links to the pre-release research and plans in Git history. `docs/` holds user-facing material for the future Zensical site.
+- Preparing the first release. The update key, tap token and DNS record are in place. Before tagging v0.1.0: enable Pages with GitHub Actions, set its custom domain, and let `v*` tags deploy to the `github-pages` environment ([releasing](engineering/releasing.md)). Releases are signed ad hoc until there's a Developer ID. The engineering index consolidates contributor references and links to the pre-release research and plans in Git history. `docs/` holds user-facing material to bring onto the site.
 
 ## Unresolved
 
@@ -26,7 +28,7 @@
 ## Next
 
 - Run the outstanding release hardware checks and collect reports from additional Kobo models.
-- Set up the Zensical site from the user-facing pages in `docs/`.
+- Bring the user-facing pages in `docs/` onto the site. Add app screenshots to the site's landing page.
 - Kindle device support is deferred. Optional Hardcover metadata, Kobo position mapping, PDF comics, and additional comic processing remain future work.
 
 ## Postponed: Kobo compatibility check

@@ -1,0 +1,106 @@
+[
+  {
+    "title": "Babbitt",
+    "authors": ["Sinclair Lewis"],
+    "tags": ["Classics", "Satire"],
+    "cover": "babbitt.jpg",
+    "published": "1922"
+  },
+  {
+    "title": "Dark Princess",
+    "authors": ["W. E. B. Du Bois"],
+    "tags": ["Classics", "Romance"],
+    "cover": "dark-princess.jpg",
+    "published": "1928"
+  },
+  {
+    "title": "A Farewell to Arms",
+    "authors": ["Ernest Hemingway"],
+    "tags": ["Classics", "War"],
+    "cover": "a-farewell-to-arms.jpg",
+    "published": "1929"
+  },
+  {
+    "title": "Gentlemen Prefer Blondes",
+    "authors": ["Anita Loos"],
+    "tags": ["Comedy"],
+    "cover": "gentlemen-prefer-blondes.jpg",
+    "published": "1925"
+  },
+  {
+    "title": "The Great Gatsby",
+    "authors": ["F. Scott Fitzgerald"],
+    "tags": ["Classics"],
+    "cover": "the-great-gatsby.jpg",
+    "published": "1925",
+    "reading": 64
+  },
+  {
+    "title": "Main Street",
+    "authors": ["Sinclair Lewis"],
+    "tags": ["Classics"],
+    "cover": "main-street.jpg",
+    "published": "1920"
+  },
+  {
+    "title": "The Maltese Falcon",
+    "authors": ["Dashiell Hammett"],
+    "tags": ["Mystery", "Noir"],
+    "cover": "the-maltese-falcon.jpg",
+    "published": "1930",
+    "reading": 23
+  },
+  {
+    "title": "Metropolis",
+    "authors": ["Thea von Harbou"],
+    "tags": ["Science Fiction"],
+    "cover": "metropolis.jpg",
+    "published": "1927"
+  },
+  {
+    "title": "The Mysterious Affair at Styles",
+    "authors": ["Agatha Christie"],
+    "series": "Hercule Poirot",
+    "series_index": "1",
+    "tags": ["Mystery"],
+    "cover": "the-mysterious-affair-at-styles.jpg",
+    "published": "1920",
+    "reading": "finished"
+  },
+  {
+    "title": "Red Harvest",
+    "authors": ["Dashiell Hammett"],
+    "tags": ["Mystery", "Noir"],
+    "cover": "red-harvest.jpg",
+    "published": "1929"
+  },
+  {
+    "title": "The Sound and the Fury",
+    "authors": ["William Faulkner"],
+    "tags": ["Classics"],
+    "cover": "the-sound-and-the-fury.jpg",
+    "published": "1929"
+  },
+  {
+    "title": "The Sun Also Rises",
+    "authors": ["Ernest Hemingway"],
+    "tags": ["Classics"],
+    "cover": "the-sun-also-rises.jpg",
+    "published": "1926",
+    "reading": "finished"
+  },
+  {
+    "title": "This Side of Paradise",
+    "authors": ["F. Scott Fitzgerald"],
+    "tags": ["Classics"],
+    "cover": "this-side-of-paradise.jpg",
+    "published": "1920"
+  },
+  {
+    "title": "Vile Bodies",
+    "authors": ["Evelyn Waugh"],
+    "tags": ["Satire"],
+    "cover": "vile-bodies.jpg",
+    "published": "1930"
+  }
+]

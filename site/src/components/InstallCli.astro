@@ -1,0 +1,52 @@
+---
+/** The CLI's install box (house-style's install.css and copy-command.js). */
+import { links } from '../lib/site';
+
+const commands = [
+  { label: 'brew', command: 'brew install jacksonfergusondev/tap/parallax-cli' },
+  { label: 'cargo', command: `cargo install --locked --git ${links.github} parallax-cli` },
+];
+const [first] = commands;
+---
+
+<div class="install">
+  <div class="hs-install-header">
+    <span class="hs-install-label">Install the CLI</span>
+    <div class="hs-install-toggle" role="tablist" aria-label="Installation method">
+      {commands.map((c, i) => (
+        <button
+          type="button"
+          role="tab"
+          aria-selected={i === 0 ? 'true' : 'false'}
+          class:list={['hs-install-tab', { 'is-active': i === 0 }]}
+          aria-controls="cli-install"
+          data-command={c.command}
+        >
+          {c.label}
+        </button>
+      ))}
+    </div>
+  </div>
+  <div class="hs-install" id="cli-install" aria-label="Install command">
+    <code>{first!.command}</code>
+    <button
+      type="button"
+      class="hs-install-copy"
+      data-copy={first!.command}
+      aria-label="Copy install command"
+    >
+      Copy<span class="hs-install-copy-long"> command</span>
+    </button>
+  </div>
+</div>
+<p class="note">
+  Homebrew installs a prebuilt binary with kepubify beside it. Cargo builds from source and needs
+  <code>kepubify</code> on your <code>PATH</code> (or <code>PARALLAX_KEPUBIFY</code> set) to send
+  books.
+</p>
+
+<script>
+  import { initCopyCommands } from 'house-style/js/copy-command.js';
+
+  initCopyCommands();
+</script>

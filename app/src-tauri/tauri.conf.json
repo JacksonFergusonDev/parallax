@@ -50,6 +50,31 @@
     ],
     "externalBin": [
       "binaries/kepubify"
-    ]
+    ],
+    "macOS": {
+      "dmg": {
+        "background": "icons/dmg-background.tiff",
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        },
+        "appPosition": {
+          "x": 180,
+          "y": 196
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 196
+        }
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE5QTRGMzFDNjg4N0FFN0IKUldSN3JvZG9IUE9rR1ZGMmcxSDhVSXNIL0VlbFB3Z0ZvL3lkS3Q5WmNPd2JJN1pKdUE3SmtHUE0K",
+      "endpoints": [
+        "https://github.com/JacksonFergusonDev/parallax/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

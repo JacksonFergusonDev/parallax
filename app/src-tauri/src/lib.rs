@@ -40,6 +40,7 @@ mod e2e;
 mod menu;
 mod reader;
 mod settings;
+mod updates;
 
 /// Event carrying [`ImportProgress`] while series and genres are looked up.
 const ENHANCE_PROGRESS: &str = "enhance-progress";
@@ -1504,6 +1505,7 @@ pub fn run() {
     e2e::prepare(&mut context);
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         // Move the data before the window state plugin reads its saved layout.
         .plugin(
             tauri::plugin::Builder::<_, ()>::new("parallax-data")
@@ -1537,11 +1539,13 @@ pub fn run() {
             app.manage(reader::OpenBooks::default());
             settings::apply_theme(app.handle(), settings::AppTheme::saved(&app.state()));
             app.manage(menu::MenuState::default());
+            app.manage(updates::Pending::default());
             app.set_menu(menu::build(app.handle())?)?;
             app.on_menu_event(menu::on_event);
             #[cfg(feature = "e2e")]
             e2e::start(app);
             size_first_window(app)?;
+            updates::start(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1598,6 +1602,9 @@ pub fn run() {
             settings::reader_settings_get,
             settings::reader_settings_set,
             menu::menu_state,
+            updates::update_available,
+            updates::update_install,
+            updates::update_skip,
             menu::open_help,
             device_duplicates,
             dismiss_duplicates,

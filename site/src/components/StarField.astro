@@ -1,0 +1,28 @@
+---
+/**
+ * The hero's moving background (src/lib/starfield.ts). It uses house-style's
+ * field canvas and pause button, and starts once the page has loaded, so the
+ * first screen paints as text. Place it first inside `.hs-hero`.
+ */
+import Icon from 'house-style/astro/Icon.astro';
+---
+
+<canvas class="hs-field" aria-hidden="true" data-starfield></canvas>
+<button type="button" class="hs-motion" hidden>
+  <span data-hs-motion-label>Pause motion</span>
+  <Icon name="pause" class="hs-motion-pause" />
+  <Icon name="play" class="hs-motion-play" />
+</button>
+
+<script>
+  import { afterLoad } from 'house-style/js/field.js';
+  import { startStarfield } from '../lib/starfield';
+
+  const canvas = document.querySelector<HTMLCanvasElement>('[data-starfield]');
+  const button = canvas?.nextElementSibling;
+  if (canvas && button instanceof HTMLButtonElement) {
+    afterLoad(() => {
+      startStarfield(canvas, button);
+    });
+  }
+</script>

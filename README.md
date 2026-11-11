@@ -22,6 +22,22 @@ Import books, improve their metadata and covers, convert them to KEPUB, and mana
 
 Licensed under GPLv3. Device logic is ported from [calibre](https://calibre-ebook.com)'s Kobo driver; EPUB to KEPUB conversion uses [kepubify](https://pgaskin.net/kepubify/), and Amazon formats are read with [boko](https://github.com/zacharydenton/boko).
 
+## Installing it
+
+Download the app from [parallax.jacksonferguson.me](https://parallax.jacksonferguson.me), which also lists every earlier version. It runs on Apple silicon and Intel Macs, checks for new versions itself, and asks before installing one (**Parallax › Check for Updates…** checks now; Settings › General turns automatic checks off).
+
+The command-line companion installs with Homebrew:
+
+```bash
+brew install jacksonfergusondev/tap/parallax-cli
+```
+
+or builds from source with Cargo (sending books then needs `kepubify` on your `PATH`):
+
+```bash
+cargo install --locked --git https://github.com/JacksonFergusonDev/parallax parallax-cli
+```
+
 ## Using it
 
 1. Drop EPUBs, DRM-free Kindle books (AZW3, MOBI, AZW, PRC, KFX), comic archives (CBZ, CBR, CB7), or ZIP, RAR and 7z bundles of books onto the window (or **Add Books…**, ⌘O). Bundles can contain folders of books. Edit title, authors, series, tags and cover in the side panel. Parallax leaves the original files untouched.
@@ -62,7 +78,7 @@ CI builds and tests the frontend on Ubuntu. Apple silicon and Intel Macs run the
 
 `just dev` prompts before stopping processes that occupy Vite’s port (1420). Accepting retries app startup without repeating setup; declining or closing input leaves those processes running.
 
-`parallax-cli` is a command-line companion for development and scripting: `cargo run -p parallax-cli -- --help`. It shares the desktop app’s library and core operations.
+`parallax-cli` is a command-line companion for scripting: `cargo run -p parallax-cli -- --help`. It shares the desktop app’s library and core operations.
 
 The CLI uses `comfy-table` for device, book, collection, cover, rule and transfer-result tables; `console` for coloured status labels; and `indicatif` for transfer, Kobo-import and metadata-lookup progress bars on stderr. Redirected output uses plain tables and progress logs. Set `NO_COLOR=1` to disable colours; `--json` keeps existing JSON responses free of styling and suppresses progress.
 
@@ -72,7 +88,7 @@ cargo run -p parallax-cli -- library ls --json
 cargo run -p parallax-cli -- library enhance  # preview metadata proposals
 ```
 
-See the [engineering index](engineering/README.md) for the design system, architecture decisions, and hardware verification. The [maintainer handoff](PROGRESS.md) tracks current work and release checks.
+The site lives in `site/` (`just site` runs it, `just check-site` checks it). See [releasing](engineering/releasing.md) for cutting a release. See the [engineering index](engineering/README.md) for the design system, architecture decisions, and hardware verification. The [maintainer handoff](PROGRESS.md) tracks current work and release checks.
 
 ### README branding
 

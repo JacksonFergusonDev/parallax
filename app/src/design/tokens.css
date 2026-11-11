@@ -1,5 +1,7 @@
 /* Parallax's shared UI contract. See engineering/design-system.md. Book content and
    cover artwork have independent typography; these tokens describe the UI. */
+/* DM Sans, self-hosted from house-style, the type the Parallax site shares. */
+@import "house-style/css/fonts.css";
 :root {
   --art-type-9: 9px;
   --art-type-7: 7px;
@@ -12,8 +14,8 @@
   --text-label: 1.142857rem;
   --text-heading: 1.428571rem;
   --text-display: 1.714286rem;
-  --font-ui: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
-  --serif: "Fraunces Variable", "Iowan Old Style", Georgia, serif;
+  --font-ui:
+    "DM Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;

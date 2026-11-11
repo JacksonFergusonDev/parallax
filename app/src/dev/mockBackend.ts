@@ -164,6 +164,57 @@ const params = new URLSearchParams(location.search);
 const firstLaunch = params.has("setup");
 const bookTemplate = books[0];
 if (firstLaunch) books = [];
+
+/** A library the site's app snapshot injects (site/scripts/snapshot-app.mjs):
+ * public-domain first editions with their covers, in place of the sample. */
+interface ShowcaseBook {
+  title: string;
+  authors: string[];
+  series?: string;
+  series_index?: string;
+  tags: string[];
+  /** A data URL. */
+  cover: string;
+  published: string;
+  /** Percent read, or finished. */
+  reading?: number | "finished";
+}
+const showcase = (window as { __PARALLAX_SHOWCASE__?: ShowcaseBook[] })
+  .__PARALLAX_SHOWCASE__;
+if (showcase) {
+  books = showcase.map((b, i) => ({
+    ...bookTemplate,
+    id: i + 1,
+    title: b.title,
+    authors: b.authors,
+    series: b.series ?? null,
+    series_index: b.series_index ?? null,
+    tags: b.tags,
+    publisher: null,
+    published: `${b.published}-01-01T00:00:00+00:00`,
+    description: null,
+    identifiers: [],
+    words: 80_000 + ((i * 37_000) % 160_000),
+    pages: 260 + ((i * 130) % 520),
+    pages_estimated: false,
+    original_name: `${b.title}.epub`,
+    has_cover: true,
+    cover: b.cover,
+    contributors: [],
+    annotations: 0,
+    reading:
+      b.reading === undefined
+        ? null
+        : {
+            device_serial: "N000000000001",
+            status: b.reading === "finished" ? "finished" : "reading",
+            percent: b.reading === "finished" ? 100 : b.reading,
+            last_read: "2026-11-08T20:00:00Z",
+            time_spent_secs: 3600 * (i + 2),
+            seen_at: "2026-11-10T00:00:00Z",
+          },
+  }));
+}
 // `?kobo=later` connects the Kobo a few seconds in; `?kobo=none` never does.
 const koboFrom =
   params.get("kobo") === "none"
@@ -327,6 +378,7 @@ const SETTING_KEYS = [
   "kobo_series",
   "kobo_rules",
   "eject_after_send",
+  "updates_auto",
 ];
 
 /** `?theme=sepia` in the URL starts the mock with that theme. */
@@ -1335,6 +1387,25 @@ export function installMockBackend(label = "main") {
         case "open_metadata_source":
           window.open(a.url as string, "_blank", "noopener,noreferrer");
           return null;
+        // `?update` offers a newer version; installing it fails at the end,
+        // as the browser can't restart, so the banner's retry shows too.
+        case "update_available":
+          return params.has("update") && !settings.has("updates_skipped")
+            ? {
+                version: "0.1.1",
+                current: "0.1.0",
+                notes: "Adds Check for Updates… to the Parallax menu.",
+              }
+            : null;
+        case "update_install":
+          for (let downloaded = 0; downloaded <= 40; downloaded += 4) {
+            await emit("update-progress", { downloaded, total: 40 });
+            await sleep(150);
+          }
+          throw "the browser preview can't restart Parallax";
+        case "update_skip":
+          settings.set("updates_skipped", a.version as string);
+          return null;
         case "setting_get":
           return settings.get(a.key as string) ?? null;
         case "setting_set":
@@ -1460,6 +1531,9 @@ export function installMockBackend(label = "main") {
           await sleep(12);
           const book = books.find((b) => b.id === a.id);
           if (!book?.has_cover) return null;
+          // Showcase covers are scans of first editions, shown as sharp.
+          if (showcase)
+            return { width: 1400, height: 2100, quality: "excellent" };
           const height = [791, 1420, 2200][(a.id as number) % 3];
           return {
             width: Math.round(height * 0.66),

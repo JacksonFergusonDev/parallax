@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 400" width="660" height="400">
+  <!-- The disk image window's background (tauri.conf.json, bundle.macOS.dmg).
+       The app's dark ink and gold: Parallax sits at (180, 196), Applications
+       at (480, 196), and the icon's sight lines run from one to the other.
+       Finder draws the icon labels black in Light Mode and white in Dark
+       Mode, so each sits on a mid-tone plate that both read on.
+       Regenerate with the command in engineering/design-system.md. -->
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="48%" r="62%">
+      <stop offset="0" stop-color="#22262d"/>
+      <stop offset="1" stop-color="#191c21"/>
+    </radialGradient>
+    <linearGradient id="sight" x1="0" x2="1">
+      <stop offset="0" stop-color="#f5c568" stop-opacity="0"/>
+      <stop offset="0.25" stop-color="#f5c568" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#f5c568" stop-opacity="0.9"/>
+    </linearGradient>
+  </defs>
+  <rect width="660" height="400" fill="url(#glow)"/>
+
+  <!-- The icon's two offset observing arcs, large and faint behind the app. -->
+  <g fill="none" stroke="#f5c568" stroke-linecap="round">
+    <path d="M128 46 A186 186 0 0 0 128 346" stroke-width="2" opacity="0.10"/>
+    <path d="M176 46 A186 186 0 0 0 176 346" stroke-width="2" opacity="0.06"/>
+  </g>
+
+  <!-- A few fixed stars, as on the site. -->
+  <g fill="#f5c568">
+    <circle cx="566" cy="64" r="1.4" opacity="0.5"/>
+    <circle cx="612" cy="118" r="1" opacity="0.35"/>
+    <circle cx="530" cy="336" r="1.2" opacity="0.35"/>
+    <circle cx="84" cy="92" r="1" opacity="0.3"/>
+    <circle cx="44" cy="300" r="1.4" opacity="0.4"/>
+    <circle cx="346" cy="352" r="1" opacity="0.3"/>
+    <circle cx="420" cy="58" r="1" opacity="0.3"/>
+  </g>
+
+  <!-- Sight lines converging on the reference point, then the drop target. -->
+  <g fill="none" stroke="url(#sight)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M262 176 L388 196 L262 216" stroke-width="2.5"/>
+  </g>
+  <circle cx="388" cy="196" r="9" fill="#191c21"/>
+  <circle cx="388" cy="196" r="5.5" fill="#f5c568"/>
+  <circle cx="388" cy="196" r="2.2" fill="#fff" opacity="0.95"/>
+
+  <text x="330" y="64" text-anchor="middle" font-family="DM Sans" font-weight="500" font-size="24" letter-spacing="-0.4" fill="#f1ede4">Parallax</text>
+  <text x="330" y="90" text-anchor="middle" font-family="DM Sans" font-weight="400" font-size="14" fill="#b2ad9f">Drag Parallax into Applications to install it.</text>
+
+  <!-- Plates under Finder's labels: 4.5:1 or better for black and for white. -->
+  <rect x="112" y="265" width="136" height="32" rx="16" fill="#78746b"/>
+  <rect x="404" y="265" width="152" height="32" rx="16" fill="#78746b"/>
+</svg>

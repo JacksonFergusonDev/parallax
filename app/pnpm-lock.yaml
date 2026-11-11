@@ -166,9 +166,6 @@ importers:
 
   .:
     dependencies:
-      '@fontsource-variable/fraunces':
-        specifier: ^5.3.0
-        version: 5.3.0
       '@tauri-apps/api':
         specifier: ^2
         version: 2.12.4
@@ -178,6 +175,9 @@ importers:
       construct-style-sheets-polyfill:
         specifier: 3.1.0
         version: 3.1.0
+      house-style:
+        specifier: github:JacksonFergusonDev/house-style#v3.1.0
+        version: https://codeload.github.com/JacksonFergusonDev/house-style/tar.gz/e2513cae974a051c3a189f61bc8607265dc2fb5a
       lucide-react:
         specifier: ^1.68.0
         version: 1.70.0(@types/react@19.3.0)(react@19.3.1)
@@ -404,9 +404,6 @@ packages:
     peerDependenciesMeta:
       '@noble/hashes':
         optional: true
-
-  '@fontsource-variable/fraunces@5.3.0':
-    resolution: {integrity: sha512-9BYGySn4AHEJdgp9Z28tQ3X+laJMEOITXkQarZXeloWQZDq5oOvXJ3kDA8c7MGIfpogIaZfjrQBqmda8POOCKA==}
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -1102,6 +1099,10 @@ packages:
   hookified@2.2.0:
     resolution: {integrity: sha512-p/LgFzRN5FeoD3DLS6bkUapeye6E4SI6yJs6KetENd18S+FBthqYq2amJUWpt5z0EQwwHemidjY5OqJGEKm5uA==}
 
+  house-style@https://codeload.github.com/JacksonFergusonDev/house-style/tar.gz/e2513cae974a051c3a189f61bc8607265dc2fb5a:
+    resolution: {gitHosted: true, integrity: sha512-ddsmdFD2I5vma+Rtb+rceTUfLSG3Qw8H94bZpMkHDpfS3lkzseIdS7CoKuWcWcQJsI81oawjl2MhS0N8guTcHA==, tarball: https://codeload.github.com/JacksonFergusonDev/house-style/tar.gz/e2513cae974a051c3a189f61bc8607265dc2fb5a}
+    version: 3.1.0
+
   html-encoding-sniffer@7.0.0:
     resolution: {integrity: sha512-UikN5yr7xsCDAq87Or5or0PAlD3HJJOKVzM05az588WnpDJ4Ux7a2A53Qi6gofGg2/EtvF/H4hCi/TXfCW4Y6w==}
     engines: {node: ^22.13.0 || >=24.0.0}
@@ -1791,8 +1792,6 @@ snapshots:
 
   '@exodus/bytes@1.16.0': {}
 
-  '@fontsource-variable/fraunces@5.3.0': {}
-
   '@humanfs/core@0.19.2':
     dependencies:
       '@humanfs/types': 0.15.0
@@ -2358,6 +2357,8 @@ snapshots:
   hookified@1.15.1: {}
 
   hookified@2.2.0: {}
+
+  house-style@https://codeload.github.com/JacksonFergusonDev/house-style/tar.gz/e2513cae974a051c3a189f61bc8607265dc2fb5a: {}
 
   html-encoding-sniffer@7.0.0:
     dependencies:

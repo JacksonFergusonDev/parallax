@@ -169,6 +169,16 @@ export function GeneralPane({ values, set }: PaneProps) {
           }
         />
       </Row>
+      <Row label="Updates">
+        <Check
+          values={values}
+          set={set}
+          name="updates_auto"
+          hint="Parallax asks before installing anything. Check for Updates… in the Parallax menu checks now."
+        >
+          Check for updates automatically
+        </Check>
+      </Row>
     </>
   );
 }

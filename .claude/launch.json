@@ -4,8 +4,36 @@
     {
       "name": "ui-mock",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "app", "dev"],
+      "runtimeArgs": [
+        "--dir",
+        "app",
+        "dev"
+      ],
       "port": 1420
+    },
+    {
+      "name": "site",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "site",
+        "dev"
+      ],
+      "port": 4600
+    },
+    {
+      "name": "site-releases-fixture",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "PARALLAX_RELEASES_FIXTURE=tests/fixtures/releases.json",
+        "pnpm",
+        "--dir",
+        "site",
+        "dev",
+        "--port",
+        "4601"
+      ],
+      "port": 4601
     }
   ]
 }

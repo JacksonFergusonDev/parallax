@@ -52,10 +52,8 @@
 
 .setup-title {
   margin: 0;
-  font-family: var(--serif);
   font-size: var(--text-display);
-  font-weight: 550;
-  font-variation-settings: "opsz" 48;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
