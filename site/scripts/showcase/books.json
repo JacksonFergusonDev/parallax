@@ -1,110 +1,106 @@
 [
   {
-    "title": "Pride and Prejudice",
-    "authors": ["Jane Austen"],
+    "title": "Babbitt",
+    "authors": ["Sinclair Lewis"],
+    "tags": ["Classics", "Satire"],
+    "cover": "babbitt.jpg",
+    "published": "1922"
+  },
+  {
+    "title": "Dark Princess",
+    "authors": ["W. E. B. Du Bois"],
     "tags": ["Classics", "Romance"],
-    "cover": "pride-and-prejudice.jpg",
-    "published": "1813",
-    "reading": "finished"
+    "cover": "dark-princess.jpg",
+    "published": "1928"
   },
   {
-    "title": "Dracula",
-    "authors": ["Bram Stoker"],
-    "tags": ["Classics", "Horror"],
-    "cover": "dracula.jpg",
-    "published": "1897",
-    "reading": 64
+    "title": "A Farewell to Arms",
+    "authors": ["Ernest Hemingway"],
+    "tags": ["Classics", "War"],
+    "cover": "a-farewell-to-arms.jpg",
+    "published": "1929"
   },
   {
-    "title": "Frankenstein",
-    "authors": ["Mary Shelley"],
-    "tags": ["Classics", "Horror"],
-    "cover": "frankenstein.jpg",
-    "published": "1818"
-  },
-  {
-    "title": "Moby-Dick",
-    "authors": ["Herman Melville"],
-    "tags": ["Classics", "Adventure"],
-    "cover": "moby-dick.jpg",
-    "published": "1851",
-    "reading": 23
-  },
-  {
-    "title": "Jane Eyre",
-    "authors": ["Charlotte Brontë"],
-    "tags": ["Classics", "Romance"],
-    "cover": "jane-eyre.jpg",
-    "published": "1847"
-  },
-  {
-    "title": "A Study in Scarlet",
-    "authors": ["Arthur Conan Doyle"],
-    "series": "Sherlock Holmes",
-    "series_index": "1",
-    "tags": ["Mystery"],
-    "cover": "a-study-in-scarlet.jpg",
-    "published": "1887",
-    "reading": "finished"
-  },
-  {
-    "title": "The Sign of the Four",
-    "authors": ["Arthur Conan Doyle"],
-    "series": "Sherlock Holmes",
-    "series_index": "2",
-    "tags": ["Mystery"],
-    "cover": "the-sign-of-the-four.jpg",
-    "published": "1890"
-  },
-  {
-    "title": "The Adventures of Sherlock Holmes",
-    "authors": ["Arthur Conan Doyle"],
-    "series": "Sherlock Holmes",
-    "series_index": "3",
-    "tags": ["Mystery"],
-    "cover": "the-adventures-of-sherlock-holmes.jpg",
-    "published": "1892"
+    "title": "Gentlemen Prefer Blondes",
+    "authors": ["Anita Loos"],
+    "tags": ["Comedy"],
+    "cover": "gentlemen-prefer-blondes.jpg",
+    "published": "1925"
   },
   {
     "title": "The Great Gatsby",
     "authors": ["F. Scott Fitzgerald"],
     "tags": ["Classics"],
     "cover": "the-great-gatsby.jpg",
-    "published": "1925"
+    "published": "1925",
+    "reading": 64
   },
   {
-    "title": "Wuthering Heights",
-    "authors": ["Emily Brontë"],
-    "tags": ["Classics", "Romance"],
-    "cover": "wuthering-heights.jpg",
-    "published": "1847"
-  },
-  {
-    "title": "The Picture of Dorian Gray",
-    "authors": ["Oscar Wilde"],
+    "title": "Main Street",
+    "authors": ["Sinclair Lewis"],
     "tags": ["Classics"],
-    "cover": "the-picture-of-dorian-gray.jpg",
-    "published": "1890"
+    "cover": "main-street.jpg",
+    "published": "1920"
   },
   {
-    "title": "The Time Machine",
-    "authors": ["H. G. Wells"],
+    "title": "The Maltese Falcon",
+    "authors": ["Dashiell Hammett"],
+    "tags": ["Mystery", "Noir"],
+    "cover": "the-maltese-falcon.jpg",
+    "published": "1930",
+    "reading": 23
+  },
+  {
+    "title": "Metropolis",
+    "authors": ["Thea von Harbou"],
     "tags": ["Science Fiction"],
-    "cover": "the-time-machine.jpg",
-    "published": "1895"
+    "cover": "metropolis.jpg",
+    "published": "1927"
   },
   {
-    "title": "Little Women",
-    "authors": ["Louisa May Alcott"],
+    "title": "The Mysterious Affair at Styles",
+    "authors": ["Agatha Christie"],
+    "series": "Hercule Poirot",
+    "series_index": "1",
+    "tags": ["Mystery"],
+    "cover": "the-mysterious-affair-at-styles.jpg",
+    "published": "1920",
+    "reading": "finished"
+  },
+  {
+    "title": "Red Harvest",
+    "authors": ["Dashiell Hammett"],
+    "tags": ["Mystery", "Noir"],
+    "cover": "red-harvest.jpg",
+    "published": "1929"
+  },
+  {
+    "title": "The Sound and the Fury",
+    "authors": ["William Faulkner"],
     "tags": ["Classics"],
-    "cover": "little-women.jpg",
-    "published": "1868"
+    "cover": "the-sound-and-the-fury.jpg",
+    "published": "1929"
   },
   {
-    "title": "Alice's Adventures in Wonderland",
-    "authors": ["Lewis Carroll"],
-    "tags": ["Classics", "Fantasy"],
-    "cover": "alices-adventures-in-wonderland.jpg",
-    "published": "1865"
+    "title": "The Sun Also Rises",
+    "authors": ["Ernest Hemingway"],
+    "tags": ["Classics"],
+    "cover": "the-sun-also-rises.jpg",
+    "published": "1926",
+    "reading": "finished"
+  },
+  {
+    "title": "This Side of Paradise",
+    "authors": ["F. Scott Fitzgerald"],
+    "tags": ["Classics"],
+    "cover": "this-side-of-paradise.jpg",
+    "published": "1920"
+  },
+  {
+    "title": "Vile Bodies",
+    "authors": ["Evelyn Waugh"],
+    "tags": ["Satire"],
+    "cover": "vile-bodies.jpg",
+    "published": "1930"
   }
 ]

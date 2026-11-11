@@ -17,9 +17,10 @@ const SITE = new URL('..', import.meta.url).pathname;
 const APP = join(SITE, '../app');
 const OUT = join(SITE, 'public/app-snapshot');
 const PORT = 1437;
-// The app's default window, less the 28px title bar the site draws.
-const VIEWPORT = { width: 1280, height: 772 };
-const BOOK = process.argv[2] ?? 'Dracula';
+// The main window's default size (tauri.conf.json), which is its content:
+// the title bar the site draws sits above it, as macOS puts it.
+const VIEWPORT = { width: 1280, height: 900 };
+const BOOK = process.argv[2] ?? 'The Great Gatsby';
 const SHOWCASE = join(SITE, 'scripts/showcase');
 
 async function showcase() {
@@ -171,7 +172,14 @@ try {
   await page.locator('.card:visible', { hasText: BOOK }).first().click();
   await page.mouse.move(0, VIEWPORT.height - 1);
   await page.evaluate(() => document.fonts.ready);
-  await page.waitForTimeout(500);
+  // The library lazy-loads covers; load them all, so none are captured blank.
+  await page.evaluate(() => {
+    for (const img of document.images) img.loading = 'eager';
+  });
+  await page.waitForFunction(() =>
+    [...document.images].every((img) => img.complete && img.naturalWidth > 0),
+  );
+  await page.waitForTimeout(800);
   const { html, fonts, images } = await page.evaluate(serialize);
 
   await rm(OUT, { recursive: true, force: true });

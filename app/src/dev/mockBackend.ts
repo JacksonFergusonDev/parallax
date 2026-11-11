@@ -166,7 +166,7 @@ const bookTemplate = books[0];
 if (firstLaunch) books = [];
 
 /** A library the site's app snapshot injects (site/scripts/snapshot-app.mjs):
- * real public-domain books with their covers, in place of the sample. */
+ * public-domain first editions with their covers, in place of the sample. */
 interface ShowcaseBook {
   title: string;
   authors: string[];
@@ -190,7 +190,7 @@ if (showcase) {
     series: b.series ?? null,
     series_index: b.series_index ?? null,
     tags: b.tags,
-    publisher: "Standard Ebooks",
+    publisher: null,
     published: `${b.published}-01-01T00:00:00+00:00`,
     description: null,
     identifiers: [],
@@ -1531,7 +1531,7 @@ export function installMockBackend(label = "main") {
           await sleep(12);
           const book = books.find((b) => b.id === a.id);
           if (!book?.has_cover) return null;
-          // Standard Ebooks covers are 1400 × 2100.
+          // Showcase covers are scans of first editions, shown as sharp.
           if (showcase)
             return { width: 1400, height: 2100, quality: "excellent" };
           const height = [791, 1420, 2200][(a.id as number) % 3];

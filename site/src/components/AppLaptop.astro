@@ -1,0 +1,213 @@
+---
+/**
+ * A laptop showing Parallax as it opens: the main window at its default
+ * 1280 × 900 size, centred on a 1512 × 982 desktop (a 14-inch MacBook's
+ * default resolution) under the menu bar. The window is the app's own markup
+ * and CSS, frozen by scripts/snapshot-app.mjs into public/app-snapshot/,
+ * shown in a sandboxed frame with no scripts. Everything is drawn at those
+ * pixel sizes and scaled to fit, so it stays sharp at any size. The frame
+ * loads after the page, so the first screen paints as text. Decorative: the
+ * hero's text says what the app does.
+ */
+const menus = ['File', 'Edit', 'View', 'Library', 'Kobo', 'Book', 'Window', 'Help'];
+---
+
+<figure class="laptop" aria-hidden="true">
+  <div class="laptop-lid">
+    <div class="laptop-screen" data-laptop-screen>
+      <div class="laptop-desktop">
+        <div class="laptop-menubar">
+          <strong>Parallax</strong>
+          {menus.map((menu) => (
+            <span>{menu}</span>
+          ))}
+          <span class="laptop-clock">Tue 10 Nov 9:41</span>
+        </div>
+        <div class="laptop-window">
+          <div class="laptop-titlebar">
+            <i></i>
+            <i></i>
+            <i></i>
+            <p>Parallax</p>
+          </div>
+          <iframe
+            data-src="/app-snapshot/index.html"
+            title="The Parallax library window"
+            tabindex="-1"
+            sandbox="allow-same-origin"
+            width="1280"
+            height="900"
+          ></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="laptop-base"></div>
+</figure>
+
+<script>
+  import { afterLoad } from 'house-style/js/field.js';
+
+  const screen = document.querySelector<HTMLElement>('[data-laptop-screen]');
+  const frame = screen?.querySelector('iframe');
+  if (screen && frame) {
+    // The desktop is drawn at 1512 pixels wide and scaled to fit the screen.
+    new ResizeObserver(() => {
+      screen.style.setProperty('--scale', String(screen.clientWidth / 1512));
+    }).observe(screen);
+    afterLoad(() => {
+      frame.addEventListener('load', () => frame.classList.add('is-loaded'), { once: true });
+      frame.src = frame.dataset.src ?? '';
+    });
+  }
+</script>
+
+<style>
+  .laptop {
+    /* Depicted, not house colours: the app's dark theme, a Mac title bar and
+       menu bar, and a desktop in the icon's navy and gold. */
+    --app-bg: #191c21;
+    --app-bar: #2a2d33;
+    --desktop: #0f172a;
+    --desktop-glow: #f5c568;
+    --menubar-text: #f1ede4;
+    --bezel: #050607;
+
+    margin: 0;
+  }
+  .laptop-lid {
+    padding: 2.2%;
+    border: 1px solid var(--line);
+    border-radius: 16px 16px 4px 4px;
+    background: var(--bezel);
+  }
+  .laptop-screen {
+    --scale: 0.4;
+
+    position: relative;
+    aspect-ratio: 1512 / 982;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--desktop);
+  }
+  /* Everything below is drawn in the desktop's own pixels, then scaled. */
+  .laptop-desktop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1512px;
+    height: 982px;
+    background:
+      radial-gradient(
+        60% 70% at 85% 110%,
+        color-mix(in srgb, var(--desktop-glow) 28%, transparent),
+        transparent
+      ),
+      radial-gradient(
+        50% 60% at 0% -10%,
+        color-mix(in srgb, var(--desktop-glow) 12%, transparent),
+        transparent
+      ),
+      var(--desktop);
+    transform: scale(var(--scale));
+    transform-origin: 0 0;
+  }
+  .laptop-menubar {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    height: 24px;
+    padding: 0 16px;
+    background: rgb(0 0 0 / 35%);
+    color: var(--menubar-text);
+    font-size: 13px;
+  }
+  .laptop-menubar strong {
+    font-weight: 700;
+  }
+  .laptop-clock {
+    margin-left: auto;
+  }
+  /* Centred as Tauri's "center" places it: the 900-pixel content plus a 28-pixel title bar. */
+  .laptop-window {
+    position: absolute;
+    top: 39px;
+    left: 116px;
+    width: 1280px;
+    overflow: hidden;
+    border: 1px solid rgb(255 255 255 / 14%);
+    border-radius: 10px;
+    background: var(--app-bg);
+    box-shadow: 0 24px 70px rgb(0 0 0 / 55%);
+  }
+  .laptop-titlebar {
+    position: relative;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    height: 28px;
+    padding: 0 12px;
+    border-bottom: 1px solid #000;
+    background: var(--app-bar);
+  }
+  .laptop-titlebar i {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #ff5f57;
+  }
+  .laptop-titlebar i:nth-child(2) {
+    background: #febc2e;
+  }
+  .laptop-titlebar i:nth-child(3) {
+    background: #28c840;
+  }
+  .laptop-titlebar p {
+    position: absolute;
+    right: 0;
+    left: 0;
+    margin: 0;
+    color: #b2ad9f;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+  }
+  .laptop iframe {
+    display: block;
+    width: 1280px;
+    height: 900px;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .laptop iframe.is-loaded {
+    opacity: 1;
+    transition: opacity 0.4s;
+  }
+  .laptop-base {
+    position: relative;
+    width: 112%;
+    height: 14px;
+    margin-left: -6%;
+    border: 1px solid var(--line);
+    border-radius: 2px 2px 12px 12px;
+    background: linear-gradient(var(--panel), var(--bezel));
+  }
+  /* The notch you open the lid with. */
+  .laptop-base::before {
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    width: 16%;
+    height: 5px;
+    border-radius: 0 0 6px 6px;
+    background: var(--bezel);
+    transform: translateX(-50%);
+    content: '';
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .laptop iframe.is-loaded {
+      transition: none;
+    }
+  }
+</style>
