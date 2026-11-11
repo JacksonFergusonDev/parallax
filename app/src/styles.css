@@ -2318,7 +2318,7 @@ form.enhance-key input {
 /* Reading stats */
 
 .reading-scroll {
-  padding-top: var(--space-4);
+  padding-top: clamp(var(--space-6), 4vw, calc(2 * var(--space-6)));
 }
 
 /* Fills the window up to a comfortable reading width, centred beyond it. */
