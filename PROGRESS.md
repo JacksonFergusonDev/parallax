@@ -21,7 +21,7 @@
 
 ## Current
 
-- Preparing the first release. The update key, tap token and DNS record are in place. Before tagging v0.1.0: enable Pages with GitHub Actions, set its custom domain, and let `v*` tags deploy to the `github-pages` environment ([releasing](engineering/releasing.md)). Releases are signed ad hoc until there's a Developer ID. The engineering index consolidates contributor references and links to the pre-release research and plans in Git history. `docs/` holds user-facing material to bring onto the site.
+- Released 0.1.0: the DMG, update archive and CLI archives are on GitHub, the site lists it, and `brew install jacksonfergusondev/tap/parallax-cli` installs it. Next release: add a `v*` tag rule to the `github-pages` environment first, or the release's site redeploy is refused and has to be rerun from `main` ([releasing](engineering/releasing.md)). Releases are signed ad hoc until there's a Developer ID. The engineering index consolidates contributor references and links to the pre-release research and plans in Git history. `docs/` holds user-facing material to bring onto the site.
 
 ## Unresolved
 
