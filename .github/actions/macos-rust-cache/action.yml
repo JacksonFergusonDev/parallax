@@ -18,8 +18,9 @@ runs:
         RUST_VERSION: ${{ inputs.rust-version }}
         RUST_TARGET: ${{ inputs.target }}
       run: |
-        prefix="macos-target-v1-$RUST_TARGET-$GITHUB_JOB-$ImageVersion-$RUST_VERSION-$(git hash-object Cargo.lock)-"
-        echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+        environment="macos-target-v1-$RUST_TARGET-$GITHUB_JOB-$ImageVersion-$RUST_VERSION-"
+        echo "environment=$environment" >> "$GITHUB_OUTPUT"
+        echo "prefix=$environment$(git hash-object Cargo.lock)-" >> "$GITHUB_OUTPUT"
         echo "tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
 
     - name: Restore full Cargo target
@@ -31,7 +32,11 @@ runs:
           ~/.cargo/registry/
           ~/.cargo/git/
         key: ${{ steps.key.outputs.prefix }}${{ steps.key.outputs.tree }}
-        restore-keys: ${{ steps.key.outputs.prefix }}
+        # Prefer the same lockfile. After dependency or version changes,
+        # Cargo can still reuse crates with matching fingerprints.
+        restore-keys: |
+          ${{ steps.key.outputs.prefix }}
+          ${{ steps.key.outputs.environment }}
 
     # Seed the first full archive from the old dependency cache when available.
     - name: Restore dependency cache on a full cache miss

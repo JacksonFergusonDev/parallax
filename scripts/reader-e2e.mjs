@@ -114,13 +114,31 @@ const clickText = (selector, text) =>
 
 const everySection = [0, 1, 2, 3].map((i) => `${view}.goTo(${i})`);
 
-/** Searches through the reader's own panel, then picks the first match. */
-const searchFor = (text) => [
-  `document.getElementById('find').click();` +
-    `document.getElementById('query').value = ${JSON.stringify(text)};` +
-    `document.querySelector('#search form').requestSubmit()`,
-  `document.querySelector('#results button').click()`,
-];
+// The reader can still be opening when the harness sends its first script.
+// Wait for the footer to show a location, then wait for search to find a
+// result before clicking. Opening, navigation and search share one budget.
+const SEARCH_WAIT_SECS = 30;
+function searchFor(text, sections = []) {
+  return [`void (async () => {
+    const deadline = performance.now() + ${(SEARCH_WAIT_SECS - 4) * 1000};
+    async function waitFor(find, description) {
+      while (performance.now() < deadline) {
+        const result = find();
+        if (result) return result;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      throw new Error('Timed out waiting for ' + description);
+    }
+    await waitFor(() => document.getElementById('progress')?.textContent, 'the reader');
+    const book = ${view};
+    for (const section of ${JSON.stringify(sections)}) await book.goTo(section);
+    document.getElementById('find').click();
+    document.getElementById('query').value = ${JSON.stringify(text)};
+    document.querySelector('#search form').requestSubmit();
+    const result = await waitFor(() => document.querySelector('#results button'), 'a search result');
+    result.click();
+  })().catch(console.error)`];
+}
 
 before(async () => {
   // READER_E2E_NO_BUILD=1 reuses the last build, when only the test changed.
@@ -172,12 +190,14 @@ scenario("epub", "a hostile book runs no scripts and reaches no network", async 
   requests = [];
   // Search reads every section off screen as well as showing them, and lands
   // on the last one.
-  await read(ids.Hostile, [...everySection.slice(0, 3), ...searchFor("Last")]);
+  await read(ids.Hostile, searchFor("Last", [0, 1, 2]), {
+    PARALLAX_E2E_SECS: String(SEARCH_WAIT_SECS),
+  });
   assert.deepEqual(requests, [], "the book reached the network");
   assert.equal(readerSettings(), null, "a script in the book ran");
   assert.equal(query("SELECT id FROM books").length, 2, "a book was removed");
   // It was really shown: walking to the last section saved a position there.
-  assert.equal(position(ids.Hostile)?.href, "c3.xhtml");
+  assert.equal(position(ids.Hostile)?.href, "c3.xhtml", "the reader did not save the final section");
 });
 
 scenario("epub", "control: with the CSP loosened, the same scripts are caught", async () => {
@@ -208,7 +228,9 @@ scenario("epub", "reopening returns to the same place after the text reflows", a
 });
 
 scenario("epub", "searching for a line goes to it", async () => {
-  await read(ids.Long, searchFor("Paragraph 4.7."));
+  await read(ids.Long, searchFor("Paragraph 4.7."), {
+    PARALLAX_E2E_SECS: String(SEARCH_WAIT_SECS),
+  });
   const found = position(ids.Long);
   assert.equal(found?.href, "c3.xhtml", "search didn't go to chapter 4");
   // The saved place is the page shown, as a range of the body's children.

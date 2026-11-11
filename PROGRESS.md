@@ -14,6 +14,8 @@
 - Added a theme-aware README wordmark, with editable branding SVGs and an Inkscape export script.
 - The interface uses DM Sans only (house-style's), and copy follows house-style's writing rules.
 - Added the site in `site/` (house-style, like Star Ground's), a tag-driven release workflow (universal Mac app, per-architecture CLI archives, GitHub release from CHANGELOG.md, site redeploy, Homebrew formula), and in-app update checks with signed updates. See [releasing](engineering/releasing.md).
+- Release packaging runs alongside CI, with publishing gated on both. The macOS CI cache can reuse compiled dependencies across lockfile changes on the same runner image and Rust toolchain.
+- The WKWebView search scenarios wait for the reader to open and for a search result before navigating, so a slow launch or search can't skip those steps.
 
 ## Current
 

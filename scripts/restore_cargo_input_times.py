@@ -43,7 +43,12 @@ def restore_tauri_inputs(paths: set[Path], reused: set[Path]) -> None:
         os.utime(CAPABILITIES, ns=(timestamp.st_atime_ns, timestamp.st_mtime_ns))
 
     saved = TAURI_INPUTS / "permissions"
-    generator_inputs = {DESKTOP / "build.rs", DESKTOP / "Cargo.toml"}
+    # The lockfile can change the version of Tauri's permission generator.
+    generator_inputs = {
+        DESKTOP / "build.rs",
+        DESKTOP / "Cargo.toml",
+        Path("Cargo.lock"),
+    }
     if (
         saved.is_dir()
         and generator_inputs <= reused

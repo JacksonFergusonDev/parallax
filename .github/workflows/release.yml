@@ -114,7 +114,7 @@ jobs:
   # browsers can't reliably tell the two kinds of Mac apart.
   app:
     name: Build the Mac app
-    needs: [ verify, ci ]
+    needs: verify
     runs-on: macos-26
     timeout-minutes: 90
     permissions:
@@ -220,7 +220,7 @@ jobs:
 
   cli:
     name: Build the CLI / ${{ matrix.target }}
-    needs: [ verify, ci ]
+    needs: verify
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     permissions:
@@ -278,7 +278,7 @@ jobs:
   # uploads them as an artifact instead of publishing.
   publish:
     name: Publish the GitHub release
-    needs: [ verify, app, cli ]
+    needs: [ verify, ci, app, cli ]
     runs-on: ubuntu-26.04-arm
     timeout-minutes: 10
     permissions:

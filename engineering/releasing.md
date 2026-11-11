@@ -1,6 +1,6 @@
 # Releasing Parallax
 
-A release is one pushed tag. [`.github/workflows/release.yml`](../.github/workflows/release.yml) reruns CI on the tagged commit, builds the app and the CLI, publishes a GitHub release, redeploys [the site](../site/) and updates the Homebrew formula. Nothing about a version is edited by hand outside `CHANGELOG.md`.
+A release is one pushed tag. [`.github/workflows/release.yml`](../.github/workflows/release.yml) reruns CI on the tagged commit while building the app and CLI. Once all three pass, it publishes a GitHub release, redeploys [the site](../site/) and updates the Homebrew formula. Nothing about a version is edited by hand outside `CHANGELOG.md`.
 
 ## Cutting a release
 
