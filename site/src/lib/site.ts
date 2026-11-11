@@ -11,3 +11,9 @@ export const links = {
   email: 'mailto:jackson.ferguson0@gmail.com',
   download: '/download/',
 } as const;
+
+// Whether releases are notarized by Apple. Until they are, macOS blocks the
+// first open and the download page explains how to allow it. Set this to true
+// once the release workflow has the Developer ID secrets
+// (engineering/releasing.md).
+export const notarized = false;

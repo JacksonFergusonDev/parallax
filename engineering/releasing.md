@@ -42,7 +42,7 @@ Keep a copy of the private key in a password manager. Every installed copy of Pa
 
 ### Developer ID signing
 
-Signing needs an Apple Developer Program membership. Create a **Developer ID Application** certificate, export it with its private key from Keychain Access as a `.p12`, then store `base64 -i cert.p12 | gh secret set APPLE_CERTIFICATE`, its export password as `APPLE_CERTIFICATE_PASSWORD`, and the identity name (`Developer ID Application: Name (TEAMID)`) as `APPLE_SIGNING_IDENTITY`. Tauri imports it into a temporary keychain, signs the app, the kepubify sidecar and the disk image, and notarizes when the `APPLE_ID` secrets are set.
+Signing needs an Apple Developer Program membership. Create a **Developer ID Application** certificate, export it with its private key from Keychain Access as a `.p12`, then store `base64 -i cert.p12 | gh secret set APPLE_CERTIFICATE`, its export password as `APPLE_CERTIFICATE_PASSWORD`, and the identity name (`Developer ID Application: Name (TEAMID)`) as `APPLE_SIGNING_IDENTITY`. Tauri imports it into a temporary keychain, signs the app, the kepubify sidecar and the disk image, and notarizes when the `APPLE_ID` secrets are set. Until then, releases are signed ad hoc and the site's download page shows how to open an app Apple hasn't notarized. Once releases are notarized, set `notarized` to `true` in `site/src/lib/site.ts` to remove those steps.
 
 ## The site
 

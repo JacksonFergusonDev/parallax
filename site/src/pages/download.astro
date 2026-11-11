@@ -5,7 +5,7 @@ import { marked } from 'marked';
 import DownloadButton from '../components/DownloadButton.astro';
 import Base from '../layouts/Base.astro';
 import { formatDate, formatSize, getReleases, latest } from '../lib/releases';
-import { links } from '../lib/site';
+import { links, notarized } from '../lib/site';
 
 const releases = await getReleases();
 const newest = latest(releases);
@@ -28,8 +28,46 @@ const cliTargets = [
     <DownloadButton versions={false} />
   </section>
 
+  {!notarized && (
+    <section id="first-open" class="hs-grid section" aria-labelledby="first-open-title">
+      <SectionMarker number={1} label="First open" />
+      <h2 id="first-open-title">Allow Parallax once, the first time you open it.</h2>
+      <p class="section-lede">
+        Parallax isn't notarized by Apple yet, so macOS can't check it and blocks it the first time.
+        You confirm it once in System Settings. Updates install without asking again.
+      </p>
+      <ol class="steps">
+        <li>
+          <h3>Install it</h3>
+          <p>Open the downloaded disk image and drag Parallax into Applications.</p>
+        </li>
+        <li>
+          <h3>Try to open it</h3>
+          <p>
+            Open Parallax from Applications. macOS says it couldn't verify it. Choose{' '}
+            <strong>Done</strong>, not Move to Trash.
+          </p>
+        </li>
+        <li>
+          <h3>Allow it in System Settings</h3>
+          <p>
+            Open <strong>System Settings › Privacy &amp; Security</strong>, scroll to Security, and
+            choose <strong>Open Anyway</strong> next to the message about Parallax.
+          </p>
+        </li>
+        <li>
+          <h3>Open it</h3>
+          <p>
+            Choose <strong>Open Anyway</strong> again and enter your password or use Touch ID. From
+            then on Parallax opens like any other app.
+          </p>
+        </li>
+      </ol>
+    </section>
+  )}
+
   <section id="versions" class="hs-grid section" aria-labelledby="versions-title">
-    <SectionMarker number={1} label="Versions" />
+    <SectionMarker number={notarized ? 1 : 2} label="Versions" />
     <h2 id="versions-title">Every release, with what changed.</h2>
     {releases.length === 0 ? (
       <p class="section-lede">

@@ -84,3 +84,11 @@ test('the app snapshot is static and complete', () => {
   }
   assert.match(page('index.html'), /data-src="\/app-snapshot\/index\.html"/);
 });
+
+test('the download page explains how to open an app Apple has not notarized', () => {
+  const html = page('download/index.html');
+  assert.match(html, /id="first-open"/);
+  assert.match(html, /Privacy &amp; Security/);
+  assert.match(html, /Choose <strong>Done<\/strong>/);
+  assert.ok(html.indexOf('id="first-open"') < html.indexOf('id="versions"'));
+});
