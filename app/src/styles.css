@@ -1618,7 +1618,13 @@ button.link.danger {
 }
 
 .library-toolbar .view-toolbar {
-  padding: var(--space-3) var(--space-3);
+  padding: var(--space-1) var(--space-3);
+}
+
+.library-toolbar .group-series,
+.library-toolbar .view-controls .segmented button,
+.library-toolbar .menu-root > button {
+  padding: var(--space-1) var(--space-2);
 }
 
 .library-toolbar .filter-bar {
@@ -1630,8 +1636,22 @@ button.link.danger {
   margin-left: auto;
 }
 
+.library-toolbar .sort-select {
+  min-height: var(--control-compact);
+}
+
+.library-toolbar .view-controls .segmented {
+  gap: var(--space-1);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.library-toolbar .view-controls .segmented button.active {
+  background: var(--sunken);
+}
+
 .library-toolbar .menu-root > button {
-  padding: var(--space-1) var(--space-3);
   font-size: var(--text-small);
   background: transparent;
   border-color: transparent;
