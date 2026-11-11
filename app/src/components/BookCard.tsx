@@ -45,8 +45,8 @@ export const BookCard = memo(function BookCard({
           <img
             src={src}
             alt=""
-            loading="lazy"
-            decoding="async"
+            loading="eager"
+            decoding="sync"
             draggable={false}
           />
         ) : (

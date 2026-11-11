@@ -19,6 +19,7 @@
 - Moved slower checks to prek's pre-push stage, added app build and site checks to the hooks, and limited release preflight to release eligibility. Changelog-only releases still trigger the project-wide lint, type and test checks.
 - Compact controls in the Library toolbar and filter row free up vertical space for books. The site's library snapshot reflects the new layout.
 - The Reading tab has more space below the toolbar, with a smaller inset at narrow window widths.
+- Library and On Kobo request thumbnails when cards and rows mount so covers are ready sooner during fast scrolling.
 
 ## Current
 

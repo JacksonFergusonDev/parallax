@@ -39,8 +39,8 @@ export const LibraryRow = memo(function LibraryRow({
           <img
             src={src}
             alt=""
-            loading="lazy"
-            decoding="async"
+            loading="eager"
+            decoding="sync"
             draggable={false}
           />
         ) : (

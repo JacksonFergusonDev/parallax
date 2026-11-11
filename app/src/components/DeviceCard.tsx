@@ -33,8 +33,8 @@ export const DeviceCard = memo(function DeviceCard({
           <img
             src={cover}
             alt=""
-            loading="lazy"
-            decoding="async"
+            loading="eager"
+            decoding="sync"
             draggable={false}
           />
         ) : (

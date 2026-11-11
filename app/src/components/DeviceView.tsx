@@ -696,8 +696,8 @@ export function DeviceView({
                           <img
                             src={src}
                             alt=""
-                            loading="lazy"
-                            decoding="async"
+                            loading="eager"
+                            decoding="sync"
                           />
                         ) : (
                           <GeneratedCover title={b.title} size="mini" />

@@ -844,6 +844,22 @@ describe("device badge", () => {
 });
 
 describe("retained app screens", () => {
+  it.each(["grid", "list"])(
+    "requests Library and hidden Kobo thumbnails on mount in %s view",
+    async (mode) => {
+      localStorage.setItem("library-view", mode);
+      localStorage.setItem("device-view", mode);
+      await render();
+      const selector = mode === "grid" ? ".card img" : ".list-row img";
+      expect(panel("On Kobo").hidden).toBe(true);
+      for (const name of ["Library", "On Kobo"]) {
+        const image = panel(name).querySelector(selector);
+        expect(image?.getAttribute("loading")).toBe("eager");
+        expect(image?.getAttribute("decoding")).toBe("sync");
+      }
+    },
+  );
+
   it("preloads once and preserves both screens, images and scroll positions across tabs", async () => {
     await render();
     expect(panel("On Kobo").hidden).toBe(true);

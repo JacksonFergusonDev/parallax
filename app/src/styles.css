@@ -350,7 +350,7 @@ button.badge.connected:hover {
 
 .card {
   /* Keep cards laid out: skipped subtrees can flash blank during fast scrolling
-     in WKWebView. Images still load lazily without hiding titles or whole rows. */
+     in WKWebView. */
   all: unset;
   display: flex;
   flex-direction: column;
