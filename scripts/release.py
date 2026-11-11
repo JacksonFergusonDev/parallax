@@ -12,7 +12,9 @@ fails or is interrupted, it deletes the tag and resets to where it started.
 Unreleased section into that version's. `check v0.1.0` fails unless every
 manifest says 0.1.0, which the release workflow runs before building.
 `notes 0.1.0` prints that version's changelog section, which becomes the
-GitHub release's notes and the in-app update's.
+GitHub release's notes and the in-app update's; `notes Unreleased` prints the
+notes still to be released. `version` prints the version the manifests share,
+which a dry run of the release workflow builds.
 """
 
 import argparse
@@ -54,6 +56,15 @@ def versions(root: Path = ROOT) -> dict[str, str]:
     tauri = json.loads((root / TAURI.relative_to(ROOT)).read_text())["version"]
     package = json.loads((root / PACKAGE.relative_to(ROOT)).read_text())["version"]
     return {"Cargo.toml": cargo[1], "tauri.conf.json": tauri, "package.json": package}
+
+
+def current(root: Path = ROOT) -> str:
+    """The version every manifest declares, if they agree."""
+    found = versions(root)
+    if len(set(found.values())) != 1:
+        listed = ", ".join(f"{f} says {v}" for f, v in found.items())
+        raise ValueError(f"The manifests disagree: {listed}")
+    return next(iter(found.values()))
 
 
 def check(tag: str, root: Path = ROOT) -> str:
@@ -243,6 +254,7 @@ def main(argv: list[str] | None = None) -> int:
     cut.add_argument(
         "--dry-run", action="store_true", help="run the checks and change nothing"
     )
+    commands.add_parser("version", help="print the manifests' version")
     commands.add_parser("bump").add_argument("version")
     commands.add_parser("check").add_argument("tag")
     commands.add_parser("notes").add_argument("version")
@@ -257,6 +269,8 @@ def main(argv: list[str] | None = None) -> int:
                 push=not args.no_push,
                 dry_run=args.dry_run,
             )
+        elif args.command == "version":
+            print(current())
         elif args.command == "bump":
             bump(args.version)
         elif args.command == "check":

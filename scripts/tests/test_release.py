@@ -219,3 +219,14 @@ def test_a_rejected_push_rolls_back(repo: Path) -> None:
         cut(repo)
     assert_unchanged(repo, start)
     assert run_git(origin_of(repo), "rev-parse", "main") == start
+
+
+def test_current_is_the_shared_version(root: Path) -> None:
+    assert release.current(root) == "0.1.0"
+    assert (
+        release.notes("Unreleased", root)
+        == "- Check for Updates… in the Parallax menu."
+    )
+    release.set_json_version(root / "app/package.json", "0.2.0")
+    with pytest.raises(ValueError, match=r"package\.json says 0\.2\.0"):
+        release.current(root)

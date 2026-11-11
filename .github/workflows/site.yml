@@ -1,7 +1,8 @@
 # Builds the site from site/ and publishes it to GitHub Pages at
-# parallax.jacksonferguson.me. It runs when the site changes on main, by hand,
-# and from the release workflow once a release is published, so the download
-# button names the new version. The build reads the releases from GitHub's API.
+# parallax.jacksonferguson.me. It runs only when a push to main changes site/
+# or this file, when run by hand, and from the release workflow once a release
+# is published, so the download button names the new version. The build reads
+# the releases from GitHub's API. Other pushes leave the live site alone.
 name: Site
 
 on:
@@ -9,7 +10,6 @@ on:
     branches: [ "main" ]
     paths:
       - "site/**"
-      - "app/public/parallax.svg"
       - ".github/workflows/site.yml"
   workflow_dispatch:
   workflow_call:

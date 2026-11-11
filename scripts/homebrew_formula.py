@@ -81,6 +81,7 @@ def main(argv: list[str] | None = None) -> int:
             arch: digest(args.archives / archive_name(args.version, target))
             for arch, target in TARGETS.items()
         }
+        args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(render(args.version, sha256))
     except OSError as error:
         print(f"error: {error}", file=sys.stderr)

@@ -4,6 +4,13 @@
 # GitHub release with CHANGELOG.md's notes, then redeploys the site so its
 # download button names the new version, and updates the Homebrew formula.
 #
+# Run it by hand (Actions › Release › Run workflow, or `gh workflow run
+# release.yml --ref BRANCH`) for a dry run: it checks the manifests agree,
+# reruns CI, builds and signs the app and both CLIs, writes latest.json and
+# the Homebrew formula, and uploads them all as workflow artifacts, but creates
+# no release, deploys no site and pushes nothing to the tap. It builds the
+# version the manifests say, with the changelog's Unreleased notes.
+#
 # Secrets (engineering/releasing.md says how to make each):
 # - TAURI_SIGNING_PRIVATE_KEY: signs the update archive. Required; without it
 #   installed copies couldn't verify the update.
@@ -18,6 +25,7 @@ name: Release
 on:
   push:
     tags: [ "v*" ]
+  workflow_dispatch:
 
 permissions: {}
 
@@ -28,6 +36,10 @@ concurrency:
 defaults:
   run:
     shell: bash
+
+env:
+  # Only a pushed tag publishes. Every other run is a dry run.
+  DRY_RUN: ${{ github.event_name != 'push' }}
 
 jobs:
   verify:
@@ -54,7 +66,14 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          version="$(uv run --directory scripts --no-project python release.py check "$TAG")"
+          if [[ "$DRY_RUN" == "true" ]]; then
+            version="$(uv run --directory scripts --no-project python release.py version)"
+            echo "notes=Unreleased" >> "$GITHUB_OUTPUT"
+            echo "::notice::Dry run of ${version} from ${TAG}: everything is built, nothing is published."
+          else
+            version="$(uv run --directory scripts --no-project python release.py check "$TAG")"
+            echo "notes=${version}" >> "$GITHUB_OUTPUT"
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [[ "$version" == *-* ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
@@ -64,8 +83,8 @@ jobs:
 
       - name: Write the release notes
         env:
-          TAG: ${{ github.ref_name }}
-        run: uv run --directory scripts --no-project python release.py notes "$TAG" > "$RUNNER_TEMP/notes.md"
+          NOTES: ${{ steps.version.outputs.notes }}
+        run: uv run --directory scripts --no-project python release.py notes "$NOTES" > "$RUNNER_TEMP/notes.md"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
@@ -129,11 +148,22 @@ jobs:
         run: pnpm --dir app install --frozen-lockfile
 
       # Tauri signs and notarizes when the APPLE_* variables are set, and
-      # signs ad hoc with the identity "-" otherwise.
+      # signs ad hoc with the identity "-" otherwise. A release must sign its
+      # update with the real key; a dry run without it signs with a throwaway
+      # key, so the signing step is still exercised.
       - name: Choose how to sign
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          UPDATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
+          if [[ -z "$UPDATE_KEY" ]]; then
+            if [[ "$DRY_RUN" != "true" ]]; then
+              echo "::error::TAURI_SIGNING_PRIVATE_KEY isn't set, so installed copies couldn't verify this update."
+              exit 1
+            fi
+            pnpm --dir app exec tauri signer generate --ci --password "" --write-keys "$RUNNER_TEMP/dry-run.key"
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY isn't set: this dry run signs the update with a throwaway key."
+          fi
           if [[ -z "$APPLE_CERTIFICATE" ]]; then
             echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
             echo "::warning::No Developer ID certificate: the app is signed ad hoc and not notarized."
@@ -151,6 +181,10 @@ jobs:
           SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           if [[ -n "$SIGNING_IDENTITY" ]]; then export APPLE_SIGNING_IDENTITY="$SIGNING_IDENTITY"; fi
+          if [[ -z "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
+            TAURI_SIGNING_PRIVATE_KEY="$(cat "$RUNNER_TEMP/dry-run.key")"
+            export TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
+          fi
           # Empty variables would read as set; leave the missing ones unset.
           for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
             if [[ -z "${!name}" ]]; then unset "$name"; fi
@@ -229,6 +263,8 @@ jobs:
           path: ${{ runner.temp }}/cli/
           if-no-files-found: error
 
+  # In a dry run this writes latest.json and checks every file is there, then
+  # uploads them as an artifact instead of publishing.
   publish:
     name: Publish the GitHub release
     needs: [ verify, app, cli ]
@@ -239,7 +275,7 @@ jobs:
     env:
       VERSION: ${{ needs.verify.outputs.version }}
       PRERELEASE: ${{ needs.verify.outputs.prerelease }}
-      TAG: ${{ github.ref_name }}
+      TAG: v${{ needs.verify.outputs.version }}
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
@@ -267,10 +303,30 @@ jobs:
                 "darwin-x86_64": {signature: $signature, url: $url}}}' \
             > latest.json
 
+      - name: Check every release file is there
+        working-directory: ${{ runner.temp }}/release
+        run: |
+          for file in "Parallax_${VERSION}_universal.dmg" "Parallax_${VERSION}_universal.app.tar.gz" \
+            "Parallax_${VERSION}_universal.app.tar.gz.sig" latest.json \
+            "parallax-cli-${VERSION}-aarch64-apple-darwin.tar.gz" "parallax-cli-${VERSION}-x86_64-apple-darwin.tar.gz"; do
+            [[ -s "$file" ]] || { echo "::error::Missing ${file}"; exit 1; }
+          done
+          jq . latest.json
+          ls -l
+
+      - name: Keep the dry run's files
+        if: env.DRY_RUN == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: dry-run-release
+          path: ${{ runner.temp }}/release/latest.json
+          if-no-files-found: error
+
       # A draft until every file is up, so nobody sees a release half there.
       # A prerelease never becomes "latest", so the updater and the site's
       # download button keep offering the newest stable version.
       - name: Publish
+        if: env.DRY_RUN != 'true'
         working-directory: ${{ runner.temp }}/release
         run: |
           flags=(--draft --verify-tag --title "Parallax ${VERSION}" --notes-file notes.md)
@@ -287,12 +343,14 @@ jobs:
   site:
     name: Site
     needs: publish
+    if: github.event_name == 'push'
     permissions:
       contents: read
       pages: write
       id-token: write
     uses: ./.github/workflows/site.yml # zizmor: ignore[self-repository] actionlint resolves the local workflow with this syntax.
 
+  # A dry run writes the formula and keeps it as an artifact, without pushing.
   homebrew:
     name: Update the Homebrew formula
     needs: [ verify, publish ]
@@ -304,41 +362,51 @@ jobs:
       VERSION: ${{ needs.verify.outputs.version }}
       TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
     steps:
-      - name: Skip without a tap token
-        if: env.TAP_TOKEN == ''
-        run: echo "::warning::TAP_GITHUB_TOKEN isn't set, so the Homebrew formula wasn't updated."
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: env.TAP_TOKEN != ''
         with:
           persist-credentials: false
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        if: env.TAP_TOKEN != ''
         with:
           pattern: cli-*
           path: ${{ runner.temp }}/cli
           merge-multiple: true
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+
+      - name: Write the formula
+        run: |
+          uv run --directory scripts --no-project python homebrew_formula.py \
+            "$VERSION" "$RUNNER_TEMP/cli" "$RUNNER_TEMP/formula/parallax-cli.rb"
+          cat "$RUNNER_TEMP/formula/parallax-cli.rb"
+
+      - name: Keep the dry run's formula
+        if: env.DRY_RUN == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: dry-run-formula
+          path: ${{ runner.temp }}/formula/parallax-cli.rb
+          if-no-files-found: error
+
+      - name: Skip without a tap token
+        if: env.DRY_RUN != 'true' && env.TAP_TOKEN == ''
+        run: echo "::warning::TAP_GITHUB_TOKEN isn't set, so the Homebrew formula wasn't updated."
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: env.TAP_TOKEN != ''
+        if: env.DRY_RUN != 'true' && env.TAP_TOKEN != ''
         with:
           repository: JacksonFergusonDev/homebrew-tap
           token: ${{ secrets.TAP_GITHUB_TOKEN }}
           path: tap
           persist-credentials: true # zizmor: ignore[artipacked] the push below needs it; nothing uploads this checkout.
 
-      - name: Install uv
-        if: env.TAP_TOKEN != ''
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          enable-cache: false
-
-      - name: Write and push the formula
-        if: env.TAP_TOKEN != ''
+      - name: Push the formula
+        if: env.DRY_RUN != 'true' && env.TAP_TOKEN != ''
         run: |
-          uv run --directory scripts --no-project python homebrew_formula.py \
-            "$VERSION" "$RUNNER_TEMP/cli" "$GITHUB_WORKSPACE/tap/Formula/parallax-cli.rb"
+          cp "$RUNNER_TEMP/formula/parallax-cli.rb" tap/Formula/parallax-cli.rb
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
