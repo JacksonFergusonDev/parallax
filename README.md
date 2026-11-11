@@ -1,8 +1,24 @@
-# Parallax
+<!-- rumdl-disable MD033 MD041 -->
+<div align="center">
 
-![Parallax icon](app/src-tauri/icons/64x64.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/readme-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/readme-light.svg">
+  <img alt="Parallax" src="assets/readme-light.svg" width="400">
+</picture>
 
-Parallax is a desktop library for reading books and comics and organising them on a Kobo. Import books, improve their metadata and covers, convert them to KEPUB, and manage the Kobo’s own collections. You can import DRM-free Kindle-format books. Support for Kindle devices is deferred.
+**A desktop library for reading books and comics and organising them on a Kobo.**
+
+![macOS](https://img.shields.io/badge/platform-macOS-f5c568?style=flat-square&labelColor=0f172a&logo=apple&logoColor=white) [![CI](https://img.shields.io/github/actions/workflow/status/JacksonFergusonDev/parallax/ci.yml?branch=main&style=flat-square&labelColor=0f172a)](https://github.com/JacksonFergusonDev/parallax/actions/workflows/ci.yml) [![Rust](https://img.shields.io/badge/built_with-Rust-f5c568?style=flat-square&labelColor=0f172a&logo=rust&logoColor=white)](https://www.rust-lang.org/) [![Tauri](https://img.shields.io/badge/desktop-Tauri-f5c568?style=flat-square&labelColor=0f172a&logo=tauri&logoColor=white)](https://tauri.app/) [![GPLv3](https://img.shields.io/badge/license-GPLv3-f5c568?style=flat-square&labelColor=0f172a)](LICENSE)
+
+[Using Parallax](#using-it) · [Kobo compatibility](docs/device-support.md) · [Development](#development)
+
+</div>
+<!-- rumdl-enable MD033 MD041 -->
+
+## Overview
+
+Import books, improve their metadata and covers, convert them to KEPUB, and manage the Kobo’s own collections. You can import DRM-free Kindle-format books. Support for Kindle devices is deferred.
 
 Licensed under GPLv3. Device logic is ported from [calibre](https://calibre-ebook.com)'s Kobo driver; EPUB to KEPUB conversion uses [kepubify](https://pgaskin.net/kepubify/), and Amazon formats are read with [boko](https://github.com/zacharydenton/boko).
 
@@ -57,6 +73,10 @@ cargo run -p parallax-cli -- library enhance  # preview metadata proposals
 ```
 
 See the [engineering index](engineering/README.md) for the design system, architecture decisions, and hardware verification. The [maintainer handoff](PROGRESS.md) tracks current work and release checks.
+
+### README branding
+
+Install Inkscape and the Space Grotesk font (including Bold), then run `scripts/build-readme-logos.sh` after editing the SVGs in `branding/`. Commit the regenerated `assets/readme-light.svg` and `assets/readme-dark.svg` with the sources. Inkscape converts the wordmark to paths so GitHub can display it without the font.
 
 ## Cover upscaling
 
