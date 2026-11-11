@@ -1,0 +1,127 @@
+---
+/**
+ * The app's library window, as a Mac window. The window is the app's own
+ * markup and CSS, frozen by scripts/snapshot-app.mjs into
+ * public/app-snapshot/, shown in a sandboxed frame with no scripts, and
+ * scaled to fit, so its text and covers stay sharp at any size. The frame
+ * loads after the page, so the first screen paints as text. Decorative: the
+ * hero's text says what the app does.
+ */
+---
+
+<figure class="app-window" aria-hidden="true">
+  <div class="app-window-screen" data-app-window>
+    <div class="app-window-scaled">
+      <div class="app-window-titlebar">
+        <span></span>
+        <span></span>
+        <span></span>
+        <p>Parallax</p>
+      </div>
+      <iframe
+        data-src="/app-snapshot/index.html"
+        title="The Parallax library window"
+        tabindex="-1"
+        sandbox="allow-same-origin"
+        scrolling="no"
+        width="1280"
+        height="772"
+      ></iframe>
+    </div>
+  </div>
+</figure>
+
+<script>
+  import { afterLoad } from 'house-style/js/field.js';
+
+  const screen = document.querySelector<HTMLElement>('[data-app-window]');
+  const frame = screen?.querySelector('iframe');
+  if (screen && frame) {
+    // The window is drawn at the app's 1280-pixel width and scaled to fit.
+    new ResizeObserver(() => {
+      screen.style.setProperty('--scale', String(screen.clientWidth / 1280));
+    }).observe(screen);
+    afterLoad(() => {
+      frame.addEventListener('load', () => frame.classList.add('is-loaded'), { once: true });
+      frame.src = frame.dataset.src ?? '';
+    });
+  }
+</script>
+
+<style>
+  .app-window {
+    /* The app's dark theme and a Mac title bar: depicted, not house colours. */
+    --app-bg: #191c21;
+    --app-bar: #22262d;
+
+    margin: 0;
+  }
+  .app-window-screen {
+    --scale: 0.45;
+
+    position: relative;
+    aspect-ratio: 1280 / 800;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--app-bg);
+  }
+  .app-window-scaled {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1280px;
+    height: 800px;
+    transform: scale(var(--scale));
+    transform-origin: 0 0;
+  }
+  /* Drawn at the app's own pixel sizes, then scaled with the window. */
+  .app-window-titlebar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    height: 28px;
+    padding: 0 12px;
+    border-bottom: 1px solid #000;
+    background: var(--app-bar);
+  }
+  .app-window-titlebar span {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #ff5f57;
+  }
+  .app-window-titlebar span:nth-child(2) {
+    background: #febc2e;
+  }
+  .app-window-titlebar span:nth-child(3) {
+    background: #28c840;
+  }
+  .app-window-titlebar p {
+    position: absolute;
+    right: 0;
+    left: 0;
+    margin: 0;
+    color: #b2ad9f;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+  }
+  .app-window iframe {
+    display: block;
+    width: 1280px;
+    height: 772px;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .app-window iframe.is-loaded {
+    opacity: 1;
+    transition: opacity 0.4s;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .app-window iframe.is-loaded {
+      transition: none;
+    }
+  }
+</style>

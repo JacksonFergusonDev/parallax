@@ -95,17 +95,22 @@ kbd {
   font-size: var(--fs-ui);
 }
 
-/* The hero's text beside the laptop on wide screens, above it on narrow ones. */
+/* The hero's text beside the app window on wide screens, above it on narrow ones. */
 .hero-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
   gap: 56px;
   align-items: center;
 }
-/* Where the window has room, the laptop reaches past the content column. */
+/* Where the window has room, the window reaches past the content column. */
 @media (min-width: 1360px) {
-  .hero-layout .laptop {
+  .hero-layout .app-window {
     width: calc(100% + 96px);
+  }
+}
+@media (min-width: 1500px) {
+  .hero-layout .app-window {
+    width: calc(100% + 160px);
   }
 }
 @media (max-width: 1100px) {
@@ -113,7 +118,7 @@ kbd {
     grid-template-columns: minmax(0, 1fr);
     gap: 64px;
   }
-  .hero-layout .laptop {
+  .hero-layout .app-window {
     width: min(100%, 680px);
     margin-inline: auto;
   }

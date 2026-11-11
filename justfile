@@ -80,6 +80,10 @@ check-site: sync
     pnpm --dir site check
     pnpm --dir site test
 
+# Refreeze the app's library window for the site's hero (site/public/app-snapshot)
+site-snapshot: sync
+    node site/scripts/snapshot-app.mjs
+
 # Run the site locally at http://127.0.0.1:4600
 site: sync
     pnpm --dir site dev

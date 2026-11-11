@@ -1,14 +1,15 @@
 // Saves the app's library window, as the browser mock draws it, into
-// public/app-snapshot/ for the landing page's laptop. The result is the real
+// public/app-snapshot/ for the landing page's hero. The result is the real
 // markup and CSS frozen as a static page: no scripts, so it can't run or
-// change, but its text and covers stay sharp at any size. Fonts the window
-// uses are copied beside it; images and other CSS assets are inlined.
+// change, but its text and covers stay sharp at any size. Fonts and covers
+// are written beside it; other CSS assets are inlined. The library is the
+// public-domain showcase in scripts/showcase/, not the mock's sample.
 //
 // Run `just site-snapshot` after a visible change to the library window, and
 // commit what it writes. It starts the app's Vite dev server (the mock only
 // runs in development) and drives it with Playwright's Chromium.
 import { spawn } from 'node:child_process';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 
@@ -16,9 +17,19 @@ const SITE = new URL('..', import.meta.url).pathname;
 const APP = join(SITE, '../app');
 const OUT = join(SITE, 'public/app-snapshot');
 const PORT = 1437;
-// The app's default window, less the 28px title bar the laptop draws.
+// The app's default window, less the 28px title bar the site draws.
 const VIEWPORT = { width: 1280, height: 772 };
-const BOOK = process.argv[2] ?? 'The Glass Harbor';
+const BOOK = process.argv[2] ?? 'Dracula';
+const SHOWCASE = join(SITE, 'scripts/showcase');
+
+async function showcase() {
+  const books = JSON.parse(await readFile(join(SHOWCASE, 'books.json'), 'utf8'));
+  for (const book of books) {
+    const jpeg = await readFile(join(SHOWCASE, 'covers', book.cover));
+    book.cover = `data:image/jpeg;base64,${jpeg.toString('base64')}`;
+  }
+  return books;
+}
 
 function startServer() {
   const server = spawn('pnpm', ['exec', 'vite', '--port', String(PORT), '--strictPort'], {
@@ -98,8 +109,25 @@ async function serialize() {
   for (const option of document.querySelectorAll('option')) {
     option.toggleAttribute('selected', option.selected);
   }
+  // Covers become files, once each, however many times the window shows them.
+  const images = [];
+  const named = new Map();
   for (const img of document.querySelectorAll('img')) {
-    if (img.src && !img.src.startsWith('data:')) img.src = await toDataUrl(img.src);
+    if (!img.src) continue;
+    const data = img.src.startsWith('data:') ? img.src : await toDataUrl(img.src);
+    const [, type, payload] = /^data:image\/([a-z+]+);base64,(.*)$/.exec(data) ?? [];
+    if (!payload) {
+      img.src = data;
+      continue;
+    }
+    if (!named.has(payload)) {
+      const name = `covers/${named.size}.${type === 'jpeg' ? 'jpg' : type.replace('+xml', '')}`;
+      named.set(payload, name);
+      images.push({ name, data: payload });
+    }
+    img.setAttribute('src', named.get(payload));
+    img.setAttribute('loading', 'lazy');
+    img.removeAttribute('srcset');
   }
   for (const canvas of document.querySelectorAll('canvas')) {
     const img = document.createElement('img');
@@ -124,13 +152,19 @@ async function serialize() {
 <body${attrs(document.body)} inert>${document.body.innerHTML}</body>
 </html>
 `;
-  return { html, fonts };
+  return { html, fonts, images };
 }
 
 const server = await startServer();
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: 2 });
+  await page.addInitScript(
+    (books) => {
+      window.__PARALLAX_SHOWCASE__ = books;
+    },
+    await showcase(),
+  );
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   await page.goto(`http://localhost:${PORT}/?theme=dark`, { waitUntil: 'networkidle' });
   // Select a book, so the detail panel shows what Parallax knows about it.
@@ -138,15 +172,21 @@ try {
   await page.mouse.move(0, VIEWPORT.height - 1);
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(500);
-  const { html, fonts } = await page.evaluate(serialize);
+  const { html, fonts, images } = await page.evaluate(serialize);
 
   await rm(OUT, { recursive: true, force: true });
   await mkdir(join(OUT, 'fonts'), { recursive: true });
+  await mkdir(join(OUT, 'covers'), { recursive: true });
+  for (const image of images) {
+    await writeFile(join(OUT, image.name), Buffer.from(image.data, 'base64'));
+  }
   await writeFile(join(OUT, 'index.html'), html);
   for (const font of fonts) {
     await writeFile(join(OUT, 'fonts', font.name), Buffer.from(font.data, 'base64'));
   }
-  console.log(`Wrote the snapshot and ${fonts.length} fonts to public/app-snapshot/`);
+  console.log(
+    `Wrote the snapshot, ${fonts.length} fonts and ${images.length} images to public/app-snapshot/`,
+  );
 } finally {
   await browser.close();
   server.kill();

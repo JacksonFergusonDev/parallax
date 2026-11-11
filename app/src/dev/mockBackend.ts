@@ -164,6 +164,57 @@ const params = new URLSearchParams(location.search);
 const firstLaunch = params.has("setup");
 const bookTemplate = books[0];
 if (firstLaunch) books = [];
+
+/** A library the site's app snapshot injects (site/scripts/snapshot-app.mjs):
+ * real public-domain books with their covers, in place of the sample. */
+interface ShowcaseBook {
+  title: string;
+  authors: string[];
+  series?: string;
+  series_index?: string;
+  tags: string[];
+  /** A data URL. */
+  cover: string;
+  published: string;
+  /** Percent read, or finished. */
+  reading?: number | "finished";
+}
+const showcase = (window as { __PARALLAX_SHOWCASE__?: ShowcaseBook[] })
+  .__PARALLAX_SHOWCASE__;
+if (showcase) {
+  books = showcase.map((b, i) => ({
+    ...bookTemplate,
+    id: i + 1,
+    title: b.title,
+    authors: b.authors,
+    series: b.series ?? null,
+    series_index: b.series_index ?? null,
+    tags: b.tags,
+    publisher: "Standard Ebooks",
+    published: `${b.published}-01-01T00:00:00+00:00`,
+    description: null,
+    identifiers: [],
+    words: 80_000 + ((i * 37_000) % 160_000),
+    pages: 260 + ((i * 130) % 520),
+    pages_estimated: false,
+    original_name: `${b.title}.epub`,
+    has_cover: true,
+    cover: b.cover,
+    contributors: [],
+    annotations: 0,
+    reading:
+      b.reading === undefined
+        ? null
+        : {
+            device_serial: "N000000000001",
+            status: b.reading === "finished" ? "finished" : "reading",
+            percent: b.reading === "finished" ? 100 : b.reading,
+            last_read: "2026-11-08T20:00:00Z",
+            time_spent_secs: 3600 * (i + 2),
+            seen_at: "2026-11-10T00:00:00Z",
+          },
+  }));
+}
 // `?kobo=later` connects the Kobo a few seconds in; `?kobo=none` never does.
 const koboFrom =
   params.get("kobo") === "none"
@@ -1480,6 +1531,9 @@ export function installMockBackend(label = "main") {
           await sleep(12);
           const book = books.find((b) => b.id === a.id);
           if (!book?.has_cover) return null;
+          // Standard Ebooks covers are 1400 × 2100.
+          if (showcase)
+            return { width: 1400, height: 2100, quality: "excellent" };
           const height = [791, 1420, 2200][(a.id as number) % 3];
           return {
             width: Math.round(height * 0.66),

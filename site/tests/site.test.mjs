@@ -3,7 +3,7 @@
 // published version on the download page.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { before, test } from 'node:test';
@@ -63,4 +63,24 @@ test('the favicon is the app icon', () => {
     readFileSync(join(site, 'public/favicon.svg'), 'utf8'),
     readFileSync(join(site, '../app/public/parallax.svg'), 'utf8'),
   );
+});
+
+test('the app snapshot is static and complete', () => {
+  const html = page('app-snapshot/index.html');
+  assert.ok(!/<script/i.test(html), 'no scripts run in the hero');
+  const files = [...html.matchAll(/(?:src="|url\(["']?)((?:covers|fonts)\/[^"')]+)/g)].map(
+    (m) => m[1],
+  );
+  assert.ok(
+    files.some((f) => f.startsWith('covers/')),
+    'covers are files',
+  );
+  assert.ok(
+    files.some((f) => f.startsWith('fonts/')),
+    'fonts are files',
+  );
+  for (const file of files) {
+    assert.ok(existsSync(join(out, 'app-snapshot', file)), `${file} is published`);
+  }
+  assert.match(page('index.html'), /data-src="\/app-snapshot\/index\.html"/);
 });
