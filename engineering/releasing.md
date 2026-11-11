@@ -54,7 +54,7 @@ Signing needs an Apple Developer Program membership. Create a **Developer ID App
 
 ## Installing the CLI
 
-- Homebrew: `brew install jacksonfergusondev/tap/parallax-cli`. The formula installs the prebuilt archive and points `PARALLAX_KEPUBIFY` at the kepubify beside it.
+- Homebrew: `brew install jacksonfergusondev/tap/parallax-cli`. The formula installs the prebuilt archive and points `PARALLAX_KEPUBIFY` at the kepubify beside it. `brew install --HEAD` builds `main` from source against Homebrew's kepubify instead, and is the only option until the first release: the tap carries the `--head` formula from `scripts/homebrew_formula.py` until the release workflow first replaces it.
 - Cargo: `cargo install --locked --git https://github.com/JacksonFergusonDev/parallax parallax-cli` builds from source. It needs kepubify on `PATH` (`brew install kepubify`) or `PARALLAX_KEPUBIFY` set to send books. `cargo binstall --git … parallax-cli` downloads the release archive instead.
 
 The CLI isn't on crates.io. Publishing it would mean publishing all ten workspace crates, and crates.io ignores the `[patch]` that substitutes the [vendored boko](../vendor/boko/VENDORED.md), so a published build would lose its Kindle fixes. Revisit once boko releases them.
