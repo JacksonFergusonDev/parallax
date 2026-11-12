@@ -226,8 +226,7 @@ impl Library {
         };
         let ids: Vec<i64> = stmt
             .query_map([], |r| r.get(0))
-            .map(|rows| rows.flatten().collect())
-            .unwrap_or_default();
+            .map_or_default(|rows| rows.flatten().collect());
         for id in ids {
             if let Ok(epub) = Epub::open(self.book_file(id)) {
                 let _ = self.conn.execute(
@@ -250,8 +249,7 @@ impl Library {
         };
         let books: Vec<(i64, PathBuf)> = stmt
             .query_map([], |r| r.get(0))
-            .map(|rows| rows.flatten().collect::<Vec<i64>>())
-            .unwrap_or_default()
+            .map_or_default(|rows| rows.flatten().collect::<Vec<i64>>())
             .into_iter()
             .map(|id| (id, self.book_file(id)))
             .collect();

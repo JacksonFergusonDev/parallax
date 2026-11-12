@@ -150,15 +150,13 @@ pub fn delete_all_backups(root: &Path) -> Result<()> {
 
 /// One folder per Kobo, by serial.
 fn device_dirs(root: &Path) -> Vec<PathBuf> {
-    fs::read_dir(root)
-        .map(|entries| {
-            entries
-                .flatten()
-                .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
-                .map(|e| e.path())
-                .collect()
-        })
-        .unwrap_or_default()
+    fs::read_dir(root).map_or_default(|entries| {
+        entries
+            .flatten()
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+            .map(|e| e.path())
+            .collect()
+    })
 }
 
 /// What's known about a backup, newest first in [`KoboDevice::backups`].
@@ -377,13 +375,11 @@ impl KoboDevice {
         let from = stem(backup);
         let root = dir.join(REMOVED_DIR);
         let mut changes = Vec::new();
-        let mut stamps: Vec<String> = fs::read_dir(&root)
-            .map(|d| {
-                d.flatten()
-                    .map(|e| e.file_name().to_string_lossy().into_owned())
-                    .collect()
-            })
-            .unwrap_or_default();
+        let mut stamps: Vec<String> = fs::read_dir(&root).map_or_default(|d| {
+            d.flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .collect()
+        });
         stamps.retain(|s| s.as_str() >= from);
         stamps.sort();
         for stamp in stamps {
@@ -709,14 +705,12 @@ fn is_backup(name: &str) -> bool {
 
 /// Backup file names in `dir`, oldest first.
 fn backup_names(dir: &Path) -> Vec<String> {
-    let mut names: Vec<String> = fs::read_dir(dir)
-        .map(|d| {
-            d.flatten()
-                .map(|e| e.file_name().to_string_lossy().into_owned())
-                .filter(|n| is_backup(n))
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut names: Vec<String> = fs::read_dir(dir).map_or_default(|d| {
+        d.flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| is_backup(n))
+            .collect()
+    });
     names.sort();
     // Both forms exist if compression stopped just before tidying up.
     names.dedup_by(|a, b| stem(a) == stem(b));

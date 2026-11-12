@@ -357,10 +357,7 @@ pub fn surname(author: &str) -> String {
         Some((last, first)) if !first.trim().is_empty() => format!("{} {last}", first.trim()),
         _ => author.to_owned(),
     };
-    name.split_whitespace()
-        .last()
-        .map(alnum)
-        .unwrap_or_default()
+    name.split_whitespace().last().map_or_default(alnum)
 }
 
 fn similarity(a: &str, b: &str) -> f64 {
@@ -591,8 +588,7 @@ pub fn parse_apple_books(json: &Value) -> Vec<Hit> {
             authors: r
                 .get("artistName")
                 .and_then(Value::as_str)
-                .map(|a| a.split(" & ").map(str::to_owned).collect())
-                .unwrap_or_default(),
+                .map_or_default(|a| a.split(" & ").map(str::to_owned).collect()),
             subjects: strings(r, "genres"),
             ..Hit::default()
         })

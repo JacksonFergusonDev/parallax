@@ -110,6 +110,30 @@
         "python"
       ],
       "allowedVersions": "/^3\\.12(?:\\.|$)/"
+    },
+    {
+      "description": "Move to a new Rust release in one PR, so CI checks its lints before main does.",
+      "matchDepNames": [
+        "rust"
+      ],
+      "groupName": "Rust toolchain"
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Update the pinned Rust release in rust-toolchain.toml and the workflows together.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^rust-toolchain\\.toml$/",
+        "/^\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "channel = \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\"",
+        "toolchain: (?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "rust",
+      "packageNameTemplate": "rust-lang/rust",
+      "datasourceTemplate": "github-releases"
     }
   ]
 }

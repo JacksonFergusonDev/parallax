@@ -155,7 +155,7 @@ fn items(
                 title: b.title,
                 series: b.series,
                 // Nickel joins several authors with ", " in Attribution.
-                authors: b.author.map(|a| vec![a]).unwrap_or_default(),
+                authors: b.author.map_or_default(|a| vec![a]),
                 tags: Vec::new(),
                 folder_genre: b.path.as_deref().and_then(crate::genres::folder_genre),
                 collections: b.collections,
