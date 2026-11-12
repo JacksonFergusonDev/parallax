@@ -1,11 +1,18 @@
 /**
- * The hero's moving background: three layers of stars drifting sideways at
+ * The hero's moving background: three layers of stars drifting at
  * different speeds, so the near ones pass the far ones. That shift between
  * layers is parallax, the effect the app is named for. house-style's
  * runField decides when to draw (reduced motion, off screen, the pause button);
  * this only draws.
  */
 import { runField } from 'house-style/js/field.js';
+
+export type StarfieldVariant = 'landing' | 'download';
+
+const scenes = {
+  landing: { seed: 20261110, slope: 0 },
+  download: { seed: 20261111, slope: 0.45 },
+};
 
 interface Star {
   x: number; // 0 to 1 across the canvas
@@ -28,8 +35,8 @@ function random(seed: number): () => number {
   };
 }
 
-function makeLayers(): Layer[] {
-  const next = random(20261110);
+function makeLayers(variant: StarfieldVariant): Layer[] {
+  const next = random(scenes[variant].seed);
   const layer = (count: number, size: number, speed: number, alpha: number): Layer => ({
     stars: Array.from({ length: count }, () => ({
       x: next(),
@@ -39,14 +46,26 @@ function makeLayers(): Layer[] {
     speed,
     alpha,
   });
+  if (variant === 'download') {
+    return [layer(110, 0.65, 0.003, 0.4), layer(52, 1, 0.006, 0.6), layer(20, 1.4, 0.012, 0.85)];
+  }
   return [layer(140, 0.7, 0.004, 0.45), layer(70, 1.1, 0.009, 0.7), layer(28, 1.6, 0.018, 1)];
 }
 
-export function startStarfield(canvas: HTMLCanvasElement, button: HTMLButtonElement): void {
+function wrap(position: number): number {
+  return position - Math.floor(position);
+}
+
+export function startStarfield(
+  canvas: HTMLCanvasElement,
+  button: HTMLButtonElement,
+  variant: StarfieldVariant,
+): void {
   const context = canvas.getContext('2d');
   if (!context) return; // The hero keeps its plain background.
   const ctx = context;
-  const layers = makeLayers();
+  const layers = makeLayers(variant);
+  const { slope } = scenes[variant];
   let width = 1;
   let height = 1;
   let color = 'rgb(245, 197, 104)';
@@ -73,11 +92,13 @@ export function startStarfield(canvas: HTMLCanvasElement, button: HTMLButtonElem
       ctx.fillStyle = color;
       for (const layer of layers) {
         ctx.globalAlpha = Math.min(1, layer.alpha * strength * 2.2);
-        const shift = time * layer.speed;
+        const shiftX = time * layer.speed;
+        const shiftY = (shiftX * slope * width) / height;
         for (const star of layer.stars) {
-          const x = ((((star.x - shift) % 1) + 1) % 1) * width;
+          const x = wrap(star.x - shiftX) * width;
+          const y = wrap(star.y - shiftY) * height;
           ctx.beginPath();
-          ctx.arc(x, star.y * height, star.r, 0, Math.PI * 2);
+          ctx.arc(x, y, star.r, 0, Math.PI * 2);
           ctx.fill();
         }
       }

@@ -3,6 +3,7 @@ import Icon from 'house-style/astro/Icon.astro';
 import SectionMarker from 'house-style/astro/SectionMarker.astro';
 import { marked } from 'marked';
 import DownloadButton from '../components/DownloadButton.astro';
+import StarField from '../components/StarField.astro';
 import Base from '../layouts/Base.astro';
 import { formatDate, formatSize, getReleases, latest } from '../lib/releases';
 import { links, notarized } from '../lib/site';
@@ -20,6 +21,7 @@ const cliTargets = [
   description="Download Parallax for Mac, and every earlier version with its release notes."
 >
   <section class="hs-hero" aria-labelledby="download-title">
+    <StarField variant="download" />
     <h1 id="download-title">Download Parallax.</h1>
     <p class="lede">
       One app for Apple silicon and Intel Macs. Once installed, Parallax checks for new versions

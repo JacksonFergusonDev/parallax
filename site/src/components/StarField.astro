@@ -5,9 +5,16 @@
  * first screen paints as text. Place it first inside `.hs-hero`.
  */
 import Icon from 'house-style/astro/Icon.astro';
+import type { StarfieldVariant } from '../lib/starfield';
+
+interface Props {
+  variant?: StarfieldVariant;
+}
+
+const { variant = 'landing' } = Astro.props;
 ---
 
-<canvas class="hs-field" aria-hidden="true" data-starfield></canvas>
+<canvas class="hs-field" aria-hidden="true" data-starfield={variant}></canvas>
 <button type="button" class="hs-motion" hidden>
   <span data-hs-motion-label>Pause motion</span>
   <Icon name="pause" class="hs-motion-pause" />
@@ -22,7 +29,11 @@ import Icon from 'house-style/astro/Icon.astro';
   const button = canvas?.nextElementSibling;
   if (canvas && button instanceof HTMLButtonElement) {
     afterLoad(() => {
-      startStarfield(canvas, button);
+      startStarfield(
+        canvas,
+        button,
+        canvas.dataset.starfield === 'download' ? 'download' : 'landing',
+      );
     });
   }
 </script>
