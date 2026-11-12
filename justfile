@@ -92,7 +92,7 @@ site: sync
 release version *flags:
     {{ script_python }} release.py release {{ version }} {{ flags }}
 
-# Run the standard local checks before pushing
+# Run the local CI suite on demand
 ci: fmt-check lint typecheck test check-site
     printf "\n{{ green }}✔ Local CI pipeline completed successfully.{{ nc }}\n"
 

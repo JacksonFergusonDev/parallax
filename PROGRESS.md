@@ -17,6 +17,7 @@
 - Release packaging runs alongside CI, with publishing gated on both. The macOS CI cache can reuse compiled dependencies across lockfile changes on the same runner image and Rust toolchain.
 - The WKWebView search scenarios wait for the reader to open and for a search result before navigating, so a slow launch or search can't skip those steps.
 - Moved slower checks to prek's pre-push stage, added app build and site checks to the hooks, and limited release preflight to release eligibility. Changelog-only releases still trigger the project-wide lint, type and test checks.
+- Updated agent guidance to rely on Git hooks for routine verification and use focused checks during development.
 - Compact controls in the Library toolbar and filter row free up vertical space for books. The site's library snapshot reflects the new layout.
 - The Reading tab has more space below the toolbar, with a smaller inset at narrow window widths.
 - The On Kobo sidebar uses the same row height and vertical text alignment for collections and All books.
