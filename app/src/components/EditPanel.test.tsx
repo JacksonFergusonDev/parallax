@@ -49,6 +49,7 @@ describe("EditPanel cover details", () => {
           onSave={vi.fn()}
           onChanged={vi.fn()}
           onEnhance={vi.fn()}
+          onGoodreadsChanged={vi.fn()}
           onClose={vi.fn()}
         />,
       );
@@ -127,6 +128,7 @@ describe("EditPanel book details", () => {
           onSave={vi.fn()}
           onChanged={vi.fn()}
           onEnhance={vi.fn()}
+          onGoodreadsChanged={vi.fn()}
           onClose={vi.fn()}
         />,
       );

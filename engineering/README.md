@@ -7,6 +7,7 @@
 - [Design system](design-system.md) covers shared UI tokens, identity, layout, and visual verification.
 - [App caching](app-caching.md) covers retained views, cache invalidation, and asynchronous refresh.
 - [Kobo engineering notes](device-notes.md) cover the database, device writes, backups, and how to add a device report.
+- [Goodreads import](goodreads.md) covers the export format, re-import merging and how saved books link to the library.
 - [Releasing](releasing.md) covers cutting a release, signing keys and secrets, the site's deployment, and how the CLI is distributed.
 - [Hardware checks](hardware-checks.md) provide repeatable procedures. [Hardware results](hardware-results.md) record which device, firmware, and workflows were actually tested.
 

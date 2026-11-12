@@ -1542,6 +1542,9 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                   canUpscale={canUpscale}
                   onSave={save}
                   onEnhance={(id) => setEnhancing([id])}
+                  onGoodreadsChanged={() =>
+                    void goodreadsMatches().then(setGoodreads, () => undefined)
+                  }
                   onChanged={(updated) => {
                     setBooks((bs) =>
                       bs.map((b) => (b.id === updated.id ? updated : b)),

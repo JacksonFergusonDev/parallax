@@ -719,10 +719,7 @@ export const goodreadsMatches = () =>
   ]);
 export const goodreadsSaved = () => invoke<GoodreadsBook[]>("goodreads_saved");
 export const goodreadsEdit = (goodreadsId: string, edit: GoodreadsEdit) =>
-  invoke<GoodreadsBook>("goodreads_edit", {
-    goodreadsId,
-    edit,
-  });
+  write<GoodreadsBook>("goodreads_edit", { goodreadsId, edit }, ["goodreads"]);
 export const librarySnapshots = () => invoke<Snapshot[]>("library_snapshots");
 export const libraryRestore = (file: string) =>
   write<{

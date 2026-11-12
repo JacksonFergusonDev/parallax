@@ -11,6 +11,7 @@ import type {
   Progress,
   DeviceBook,
   DeviceInfo,
+  GoodreadsMatch,
   MetadataEdit,
   Proposal,
   ReaderSettings,
@@ -251,6 +252,25 @@ const device: DeviceInfo = {
 const dismissed = new Set<string>();
 const settings = new Map<string, string>();
 const health = { missing: true, duplicates: true, images: 23 };
+/** A few library books on Goodreads shelves, by library id. */
+const goodreadsMatches = new Map<number, GoodreadsMatch>(
+  [
+    [0, "read", 5, ["favorites"]],
+    [1, "read", 4, []],
+    [3, "currently_reading", null, []],
+    [6, "to_read", null, ["sci-fi"]],
+  ].map(([i, shelf, rating, shelves]) => [
+    books[i as number]?.id ?? (i as number),
+    {
+      goodreads_id: `gr${i}`,
+      shelf: shelf as GoodreadsMatch["shelf"],
+      rating: rating as number | null,
+      date_read: null,
+      shelves: shelves as string[],
+    },
+  ]),
+);
+
 const onDevice = new Map<number, string>([
   [3, "2026-10-01T00:00:00Z"],
   [5, "2026-10-01T00:00:00Z"],
@@ -761,7 +781,68 @@ export function installMockBackend(label = "main") {
           }
           return null;
         }
+        case "goodreads_matches":
+          return Object.fromEntries(goodreadsMatches);
+        case "goodreads_edit": {
+          const id = a.goodreadsId as string;
+          const edit = a.edit as {
+            shelf?: string;
+            rating?: number;
+            add_shelves?: string[];
+            remove_shelves?: string[];
+          };
+          for (const [bookId, m] of goodreadsMatches) {
+            if (m.goodreads_id !== id) continue;
+            if (edit.shelf) m.shelf = edit.shelf as typeof m.shelf;
+            if (edit.rating !== undefined)
+              m.rating = edit.rating === 0 ? null : edit.rating;
+            m.shelves = [
+              ...m.shelves.filter((n) => !edit.remove_shelves?.includes(n)),
+              ...(edit.add_shelves ?? []).filter((n) => !m.shelves.includes(n)),
+            ];
+            goodreadsMatches.set(bookId, m);
+            return m;
+          }
+          throw "that book isn't on your Goodreads shelves";
+        }
+        case "goodreads_plan":
+          return {
+            added: 12,
+            updated: 2,
+            unchanged: 0,
+            skipped: 0,
+            conflicts: [],
+            missing: [],
+            summary: {
+              books: 14,
+              read: 9,
+              to_read: 4,
+              currently_reading: 1,
+              shelves: [
+                { name: "favorites", books: 3, new: true },
+                { name: "sci-fi", books: 5, new: true },
+              ],
+              in_library: goodreadsMatches.size,
+            },
+          };
+        case "goodreads_import":
+          return {
+            added: 12,
+            updated: 2,
+            unchanged: 0,
+            skipped: 0,
+            kept: 0,
+            removed: 0,
+            kept_yours: 0,
+            took_goodreads: 0,
+          };
         case "plugin:dialog|open":
+          if (
+            (
+              a.options as { filters?: { extensions: string[] }[] } | undefined
+            )?.filters?.some((f) => f.extensions.includes("csv"))
+          )
+            return "/Users/you/Downloads/goodreads_library_export.csv";
           return [
             "/Users/you/Downloads/my_scan_01.epub",
             "/Users/you/Downloads/no_author_notes.epub",

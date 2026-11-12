@@ -31,6 +31,7 @@ import { AnnotationsDialog } from "./AnnotationsDialog";
 import { CoverPicker } from "./CoverPicker";
 import { UpscaleReview } from "./UpscaleReview";
 import { MetadataSource } from "./MetadataSource";
+import { GoodreadsShelves } from "./GoodreadsShelves";
 
 interface Props {
   book: Book;
@@ -43,6 +44,8 @@ interface Props {
   onChanged: (book: Book) => void;
   /** Look up this book's metadata online. */
   onEnhance: (id: number) => void;
+  /** Called after the Goodreads status, rating or shelves changed. */
+  onGoodreadsChanged: () => void;
   onClose: () => void;
 }
 
@@ -146,6 +149,7 @@ export function EditPanel({
   onSave,
   onChanged,
   onEnhance,
+  onGoodreadsChanged,
   onClose,
 }: Props) {
   const [form, setForm] = useState<EditForm>(() => toForm(book));
@@ -555,6 +559,7 @@ export function EditPanel({
           )
         );
       })}
+      <GoodreadsShelves book={book} onChanged={onGoodreadsChanged} />
       <Facts book={book} />
     </aside>
   );

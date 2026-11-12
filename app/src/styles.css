@@ -3525,3 +3525,37 @@ button.icon {
   width: var(--icon-size);
   height: var(--icon-size);
 }
+
+.goodreads-shelves {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+}
+
+.goodreads-shelves h3 {
+  margin: 0;
+}
+
+.goodreads-rating {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.goodreads-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.goodreads-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: var(--text-small);
+}
