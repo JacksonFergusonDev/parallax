@@ -82,6 +82,14 @@ enum Command {
         #[command(subcommand)]
         command: LibraryCommand,
     },
+    /// Read a Goodreads export (CSV): shelf counts, or the books on one shelf. Reads only.
+    Goodreads {
+        /// The CSV from Goodreads' My Books → Import and export.
+        file: PathBuf,
+        /// List the books on this shelf (read, to-read, currently-reading or one of yours).
+        #[arg(long)]
+        shelf: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -555,6 +563,11 @@ fn main() -> Result<()> {
             let outcomes = send_books(&kobo, &ToKepub::locate()?, &files, |p| progress.send(p));
             drop(progress);
             finish_send(&kobo, &outcomes, no_eject, cli.json)?;
+        }
+        Command::Goodreads { file, shelf } => {
+            let books = parallax_core::goodreads::read_file(&file)
+                .with_context(|| format!("reading {}", file.display()))?;
+            goodreads_command(&books, shelf.as_deref(), cli.json)?;
         }
         Command::Library { library, command } => {
             let root = library.map_or_else(default_library_root, Ok)?;
@@ -1739,6 +1752,57 @@ fn finish_send(
     if failed > 0 {
         bail!("{failed} of {} books failed", outcomes.len());
     }
+    Ok(())
+}
+
+fn goodreads_command(
+    books: &[parallax_core::goodreads::Book],
+    shelf: Option<&str>,
+    json: bool,
+) -> Result<()> {
+    let Some(shelf) = shelf else {
+        let counts = parallax_core::goodreads::shelf_counts(books);
+        if json {
+            return print_json(&counts);
+        }
+        let mut rows = table(&["Shelf", "Books"]);
+        for (name, count) in counts {
+            rows.add_row([name, count.to_string()]);
+        }
+        println!("{rows}");
+        return Ok(());
+    };
+    let mut on_shelf: Vec<_> = books
+        .iter()
+        .filter(|b| b.shelves.iter().any(|s| s.name == shelf) || b.shelf.name() == shelf)
+        .collect();
+    if on_shelf.is_empty() {
+        bail!("no books on a shelf called {shelf}");
+    }
+    on_shelf.sort_by_key(|b| {
+        b.shelves
+            .iter()
+            .find(|s| s.name == shelf)
+            .and_then(|s| s.position)
+            .unwrap_or(u32::MAX)
+    });
+    if json {
+        return print_json(&on_shelf);
+    }
+    let mut rows = table(&["Title", "Author", "Series", "Rating", "Read"]);
+    for b in on_shelf {
+        rows.add_row([
+            b.title.clone(),
+            b.authors.first().cloned().unwrap_or_default(),
+            b.series
+                .as_ref()
+                .map_or_default(|s| format!("{} #{}", s.name, s.number)),
+            b.rating.map_or_default(|r| format!("{r}/5")),
+            b.date_read
+                .map_or_default(|d| d.format("%Y-%m-%d").to_string()),
+        ]);
+    }
+    println!("{rows}");
     Ok(())
 }
 
