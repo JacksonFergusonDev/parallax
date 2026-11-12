@@ -4,6 +4,8 @@ What changed in each release of Parallax, for people using it. The release workf
 
 ## Unreleased
 
+## 0.1.1 (2026-11-11)
+
 - Settings › General can download new versions in the background. Parallax then tells you the update is ready, and installs it when you choose **Restart to Update**.
 - The app icon keeps its full gold outline on macOS 26 and later, where it was trimmed at the edges and corners.
 - The disk image opens in an arranged window, with Parallax beside a shortcut to Applications on its background.
