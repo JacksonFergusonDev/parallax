@@ -524,8 +524,7 @@ fn main() -> Result<()> {
                     rows.add_row([
                         status_of(b),
                         b.last_read
-                            .map(|d| d.format("%Y-%m-%d").to_string())
-                            .unwrap_or_default(),
+                            .map_or_default(|d| d.format("%Y-%m-%d").to_string()),
                         b.title.clone(),
                         b.author.clone().unwrap_or_else(|| "Unknown".into()),
                     ]);
@@ -782,8 +781,8 @@ fn main() -> Result<()> {
                     rows.add_row([
                         b.title.clone(),
                         format!("{}%", b.percent),
-                        b.time_secs.map(hours).unwrap_or_default(),
-                        b.left_secs.map(hours).unwrap_or_default(),
+                        b.time_secs.map_or_default(hours),
+                        b.left_secs.map_or_default(hours),
                     ]);
                 }
                 println!("{rows}");
@@ -851,8 +850,7 @@ fn main() -> Result<()> {
                 let failed = e
                     .error
                     .as_deref()
-                    .map(|err| format!("  FAILED: {err}"))
-                    .unwrap_or_default();
+                    .map_or_default(|err| format!("  FAILED: {err}"));
                 println!("{}  {:<10} {what}{failed}", e.at, e.op);
             }
         }
@@ -926,8 +924,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                         possible_duplicate_of,
                     }) => {
                         let dup = possible_duplicate_of
-                            .map(|id| format!(" (possible duplicate of #{id})"))
-                            .unwrap_or_default();
+                            .map_or_default(|id| format!(" (possible duplicate of #{id})"));
                         println!("{} #{} {}{dup}", success("added"), book.id, book.title);
                     }
                     Ok(ImportOutcome::AlreadyInLibrary { book }) => {
@@ -1150,11 +1147,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             {
                 println!("#{} {}", p.book_id, lib.book(p.book_id)?.title);
                 if let Some(s) = &p.series {
-                    let index = s
-                        .index
-                        .as_deref()
-                        .map(|i| format!(" #{i}"))
-                        .unwrap_or_default();
+                    let index = s.index.as_deref().map_or_default(|i| format!(" #{i}"));
                     println!(
                         "  {} series  {}{index}  ({})",
                         mark(s.confident),
@@ -1295,7 +1288,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             }
             let mut rows = table(&["Issue", "Book", "Detail"]);
             for f in &review.findings {
-                let title = lib.book(f.book_id).map(|b| b.title).unwrap_or_default();
+                let title = lib.book(f.book_id).map_or_default(|b| b.title);
                 rows.add_row(vec![format!("{:?}", f.issue), title, f.detail.clone()]);
             }
             println!("{rows}");

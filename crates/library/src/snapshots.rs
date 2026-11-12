@@ -259,8 +259,7 @@ impl Library {
     /// Held folders by file hash, the newest where a book was removed twice.
     fn held_books(&self) -> HashMap<String, PathBuf> {
         let mut dirs: Vec<PathBuf> = fs::read_dir(self.root.join(REMOVED_DIR))
-            .map(|d| d.flatten().map(|e| e.path()).collect())
-            .unwrap_or_default();
+            .map_or_default(|d| d.flatten().map(|e| e.path()).collect());
         dirs.sort();
         dirs.into_iter()
             .filter_map(|dir| {
@@ -327,14 +326,12 @@ fn is_snapshot(name: &str) -> bool {
 
 /// Snapshot file names, oldest first.
 fn snapshot_names(dir: &Path) -> Vec<String> {
-    let mut names: Vec<String> = fs::read_dir(dir)
-        .map(|d| {
-            d.flatten()
-                .map(|e| e.file_name().to_string_lossy().into_owned())
-                .filter(|n| is_snapshot(n))
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut names: Vec<String> = fs::read_dir(dir).map_or_default(|d| {
+        d.flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| is_snapshot(n))
+            .collect()
+    });
     names.sort();
     names
 }

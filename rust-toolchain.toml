@@ -1,0 +1,6 @@
+# The Rust release used locally and in CI. Pinned so a new stable release
+# can't change lints or invalidate CI build caches without a commit.
+[toolchain]
+channel = "1.100.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

@@ -294,7 +294,7 @@ impl KoboDevice {
             let books_path = dir.join("books.json");
             let mut books: BTreeMap<String, ManagedBook> =
                 if let Ok(f) = read_json::<BooksFile>(&books_path) {
-                    f.map(|f| f.books).unwrap_or_default()
+                    f.map_or_default(|f| f.books)
                 } else {
                     set_aside(&books_path);
                     Vec::new()

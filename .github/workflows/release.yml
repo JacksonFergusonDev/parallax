@@ -129,7 +129,7 @@ jobs:
       - name: Install Rust for both Mac architectures
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          toolchain: stable
+          toolchain: 1.100.0
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Install uv
@@ -263,7 +263,7 @@ jobs:
       - name: Install native Rust toolchain
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          toolchain: stable-${{ matrix.target }}
+          toolchain: 1.100.0-${{ matrix.target }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3

@@ -174,7 +174,7 @@ pub fn proposal(book: &Book, clues: &DeviceClues, lookup: Option<&Lookup>) -> Pr
         details: None,
         record: None,
         issues: Vec::new(),
-        problems: lookup.map(|l| l.problems.clone()).unwrap_or_default(),
+        problems: lookup.map_or_default(|l| l.problems.clone()),
     };
 
     let online_series = lookup
@@ -219,7 +219,7 @@ pub fn proposal(book: &Book, clues: &DeviceClues, lookup: Option<&Lookup>) -> Pr
     if let Some(folder) = clues.folder.get(&book.id) {
         add((*folder).to_owned(), vec!["Kobo folder".to_owned()], true);
     }
-    for g in lookup.map(|l| l.genres.as_slice()).unwrap_or_default() {
+    for g in lookup.map_or_default(|l| l.genres.as_slice()) {
         add(
             g.name.clone(),
             g.sources.iter().map(|s| s.label().to_owned()).collect(),

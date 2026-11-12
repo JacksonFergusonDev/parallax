@@ -82,8 +82,7 @@ fn scan(dir: &Path) -> Result<Contents> {
             let rel_name = child.to_string_lossy().replace('\\', "/");
             let ext = name
                 .rsplit_once('.')
-                .map(|(_, e)| e.to_lowercase())
-                .unwrap_or_default();
+                .map_or_default(|(_, e)| e.to_lowercase());
             match classify(&rel_name) {
                 Kind::Page => contents.images.push(rel_name),
                 Kind::ComicInfo if rel.as_os_str().is_empty() => {
