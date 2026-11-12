@@ -3,6 +3,14 @@ import type { GoodreadsPlan, GoodreadsReport } from "./api";
 import { goodreadsSummary } from "./goodreads";
 
 const plan = (p: Partial<GoodreadsPlan>): GoodreadsPlan => ({
+  summary: {
+    books: 0,
+    read: 0,
+    to_read: 0,
+    currently_reading: 0,
+    shelves: [],
+    in_library: 0,
+  },
   added: 0,
   updated: 0,
   unchanged: 0,

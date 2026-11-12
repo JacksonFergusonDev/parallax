@@ -18,6 +18,7 @@ const COMMANDS: &[&str] = &[
     "goodreads_plan",
     "goodreads_import",
     "goodreads_saved",
+    "goodreads_matches",
     "goodreads_edit",
     "library_snapshots",
     "library_restore",

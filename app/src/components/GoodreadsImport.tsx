@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   goodreadsImport,
@@ -7,10 +7,17 @@ import {
   type GoodreadsReport,
   type GoodreadsResolutions,
 } from "../api";
-import { goodreadsSummary, plural } from "../goodreads";
+import {
+  exportOverview,
+  goodreadsSummary,
+  plural,
+  shelfList,
+} from "../goodreads";
 
 interface Props {
   onClose: () => void;
+  /** Called after a successful import; the dialog then closes itself. */
+  onImported: (report: GoodreadsReport) => void;
 }
 
 type Pick = "mine" | "goodreads";
@@ -51,7 +58,7 @@ function Choice<T extends string>({
  * a book was changed both here and on Goodreads, or Goodreads no longer has
  * it, you decide, or take the recommended choice for everything in one click.
  */
-export function GoodreadsImport({ onClose }: Props) {
+export function GoodreadsImport({ onClose, onImported }: Props) {
   const [path, setPath] = useState<string | null>(null);
   const [plan, setPlan] = useState<GoodreadsPlan | null>(null);
   const [picks, setPicks] = useState<Record<string, Pick>>({});
@@ -59,15 +66,27 @@ export function GoodreadsImport({ onClose }: Props) {
     {},
   );
   const [busy, setBusy] = useState(false);
-  const [report, setReport] = useState<GoodreadsReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The file picker is open, so there's nothing else to show yet. */
+  const [picking, setPicking] = useState(true);
+  const started = useRef(false);
 
-  const choose = async () => {
+  const choose = async (first = false) => {
+    setPicking(true);
     const picked = await open({
       title: "Choose your Goodreads export",
       filters: [{ name: "CSV", extensions: ["csv"] }],
+    }).catch((e: unknown) => {
+      setError(String(e));
+      return null;
     });
-    if (typeof picked !== "string") return;
+    if (typeof picked !== "string") {
+      // Cancelled before anything was shown: leave nothing behind.
+      if (first) onClose();
+      else setPicking(false);
+      return;
+    }
+    setPicking(false);
     setBusy(true);
     setError(null);
     setPlan(null);
@@ -88,13 +107,22 @@ export function GoodreadsImport({ onClose }: Props) {
     setBusy(true);
     setError(null);
     try {
-      setReport(await goodreadsImport(path, resolutions));
+      const report = await goodreadsImport(path, resolutions);
+      onImported(report);
+      onClose();
     } catch (e) {
       setError(String(e));
-    } finally {
       setBusy(false);
     }
   };
+
+  // Opening the dialog goes straight to choosing the file.
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    void choose(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const needsDecisions =
     (plan?.conflicts.length ?? 0) + (plan?.missing.length ?? 0) > 0;
@@ -123,6 +151,8 @@ export function GoodreadsImport({ onClose }: Props) {
       ),
     );
 
+  if (picking && !plan) return null;
+
   return (
     <div className="modal-backdrop" onClick={busy ? undefined : onClose}>
       <div
@@ -135,8 +165,7 @@ export function GoodreadsImport({ onClose }: Props) {
           <div>
             <h2>Import from Goodreads</h2>
             <p className="muted">
-              Choose the CSV from Goodreads (My Books, then Import and export).
-              Import a newer one any time and your books update without being
+              Import a newer export any time and your books update without being
               added twice.
             </p>
           </div>
@@ -144,10 +173,22 @@ export function GoodreadsImport({ onClose }: Props) {
 
         {error && <p className="notice notice-error wrap">{error}</p>}
 
-        {report ? (
-          <p>{goodreadsSummary(report)}</p>
-        ) : plan ? (
+        {plan ? (
           <>
+            <div className="goodreads-overview">
+              {exportOverview(plan.summary).map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+              {shelfList(plan.summary.shelves, true) && (
+                <p>New shelves: {shelfList(plan.summary.shelves, true)}.</p>
+              )}
+              {shelfList(plan.summary.shelves, false) && (
+                <p className="muted">
+                  Shelves you already have:{" "}
+                  {shelfList(plan.summary.shelves, false)}.
+                </p>
+              )}
+            </div>
             <p>{goodreadsSummary(plan)}</p>
             {needsDecisions && (
               <>
@@ -260,40 +301,36 @@ export function GoodreadsImport({ onClose }: Props) {
 
         <div className="form-actions">
           <span className="spacer" />
-          {report ? (
-            <button className="primary" onClick={onClose} autoFocus>
-              Done
-            </button>
-          ) : (
+          <button className="secondary" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          {plan ? (
             <>
-              <button className="secondary" onClick={onClose} disabled={busy}>
-                Cancel
+              <button
+                className="secondary"
+                onClick={() => choose()}
+                disabled={busy}
+              >
+                Choose another…
               </button>
-              {plan ? (
-                <>
-                  <button
-                    className="secondary"
-                    onClick={choose}
-                    disabled={busy}
-                  >
-                    Choose another…
-                  </button>
-                  <button
-                    className="primary"
-                    disabled={busy}
-                    onClick={() => run(needsDecisions ? chosen : recommended)}
-                  >
-                    {removing > 0
-                      ? `Import and remove ${plural(removing, "book")}`
-                      : "Import"}
-                  </button>
-                </>
-              ) : (
-                <button className="primary" onClick={choose} disabled={busy}>
-                  Choose export…
-                </button>
-              )}
+              <button
+                className="primary"
+                disabled={busy}
+                onClick={() => run(needsDecisions ? chosen : recommended)}
+              >
+                {removing > 0
+                  ? `Import and remove ${plural(removing, "book")}`
+                  : "Import"}
+              </button>
             </>
+          ) : (
+            <button
+              className="primary"
+              onClick={() => choose()}
+              disabled={busy}
+            >
+              Choose export…
+            </button>
           )}
         </div>
       </div>

@@ -524,6 +524,72 @@ pub struct ImportPlan {
     pub skipped: usize,
     pub conflicts: Vec<Conflict>,
     pub missing: Vec<MissingBook>,
+    /// A look at the export itself, to show before importing.
+    pub summary: ExportSummary,
+}
+
+/// What an export holds: how many books, on which shelves, and how many are
+/// already in the library.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct ExportSummary {
+    pub books: usize,
+    pub read: usize,
+    pub to_read: usize,
+    pub currently_reading: usize,
+    /// Your own shelves, biggest first, with whether they're new to you here.
+    pub shelves: Vec<ShelfSummary>,
+    /// Books in the export that match a book in your library.
+    pub in_library: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ShelfSummary {
+    pub name: String,
+    pub books: usize,
+    /// Not on any book you've saved from an earlier export.
+    pub new: bool,
+}
+
+/// Describes an export against what's saved and what's in the library.
+pub fn summarize(
+    saved: &[Book],
+    books: &[Book],
+    library: &[parallax_library::Book],
+) -> ExportSummary {
+    let known: BTreeSet<&str> = saved
+        .iter()
+        .flat_map(|b| b.shelves.iter().map(|s| s.name.as_str()))
+        .collect();
+    let custom = |name: &str| {
+        !matches!(
+            Shelf::parse(name),
+            Shelf::Read | Shelf::ToRead | Shelf::CurrentlyReading
+        )
+    };
+    let mut shelves: Vec<ShelfSummary> = shelf_counts(books)
+        .into_iter()
+        .filter(|(name, _)| custom(name))
+        .map(|(name, count)| ShelfSummary {
+            new: !known.contains(name.as_str()),
+            name,
+            books: count,
+        })
+        .collect();
+    shelves.sort_by(|a, b| b.books.cmp(&a.books).then_with(|| a.name.cmp(&b.name)));
+    let count = |shelf: &Shelf| books.iter().filter(|b| &b.shelf == shelf).count();
+    let in_library = library_matches(books, library)
+        .values()
+        .map(|m| &m.goodreads_id)
+        .collect::<BTreeSet<_>>()
+        .len();
+    ExportSummary {
+        books: books.len(),
+        read: count(&Shelf::Read),
+        to_read: count(&Shelf::ToRead),
+        currently_reading: count(&Shelf::CurrentlyReading),
+        shelves,
+        in_library,
+    }
 }
 
 impl ImportPlan {
@@ -719,7 +785,11 @@ pub fn plan_file(lib: &Library, path: &Path) -> Result<ImportPlan, GoodreadsErro
 }
 
 pub fn plan(lib: &Library, books: &[Book]) -> Result<ImportPlan, GoodreadsError> {
-    Ok(reconcile(&load(lib)?, books, &Resolutions::default())?.0)
+    let saved = load(lib)?;
+    let mut plan = reconcile(&saved, books, &Resolutions::default())?.0;
+    let mine: Vec<Book> = saved.into_values().map(|s| s.mine).collect();
+    plan.summary = summarize(&mine, books, &lib.books()?);
+    Ok(plan)
 }
 
 /// Saves an export with your decisions, all together or not at all. Anything
@@ -746,6 +816,67 @@ pub fn import(
 /// The saved books as you see them.
 pub fn saved(lib: &Library) -> Result<Vec<Book>, GoodreadsError> {
     Ok(load(lib)?.into_values().map(|s| s.mine).collect())
+}
+
+/// What your Goodreads shelves say about a book in the library.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct LibraryMatch {
+    pub goodreads_id: String,
+    pub shelf: Shelf,
+    pub rating: Option<u8>,
+    pub date_read: Option<NaiveDate>,
+    /// Your own shelves it's on.
+    pub shelves: Vec<String>,
+}
+
+/// Finds the library books on your saved Goodreads shelves, by ISBN first and
+/// then by title and author (the same way duplicates are found), keyed by
+/// library book id. Each Goodreads book matches at most one library book per
+/// key, and the first library book wins, so the result doesn't depend on
+/// anything but the two lists.
+pub fn library_matches(
+    saved: &[Book],
+    books: &[parallax_library::Book],
+) -> std::collections::HashMap<i64, LibraryMatch> {
+    use crate::duplicates::{normalise_isbn, title_author_key};
+    use std::collections::HashMap;
+    let mut by_isbn: HashMap<String, &Book> = HashMap::new();
+    let mut by_title: HashMap<String, &Book> = HashMap::new();
+    for g in saved {
+        for isbn in [&g.isbn, &g.isbn13].into_iter().flatten() {
+            let key = normalise_isbn(isbn);
+            if !key.is_empty() {
+                by_isbn.entry(key).or_insert(g);
+            }
+        }
+        if let Some(key) = title_author_key(&g.title, &g.authors) {
+            by_title.entry(key).or_insert(g);
+        }
+    }
+    let mut out = HashMap::new();
+    for b in books {
+        let by_number = b
+            .identifiers
+            .iter()
+            .map(|i| normalise_isbn(i.value.trim_start_matches("urn:isbn:")))
+            .find_map(|k| by_isbn.get(&k).copied());
+        let found = by_number.or_else(|| {
+            title_author_key(&b.title, &b.authors).and_then(|k| by_title.get(&k).copied())
+        });
+        if let Some(g) = found {
+            out.insert(
+                b.id,
+                LibraryMatch {
+                    goodreads_id: g.goodreads_id.clone(),
+                    shelf: g.shelf.clone(),
+                    rating: g.rating,
+                    date_read: g.date_read,
+                    shelves: g.custom_shelves().map(|s| s.name.clone()).collect(),
+                },
+            );
+        }
+    }
+    out
 }
 
 /// A change you make here. Anything left out stays as it is.
@@ -839,6 +970,92 @@ pub fn shelf_counts(books: &[Book]) -> BTreeMap<String, usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn library_book(
+        id: i64,
+        title: &str,
+        author: &str,
+        isbn: Option<&str>,
+    ) -> parallax_library::Book {
+        parallax_library::Book {
+            id,
+            title: title.into(),
+            authors: vec![author.into()],
+            contributors: None,
+            series: None,
+            series_index: None,
+            tags: vec![],
+            language: None,
+            publisher: None,
+            published: None,
+            description: None,
+            identifiers: isbn
+                .map(|v| parallax_epub::Identifier {
+                    scheme: Some("isbn".into()),
+                    value: v.into(),
+                })
+                .into_iter()
+                .collect(),
+            words: None,
+            pages: None,
+            pages_estimated: true,
+            original_name: "b.epub".into(),
+            file_size: 1,
+            format: parallax_library::Format::Epub,
+            kind: parallax_library::Kind::Book,
+            direction: parallax_library::Direction::Ltr,
+            has_cover: false,
+            custom_cover: false,
+            cover_upscaled: false,
+            added_at: String::new(),
+            modified_at: String::new(),
+        }
+    }
+
+    #[test]
+    fn matches_library_books_by_isbn_then_by_title_and_author() {
+        let books = parse_rows(&[
+            r#"1,"The Color of Magic (Discworld, #1)",Terry Pratchett,"Pratchett, Terry",,="0061020656",="9780061020650",5,,,,,,2026/01/02,,read,read (#1),read,,,1,"#,
+            r#"2,Emma,Jane Austen,"Austen, Jane",,="",="",0,,,,,,,,to-read,to-read (#1),to-read,,,0,"#,
+        ]);
+        let library = [
+            library_book(
+                10,
+                "Colour of Magic",
+                "T. Pratchett",
+                Some("urn:isbn:978-0-06-102065-0"),
+            ),
+            library_book(11, "Emma", "Jane Austen", None),
+            library_book(12, "Something Else", "Nobody", None),
+        ];
+        let found = library_matches(&books, &library);
+        assert_eq!(found.len(), 2);
+        assert_eq!(found[&10].goodreads_id, "1");
+        assert_eq!(found[&10].shelf, Shelf::Read);
+        assert_eq!(found[&10].rating, Some(5));
+        assert_eq!(found[&11].shelf, Shelf::ToRead);
+        assert!(!found.contains_key(&12));
+    }
+
+    #[test]
+    fn summarizes_an_export_and_flags_new_shelves() {
+        let books = parse_rows(&[
+            r#"1,One,Ann Author,"Author, Ann",,="",="",0,,,,,,,,"read, favorites","read (#1), favorites (#1)",read,,,1,"#,
+            r#"2,Two,Ann Author,"Author, Ann",,="",="",0,,,,,,,,"to-read, sci-fi","to-read (#1), sci-fi (#1)",to-read,,,0,"#,
+        ]);
+        let earlier = parse_rows(&[
+            r#"3,Old,Ann Author,"Author, Ann",,="",="",0,,,,,,,,"read, favorites","read (#1), favorites (#1)",read,,,1,"#,
+        ]);
+        let summary = summarize(&earlier, &books, &[]);
+        assert_eq!((summary.books, summary.read, summary.to_read), (2, 1, 1));
+        assert_eq!(summary.currently_reading, 0);
+        let names: Vec<(&str, bool)> = summary
+            .shelves
+            .iter()
+            .map(|s| (s.name.as_str(), s.new))
+            .collect();
+        assert_eq!(names, [("favorites", false), ("sci-fi", true)]);
+    }
 
     const HEADER: &str = "Book Id,Title,Author,Author l-f,Additional Authors,ISBN,ISBN13,My Rating,Publisher,Binding,Number of Pages,Year Published,Original Publication Year,Date Read,Date Added,Bookshelves,Bookshelves with positions,Exclusive Shelf,My Review,Spoiler,Private Notes,Read Count,Owned Copies";
 

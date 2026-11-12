@@ -374,17 +374,32 @@ export function plainDescription(html: string): string {
   return (doc.body.textContent ?? "").replace(/\n\s*\n+/g, "\n").trim();
 }
 
-/** "Finished", "63%", "Unread", or "" when no Kobo has reported it. */
+/** Finished or reading, from a Kobo or else your Goodreads shelves. */
+export function readState(b: Book): "unread" | "reading" | "finished" {
+  if (b.reading?.status === "finished" || b.reading?.status === "reading")
+    return b.reading.status;
+  if (b.goodreads?.shelf === "read") return "finished";
+  if (b.goodreads?.shelf === "currently_reading") return "reading";
+  return "unread";
+}
+
+/** "Finished", "63%", "Unread", "Read" or "Reading" (from Goodreads), or "". */
 export function progressLabel(b: Book): string {
   switch (b.reading?.status) {
     case "finished":
       return "Finished";
     case "reading":
       return `${b.reading.percent}%`;
-    case "unread":
-      return "Unread";
     default:
-      return "";
+      break;
+  }
+  switch (b.goodreads?.shelf) {
+    case "read":
+      return "Read";
+    case "currently_reading":
+      return "Reading";
+    default:
+      return b.reading?.status === "unread" ? "Unread" : "";
   }
 }
 

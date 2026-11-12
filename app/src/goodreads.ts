@@ -1,6 +1,10 @@
 // What the Goodreads import says about a plan or a finished import. Pure, so
 // it's testable without the dialog.
-import type { GoodreadsPlan, GoodreadsReport } from "./api";
+import type {
+  GoodreadsExportSummary,
+  GoodreadsPlan,
+  GoodreadsReport,
+} from "./api";
 
 export const plural = (n: number, word: string) =>
   `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -36,4 +40,33 @@ export function goodreadsSummary(
   return result.skipped > 0
     ? `${text} ${plural(result.skipped, "row")} skipped because Goodreads gave no book id.`
     : text;
+}
+
+/** What's in the export, in a sentence or two. */
+export function exportOverview(s: GoodreadsExportSummary): string[] {
+  const counts = [
+    s.read > 0 ? `${s.read} read` : "",
+    s.currently_reading > 0 ? `${s.currently_reading} reading now` : "",
+    s.to_read > 0 ? `${s.to_read} want to read` : "",
+  ].filter(Boolean);
+  const lines = [
+    `${plural(s.books, "book")} in this export${counts.length ? `: ${sentence(counts)}` : ""}.`,
+  ];
+  lines.push(
+    s.in_library > 0
+      ? `${s.in_library} of them ${s.in_library === 1 ? "is" : "are"} in your library and will show their read status there.`
+      : "None of them are in your library yet, so nothing in your library will change.",
+  );
+  return lines;
+}
+
+/** "favorites (19), sci-fi (7)", for the shelves that are new or all the rest. */
+export function shelfList(
+  shelves: GoodreadsExportSummary["shelves"],
+  isNew: boolean,
+): string {
+  return shelves
+    .filter((s) => s.new === isNew)
+    .map((s) => `${s.name} (${s.books})`)
+    .join(", ");
 }

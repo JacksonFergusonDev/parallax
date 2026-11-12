@@ -26,6 +26,8 @@ import {
   importBooks,
   reviewBooks,
   listBooks,
+  goodreadsMatches,
+  type GoodreadsMatch,
   listDevices,
   removeBooks,
   removeFromDevice,
@@ -78,6 +80,7 @@ import { BatchTransferBar } from "./components/BatchTransferBar";
 import { BookCard } from "./components/BookCard";
 import { CalibreImport } from "./components/CalibreImport";
 import { GoodreadsImport } from "./components/GoodreadsImport";
+import { goodreadsSummary } from "./goodreads";
 import { ReadingView } from "./components/ReadingView";
 import { ShelfArt } from "./components/ShelfArt";
 import { TidyGenres } from "./components/TidyGenres";
@@ -157,7 +160,18 @@ const NO_DEVICE_COPIES = new Map<number, OnDevice>();
 const none = new Set<number>();
 
 export default function App() {
-  const [books, setBooks] = useState<Book[]>([]);
+  const [stored, setBooks] = useState<Book[]>([]);
+  /** Which books are on your Goodreads shelves, by library id. */
+  const [goodreads, setGoodreads] = useState<Record<string, GoodreadsMatch>>(
+    {},
+  );
+  const books = useMemo(
+    () =>
+      stored.map((b) =>
+        goodreads[b.id] ? { ...b, goodreads: goodreads[b.id] } : b,
+      ),
+    [stored, goodreads],
+  );
   const [loaded, setLoaded] = useState(false);
   const appRef = useRef<HTMLDivElement>(null);
   const [detected, setDetected] = useState(false);
@@ -251,6 +265,7 @@ export default function App() {
   const refresh = useCallback(async () => {
     try {
       setBooks(await listBooks());
+      setGoodreads(await goodreadsMatches().catch(() => ({})));
     } catch (e) {
       setNotice({ kind: "error", text: String(e) });
     } finally {
@@ -259,6 +274,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    goodreadsMatches()
+      .then(setGoodreads)
+      .catch(() => undefined);
     listBooks()
       .then(setBooks)
       .catch((e) => setNotice({ kind: "error", text: String(e) }))
@@ -1757,7 +1775,13 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
         />
       )}
       {fromGoodreads && (
-        <GoodreadsImport onClose={() => setFromGoodreads(false)} />
+        <GoodreadsImport
+          onClose={() => setFromGoodreads(false)}
+          onImported={(report) => {
+            goodreadsMatches().then(setGoodreads, () => undefined);
+            setNotice({ kind: "info", text: goodreadsSummary(report) });
+          }}
+        />
       )}
       {reverting && (
         <RevertChanges

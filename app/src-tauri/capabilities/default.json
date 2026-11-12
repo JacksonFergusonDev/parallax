@@ -18,6 +18,7 @@
     "allow-goodreads-plan",
     "allow-goodreads-import",
     "allow-goodreads-saved",
+    "allow-goodreads-matches",
     "allow-goodreads-edit",
     "allow-library-review",
     "allow-library-update",

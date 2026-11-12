@@ -46,6 +46,8 @@ export interface Contributor {
 
 export interface Book {
   id: number;
+  /** From your saved Goodreads shelves; added by the app, not the library. */
+  goodreads?: GoodreadsMatch;
   title: string;
   authors: string[];
   /** Translators, illustrators…; null when not read from the EPUB yet. */
@@ -654,6 +656,18 @@ export interface GoodreadsPlan {
   skipped: number;
   conflicts: GoodreadsConflict[];
   missing: GoodreadsMissing[];
+  summary: GoodreadsExportSummary;
+}
+/** What the export holds, to show before importing. */
+export interface GoodreadsExportSummary {
+  books: number;
+  read: number;
+  to_read: number;
+  currently_reading: number;
+  /** Your own shelves, biggest first; `new` when not saved from an earlier export. */
+  shelves: { name: string; books: number; new: boolean }[];
+  /** Books in the export that match a book in your library. */
+  in_library: number;
 }
 /** Decisions by Goodreads Book Id; anything left out gets the recommended choice. */
 export interface GoodreadsResolutions {
@@ -684,7 +698,25 @@ export const goodreadsPlan = (path: string) =>
 export const goodreadsImport = (
   path: string,
   resolutions: GoodreadsResolutions,
-) => invoke<GoodreadsReport>("goodreads_import", { path, resolutions });
+) =>
+  write<GoodreadsReport>("goodreads_import", { path, resolutions }, [
+    "goodreads",
+  ]);
+/** Where a library book sits on your Goodreads shelves. */
+export interface GoodreadsMatch {
+  goodreads_id: string;
+  shelf: GoodreadsBook["shelf"];
+  rating: number | null;
+  date_read: string | null;
+  /** Your own shelves it's on. */
+  shelves: string[];
+}
+/** Library book ids on your saved Goodreads shelves. */
+export const goodreadsMatches = () =>
+  read<Record<string, GoodreadsMatch>>("goodreads_matches", {}, [
+    "library",
+    "goodreads",
+  ]);
 export const goodreadsSaved = () => invoke<GoodreadsBook[]>("goodreads_saved");
 export const goodreadsEdit = (goodreadsId: string, edit: GoodreadsEdit) =>
   invoke<GoodreadsBook>("goodreads_edit", {

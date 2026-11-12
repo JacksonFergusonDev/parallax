@@ -375,6 +375,17 @@ async fn goodreads_import(
 }
 
 /// The books saved from Goodreads exports, as the user sees them.
+/// Which library books are on your saved Goodreads shelves, by library id.
+#[tauri::command]
+fn goodreads_matches(
+    state: State<AppState>,
+) -> CmdResult<std::collections::HashMap<i64, parallax_core::goodreads::LibraryMatch>> {
+    let lib = state.library();
+    let saved = parallax_core::goodreads::saved(&lib).map_err(err)?;
+    let books = lib.books().map_err(err)?;
+    Ok(parallax_core::goodreads::library_matches(&saved, &books))
+}
+
 #[tauri::command]
 fn goodreads_saved(state: State<AppState>) -> CmdResult<Vec<parallax_core::goodreads::Book>> {
     parallax_core::goodreads::saved(&state.library()).map_err(err)
@@ -1616,6 +1627,7 @@ pub fn run() {
             goodreads_plan,
             goodreads_import,
             goodreads_saved,
+            goodreads_matches,
             goodreads_edit,
             library_snapshots,
             library_restore,

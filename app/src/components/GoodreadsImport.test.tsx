@@ -10,7 +10,19 @@ import type { GoodreadsPlan } from "../api";
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 
+const summary = {
+  books: 8,
+  read: 5,
+  to_read: 2,
+  currently_reading: 1,
+  shelves: [
+    { name: "favorites", books: 3, new: false },
+    { name: "sci-fi", books: 2, new: true },
+  ],
+  in_library: 4,
+};
 const quiet: GoodreadsPlan = {
+  summary,
   added: 2,
   updated: 1,
   unchanged: 5,
@@ -65,6 +77,7 @@ describe("GoodreadsImport", () => {
   let root: Root;
   let host: HTMLDivElement;
   const onClose = vi.fn();
+  const onImported = vi.fn();
   let plan = quiet;
 
   const button = (text: string) =>
@@ -83,9 +96,10 @@ describe("GoodreadsImport", () => {
   const start = async (p: GoodreadsPlan) => {
     plan = p;
     await act(async () => {
-      root.render(<GoodreadsImport onClose={onClose} />);
+      root.render(
+        <GoodreadsImport onClose={onClose} onImported={onImported} />,
+      );
     });
-    await click(button("Choose export"));
   };
 
   beforeEach(() => {
@@ -122,8 +136,28 @@ describe("GoodreadsImport", () => {
         },
       ],
     ]);
-    expect(host.textContent).toContain("2 books kept as your own");
-    expect(button("Done")).toBeTruthy();
+    expect(onImported).toHaveBeenCalledWith(report);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("opens the file picker straight away and closes if you cancel", async () => {
+    vi.mocked(open).mockResolvedValue(null);
+    await start(quiet);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalled();
+    expect(host.querySelector("[role=dialog]")).toBeNull();
+  });
+
+  it("describes the export and its new shelves before importing", async () => {
+    await start(quiet);
+    expect(host.textContent).toContain(
+      "8 books in this export: 5 read, 1 reading now and 2 want to read.",
+    );
+    expect(host.textContent).toContain("4 of them are in your library");
+    expect(host.textContent).toContain("New shelves: sci-fi (2).");
+    expect(host.textContent).toContain(
+      "Shelves you already have: favorites (3).",
+    );
   });
 
   it("lays out each conflict and missing book in plain words", async () => {
@@ -173,9 +207,10 @@ describe("GoodreadsImport", () => {
       "this doesn't look like a Goodreads export",
     );
     await act(async () => {
-      root.render(<GoodreadsImport onClose={onClose} />);
+      root.render(
+        <GoodreadsImport onClose={onClose} onImported={onImported} />,
+      );
     });
-    await click(button("Choose export"));
     expect(host.textContent).toContain("doesn't look like a Goodreads export");
     expect(button("Choose export")).toBeTruthy();
   });
