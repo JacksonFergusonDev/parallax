@@ -355,6 +355,7 @@ describe("skippedPagesNote", () => {
         content_id: "x",
         bytes: 1,
         skipped_pages: skipped,
+        details_only: false,
       },
     },
   });

@@ -401,6 +401,7 @@ describe("book operation progress", () => {
               content_id: koboBook.id,
               bytes: 100,
               skipped_pages: [],
+              details_only: false,
             },
           },
         },
