@@ -1,12 +1,19 @@
 ## Git workflow
 
-- Work directly on `main`. This is a solo-development repository; feature branches and pull requests are not required.
+- Commit and push directly to `origin/main` by default for a single, self-contained change, such as a small bug fix or an edit to `AGENTS.md`. Check the pull request criteria below before choosing this path.
 - Commit completed, coherent changes autonomously using conventional commit messages.
-- Push to `origin/main` autonomously after each coherent milestone and before ending each development session. The pre-push hook verifies the milestone during `git push`.
+- Push the working branch autonomously after each coherent milestone and before ending each development session. The pre-push hook runs during `git push`.
 - Do not ask for approval before routine commits, pushes, refactoring, dependency changes, or other development activities.
 - Never force-push, rewrite published Git history, delete remote branches, or perform destructive repository operations.
 - Never bypass Git hooks, disable CI, remove failing tests, or weaken verification to make changes pass.
 - Keep [PROGRESS.md](PROGRESS.md) concise and current. It records completed milestones, current work, unresolved issues, and next steps. Use the [engineering index](engineering/README.md) to find maintained references and design decisions.
+
+### When to use a pull request
+
+- Use a PR when the change needs verification on a GitHub Actions runner beyond what the local hooks cover. Run the relevant workflows against the PR branch, trigger any manual workflows it needs, and confirm the checks passed for the latest revision before merging to `main`.
+- Prefer a PR when you expect several rounds of iteration, such as debugging a tricky issue or refining a UI. Keep the intermediate commits on the branch and squash-merge the finished work into `main` as one conventional commit.
+- Use a PR when the change needs a lasting explanation beyond a commit message. Record the problem, why you chose the approach, and how you verified it. Document any architectural boundaries or invariants the change affects.
+- Use a PR when the diff is large or the work is complex, even if it has a single goal.
 
 ## Verification
 
