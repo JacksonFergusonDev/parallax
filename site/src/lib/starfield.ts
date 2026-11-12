@@ -7,11 +7,11 @@
  */
 import { runField } from 'house-style/js/field.js';
 
-export type StarfieldVariant = 'landing' | 'download';
+export type StarfieldVariant = 'landing' | 'diagonal';
 
 const scenes = {
   landing: { seed: 20261110, slope: 0 },
-  download: { seed: 20261111, slope: 0.45 },
+  diagonal: { seed: 20261111, slope: 0.45 },
 };
 
 interface Star {
@@ -46,7 +46,7 @@ function makeLayers(variant: StarfieldVariant): Layer[] {
     speed,
     alpha,
   });
-  if (variant === 'download') {
+  if (variant === 'diagonal') {
     return [layer(110, 0.65, 0.003, 0.4), layer(52, 1, 0.006, 0.6), layer(20, 1.4, 0.012, 0.85)];
   }
   return [layer(140, 0.7, 0.004, 0.45), layer(70, 1.1, 0.009, 0.7), layer(28, 1.6, 0.018, 1)];

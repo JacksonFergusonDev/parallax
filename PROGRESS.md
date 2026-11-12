@@ -21,7 +21,7 @@
 - The Reading tab has more space below the toolbar, with a smaller inset at narrow window widths.
 - The On Kobo sidebar uses the same row height and vertical text alignment for collections and All books.
 - Library and On Kobo request thumbnails when cards and rows mount. The grids warm decoded covers and use CSS spine shading to avoid delayed painting on the first fast scroll, verified in the macOS development app with a connected Libra 2.
-- The download page has a sparser gold starfield that drifts diagonally, with the same motion controls as the landing page.
+- The download and 404 pages share a sparser gold starfield that drifts diagonally, with the same motion controls as the landing page.
 
 ## Current
 
