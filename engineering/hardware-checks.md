@@ -31,7 +31,8 @@ Create a test collection and send a disposable book to it. Eject, read a few pag
 2. Compare left- and right-edge taps for a raw CBZ and a prepared KEPUB. Repeat for a left-to-right comic. Record the direction each tap actually turns.
 3. Check chapter navigation and metadata on the Kobo. Reconnect with **Add series to newly imported books** enabled, then verify the series and volume order. Update a comic already in progress and check that it reopens at the same place.
 4. On a colour Kobo, check colour pages and greyscale pages and record any rainbow artefacts. On an older 600 × 800 or 758 × 1024 model, confirm that the fixed-layout KEPUB opens and record page-turn speed.
-5. If testing landscape two-up with spread pinning enabled in the model profile, record the model and firmware and whether the split halves face each other.
+5. Put a CBZ on the Kobo by hand, read a few pages, then add it to the library from the Kobo. Edit its title and series and choose **Update on Kobo**. Check that the dialog explains a details-only update, then after ejecting confirm the new title and series show and the comic reopens at the same page.
+6. If testing landscape two-up with spread pinning enabled in the model profile, record the model and firmware and whether the split halves face each other.
 
 ## Marking a model as tested
 
@@ -39,6 +40,7 @@ After running the relevant checks on a physical device of a new model and record
 
 ## Checks still open
 
+- Verify the details-only update for a comic that is on the Kobo as its original CBZ (Comics step 5). Nickel showing series on a CBZ row is untested.
 - Repeat the production comics send and update checks on the Libra 2. Verify direction, chapter presentation, series, reading position, and the final page-processing settings. Colour and older models still need their own runs.
 - Verify batch progress, pending-eject states, Library removal scopes, Library filters with a connected device, and the physical-device restore flow.
 - Collect reports and run the relevant checks on other Kobo models. Real KindleGen combo files and KFX samples are still needed for the import checks.

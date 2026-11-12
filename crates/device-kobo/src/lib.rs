@@ -42,7 +42,7 @@ pub use maintenance::{
 };
 pub use ops::{
     DisplayMetadata, image_id_for, qhash, remove_book, remove_book_with_progress, replace_book,
-    replace_book_with_progress, set_series, tidy_apple_double,
+    replace_book_with_progress, set_series, tidy_apple_double, update_details,
 };
 pub use report::{CoverFiles, DeviceReport, REPORT_FORMAT};
 pub use screen::ASSUMED_SCREEN;

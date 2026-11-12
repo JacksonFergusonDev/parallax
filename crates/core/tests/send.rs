@@ -658,9 +658,10 @@ fn sends_and_updates_a_comic_on_fat32() {
 }
 
 #[test]
-fn comics_added_from_the_kobo_are_never_replaced() {
+fn comics_added_from_the_kobo_get_their_details_updated_in_place() {
     use parallax_core::device::books_on_device;
     use parallax_core::send::{COMIC_SPREADS, update_on_device};
+    use rusqlite::Connection;
 
     let dir = tempfile::tempdir().unwrap();
     let mount = dir.path().join("kobo");
@@ -679,27 +680,59 @@ fn comics_added_from_the_kobo_are_never_replaced() {
     library
         .record_device_copy(book.id, &kobo.version().serial, rel, &content_id)
         .unwrap();
+    let converter = Kepubify::locate().unwrap();
+    let backups = dir.path().join("backups");
+    let copy = |library: &Library| books_on_device(library, &kobo).unwrap().remove(0);
+    assert!(copy(&library).original_comic);
 
+    // Comic page settings never apply to it, so they don't make it out of date.
     library
         .set_setting(COMIC_SPREADS, Some("keep_whole"))
         .unwrap();
+    assert!(!copy(&library).stale);
+
+    // Not imported by Nickel yet: nothing to update, and nothing changes.
+    std::thread::sleep(std::time::Duration::from_millis(1100)); // timestamps have 1 s resolution
     let mut edit = book.edit();
     edit.title = "Storm, edited".into();
+    edit.series = Some("Storm".into());
+    edit.series_index = Some("2".into());
     library.update(book.id, &edit).unwrap();
-    assert!(!books_on_device(&library, &kobo).unwrap()[0].stale);
-
-    let converter = Kepubify::locate().unwrap();
-    let backups = dir.path().join("backups");
+    assert!(copy(&library).stale);
     let outcome =
         update_on_device(&library, &kobo, &converter, &backups, &[book.id], |_| {}).unwrap();
-    assert!(
-        outcome[0]
-            .result
-            .as_ref()
-            .unwrap_err()
-            .contains("can't be updated")
-    );
+    assert!(outcome[0].result.as_ref().unwrap_err().contains("Eject"));
+
+    Connection::open(kobo.db_path())
+        .unwrap()
+        .execute(
+            "INSERT INTO content (ContentID, ContentType, MimeType, ___UserID, Title, Accessibility, IsDownloaded, ___PercentRead)
+             VALUES (?1, 6, 'application/x-cbz', '', 'Storm v02', -1, 'true', 40)",
+            [&content_id],
+        )
+        .unwrap();
+    let outcome =
+        update_on_device(&library, &kobo, &converter, &backups, &[book.id], |_| {}).unwrap();
+    let sent = outcome[0].result.as_ref().unwrap();
+    assert!(sent.details_only);
+    assert_eq!(sent.device_path, rel);
+    assert!(!copy(&library).stale);
+    // Same file, same path, so the reading position stays.
     assert_eq!(fs::read(&on_kobo).unwrap(), original);
+    let (title, series, number, percent): (String, String, String, i64) = Connection::open(
+        kobo.db_path(),
+    )
+    .unwrap()
+    .query_row(
+        "SELECT Title, Series, SeriesNumber, ___PercentRead FROM content WHERE ContentID = ?1",
+        [&content_id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+    )
+    .unwrap();
+    assert_eq!(
+        (title.as_str(), series.as_str(), number.as_str(), percent),
+        ("Storm, edited", "Storm", "2", 40)
+    );
 }
 
 #[test]

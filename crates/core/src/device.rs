@@ -11,7 +11,7 @@ use parallax_device_kobo::{
 use parallax_library::{Format, Library};
 use serde::Serialize;
 
-use crate::comic_send::{ComicTarget, is_prepared_copy};
+use crate::comic_send::{ComicTarget, is_original_comic};
 
 #[derive(Debug, Serialize)]
 pub struct CatalogBook {
@@ -125,6 +125,9 @@ pub struct OnDevice {
     pub sent_at: String,
     /// The book was edited (metadata or cover) after it was sent.
     pub stale: bool,
+    /// A comic on the Kobo as its original CBZ (added from the Kobo), not
+    /// a copy Parallax prepared. Updating it changes only its details.
+    pub original_comic: bool,
 }
 
 pub fn books_on_device(
@@ -138,19 +141,20 @@ pub fn books_on_device(
         .filter(|c| device.mount().join(&c.device_path).is_file())
         .filter_map(|c| {
             let book = library.book(c.book_id).ok()?;
-            // A comic copied to the Kobo as it is (added from the Kobo) can't
-            // be updated in place, so it is never offered as out of date.
-            let raw_comic = book.format == Format::Cbz && !is_prepared_copy(&c.device_path);
+            // A comic on the Kobo as its original CBZ only takes edited
+            // details, so comic page settings don't make it out of date.
+            let original_comic = is_original_comic(&book, &c.device_path);
             Some(OnDevice {
-                stale: !raw_comic
-                    && (book.modified_at > c.sent_at
-                        || (book.format == Format::Cbz
-                            && target
-                                .get_or_init(|| ComicTarget::new(library, device))
-                                .as_ref()
-                                .is_ok_and(|target| {
-                                    c.comic_profile.as_deref() != Some(&target.fingerprint(&book))
-                                }))),
+                stale: book.modified_at > c.sent_at
+                    || (book.format == Format::Cbz
+                        && !original_comic
+                        && target
+                            .get_or_init(|| ComicTarget::new(library, device))
+                            .as_ref()
+                            .is_ok_and(|target| {
+                                c.comic_profile.as_deref() != Some(&target.fingerprint(&book))
+                            })),
+                original_comic,
                 book_id: c.book_id,
                 device_path: c.device_path,
                 content_id: c.content_id,

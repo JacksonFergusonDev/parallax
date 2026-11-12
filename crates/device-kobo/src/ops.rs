@@ -181,13 +181,13 @@ pub fn replace_book_with_progress(
     let content_id = format!("{ONBOARD_PREFIX}{device_path}");
     writer.device().replace_file(src, device_path, progress)?;
     let image_id = writer.transaction(|tx| {
-        tx.execute(
-            "UPDATE content SET Title = ?2, Attribution = ?3 WHERE ContentID = ?1 AND BookID IS NULL",
-            params![content_id, meta.title, meta.author],
-        )?;
-        set_series(tx, &content_id, meta.series.as_deref(), meta.series_number.as_deref())?;
+        write_display_metadata(tx, &content_id, meta)?;
         Ok(tx
-            .query_row("SELECT ImageId FROM content WHERE ContentID = ?1 AND BookID IS NULL", [&content_id], |r| r.get(0))
+            .query_row(
+                "SELECT ImageId FROM content WHERE ContentID = ?1 AND BookID IS NULL",
+                [&content_id],
+                |r| r.get(0),
+            )
             .optional()?
             .flatten())
     })?;
@@ -203,6 +203,46 @@ pub fn replace_book_with_progress(
             .detail(&meta.title),
     );
     Ok(())
+}
+
+/// Updates only what Nickel shows for a book (title, author, series),
+/// leaving its file alone. For copies whose file can't be replaced without
+/// changing its path, such as a comic that is on the Kobo as its original
+/// CBZ. Returns false when Nickel hasn't imported the book yet, so there is
+/// nothing to update.
+pub fn update_details(
+    writer: &mut DeviceWriter,
+    device_path: &str,
+    meta: &DisplayMetadata,
+) -> Result<bool> {
+    let content_id = format!("{ONBOARD_PREFIX}{device_path}");
+    let updated = writer.transaction(|tx| write_display_metadata(tx, &content_id, meta))?;
+    if updated {
+        writer.log(
+            LogEntry::new("update_details")
+                .ids([content_id])
+                .detail(&meta.title),
+        );
+    }
+    Ok(updated)
+}
+
+fn write_display_metadata(
+    tx: &rusqlite::Transaction,
+    content_id: &str,
+    meta: &DisplayMetadata,
+) -> Result<bool> {
+    let changed = tx.execute(
+        "UPDATE content SET Title = ?2, Attribution = ?3 WHERE ContentID = ?1 AND BookID IS NULL",
+        params![content_id, meta.title, meta.author],
+    )?;
+    set_series(
+        tx,
+        content_id,
+        meta.series.as_deref(),
+        meta.series_number.as_deref(),
+    )?;
+    Ok(changed > 0)
 }
 
 /// Sets (or clears) the series Nickel shows for an imported book. SeriesID

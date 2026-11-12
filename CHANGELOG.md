@@ -4,6 +4,8 @@ What changed in each release of Parallax, for people using it. The release workf
 
 ## Unreleased
 
+- **Update on Kobo** now works for a comic that was on your Kobo as its CBZ file before you added it to your library. It changes the title, author and series there and keeps your place. Parallax tells you first that the pages and cover stay as they are, and that removing the comic and sending it again gets you a copy prepared for your Kobo but starts it from the beginning.
+
 ## 0.1.1 (2026-11-11)
 
 - Settings › General can download new versions in the background. Parallax then tells you the update is ready, and installs it when you choose **Restart to Update**.

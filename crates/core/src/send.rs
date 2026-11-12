@@ -8,11 +8,12 @@ use parallax_comic::prepare::{Prepared, safe_kobo_component};
 use parallax_convert::Converter;
 use parallax_device_kobo::{
     BOOKS_DIR, DisplayMetadata, KoboDevice, device_file_name, replace_book_with_progress,
+    update_details,
 };
 use parallax_library::{Book, Format, Library};
 use serde::Serialize;
 
-use crate::comic_send::{ComicTarget, check_space, is_prepared_copy};
+use crate::comic_send::{ComicTarget, check_space, is_original_comic};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case", tag = "stage")]
@@ -70,6 +71,9 @@ pub struct SentInfo {
     pub bytes: u64,
     /// Comic pages left out because they aren't readable images.
     pub skipped_pages: Vec<String>,
+    /// Only the title, author and series were updated; the file on the
+    /// device was left as it was (a comic that is there as its original CBZ).
+    pub details_only: bool,
 }
 
 pub const COMIC_SPREADS: &str = "comic_spreads";
@@ -229,6 +233,7 @@ pub fn send_library_books(
                 content_id: sent.content_id,
                 bytes: sent.bytes,
                 skipped_pages: upload.skipped_pages(),
+                details_only: false,
             };
             Ok(sent)
         });
@@ -271,21 +276,41 @@ pub fn update_on_device(
                 .find(|c| c.book_id == id && device.mount().join(&c.device_path).is_file())
                 .ok_or("not on the device")?;
             let book = library.book(id).map_err(|e| e.to_string())?;
-            if book.format == Format::Cbz && !is_prepared_copy(&copy.device_path) {
-                return Err(format!(
-                    "{} is the comic file as it was added, so it can't be updated. Remove it from the Kobo and send it again.",
-                    copy.device_path
-                ));
-            }
-            stage(&|index, total, file| Progress::Preparing { index, total, file });
-            let upload = prepare_upload(library, device, converter, &book, &comic_target, stage)?;
-            let bytes = upload.check_space(device)?;
             let meta = DisplayMetadata {
                 title: book.title.clone(),
                 author: (!book.authors.is_empty()).then(|| book.authors.join(", ")),
                 series: book.series.clone(),
                 series_number: book.series.as_ref().and(book.series_index.clone()),
             };
+            if is_original_comic(&book, &copy.device_path) {
+                // Preparing the comic would give it a new path, which Nickel
+                // sees as a new book with no reading position. Update only
+                // what Nickel shows and leave the file as it is.
+                if !update_details(&mut writer, &copy.device_path, &meta)
+                    .map_err(|e| e.to_string())?
+                {
+                    return Err("Your Kobo hasn't added this comic to its library yet. Eject your Kobo, then update it again.".into());
+                }
+                library
+                    .record_device_copy_profile(
+                        id,
+                        &serial,
+                        &copy.device_path,
+                        &copy.content_id,
+                        None,
+                    )
+                    .map_err(|e| e.to_string())?;
+                return Ok(SentInfo {
+                    device_path: copy.device_path.clone(),
+                    content_id: copy.content_id.clone(),
+                    bytes: 0,
+                    skipped_pages: Vec::new(),
+                    details_only: true,
+                });
+            }
+            stage(&|index, total, file| Progress::Preparing { index, total, file });
+            let upload = prepare_upload(library, device, converter, &book, &comic_target, stage)?;
+            let bytes = upload.check_space(device)?;
             replace_book_with_progress(
                 &mut writer,
                 upload.path(),
@@ -308,6 +333,7 @@ pub fn update_on_device(
                 content_id: copy.content_id.clone(),
                 bytes,
                 skipped_pages: upload.skipped_pages(),
+                details_only: false,
             })
         })();
         SendOutcome {
@@ -470,6 +496,7 @@ fn deliver(
         content_id: sent.content_id,
         bytes: sent.bytes,
         skipped_pages: Vec::new(),
+        details_only: false,
     })
 }
 

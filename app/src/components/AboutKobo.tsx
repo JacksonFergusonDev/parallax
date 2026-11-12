@@ -19,6 +19,7 @@ interface Props {
 const OP_LABELS: Record<string, string> = {
   send: "Sent",
   replace: "Updated",
+  update_details: "Updated details",
   remove: "Removed",
   collection: "Collections",
   series: "Series",
@@ -47,7 +48,8 @@ function describe(e: LogEntry, titles: Map<string, string>): string {
       : ids.length > 1
         ? `${ids.length} books`
         : "";
-  if (e.detail && books && e.op !== "replace") return `${e.detail}: ${books}`;
+  if (e.detail && books && e.op !== "replace" && e.op !== "update_details")
+    return `${e.detail}: ${books}`;
   return e.detail ?? books;
 }
 

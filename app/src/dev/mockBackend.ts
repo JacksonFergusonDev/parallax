@@ -255,6 +255,10 @@ const onDevice = new Map<number, string>([
   [3, "2026-10-01T00:00:00Z"],
   [5, "2026-10-01T00:00:00Z"],
 ]);
+// A comic that was on the Kobo as its original CBZ before it was added to
+// the library, so updating it changes only its details.
+const originalComic = books.find((b) => b.title === "Signal Fires Vol. 1")!.id;
+onDevice.set(originalComic, "2026-10-01T00:00:00Z");
 const pendingImport = new Set<number>();
 const deviceOnlyBooks = new Map<number, Book>();
 const shelves = new Map<string, Set<string>>([["Favourites", new Set()]]);
@@ -429,10 +433,14 @@ export function installMockBackend(label = "main") {
               ? [
                   {
                     book_id: book.id,
-                    device_path: `KEpub/book-${book.id}.kepub.epub`,
+                    device_path:
+                      book.id === originalComic
+                        ? `Comics/${book.title}.cbz`
+                        : `KEpub/book-${book.id}.kepub.epub`,
                     content_id: contentId(book.id),
                     sent_at: sentAt,
                     stale: book.modified_at > sentAt,
+                    original_comic: book.id === originalComic,
                   },
                 ]
               : [];
@@ -633,8 +641,9 @@ export function installMockBackend(label = "main") {
               Ok: {
                 device_path: "KEpub/x.kepub.epub",
                 content_id: contentId(id),
-                bytes: 1_000_000,
+                bytes: id === originalComic ? 0 : 1_000_000,
                 skipped_pages: [],
+                details_only: id === originalComic,
               },
             },
           }));

@@ -413,6 +413,32 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
     );
   };
 
+  /** Comics on the Kobo as their original CBZ only take edited details.
+   * Says what updating them will and won't do before it happens. */
+  const confirmOriginalComics = (ids: number[]) => {
+    const originals = books.filter(
+      (b) => ids.includes(b.id) && onDevice.get(b.id)?.original_comic,
+    );
+    if (originals.length === 0) return Promise.resolve(true);
+    const one = originals.length === 1;
+    const [it, its, files] = one
+      ? ["it", "its", "file"]
+      : ["them", "their", "files"];
+    const which = one
+      ? `“${originals[0].title}” is`
+      : `${originals.length} comics are`;
+    return ask(
+      `${which} on your Kobo as the original CBZ ${files}, so Parallax updates ${its} title, author and series there. You keep your place.
+
+The pages and cover on your Kobo stay as they are, so comic page settings and cover changes won't show. To get a copy prepared for your Kobo's screen instead, remove ${it} from your Kobo and send ${it} again. You'll start from the beginning.`,
+      {
+        title: "Update comic details?",
+        okLabel: "Update Details",
+        cancelLabel: "Cancel",
+      },
+    );
+  };
+
   const rememberKoboChange = (
     target: DeviceInfo,
     ids: number[],
@@ -837,7 +863,16 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
     setBusy(kind);
     setNotice(null);
     try {
-      if (!(await confirmComicTransfer(device, ids, kind === "updating")))
+      if (kind === "updating" && !(await confirmOriginalComics(ids))) return;
+      if (
+        !(await confirmComicTransfer(
+          device,
+          kind === "updating"
+            ? ids.filter((id) => !onDevice.get(id)?.original_comic)
+            : ids,
+          kind === "updating",
+        ))
+      )
         return;
       const collection =
         sendCollection === NEW_COLLECTION
@@ -1589,7 +1624,7 @@ Notes and bookmarks are unavailable on the Kobo for sideloaded fixed-layout book
                   )
                 }
                 disabled={!device || busy !== null}
-                title="Replace the copies on your Kobo with your edits, keeping reading progress"
+                title="Send your edits to the copies on your Kobo, keeping reading progress"
               >
                 <RefreshCw />
                 {busy === "updating"

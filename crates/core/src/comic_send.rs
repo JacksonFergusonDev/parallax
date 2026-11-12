@@ -213,6 +213,13 @@ pub(crate) fn is_prepared_copy(device_path: &str) -> bool {
     device_path.to_ascii_lowercase().ends_with(".kepub.epub")
 }
 
+/// Whether `book`'s copy at `device_path` is a comic on the Kobo as its
+/// original archive. Only its details can be updated in place: a prepared
+/// copy would need a new path, and Nickel would treat it as a new book.
+pub fn is_original_comic(book: &parallax_library::Book, device_path: &str) -> bool {
+    book.format == parallax_library::Format::Cbz && !is_prepared_copy(device_path)
+}
+
 pub(crate) fn check_space(device: &KoboDevice, path: &std::path::Path) -> Result<u64, String> {
     let bytes = std::fs::metadata(path).map_err(|e| e.to_string())?.len();
     let free = device.free_bytes().map_err(|e| e.to_string())?;

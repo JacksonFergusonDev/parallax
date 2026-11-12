@@ -47,6 +47,7 @@ const bookName = (contentId: string) =>
 const KOBO_OPS: Record<string, string> = {
   send: "Sent",
   replace: "Updated",
+  update_details: "Updated details of",
   remove: "Removed",
   collection: "Changed collections for",
   series: "Changed series for",

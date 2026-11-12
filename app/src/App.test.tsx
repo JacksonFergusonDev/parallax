@@ -493,6 +493,7 @@ describe("book operation progress", () => {
             content_id: koboBook.id,
             sent_at: "2026-11-01",
             stale,
+            original_comic: false,
           },
         ];
       if (command === "update_books") {
@@ -507,6 +508,7 @@ describe("book operation progress", () => {
                 content_id: koboBook.id,
                 bytes: 100,
                 skipped_pages: [],
+                details_only: false,
               },
             },
           },
@@ -526,6 +528,46 @@ describe("book operation progress", () => {
     await click(button("On Kobo"));
     expect(panel("On Kobo").querySelector(".on-device")?.textContent).toBe(
       "Eject to see update",
+    );
+  });
+});
+
+describe("comics on the Kobo as their original CBZ", () => {
+  it("says what updating changes and how to get a prepared copy", async () => {
+    const normal = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === "library_list")
+        return [{ ...localBook, title: "Storm v02", format: "cbz" }];
+      if (command === "books_on_device")
+        return [
+          {
+            book_id: localBook.id,
+            device_path: "Comics/Storm v02.cbz",
+            content_id: "file:///mnt/onboard/Comics/Storm v02.cbz",
+            sent_at: "2026-11-01",
+            stale: true,
+            original_comic: true,
+          },
+        ];
+      return normal(command, args);
+    });
+    vi.mocked(ask).mockResolvedValueOnce(false);
+    await render();
+    await click(panel("Library").querySelector<HTMLButtonElement>(".card")!);
+    await click(button("Update 1 on Kobo"));
+    const [text, options] = vi.mocked(ask).mock.calls[0];
+    expect(options).toMatchObject({ title: "Update comic details?" });
+    expect(text).toContain(
+      "“Storm v02” is on your Kobo as the original CBZ file",
+    );
+    expect(text).toContain("You keep your place.");
+    expect(text).toContain("remove it from your Kobo and send it again");
+    // Cancelled: nothing is written and no comic preparation is offered.
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(invoke).not.toHaveBeenCalledWith("update_books", expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith(
+      "comic_transfer_estimate",
+      expect.anything(),
     );
   });
 });

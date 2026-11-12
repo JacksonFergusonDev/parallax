@@ -219,7 +219,8 @@ enum LibraryCommand {
         reset: bool,
     },
     /// Re-send books already on the Kobo with their latest edits, keeping
-    /// reading progress. Writes, with a backup.
+    /// reading progress. A comic on the Kobo as its original CBZ gets only
+    /// its title, author and series updated. Writes, with a backup.
     Update {
         #[arg(required = true)]
         ids: Vec<i64>,
@@ -1714,6 +1715,13 @@ fn finish_send(
         let mut rows = table(&["Status", "Book", "Destination / error"]);
         for outcome in outcomes {
             let (status, detail) = match &outcome.result {
+                Ok(sent) if sent.details_only => (
+                    success("updated"),
+                    format!(
+                        "{} (original CBZ: title, author and series only; pages and cover unchanged)",
+                        sent.device_path
+                    ),
+                ),
                 Ok(sent) if sent.skipped_pages.is_empty() => {
                     (success("sent"), sent.device_path.clone())
                 }

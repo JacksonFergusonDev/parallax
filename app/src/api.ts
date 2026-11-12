@@ -197,6 +197,8 @@ export interface SendOutcome {
           bytes: number;
           /** Comic pages left out because they aren't readable images. */
           skipped_pages: string[];
+          /** Only title, author and series changed; the file was left as it was. */
+          details_only: boolean;
         };
       }
     | { Err: string };
@@ -210,6 +212,8 @@ export interface OnDevice {
   sent_at: string;
   /** Edited since it was sent. */
   stale: boolean;
+  /** A comic on the Kobo as its original CBZ: updating changes only its details. */
+  original_comic: boolean;
 }
 
 /** A book on the device, including sends that Nickel hasn't imported yet. */
