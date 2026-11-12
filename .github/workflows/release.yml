@@ -190,6 +190,9 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # Tauri skips the Finder step that lays out the disk image window
+          # (background, icon positions) whenever CI is set, unless this is.
+          TAURI_BUNDLER_DMG_IGNORE_CI: "true"
         run: |
           if [[ -n "$SIGNING_IDENTITY" ]]; then export APPLE_SIGNING_IDENTITY="$SIGNING_IDENTITY"; fi
           if [[ -z "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
@@ -202,6 +205,23 @@ jobs:
           done
           pnpm --dir app tauri build --target universal-apple-darwin --bundles app,dmg \
             --config src-tauri/tauri.upscale.conf.json --config src-tauri/tauri.release.conf.json
+
+      # Finder saves the window's background and icon positions in .DS_Store.
+      # Without it the disk image opens as a plain window.
+      - name: Check the disk image keeps its window layout
+        run: |
+          mount="$(mktemp -d)"
+          hdiutil attach -quiet -nobrowse -readonly -mountpoint "$mount" \
+            "target/universal-apple-darwin/release/bundle/dmg/Parallax_${VERSION}_universal.dmg"
+          status=0
+          for file in .DS_Store .background/dmg-background.tiff; do
+            if [[ ! -s "$mount/$file" ]]; then
+              echo "::error::The disk image has no ${file}, so it would open as a plain window."
+              status=1
+            fi
+          done
+          hdiutil detach -quiet "$mount"
+          exit "$status"
 
       - name: Collect the release files
         run: |
