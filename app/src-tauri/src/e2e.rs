@@ -7,12 +7,16 @@
 //!   seconds apart. They stand in for a person turning pages. A step
 //!   `menu:<id>` chooses that menu command instead.
 //! - `PARALLAX_E2E_SECS`: how long to wait after the last step before quitting.
+//! - `PARALLAX_E2E_WAIT=1`: treat `PARALLAX_E2E_SECS` as a backstop instead. Quit
+//!   once a step sets `location.hash` to `#e2e-done`, or exit with status 1 and
+//!   the message when it sets `#e2e-failed:<encoded message>` or the backstop
+//!   passes. The native window title doesn't follow `document.title`.
 //! - `PARALLAX_E2E_LOOSE=1`: serve the reader page without its CSP and with a loose
 //!   one in its place, so the test can show its detector catches scripts.
 
 use std::borrow::Cow;
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tauri::{App, Context, Manager, Runtime, WebviewWindowBuilder};
 
@@ -67,10 +71,59 @@ pub fn start(app: &App) {
                 }
                 sleep(Duration::from_secs(2));
             }
+            if std::env::var_os("PARALLAX_E2E_WAIT").is_some() {
+                let deadline = Instant::now() + Duration::from_secs(secs);
+                let code = loop {
+                    let hash = app
+                        .get_webview_window(&label)
+                        .and_then(|w| w.url().ok())
+                        .and_then(|url| url.fragment().map(str::to_owned))
+                        .unwrap_or_default();
+                    if hash == "e2e-done" {
+                        // Let the reader save what the last step did.
+                        sleep(Duration::from_secs(2));
+                        break 0;
+                    }
+                    if let Some(message) = hash.strip_prefix("e2e-failed:") {
+                        eprintln!("e2e: step failed: {}", percent_decode(message));
+                        break 1;
+                    }
+                    if Instant::now() >= deadline {
+                        eprintln!("e2e: steps did not finish within {secs}s");
+                        break 1;
+                    }
+                    sleep(Duration::from_millis(200));
+                };
+                app.exit(code);
+                return;
+            }
             sleep(Duration::from_secs(secs));
             app.exit(0);
         });
     });
+}
+
+fn percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = bytes
+            .get(i + 1..i + 3)
+            .and_then(|h| std::str::from_utf8(h).ok())
+            .and_then(|h| u8::from_str_radix(h, 16).ok());
+        match (bytes[i], hex) {
+            (b'%', Some(byte)) => {
+                out.push(byte);
+                i += 3;
+            }
+            (byte, _) => {
+                out.push(byte);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 pub fn reader_window<R: Runtime, M: Manager<R>>(

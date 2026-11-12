@@ -23,7 +23,7 @@ const targetDir = resolve(root, process.env.CARGO_TARGET_DIR ?? "target/e2e");
 const bin = join(targetDir, "debug");
 /** The address hostile.epub sends requests to (see make_reader_fixtures.py). */
 const BEACON_PORT = 8931;
-const RUN_TIMEOUT_MS = 120_000;
+const RUN_TIMEOUT_MS = 150_000;
 const view = "document.querySelector('foliate-view')";
 const shard = process.env.READER_E2E_SHARD;
 assert.ok(
@@ -117,10 +117,18 @@ const everySection = [0, 1, 2, 3].map((i) => `${view}.goTo(${i})`);
 // The reader can still be opening when the harness sends its first script.
 // Wait for the footer to show a location, then wait for search to find a
 // result before clicking. Opening, navigation and search share one budget.
-const SEARCH_WAIT_SECS = 30;
+// The script reports through location.hash, which the app watches (see
+// e2e.rs), so it quits when the steps finish or fail instead of after a fixed
+// sleep. The backstop only has to outlast a slow runner.
+const SEARCH_WAIT_SECS = 60;
+const SEARCH_BACKSTOP_SECS = 80;
+const searchEnv = {
+  PARALLAX_E2E_WAIT: "1",
+  PARALLAX_E2E_SECS: String(SEARCH_BACKSTOP_SECS),
+};
 function searchFor(text, sections = []) {
   return [`void (async () => {
-    const deadline = performance.now() + ${(SEARCH_WAIT_SECS - 4) * 1000};
+    const deadline = performance.now() + ${SEARCH_WAIT_SECS * 1000};
     async function waitFor(find, description) {
       while (performance.now() < deadline) {
         const result = find();
@@ -137,7 +145,10 @@ function searchFor(text, sections = []) {
     document.querySelector('#search form').requestSubmit();
     const result = await waitFor(() => document.querySelector('#results button'), 'a search result');
     result.click();
-  })().catch(console.error)`];
+    location.hash = 'e2e-done';
+  })().catch((error) => {
+    location.hash = 'e2e-failed:' + encodeURIComponent(error?.message ?? String(error));
+  })`];
 }
 
 before(async () => {
@@ -190,9 +201,7 @@ scenario("epub", "a hostile book runs no scripts and reaches no network", async 
   requests = [];
   // Search reads every section off screen as well as showing them, and lands
   // on the last one.
-  await read(ids.Hostile, searchFor("Last", [0, 1, 2]), {
-    PARALLAX_E2E_SECS: String(SEARCH_WAIT_SECS),
-  });
+  await read(ids.Hostile, searchFor("Last", [0, 1, 2]), searchEnv);
   assert.deepEqual(requests, [], "the book reached the network");
   assert.equal(readerSettings(), null, "a script in the book ran");
   assert.equal(query("SELECT id FROM books").length, 2, "a book was removed");
@@ -228,9 +237,7 @@ scenario("epub", "reopening returns to the same place after the text reflows", a
 });
 
 scenario("epub", "searching for a line goes to it", async () => {
-  await read(ids.Long, searchFor("Paragraph 4.7."), {
-    PARALLAX_E2E_SECS: String(SEARCH_WAIT_SECS),
-  });
+  await read(ids.Long, searchFor("Paragraph 4.7."), searchEnv);
   const found = position(ids.Long);
   assert.equal(found?.href, "c3.xhtml", "search didn't go to chapter 4");
   // The saved place is the page shown, as a range of the body's children.
