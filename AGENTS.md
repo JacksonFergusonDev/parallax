@@ -6,7 +6,8 @@
 - Do not ask for approval before routine commits, pushes, refactoring, dependency changes, or other development activities.
 - Never force-push, rewrite published Git history, delete remote branches, or perform destructive repository operations.
 - Never bypass Git hooks, disable CI, remove failing tests, or weaken verification to make changes pass.
-- Keep [PROGRESS.md](PROGRESS.md) concise and current. It records completed milestones, current work, unresolved issues, and next steps. Use the [engineering index](engineering/README.md) to find maintained references and design decisions.
+- When a commit changes something users can see or do in the app, CLI or site, add a line for it under **Unreleased** in [CHANGELOG.md](CHANGELOG.md) in the same commit. Write it for users, following the writing conventions below. Leave out internal changes such as CI, tooling, refactors, tests and contributor docs. These notes become the release notes, the update banner's What's New and the site's version list.
+- [PROGRESS.md](PROGRESS.md) is the maintainer handoff, not a log. Update it only when current work, unresolved issues or next steps change, or at a release or milestone. Don't record routine fixes there: Git history and CHANGELOG.md cover them. Keep longer plans in `engineering/` and link to them. Use the [engineering index](engineering/README.md) to find maintained references and design decisions.
 
 ### When to use a pull request
 

@@ -16,6 +16,10 @@
 - [Comic preparation for Kobo](decisions/kobo-comics.md)
 - [Archive reader benchmark on Apple Silicon](benchmarks/archive-reader-benchmark.md)
 
+## Plans
+
+- [Kobo compatibility check](plans/kobo-compatibility-check.md) (postponed)
+
 ## Historical material
 
 These links point to the last committed snapshot before the documentation consolidation. The plans and experiments describe the project at the time they were written.

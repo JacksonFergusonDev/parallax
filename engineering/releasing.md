@@ -4,7 +4,7 @@ A release is one pushed tag. [`.github/workflows/release.yml`](../.github/workfl
 
 ## Cutting a release
 
-1. Add what changed for users under **Unreleased** in [`CHANGELOG.md`](../CHANGELOG.md), as changes land. These notes become the GitHub release notes, the update banner's **What's New** and the site's version list, so write them for users, following house-style's writing rules.
+1. Add what changed for users under **Unreleased** in [`CHANGELOG.md`](../CHANGELOG.md), in the same commit as each change. Before releasing, compare the notes with `git log --oneline $(git describe --tags --abbrev=0)..` and add any user-visible `feat` or `fix` commits that are missing. These notes become the GitHub release notes, the update banner's **What's New** and the site's version list, so write them for users, following house-style's writing rules.
 2. On `main`, run `just release 1.2.3` with the Git hooks installed (`prek install`). Preflight checks that the checkout is clean and matches `origin/main`, the changelog has unreleased notes, and the requested version is valid and unused in the changelog and in local and remote tags.
 3. The command updates the manifests and Cargo lockfile, dates the changelog section, commits `chore(release): v1.2.3`, tags `v1.2.3`, and pushes `main` and the tag together. The commit and push run the usual Git hooks. GitHub Actions runs CI again against the tagged commit before publishing. If a step fails or you interrupt it, the command removes the new tag and restores the starting commit.
 
