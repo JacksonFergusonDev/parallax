@@ -1,0 +1,4 @@
+# Goodreads export fixture
+
+- `library-export.csv`: a Goodreads library export (My Books → Import and export) with 283 books on the `read`, `to-read`, `currently-reading` and two custom shelves, anonymized by [scripts/make_goodreads_fixture.py](../../../scripts/make_goodreads_fixture.py). It keeps Goodreads' columns, row order, quoting and quirks (`="..."` ISBNs, blank ISBNs, `(Series, #N)` titles, `<br/>` in reviews, curly apostrophes, non-Latin titles, shelf positions, `Author l-f`). The titles, authors, publishers and reviews are pseudo-words and the ISBNs, Book Ids and dates are made up, so the people and books in it are not real.
+- Regenerate it from a new export with `uv run --directory scripts --no-project python make_goodreads_fixture.py <export.csv> ../tests/fixtures/goodreads/library-export.csv`. Don't commit the export itself.
