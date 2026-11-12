@@ -316,10 +316,10 @@ pub struct ImportReport {
 /// deleted. An export with no books is refused, so a wrong file can't flag
 /// everything.
 pub fn import(lib: &mut Library, path: &Path) -> Result<ImportReport, GoodreadsError> {
-    save(lib, read_file(path)?)
+    save(lib, &read_file(path)?)
 }
 
-pub fn save(lib: &mut Library, books: Vec<Book>) -> Result<ImportReport, GoodreadsError> {
+pub fn save(lib: &mut Library, books: &[Book]) -> Result<ImportReport, GoodreadsError> {
     if books.is_empty() {
         return Err(GoodreadsError::Empty);
     }
