@@ -1,5 +1,6 @@
 // A newer Parallax: the banner's state, from the update check in
-// src-tauri/src/updates.rs. Nothing installs until the user says so.
+// src-tauri/src/updates.rs. Nothing installs until the user says so, even
+// when the update downloaded on its own.
 import { useCallback, useEffect, useState } from "react";
 import {
   installUpdate,

@@ -59,11 +59,13 @@ export function Check({
   set,
   name,
   defaultOn = true,
+  disabled = false,
   children,
   hint,
 }: PaneProps & {
   name: SettingKey;
   defaultOn?: boolean;
+  disabled?: boolean;
   children: ReactNode;
   hint?: ReactNode;
 }) {
@@ -74,6 +76,7 @@ export function Check({
         <input
           type="checkbox"
           checked={on}
+          disabled={disabled}
           onChange={(e) => {
             const next = e.target.checked;
             set(name, next === defaultOn ? null : next ? "on" : "off");
@@ -174,9 +177,19 @@ export function GeneralPane({ values, set }: PaneProps) {
           values={values}
           set={set}
           name="updates_auto"
-          hint="Parallax asks before installing anything. Check for Updates… in the Parallax menu checks now."
+          hint="Parallax checks when it opens and once a day. Check for Updates… in the Parallax menu checks now."
         >
           Check for updates automatically
+        </Check>
+        <Check
+          values={values}
+          set={set}
+          name="updates_download"
+          defaultOn={false}
+          disabled={values.updates_auto === "off"}
+          hint="New versions download in the background, then Parallax tells you and installs when you choose to restart. Otherwise it asks before downloading."
+        >
+          Download updates automatically
         </Check>
       </Row>
     </>

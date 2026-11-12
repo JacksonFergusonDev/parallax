@@ -15,12 +15,18 @@ interface Props {
 function detail(update: UpdateInfo, stage: UpdateStage, busy: boolean) {
   switch (stage.stage) {
     case "installing":
+      if (update.ready) return "Installing the update…";
       return stage.share === null
         ? "Downloading the update…"
         : `Downloading the update… ${Math.round(stage.share * 100)}%`;
     case "failed":
       return `The update couldn't be installed: ${stage.error}`;
     case "offered":
+      if (update.ready) {
+        return busy
+          ? `It's downloaded. You can restart to update once the current task finishes.`
+          : `It's downloaded. Restart Parallax to finish updating; your library and open books are kept.`;
+      }
       return busy
         ? `You have ${update.current}. You can install it once the current task finishes.`
         : `You have ${update.current}. Installing restarts Parallax; your library and open books are kept.`;
@@ -45,7 +51,8 @@ export function UpdateNotice({
       <Download className="kobo-notice-icon" aria-hidden="true" />
       <div className="kobo-notice-text" aria-live="polite">
         <p className="kobo-notice-title">
-          Parallax {update.version} is available
+          Parallax {update.version}{" "}
+          {update.ready ? "is ready to install" : "is available"}
         </p>
         <p className="muted">{detail(update, stage, busy)}</p>
       </div>
@@ -64,7 +71,11 @@ export function UpdateNotice({
           disabled={busy || installing}
           onClick={onInstall}
         >
-          {stage.stage === "failed" ? "Try Again" : "Install and Restart"}
+          {stage.stage === "failed"
+            ? "Try Again"
+            : update.ready
+              ? "Restart to Update"
+              : "Install and Restart"}
         </button>
       </div>
       <button

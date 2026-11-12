@@ -24,7 +24,7 @@ Licensed under GPLv3. Device logic is ported from [calibre](https://calibre-eboo
 
 ## Installing it
 
-Download the app from [parallax.jacksonferguson.me](https://parallax.jacksonferguson.me), which also lists every earlier version. It runs on Apple silicon and Intel Macs, checks for new versions itself, and asks before installing one (**Parallax › Check for Updates…** checks now; Settings › General turns automatic checks off).
+Download the app from [parallax.jacksonferguson.me](https://parallax.jacksonferguson.me), which also lists every earlier version. It runs on Apple silicon and Intel Macs, checks for new versions itself, and installs one only when you say so (**Parallax › Check for Updates…** checks now). In Settings › General you can turn automatic checks off, or have new versions download in the background so updating only needs a restart.
 
 The command-line companion installs with Homebrew:
 

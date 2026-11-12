@@ -18,7 +18,12 @@ vi.mock("@tauri-apps/api/event", () => ({
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-const update: UpdateInfo = { version: "0.1.1", current: "0.1.0", notes: null };
+const update: UpdateInfo = {
+  version: "0.1.1",
+  current: "0.1.0",
+  notes: null,
+  ready: false,
+};
 
 describe("downloadedShare", () => {
   it("is the fraction downloaded, or null without a size", () => {
@@ -41,12 +46,12 @@ describe("UpdateNotice", () => {
     container.remove();
   });
 
-  const show = (stage: UpdateStage, busy = false) => {
+  const show = (stage: UpdateStage, busy = false, ready = false) => {
     const calls = { install: 0, skip: 0 };
     act(() =>
       root.render(
         <UpdateNotice
-          update={update}
+          update={{ ...update, ready }}
           stage={stage}
           busy={busy}
           onInstall={() => calls.install++}
@@ -90,5 +95,25 @@ describe("UpdateNotice", () => {
     show({ stage: "failed", error: "signature mismatch" });
     expect(container.textContent).toContain("signature mismatch");
     expect(button("Try Again").disabled).toBe(false);
+  });
+
+  it("offers a restart once the update has downloaded on its own", () => {
+    const calls = show({ stage: "offered" }, false, true);
+    expect(container.textContent).toContain(
+      "Parallax 0.1.1 is ready to install",
+    );
+    expect(container.textContent).toContain("It's downloaded.");
+    act(() => button("Restart to Update").click());
+    expect(calls.install).toBe(1);
+  });
+
+  it("waits for a task before restarting into a downloaded update", () => {
+    show({ stage: "offered" }, true, true);
+    expect(button("Restart to Update").disabled).toBe(true);
+  });
+
+  it("says it's installing, not downloading, a downloaded update", () => {
+    show({ stage: "installing", share: null }, false, true);
+    expect(container.textContent).toContain("Installing the update…");
   });
 });

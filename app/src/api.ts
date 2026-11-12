@@ -736,6 +736,7 @@ export type SettingKey =
   | "setup"
   | "kobo_notices"
   | "updates_auto"
+  | "updates_download"
   | "updates_skipped"
   | "comics_kind"
   | "comic_spreads"
@@ -786,6 +787,8 @@ export interface UpdateInfo {
   current: string;
   /** The release notes, in Markdown. */
   notes: string | null;
+  /** Downloaded already, so installing only needs a restart. */
+  ready: boolean;
 }
 export interface UpdateProgress {
   downloaded: number;
@@ -794,7 +797,8 @@ export interface UpdateProgress {
 /** The update a check already found, if the window missed its event. */
 export const updateAvailable = () =>
   invoke<UpdateInfo | null>("update_available");
-/** Downloads and installs the update, then restarts Parallax. */
+/** Installs the update, downloading it first unless it's ready, then
+ * restarts Parallax. */
 export const installUpdate = () => invoke<void>("update_install");
 export const skipUpdate = (version: string) =>
   invoke<void>("update_skip", { version });
