@@ -82,11 +82,31 @@ enum Command {
         #[command(subcommand)]
         command: LibraryCommand,
     },
-    /// Read a Goodreads export (CSV): shelf counts, or the books on one shelf. Reads only.
+    /// Goodreads library exports (the CSV from My Books › Import and export).
     Goodreads {
-        /// The CSV from Goodreads' My Books → Import and export.
+        /// Library folder (default: the desktop app's).
+        #[arg(long, global = true)]
+        library: Option<PathBuf>,
+        #[command(subcommand)]
+        command: GoodreadsCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum GoodreadsCommand {
+    /// Show shelf counts, or the books on one shelf, from an export file. Reads only.
+    Show {
         file: PathBuf,
         /// List the books on this shelf (read, to-read, currently-reading or one of yours).
+        #[arg(long)]
+        shelf: Option<String>,
+    },
+    /// Save an export in the library. Importing a newer export updates the
+    /// books saved before, matched by Goodreads Book Id, without duplicating
+    /// them; books it no longer has are flagged, never deleted.
+    Import { file: PathBuf },
+    /// Show the saved books, as shelf counts or the books on one shelf.
+    Saved {
         #[arg(long)]
         shelf: Option<String>,
     },
@@ -564,11 +584,45 @@ fn main() -> Result<()> {
             drop(progress);
             finish_send(&kobo, &outcomes, no_eject, cli.json)?;
         }
-        Command::Goodreads { file, shelf } => {
-            let books = parallax_core::goodreads::read_file(&file)
-                .with_context(|| format!("reading {}", file.display()))?;
-            goodreads_command(&books, shelf.as_deref(), cli.json)?;
-        }
+        Command::Goodreads { library, command } => match command {
+            GoodreadsCommand::Show { file, shelf } => {
+                let books = parallax_core::goodreads::read_file(&file)
+                    .with_context(|| format!("reading {}", file.display()))?;
+                goodreads_command(&books, shelf.as_deref(), cli.json)?;
+            }
+            GoodreadsCommand::Import { file } => {
+                let root = library.map_or_else(default_library_root, Ok)?;
+                let mut lib = Library::open(&root)?;
+                let report = parallax_core::goodreads::import(&mut lib, &file)
+                    .with_context(|| format!("importing {}", file.display()))?;
+                if cli.json {
+                    return print_json(&report);
+                }
+                let sync = &report.sync;
+                println!(
+                    "{} added, {} updated, {} unchanged, {} restored, {} no longer in the export{}",
+                    sync.added,
+                    sync.updated,
+                    sync.unchanged,
+                    sync.restored,
+                    sync.missing,
+                    if report.skipped > 0 {
+                        format!(", {} skipped (no Goodreads Book Id)", report.skipped)
+                    } else {
+                        String::new()
+                    }
+                );
+            }
+            GoodreadsCommand::Saved { shelf } => {
+                let root = library.map_or_else(default_library_root, Ok)?;
+                let lib = Library::open(&root)?;
+                let books: Vec<_> = parallax_core::goodreads::saved(&lib)?
+                    .into_iter()
+                    .map(|saved| saved.book)
+                    .collect();
+                goodreads_command(&books, shelf.as_deref(), cli.json)?;
+            }
+        },
         Command::Library { library, command } => {
             let root = library.map_or_else(default_library_root, Ok)?;
             let mut lib = Library::open(&root)?;

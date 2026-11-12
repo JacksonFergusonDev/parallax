@@ -15,6 +15,8 @@ const COMMANDS: &[&str] = &[
     "library_set_comic_kind",
     "library_comic_spreads",
     "library_remove",
+    "goodreads_import",
+    "goodreads_saved",
     "library_snapshots",
     "library_restore",
     "device_backups",

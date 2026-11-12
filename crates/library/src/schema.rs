@@ -138,6 +138,18 @@ const MIGRATIONS: &[&str] = &[
      ALTER TABLE books ADD COLUMN direction TEXT NOT NULL DEFAULT 'ltr';",
     // 16: the effective comic preparation profile of each device copy.
     "ALTER TABLE device_copies ADD COLUMN comic_profile TEXT;",
+    // 17: books from Goodreads library exports, by Goodreads' Book Id, so
+    // importing a newer export updates them in place. `data` is the book as
+    // JSON; `fingerprint` is its SHA-256, to tell changed from unchanged.
+    // `missing` is set when a later export no longer has the book.
+    "CREATE TABLE goodreads_books (
+        goodreads_id      TEXT PRIMARY KEY,
+        data              TEXT NOT NULL,
+        fingerprint       TEXT NOT NULL,
+        first_imported_at TEXT NOT NULL,
+        updated_at        TEXT NOT NULL,
+        missing           INTEGER NOT NULL DEFAULT 0
+    );",
 ];
 
 /// The schema version this build creates.

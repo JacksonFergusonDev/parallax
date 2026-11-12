@@ -337,6 +337,30 @@ async fn library_remove(
     .map_err(err)?
 }
 
+/// Saves a Goodreads export. Importing a newer one updates the books saved
+/// before by their Goodreads Book Id instead of adding them again.
+#[tauri::command]
+async fn goodreads_import(
+    state: State<'_, AppState>,
+    path: PathBuf,
+) -> CmdResult<parallax_core::goodreads::ImportReport> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        parallax_core::goodreads::import(&mut lib, &path).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+/// The books saved from Goodreads exports, including ones the latest export no longer had.
+#[tauri::command]
+fn goodreads_saved(state: State<AppState>) -> CmdResult<Vec<parallax_core::goodreads::SavedBook>> {
+    parallax_core::goodreads::saved(&state.library()).map_err(err)
+}
+
 /// Points the library can go back to, newest first.
 #[tauri::command]
 fn library_snapshots(state: State<AppState>) -> Vec<Snapshot> {
@@ -1560,6 +1584,8 @@ pub fn run() {
             library_set_comic_kind,
             library_comic_spreads,
             library_remove,
+            goodreads_import,
+            goodreads_saved,
             library_snapshots,
             library_restore,
             device_backups,

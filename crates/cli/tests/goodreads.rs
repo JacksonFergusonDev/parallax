@@ -2,14 +2,16 @@
 use std::path::Path;
 use std::process::{Command, Output};
 
-/// `parallax-cli [global...] goodreads <fixture> [after...]`.
+fn fixture() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/goodreads/library-export.csv")
+}
+
+/// `parallax-cli [global...] goodreads show <fixture> [after...]`.
 fn run(global: &[&str], after: &[&str]) -> Output {
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/goodreads/library-export.csv");
     Command::new(env!("CARGO_BIN_EXE_parallax-cli"))
         .args(global)
-        .arg("goodreads")
-        .arg(fixture)
+        .args(["goodreads", "show"])
+        .arg(fixture())
         .args(after)
         .env("NO_COLOR", "1")
         .output()
@@ -52,4 +54,44 @@ fn unknown_shelf_fails_with_a_message() {
     let out = run(&[], &["--shelf", "nope"]);
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("no books on a shelf called nope"));
+}
+
+#[test]
+fn importing_twice_saves_once_and_json_stays_clean() {
+    let dir = tempfile::tempdir().unwrap();
+    let import = || {
+        let out = Command::new(env!("CARGO_BIN_EXE_parallax-cli"))
+            .args(["--json", "goodreads", "import"])
+            .arg(fixture())
+            .arg("--library")
+            .arg(dir.path())
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        serde_json::from_slice::<serde_json::Value>(&out.stdout).unwrap()
+    };
+    let first = import();
+    assert_eq!(
+        (first["added"].as_u64(), first["unchanged"].as_u64()),
+        (Some(283), Some(0))
+    );
+    let second = import();
+    assert_eq!(
+        (second["added"].as_u64(), second["unchanged"].as_u64()),
+        (Some(0), Some(283))
+    );
+
+    let out = Command::new(env!("CARGO_BIN_EXE_parallax-cli"))
+        .args(["--json", "goodreads", "saved"])
+        .arg("--library")
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    let counts: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(counts["read"], 116);
+    assert_eq!(counts["to-read"], 166);
 }

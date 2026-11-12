@@ -607,6 +607,48 @@ export const removeBooks = (ids: number[], report?: ReportBookProgress) =>
     "plans",
     ...ids.map(coverSearchTag),
   ]);
+export interface GoodreadsShelfEntry {
+  name: string;
+  position: number | null;
+}
+export interface GoodreadsBook {
+  goodreads_id: string;
+  title: string;
+  series: { name: string; number: string } | null;
+  authors: string[];
+  isbn: string | null;
+  isbn13: string | null;
+  publisher: string | null;
+  binding: string | null;
+  pages: number | null;
+  year_published: number | null;
+  original_year: number | null;
+  /** 1 to 5, or null when unrated. */
+  rating: number | null;
+  shelf: "read" | "to_read" | "currently_reading" | { other: string };
+  shelves: GoodreadsShelfEntry[];
+  date_read: string | null;
+  date_added: string | null;
+  read_count: number;
+  review: string | null;
+  /** The latest export no longer had it; it is kept, not deleted. */
+  missing: boolean;
+}
+export interface GoodreadsImport {
+  added: number;
+  updated: number;
+  unchanged: number;
+  /** Were missing from an earlier export and are back. */
+  restored: number;
+  /** In the library but not in this export. */
+  missing: number;
+  /** Rows without a Goodreads Book Id. */
+  skipped: number;
+}
+/** Importing a newer export updates the saved books in place. */
+export const goodreadsImport = (path: string) =>
+  invoke<GoodreadsImport>("goodreads_import", { path });
+export const goodreadsSaved = () => invoke<GoodreadsBook[]>("goodreads_saved");
 export const librarySnapshots = () => invoke<Snapshot[]>("library_snapshots");
 export const libraryRestore = (file: string) =>
   write<{

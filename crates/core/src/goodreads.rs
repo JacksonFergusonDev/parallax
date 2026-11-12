@@ -19,7 +19,8 @@ use std::path::Path;
 
 use chrono::NaiveDate;
 use csv::StringRecord;
-use serde::Serialize;
+use parallax_library::{GoodreadsSync, Library};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
 pub enum GoodreadsError {
@@ -27,12 +28,18 @@ pub enum GoodreadsError {
     Csv(#[from] csv::Error),
     #[error("couldn't open the Goodreads export: {0}")]
     Io(#[from] std::io::Error),
+    #[error("the Goodreads export has no books, so nothing was changed")]
+    Empty,
+    #[error("couldn't save the books: {0}")]
+    Library(#[from] parallax_library::Error),
+    #[error("couldn't save a book: {0}")]
+    Json(#[from] serde_json::Error),
     #[error("this doesn't look like a Goodreads export: no {0} column")]
     MissingColumn(&'static str),
 }
 
 /// The exclusive shelf every Goodreads book is on.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Shelf {
     Read,
@@ -63,7 +70,7 @@ impl Shelf {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Series {
     pub name: String,
     /// As Goodreads writes it: "1", "0.5", or a range like "1-3".
@@ -71,19 +78,21 @@ pub struct Series {
 }
 
 /// A place on a shelf, with its 1-based position when the export gave one.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OnShelf {
     pub name: String,
     pub position: Option<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+/// Saved as JSON in the library, so a field added later needs a default.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Book {
     pub goodreads_id: String,
     /// The title without its trailing "(Series, #N)".
     pub title: String,
     pub series: Option<Series>,
     /// The main author first, then the additional authors (translators, editors).
+    #[serde(default)]
     pub authors: Vec<String>,
     pub isbn: Option<String>,
     pub isbn13: Option<String>,
@@ -96,9 +105,11 @@ pub struct Book {
     pub rating: Option<u8>,
     pub shelf: Shelf,
     /// Every shelf it's on, the exclusive one and your own.
+    #[serde(default)]
     pub shelves: Vec<OnShelf>,
     pub date_read: Option<NaiveDate>,
     pub date_added: Option<NaiveDate>,
+    #[serde(default)]
     pub read_count: u32,
     pub review: Option<String>,
 }
@@ -288,6 +299,64 @@ fn shelves(names: &str, with_positions: &str) -> Vec<OnShelf> {
         }
     }
     out
+}
+
+/// What importing an export did to the saved books.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ImportReport {
+    #[serde(flatten)]
+    pub sync: GoodreadsSync,
+    /// Rows without a Goodreads Book Id, which can't be matched next time.
+    pub skipped: usize,
+}
+
+/// Saves an export, updating books imported from an earlier one by their
+/// Goodreads Book Id. Safe to repeat: the same file changes nothing, a newer
+/// one adds and updates books, and books it no longer has are flagged, never
+/// deleted. An export with no books is refused, so a wrong file can't flag
+/// everything.
+pub fn import(lib: &mut Library, path: &Path) -> Result<ImportReport, GoodreadsError> {
+    save(lib, read_file(path)?)
+}
+
+pub fn save(lib: &mut Library, books: Vec<Book>) -> Result<ImportReport, GoodreadsError> {
+    if books.is_empty() {
+        return Err(GoodreadsError::Empty);
+    }
+    let total = books.len();
+    let rows = books
+        .iter()
+        .filter(|b| !b.goodreads_id.is_empty())
+        .map(|b| Ok((b.goodreads_id.clone(), serde_json::to_string(b)?)))
+        .collect::<Result<Vec<_>, serde_json::Error>>()?;
+    let skipped = total - rows.len();
+    if rows.is_empty() {
+        return Err(GoodreadsError::Empty);
+    }
+    Ok(ImportReport {
+        sync: lib.goodreads_sync(&rows)?,
+        skipped,
+    })
+}
+
+/// A saved book, and whether the latest export no longer had it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SavedBook {
+    #[serde(flatten)]
+    pub book: Book,
+    pub missing: bool,
+}
+
+pub fn saved(lib: &Library) -> Result<Vec<SavedBook>, GoodreadsError> {
+    lib.goodreads_saved()?
+        .into_iter()
+        .map(|row| {
+            Ok(SavedBook {
+                book: serde_json::from_str(&row.data)?,
+                missing: row.missing,
+            })
+        })
+        .collect()
 }
 
 /// How many books are on each shelf, the exclusive ones and your own.
