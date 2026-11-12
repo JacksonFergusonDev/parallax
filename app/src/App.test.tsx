@@ -613,6 +613,7 @@ describe("library toolbar", () => {
       "Check library…",
       "Revert changes…",
       "Import from calibre…",
+      "Import from Goodreads…",
       "Tidy genres…",
       "Find metadata…",
     ]);

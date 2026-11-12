@@ -13,13 +13,13 @@
 //! - `Bookshelves` lists every shelf, including the exclusive one, and
 //!   `Bookshelves with positions` adds each book's place on it (`favorites (#2)`).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::Path;
 
 use chrono::NaiveDate;
 use csv::StringRecord;
-use parallax_library::{GoodreadsSync, Library};
+use parallax_library::{GoodreadsWrite, Library};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
@@ -30,6 +30,8 @@ pub enum GoodreadsError {
     Io(#[from] std::io::Error),
     #[error("the Goodreads export has no books, so nothing was changed")]
     Empty,
+    #[error("no saved Goodreads book with id {0}")]
+    NotSaved(String),
     #[error("couldn't save the books: {0}")]
     Library(#[from] parallax_library::Error),
     #[error("couldn't save a book: {0}")]
@@ -301,62 +303,523 @@ fn shelves(names: &str, with_positions: &str) -> Vec<OnShelf> {
     out
 }
 
-/// What importing an export did to the saved books.
+// Importing and merging --------------------------------------------------------
+//
+// Saved books are keyed by Goodreads Book Id and kept in two copies: what you
+// see (`data`) and what the last export said (`base`). Importing a newer export
+// merges field by field, for the fields you can edit here (status, rating,
+// date read, times read, your shelves and the review):
+// - only the export changed it: the export's value;
+// - only you changed it: yours;
+// - both changed it, differently: a conflict you decide, for the whole book.
+// Everything else (title, ISBN, pages...) always follows the export. After a
+// merge both copies are the result, so nothing is left marked or half-decided.
+
+/// Fields you can change here that an export can also change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Field {
+    Shelf,
+    Rating,
+    DateRead,
+    ReadCount,
+    Shelves,
+    Review,
+}
+
+const FIELDS: [Field; 6] = [
+    Field::Shelf,
+    Field::Rating,
+    Field::DateRead,
+    Field::ReadCount,
+    Field::Shelves,
+    Field::Review,
+];
+
+impl Field {
+    pub fn label(self) -> &'static str {
+        match self {
+            Field::Shelf => "Status",
+            Field::Rating => "Rating",
+            Field::DateRead => "Date read",
+            Field::ReadCount => "Times read",
+            Field::Shelves => "Your shelves",
+            Field::Review => "Review",
+        }
+    }
+}
+
+fn is_system(name: &str) -> bool {
+    !matches!(Shelf::parse(name), Shelf::Other(_))
+}
+
+/// The shelves you made, by name.
+fn custom_names(book: &Book) -> BTreeSet<String> {
+    book.shelves
+        .iter()
+        .filter(|s| !is_system(&s.name))
+        .map(|s| s.name.clone())
+        .collect()
+}
+
+/// What to compare: equal values mean nothing changed.
+fn value(book: &Book, field: Field) -> serde_json::Value {
+    match field {
+        Field::Shelf => book.shelf.name().into(),
+        Field::Rating => book.rating.into(),
+        Field::DateRead => book.date_read.map(|d| d.to_string()).into(),
+        Field::ReadCount => book.read_count.into(),
+        Field::Shelves => custom_names(book).into_iter().collect::<Vec<_>>().into(),
+        Field::Review => book.review.clone().into(),
+    }
+}
+
+/// What to show, in words.
+pub fn describe(book: &Book, field: Field) -> String {
+    match field {
+        Field::Shelf => match &book.shelf {
+            Shelf::Read => "Read".into(),
+            Shelf::ToRead => "Want to read".into(),
+            Shelf::CurrentlyReading => "Currently reading".into(),
+            Shelf::Other(name) => name.clone(),
+        },
+        Field::Rating => match book.rating {
+            None => "No rating".into(),
+            Some(1) => "1 star".into(),
+            Some(n) => format!("{n} stars"),
+        },
+        Field::DateRead => book
+            .date_read
+            .map_or_else(|| "No date".into(), |d| d.format("%b %-d, %Y").to_string()),
+        Field::ReadCount => match book.read_count {
+            0 => "Not read".into(),
+            1 => "Read once".into(),
+            n => format!("Read {n} times"),
+        },
+        Field::Shelves => {
+            let names: Vec<_> = custom_names(book).into_iter().collect();
+            if names.is_empty() {
+                "None".into()
+            } else {
+                names.join(", ")
+            }
+        }
+        Field::Review => book.review.as_deref().map_or_else(
+            || "No review".into(),
+            |r| {
+                let short: String = r.chars().take(60).collect();
+                if short.len() < r.len() {
+                    format!("{short}…")
+                } else {
+                    short
+                }
+            },
+        ),
+    }
+}
+
+/// Copies one field from `from` into `to`.
+fn copy_field(to: &mut Book, from: &Book, field: Field) {
+    match field {
+        Field::Shelf => to.shelf = from.shelf.clone(),
+        Field::Rating => to.rating = from.rating,
+        Field::DateRead => to.date_read = from.date_read,
+        Field::ReadCount => to.read_count = from.read_count,
+        Field::Review => to.review.clone_from(&from.review),
+        Field::Shelves => {} // Rebuilt together with the status; see `rebuild_shelves`.
+    }
+}
+
+/// Lists each shelf the merged book is on, with its place from whichever side knows it.
+fn rebuild_shelves(out: &mut Book, mine: &Book, theirs: &Book, custom: &BTreeSet<String>) {
+    let place = |name: &str| {
+        theirs
+            .shelves
+            .iter()
+            .chain(&mine.shelves)
+            .find(|s| s.name == name)
+            .cloned()
+    };
+    out.shelves = std::iter::once(out.shelf.name().to_owned())
+        .chain(custom.iter().cloned())
+        .filter_map(|name| place(&name))
+        .collect();
+}
+
+/// Who wins when you and the export both changed the same thing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Pick {
+    /// Keep what you set here. The recommended choice.
+    Mine,
+    Goodreads,
+}
+
+/// What to do with a saved book a newer export no longer has.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MissingPick {
+    /// Keep it as a book of your own. The recommended choice.
+    Keep,
+    Remove,
+}
+
+/// Your decisions, by Goodreads Book Id. Anything not listed gets the
+/// recommended choice, so `Resolutions::default()` is "use the recommended
+/// choices for everything" and no import is ever left half-decided.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Resolutions {
+    #[serde(default)]
+    pub conflicts: BTreeMap<String, Pick>,
+    #[serde(default)]
+    pub missing: BTreeMap<String, MissingPick>,
+}
+
+impl Resolutions {
+    fn conflict(&self, id: &str) -> Pick {
+        self.conflicts.get(id).copied().unwrap_or(Pick::Mine)
+    }
+
+    fn missing(&self, id: &str) -> MissingPick {
+        self.missing.get(id).copied().unwrap_or(MissingPick::Keep)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ImportReport {
-    #[serde(flatten)]
-    pub sync: GoodreadsSync,
+pub struct FieldChange {
+    pub field: Field,
+    pub label: &'static str,
+    /// What the book says here now.
+    pub mine: String,
+    /// What the new export says.
+    pub theirs: String,
+}
+
+/// A book you changed here and the export changed too, differently.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Conflict {
+    pub goodreads_id: String,
+    pub title: String,
+    pub authors: Vec<String>,
+    pub changes: Vec<FieldChange>,
+}
+
+/// A saved book the export no longer has.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MissingBook {
+    pub goodreads_id: String,
+    pub title: String,
+    pub authors: Vec<String>,
+    /// Its status now, in words.
+    pub status: String,
+}
+
+/// What importing an export would do, before anything is saved.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct ImportPlan {
+    pub added: usize,
+    pub updated: usize,
+    pub unchanged: usize,
     /// Rows without a Goodreads Book Id, which can't be matched next time.
     pub skipped: usize,
+    pub conflicts: Vec<Conflict>,
+    pub missing: Vec<MissingBook>,
 }
 
-/// Saves an export, updating books imported from an earlier one by their
-/// Goodreads Book Id. Safe to repeat: the same file changes nothing, a newer
-/// one adds and updates books, and books it no longer has are flagged, never
-/// deleted. An export with no books is refused, so a wrong file can't flag
-/// everything.
-pub fn import(lib: &mut Library, path: &Path) -> Result<ImportReport, GoodreadsError> {
-    save(lib, &read_file(path)?)
-}
-
-pub fn save(lib: &mut Library, books: &[Book]) -> Result<ImportReport, GoodreadsError> {
-    if books.is_empty() {
-        return Err(GoodreadsError::Empty);
+impl ImportPlan {
+    /// Whether anything needs a decision. If not, importing needs no questions.
+    pub fn needs_decisions(&self) -> bool {
+        !self.conflicts.is_empty() || !self.missing.is_empty()
     }
-    let total = books.len();
-    let rows = books
+}
+
+/// What importing did.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct ImportReport {
+    pub added: usize,
+    pub updated: usize,
+    pub unchanged: usize,
+    pub skipped: usize,
+    /// Books the export no longer had, kept as your own.
+    pub kept: usize,
+    /// Books the export no longer had, removed.
+    pub removed: usize,
+    /// Conflicts settled by keeping your changes.
+    pub kept_yours: usize,
+    /// Conflicts settled by taking the export's.
+    pub took_goodreads: usize,
+}
+
+struct Merged {
+    book: Book,
+    conflicts: Vec<FieldChange>,
+}
+
+/// Merges one book: yours, the last export's and the new export's.
+fn merge(mine: &Book, base: &Book, theirs: &Book, pick: Pick) -> Merged {
+    let mut out = theirs.clone();
+    let mut conflicts = Vec::new();
+    let mut from_mine = Vec::new();
+    for field in FIELDS {
+        let (m, b, t) = (value(mine, field), value(base, field), value(theirs, field));
+        if m == b || m == t {
+            continue; // the export's value, which is yours too or unchanged by you
+        }
+        if t == b {
+            from_mine.push(field); // only you changed it
+        } else {
+            conflicts.push(FieldChange {
+                field,
+                label: field.label(),
+                mine: describe(mine, field),
+                theirs: describe(theirs, field),
+            });
+            if pick == Pick::Mine {
+                from_mine.push(field);
+            }
+        }
+    }
+    for &field in &from_mine {
+        copy_field(&mut out, mine, field);
+    }
+    if from_mine
         .iter()
-        .filter(|b| !b.goodreads_id.is_empty())
-        .map(|b| Ok((b.goodreads_id.clone(), serde_json::to_string(b)?)))
-        .collect::<Result<Vec<_>, serde_json::Error>>()?;
-    let skipped = total - rows.len();
-    if rows.is_empty() {
+        .any(|f| matches!(f, Field::Shelf | Field::Shelves))
+    {
+        let custom = if from_mine.contains(&Field::Shelves) {
+            custom_names(mine)
+        } else {
+            custom_names(theirs)
+        };
+        rebuild_shelves(&mut out, mine, theirs, &custom);
+    }
+    Merged {
+        book: out,
+        conflicts,
+    }
+}
+
+struct Saved {
+    mine: Book,
+    base: Book,
+    local_only: bool,
+}
+
+fn reconcile(
+    saved: &BTreeMap<String, Saved>,
+    incoming: &[Book],
+    resolutions: &Resolutions,
+) -> Result<(ImportPlan, ImportReport, Vec<GoodreadsWrite>), GoodreadsError> {
+    let mut latest: BTreeMap<&str, &Book> = BTreeMap::new();
+    let mut skipped = 0;
+    for book in incoming {
+        if book.goodreads_id.is_empty() {
+            skipped += 1;
+        } else {
+            latest.insert(&book.goodreads_id, book);
+        }
+    }
+    if latest.is_empty() {
         return Err(GoodreadsError::Empty);
     }
-    Ok(ImportReport {
-        sync: lib.goodreads_sync(&rows)?,
+    let mut plan = ImportPlan {
         skipped,
-    })
+        ..ImportPlan::default()
+    };
+    let mut report = ImportReport {
+        skipped,
+        ..ImportReport::default()
+    };
+    let mut writes = Vec::new();
+    for (&id, &theirs) in &latest {
+        let Some(old) = saved.get(id) else {
+            plan.added += 1;
+            report.added += 1;
+            writes.push(GoodreadsWrite::Add {
+                id: id.to_owned(),
+                data: serde_json::to_string(theirs)?,
+            });
+            continue;
+        };
+        let pick = resolutions.conflict(id);
+        let merged = merge(&old.mine, &old.base, theirs, pick);
+        if !merged.conflicts.is_empty() {
+            plan.conflicts.push(Conflict {
+                goodreads_id: id.to_owned(),
+                title: theirs.title.clone(),
+                authors: theirs.authors.clone(),
+                changes: merged.conflicts.clone(),
+            });
+            match pick {
+                Pick::Mine => report.kept_yours += 1,
+                Pick::Goodreads => report.took_goodreads += 1,
+            }
+        }
+        let changed = merged.book != old.mine;
+        if changed {
+            plan.updated += 1;
+            report.updated += 1;
+        } else {
+            plan.unchanged += 1;
+            report.unchanged += 1;
+        }
+        if changed || *theirs != old.base || old.local_only {
+            writes.push(GoodreadsWrite::Merge {
+                id: id.to_owned(),
+                data: serde_json::to_string(&merged.book)?,
+                base: serde_json::to_string(theirs)?,
+            });
+        }
+    }
+    for (id, old) in saved {
+        if latest.contains_key(id.as_str()) || old.local_only {
+            continue;
+        }
+        plan.missing.push(MissingBook {
+            goodreads_id: id.clone(),
+            title: old.mine.title.clone(),
+            authors: old.mine.authors.clone(),
+            status: describe(&old.mine, Field::Shelf),
+        });
+        match resolutions.missing(id) {
+            MissingPick::Keep => {
+                report.kept += 1;
+                writes.push(GoodreadsWrite::KeepLocal { id: id.clone() });
+            }
+            MissingPick::Remove => {
+                report.removed += 1;
+                writes.push(GoodreadsWrite::Remove { id: id.clone() });
+            }
+        }
+    }
+    Ok((plan, report, writes))
 }
 
-/// A saved book, and whether the latest export no longer had it.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct SavedBook {
-    #[serde(flatten)]
-    pub book: Book,
-    pub missing: bool,
-}
-
-pub fn saved(lib: &Library) -> Result<Vec<SavedBook>, GoodreadsError> {
+fn load(lib: &Library) -> Result<BTreeMap<String, Saved>, GoodreadsError> {
     lib.goodreads_saved()?
         .into_iter()
         .map(|row| {
-            Ok(SavedBook {
-                book: serde_json::from_str(&row.data)?,
-                missing: row.missing,
-            })
+            Ok((
+                row.goodreads_id,
+                Saved {
+                    mine: serde_json::from_str(&row.data)?,
+                    base: serde_json::from_str(&row.base)?,
+                    local_only: row.local_only,
+                },
+            ))
         })
         .collect()
+}
+
+/// What importing this export would change and what needs your decision.
+/// Writes nothing. An export with no books is refused, so a wrong file can't
+/// make every saved book look missing.
+pub fn plan_file(lib: &Library, path: &Path) -> Result<ImportPlan, GoodreadsError> {
+    plan(lib, &read_file(path)?)
+}
+
+pub fn plan(lib: &Library, books: &[Book]) -> Result<ImportPlan, GoodreadsError> {
+    Ok(reconcile(&load(lib)?, books, &Resolutions::default())?.0)
+}
+
+/// Saves an export with your decisions, all together or not at all. Anything
+/// you didn't decide gets the recommended choice. Importing the same file
+/// again changes nothing.
+pub fn import_file(
+    lib: &mut Library,
+    path: &Path,
+    resolutions: &Resolutions,
+) -> Result<ImportReport, GoodreadsError> {
+    import(lib, &read_file(path)?, resolutions)
+}
+
+pub fn import(
+    lib: &mut Library,
+    books: &[Book],
+    resolutions: &Resolutions,
+) -> Result<ImportReport, GoodreadsError> {
+    let (_, report, writes) = reconcile(&load(lib)?, books, resolutions)?;
+    lib.goodreads_write(&writes)?;
+    Ok(report)
+}
+
+/// The saved books as you see them.
+pub fn saved(lib: &Library) -> Result<Vec<Book>, GoodreadsError> {
+    Ok(load(lib)?.into_values().map(|s| s.mine).collect())
+}
+
+/// A change you make here. Anything left out stays as it is.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Edit {
+    pub shelf: Option<Shelf>,
+    /// 1 to 5; 0 clears it.
+    pub rating: Option<u8>,
+    pub date_read: Option<NaiveDate>,
+    /// Remove the date read (ignored if `date_read` is set).
+    #[serde(default)]
+    pub clear_date_read: bool,
+    #[serde(default)]
+    pub add_shelves: Vec<String>,
+    #[serde(default)]
+    pub remove_shelves: Vec<String>,
+}
+
+/// [`edit`], dating a newly read book with today's date.
+pub fn edit_today(
+    lib: &mut Library,
+    goodreads_id: &str,
+    change: &Edit,
+) -> Result<Book, GoodreadsError> {
+    edit(lib, goodreads_id, change, chrono::Local::now().date_naive())
+}
+
+/// Applies an edit to a saved book. Marking it read also counts one read and
+/// dates it `today` if it had no date. The export's copy is untouched, so a
+/// later export can tell what you changed.
+pub fn edit(
+    lib: &mut Library,
+    goodreads_id: &str,
+    edit: &Edit,
+    today: NaiveDate,
+) -> Result<Book, GoodreadsError> {
+    let mut book = load(lib)?
+        .remove(goodreads_id)
+        .ok_or_else(|| GoodreadsError::NotSaved(goodreads_id.to_owned()))?
+        .mine;
+    if let Some(shelf) = &edit.shelf {
+        if *shelf == Shelf::Read && book.shelf != Shelf::Read {
+            book.read_count = book.read_count.max(1);
+            if book.date_read.is_none() && edit.date_read.is_none() && !edit.clear_date_read {
+                book.date_read = Some(today);
+            }
+        }
+        // The old status's entry goes; positions on it no longer apply.
+        book.shelves.retain(|s| s.name != book.shelf.name());
+        book.shelf = shelf.clone();
+    }
+    if let Some(rating) = edit.rating {
+        book.rating = (1..=5).contains(&rating).then_some(rating);
+    }
+    if let Some(date) = edit.date_read {
+        book.date_read = Some(date);
+    } else if edit.clear_date_read {
+        book.date_read = None;
+    }
+    book.shelves
+        .retain(|s| !edit.remove_shelves.contains(&s.name));
+    for name in &edit.add_shelves {
+        if !book.shelves.iter().any(|s| &s.name == name) {
+            book.shelves.push(OnShelf {
+                name: name.clone(),
+                position: None,
+            });
+        }
+    }
+    lib.goodreads_write(&[GoodreadsWrite::Edit {
+        id: goodreads_id.to_owned(),
+        data: serde_json::to_string(&book)?,
+    }])?;
+    Ok(book)
 }
 
 /// How many books are on each shelf, the exclusive ones and your own.

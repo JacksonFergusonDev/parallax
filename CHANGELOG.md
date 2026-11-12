@@ -4,7 +4,7 @@ What changed in each release of Parallax, for people using it. The release workf
 
 ## Unreleased
 
-- **`parallax-cli goodreads`** reads a Goodreads library export (the CSV from My Books › Import and export). `show` lists how many books are on each of your shelves, or the books on one shelf with their series, rating and the date you read them. `import` saves an export in your library, and importing a newer one later updates those books in place without duplicating them. Books a newer export no longer has are flagged, never deleted. Add `--json` for scripts.
+- **Import from Goodreads** (File menu, and the Library tools menu) saves the CSV from Goodreads' My Books › Import and export. Import a newer export whenever you like and your books update in place without being added twice. If you changed a book here and Goodreads changed it too, or Goodreads no longer lists a book you saved, Parallax shows both sides in plain words and asks what to do. **Use recommended** settles everything in one click by keeping your changes and keeping those books. Nothing is deleted unless you choose Remove. `parallax-cli goodreads show`, `import` and `saved` do the same from the terminal, with `--json` for scripts.
 - **Update on Kobo** now works for a comic that was on your Kobo as its CBZ file before you added it to your library. It changes the title, author and series there and keeps your place. Parallax tells you first that the pages and cover stay as they are, and that removing the comic and sending it again gets you a copy prepared for your Kobo but starts it from the beginning.
 
 ## 0.1.1 (2026-11-11)

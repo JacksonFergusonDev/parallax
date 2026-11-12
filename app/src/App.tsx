@@ -77,6 +77,7 @@ import {
 import { BatchTransferBar } from "./components/BatchTransferBar";
 import { BookCard } from "./components/BookCard";
 import { CalibreImport } from "./components/CalibreImport";
+import { GoodreadsImport } from "./components/GoodreadsImport";
 import { ReadingView } from "./components/ReadingView";
 import { ShelfArt } from "./components/ShelfArt";
 import { TidyGenres } from "./components/TidyGenres";
@@ -235,6 +236,7 @@ export default function App() {
       .catch(() => {});
   }, []);
   const [fromCalibre, setFromCalibre] = useState(false);
+  const [fromGoodreads, setFromGoodreads] = useState(false);
   const [tidying, setTidying] = useState(false);
   /** Bumped when an enhance saves, so an open edit form reloads. */
   const [enhanced, setEnhanced] = useState(0);
@@ -1097,6 +1099,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     "help.welcome": { run: setup.show, enabled: !setup.open },
     "file.add": { run: () => void chooseFiles() },
     "file.calibre": { run: () => setFromCalibre(true) },
+    "file.goodreads": { run: () => setFromGoodreads(true) },
     "edit.find": {
       run: () => {
         searchRef.current?.focus();
@@ -1356,6 +1359,10 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                         {
                           label: "Import from calibre…",
                           onPick: () => setFromCalibre(true),
+                        },
+                        {
+                          label: "Import from Goodreads…",
+                          onPick: () => setFromGoodreads(true),
                         },
                         {
                           label: "Tidy genres…",
@@ -1748,6 +1755,9 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
           }}
           onClose={() => setFromCalibre(false)}
         />
+      )}
+      {fromGoodreads && (
+        <GoodreadsImport onClose={() => setFromGoodreads(false)} />
       )}
       {reverting && (
         <RevertChanges

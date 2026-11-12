@@ -138,17 +138,18 @@ const MIGRATIONS: &[&str] = &[
      ALTER TABLE books ADD COLUMN direction TEXT NOT NULL DEFAULT 'ltr';",
     // 16: the effective comic preparation profile of each device copy.
     "ALTER TABLE device_copies ADD COLUMN comic_profile TEXT;",
-    // 17: books from Goodreads library exports, by Goodreads' Book Id, so
-    // importing a newer export updates them in place. `data` is the book as
-    // JSON; `fingerprint` is its SHA-256, to tell changed from unchanged.
-    // `missing` is set when a later export no longer has the book.
+    // 17: books from Goodreads library exports, by Goodreads' Book Id.
+    // `data` is the book as you see it, as JSON. `base` is the book as the
+    // last export had it, so a newer export can be merged with edits made
+    // here. `local_only` is set when you chose to keep a book a newer export
+    // no longer had.
     "CREATE TABLE goodreads_books (
         goodreads_id      TEXT PRIMARY KEY,
         data              TEXT NOT NULL,
-        fingerprint       TEXT NOT NULL,
+        base              TEXT NOT NULL,
+        local_only        INTEGER NOT NULL DEFAULT 0,
         first_imported_at TEXT NOT NULL,
-        updated_at        TEXT NOT NULL,
-        missing           INTEGER NOT NULL DEFAULT 0
+        updated_at        TEXT NOT NULL
     );",
 ];
 

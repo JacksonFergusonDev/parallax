@@ -631,24 +631,66 @@ export interface GoodreadsBook {
   date_added: string | null;
   read_count: number;
   review: string | null;
-  /** The latest export no longer had it; it is kept, not deleted. */
-  missing: boolean;
 }
-export interface GoodreadsImport {
+/** A book you changed here and the new export changed too, differently. */
+export interface GoodreadsConflict {
+  goodreads_id: string;
+  title: string;
+  authors: string[];
+  changes: { field: string; label: string; mine: string; theirs: string }[];
+}
+/** A saved book the new export no longer has. */
+export interface GoodreadsMissing {
+  goodreads_id: string;
+  title: string;
+  authors: string[];
+  status: string;
+}
+/** What importing an export would do, before anything is saved. */
+export interface GoodreadsPlan {
   added: number;
   updated: number;
   unchanged: number;
-  /** Were missing from an earlier export and are back. */
-  restored: number;
-  /** In the library but not in this export. */
-  missing: number;
-  /** Rows without a Goodreads Book Id. */
   skipped: number;
+  conflicts: GoodreadsConflict[];
+  missing: GoodreadsMissing[];
 }
-/** Importing a newer export updates the saved books in place. */
-export const goodreadsImport = (path: string) =>
-  invoke<GoodreadsImport>("goodreads_import", { path });
+/** Decisions by Goodreads Book Id; anything left out gets the recommended choice. */
+export interface GoodreadsResolutions {
+  conflicts: Record<string, "mine" | "goodreads">;
+  missing: Record<string, "keep" | "remove">;
+}
+export interface GoodreadsReport {
+  added: number;
+  updated: number;
+  unchanged: number;
+  skipped: number;
+  kept: number;
+  removed: number;
+  kept_yours: number;
+  took_goodreads: number;
+}
+export interface GoodreadsEdit {
+  shelf?: GoodreadsBook["shelf"];
+  /** 1 to 5; 0 clears it. */
+  rating?: number;
+  date_read?: string;
+  clear_date_read?: boolean;
+  add_shelves?: string[];
+  remove_shelves?: string[];
+}
+export const goodreadsPlan = (path: string) =>
+  invoke<GoodreadsPlan>("goodreads_plan", { path });
+export const goodreadsImport = (
+  path: string,
+  resolutions: GoodreadsResolutions,
+) => invoke<GoodreadsReport>("goodreads_import", { path, resolutions });
 export const goodreadsSaved = () => invoke<GoodreadsBook[]>("goodreads_saved");
+export const goodreadsEdit = (goodreadsId: string, edit: GoodreadsEdit) =>
+  invoke<GoodreadsBook>("goodreads_edit", {
+    goodreadsId,
+    edit,
+  });
 export const librarySnapshots = () => invoke<Snapshot[]>("library_snapshots");
 export const libraryRestore = (file: string) =>
   write<{

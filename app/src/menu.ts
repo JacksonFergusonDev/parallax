@@ -129,7 +129,12 @@ export function resetMenu() {
 }
 
 /** Commands that still make sense while first-run setup fills the window. */
-const SETUP_COMMANDS = new Set(["file.add", "file.calibre", "kobo.eject"]);
+const SETUP_COMMANDS = new Set([
+  "file.add",
+  "file.calibre",
+  "file.goodreads",
+  "kobo.eject",
+]);
 
 /** `commands` with everything setup would hide turned off. */
 export function duringSetup(commands: MenuCommands): MenuCommands {

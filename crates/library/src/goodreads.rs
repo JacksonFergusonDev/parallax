@@ -1,122 +1,116 @@
 //! Books from Goodreads exports, kept so a newer export can update them.
 //!
-//! The library stores each book as opaque JSON under its Goodreads Book Id
-//! (the parsing lives in `parallax-core`). A sync is one transaction: it
-//! adds new books, rewrites ones that changed, leaves unchanged ones alone,
-//! and only flags books a newer export no longer has. It never deletes, so a
-//! partial or wrong export can't lose anything, and importing the same file
-//! twice changes nothing.
-
-use std::collections::HashMap;
+//! The library stores each book as opaque JSON under its Goodreads Book Id;
+//! `parallax-core` parses exports and decides how a newer one merges with the
+//! saved books. Each saved book has two copies: `data`, the book as you see
+//! it, and `base`, the book as the last export had it. Comparing the two with
+//! a newer export tells which side changed a field. Changes are applied in one
+//! transaction, so an import either happens completely or not at all.
 
 use chrono::Utc;
 use rusqlite::params;
-use serde::Serialize;
-use sha2::{Digest, Sha256};
 
 use crate::{Library, Result};
-
-/// What a sync did. Each book in the export is in exactly one of `added`,
-/// `updated`, `unchanged` or `restored`; `missing` counts saved books the
-/// export no longer has.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
-pub struct GoodreadsSync {
-    pub added: usize,
-    pub updated: usize,
-    pub unchanged: usize,
-    /// Were flagged missing by an earlier export and are back.
-    pub restored: usize,
-    /// Newly flagged missing: saved before, absent from this export.
-    pub missing: usize,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GoodreadsRow {
     pub goodreads_id: String,
     pub data: String,
-    pub missing: bool,
+    pub base: String,
+    /// You kept it after an export no longer had it.
+    pub local_only: bool,
 }
 
-fn fingerprint(data: &str) -> String {
-    Sha256::digest(data.as_bytes())
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+/// One change to the saved books.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GoodreadsWrite {
+    /// A book new to the library.
+    Add {
+        id: String,
+        data: String,
+    },
+    /// Both copies at once, from merging an export.
+    Merge {
+        id: String,
+        data: String,
+        base: String,
+    },
+    /// An edit made here; the export's copy stays as it was.
+    Edit {
+        id: String,
+        data: String,
+    },
+    /// Keep a book an export no longer has.
+    KeepLocal {
+        id: String,
+    },
+    Remove {
+        id: String,
+    },
 }
 
 impl Library {
-    /// Applies an export: `(goodreads_id, json)` for every book in it. If an
-    /// id appears twice the last one wins.
-    pub fn goodreads_sync(&mut self, books: &[(String, String)]) -> Result<GoodreadsSync> {
-        let latest: HashMap<&str, &str> = books
-            .iter()
-            .map(|(id, data)| (id.as_str(), data.as_str()))
-            .collect();
-        let now = Utc::now().to_rfc3339();
-        let tx = self.conn.transaction()?;
-        let mut sync = GoodreadsSync::default();
-        let saved: HashMap<String, (String, bool)> = tx
-            .prepare("SELECT goodreads_id, fingerprint, missing FROM goodreads_books")?
-            .query_map([], |r| Ok((r.get(0)?, (r.get(1)?, r.get(2)?))))?
-            .collect::<std::result::Result<_, _>>()?;
-        for (&id, &data) in &latest {
-            let print = fingerprint(data);
-            match saved.get(id) {
-                None => {
-                    tx.execute(
-                        "INSERT INTO goodreads_books
-                         (goodreads_id, data, fingerprint, first_imported_at, updated_at)
-                         VALUES (?1, ?2, ?3, ?4, ?4)",
-                        params![id, data, print, now],
-                    )?;
-                    sync.added += 1;
-                }
-                Some((old, was_missing)) => {
-                    let changed = *old != print;
-                    if changed || *was_missing {
-                        tx.execute(
-                            "UPDATE goodreads_books SET data = ?2, fingerprint = ?3,
-                             updated_at = CASE WHEN ?4 THEN ?5 ELSE updated_at END, missing = 0
-                             WHERE goodreads_id = ?1",
-                            params![id, data, print, changed, now],
-                        )?;
-                    }
-                    match (*was_missing, changed) {
-                        (true, _) => sync.restored += 1,
-                        (false, true) => sync.updated += 1,
-                        (false, false) => sync.unchanged += 1,
-                    }
-                }
-            }
-        }
-        for (id, (_, was_missing)) in &saved {
-            if !was_missing && !latest.contains_key(id.as_str()) {
-                tx.execute(
-                    "UPDATE goodreads_books SET missing = 1 WHERE goodreads_id = ?1",
-                    [id],
-                )?;
-                sync.missing += 1;
-            }
-        }
-        tx.commit()?;
-        Ok(sync)
-    }
-
-    /// Every saved book, including those flagged missing, by id.
+    /// Every saved book, by id.
     pub fn goodreads_saved(&self) -> Result<Vec<GoodreadsRow>> {
         let mut stmt = self.conn.prepare(
-            "SELECT goodreads_id, data, missing FROM goodreads_books ORDER BY CAST(goodreads_id AS INTEGER), goodreads_id",
+            "SELECT goodreads_id, data, base, local_only FROM goodreads_books
+             ORDER BY CAST(goodreads_id AS INTEGER), goodreads_id",
         )?;
         let rows = stmt
             .query_map([], |r| {
                 Ok(GoodreadsRow {
                     goodreads_id: r.get(0)?,
                     data: r.get(1)?,
-                    missing: r.get(2)?,
+                    base: r.get(2)?,
+                    local_only: r.get(3)?,
                 })
             })?
             .collect::<std::result::Result<_, _>>()?;
         Ok(rows)
+    }
+
+    /// Applies the changes together or not at all.
+    pub fn goodreads_write(&mut self, writes: &[GoodreadsWrite]) -> Result<()> {
+        let now = Utc::now().to_rfc3339();
+        let tx = self.conn.transaction()?;
+        for write in writes {
+            match write {
+                GoodreadsWrite::Add { id, data } => {
+                    tx.execute(
+                        "INSERT INTO goodreads_books
+                         (goodreads_id, data, base, first_imported_at, updated_at)
+                         VALUES (?1, ?2, ?2, ?3, ?3)",
+                        params![id, data, now],
+                    )?;
+                }
+                GoodreadsWrite::Merge { id, data, base } => {
+                    tx.execute(
+                        "UPDATE goodreads_books
+                         SET data = ?2, base = ?3, local_only = 0, updated_at = ?4
+                         WHERE goodreads_id = ?1",
+                        params![id, data, base, now],
+                    )?;
+                }
+                GoodreadsWrite::Edit { id, data } => {
+                    tx.execute(
+                        "UPDATE goodreads_books SET data = ?2, updated_at = ?3
+                         WHERE goodreads_id = ?1",
+                        params![id, data, now],
+                    )?;
+                }
+                GoodreadsWrite::KeepLocal { id } => {
+                    tx.execute(
+                        "UPDATE goodreads_books SET local_only = 1 WHERE goodreads_id = ?1",
+                        [id],
+                    )?;
+                }
+                GoodreadsWrite::Remove { id } => {
+                    tx.execute("DELETE FROM goodreads_books WHERE goodreads_id = ?1", [id])?;
+                }
+            }
+        }
+        tx.commit()?;
+        Ok(())
     }
 }
 
@@ -130,109 +124,80 @@ mod tests {
         (dir, lib)
     }
 
-    fn rows(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
-        pairs
-            .iter()
-            .map(|(i, d)| ((*i).into(), (*d).into()))
-            .collect()
+    fn add(id: &str, data: &str) -> GoodreadsWrite {
+        GoodreadsWrite::Add {
+            id: id.into(),
+            data: data.into(),
+        }
     }
 
     #[test]
-    fn importing_the_same_export_twice_changes_nothing() {
+    fn a_new_book_starts_with_data_and_base_the_same() {
         let (_dir, mut lib) = lib();
-        let export = rows(&[("1", "a"), ("2", "b")]);
-        let first = lib.goodreads_sync(&export).unwrap();
-        assert_eq!((first.added, first.unchanged), (2, 0));
-        let before = lib.goodreads_saved().unwrap();
-        let second = lib.goodreads_sync(&export).unwrap();
+        lib.goodreads_write(&[add("1", "a")]).unwrap();
+        let [row] = lib.goodreads_saved().unwrap().try_into().unwrap();
         assert_eq!(
-            second,
-            GoodreadsSync {
-                unchanged: 2,
-                ..GoodreadsSync::default()
-            }
+            (row.data.as_str(), row.base.as_str(), row.local_only),
+            ("a", "a", false)
         );
-        assert_eq!(lib.goodreads_saved().unwrap(), before);
     }
 
     #[test]
-    fn a_newer_export_adds_updates_and_flags_without_duplicating() {
+    fn an_edit_changes_only_what_you_see_and_a_merge_changes_both() {
         let (_dir, mut lib) = lib();
-        lib.goodreads_sync(&rows(&[("1", "a"), ("2", "b"), ("3", "c")]))
+        lib.goodreads_write(&[add("1", "a")]).unwrap();
+        lib.goodreads_write(&[GoodreadsWrite::Edit {
+            id: "1".into(),
+            data: "mine".into(),
+        }])
+        .unwrap();
+        let row = &lib.goodreads_saved().unwrap()[0];
+        assert_eq!((row.data.as_str(), row.base.as_str()), ("mine", "a"));
+        lib.goodreads_write(&[GoodreadsWrite::Merge {
+            id: "1".into(),
+            data: "m".into(),
+            base: "t".into(),
+        }])
+        .unwrap();
+        let row = &lib.goodreads_saved().unwrap()[0];
+        assert_eq!((row.data.as_str(), row.base.as_str()), ("m", "t"));
+    }
+
+    #[test]
+    fn keeping_and_removing() {
+        let (_dir, mut lib) = lib();
+        lib.goodreads_write(&[add("1", "a"), add("2", "b")])
             .unwrap();
-        let sync = lib
-            .goodreads_sync(&rows(&[("1", "a"), ("2", "b2"), ("4", "d")]))
-            .unwrap();
-        assert_eq!(
-            sync,
-            GoodreadsSync {
-                added: 1,
-                updated: 1,
-                unchanged: 1,
-                restored: 0,
-                missing: 1
-            }
-        );
+        lib.goodreads_write(&[
+            GoodreadsWrite::KeepLocal { id: "1".into() },
+            GoodreadsWrite::Remove { id: "2".into() },
+        ])
+        .unwrap();
         let saved = lib.goodreads_saved().unwrap();
-        let state: Vec<_> = saved
-            .iter()
-            .map(|r| (r.goodreads_id.as_str(), r.data.as_str(), r.missing))
-            .collect();
-        assert_eq!(
-            state,
-            [
-                ("1", "a", false),
-                ("2", "b2", false),
-                ("3", "c", true),
-                ("4", "d", false)
-            ]
+        assert_eq!(saved.len(), 1);
+        assert!(saved[0].local_only);
+        lib.goodreads_write(&[GoodreadsWrite::Merge {
+            id: "1".into(),
+            data: "a".into(),
+            base: "a".into(),
+        }])
+        .unwrap();
+        assert!(
+            !lib.goodreads_saved().unwrap()[0].local_only,
+            "back in an export"
         );
     }
 
     #[test]
-    fn a_flagged_book_comes_back_when_it_returns_and_isnt_flagged_twice() {
+    fn a_failing_change_undoes_the_whole_batch() {
         let (_dir, mut lib) = lib();
-        lib.goodreads_sync(&rows(&[("1", "a"), ("2", "b")]))
-            .unwrap();
-        lib.goodreads_sync(&rows(&[("1", "a")])).unwrap();
-        let again = lib.goodreads_sync(&rows(&[("1", "a")])).unwrap();
-        assert_eq!(again.missing, 0, "already flagged");
-        let back = lib
-            .goodreads_sync(&rows(&[("1", "a"), ("2", "b")]))
-            .unwrap();
-        assert_eq!((back.restored, back.unchanged, back.missing), (1, 1, 0));
-        assert!(lib.goodreads_saved().unwrap().iter().all(|r| !r.missing));
-    }
-
-    #[test]
-    fn duplicate_ids_in_one_export_are_one_book() {
-        let (_dir, mut lib) = lib();
-        let sync = lib
-            .goodreads_sync(&rows(&[("1", "old"), ("1", "new")]))
-            .unwrap();
-        assert_eq!(sync.added, 1);
-        assert_eq!(lib.goodreads_saved().unwrap()[0].data, "new");
-    }
-
-    #[test]
-    fn first_import_time_survives_updates() {
-        let (_dir, mut lib) = lib();
-        lib.goodreads_sync(&rows(&[("1", "a")])).unwrap();
-        let first: String = lib
-            .conn
-            .query_row("SELECT first_imported_at FROM goodreads_books", [], |r| {
-                r.get(0)
-            })
-            .unwrap();
-        lib.goodreads_sync(&rows(&[("1", "b")])).unwrap();
-        let (kept, data): (String, String) = lib
-            .conn
-            .query_row(
-                "SELECT first_imported_at, data FROM goodreads_books",
-                [],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )
-            .unwrap();
-        assert_eq!((kept, data.as_str()), (first, "b"));
+        lib.goodreads_write(&[add("1", "a")]).unwrap();
+        let result = lib.goodreads_write(&[add("2", "b"), add("1", "again")]);
+        assert!(result.is_err(), "duplicate id");
+        assert_eq!(
+            lib.goodreads_saved().unwrap().len(),
+            1,
+            "2 wasn't left behind"
+        );
     }
 }
