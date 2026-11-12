@@ -1,5 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
-  <rect x="4" y="4" width="192" height="192" rx="40" fill="#0f172a" stroke="#f5c568" stroke-width="5"/>
+  <!-- The tile is macOS's app icon shape, a square with continuous corners, so the
+       system's mask leaves the outline whole. The outline is drawn inside it. -->
+  <defs>
+    <path id="tile" d="M120.38 0C143.31 0 154.77 0 167.11 3.9C180.58 8.8 191.2 19.42 196.1 32.89C200 45.23 200 56.69 200 79.62L200 120.38C200 143.31 200 154.77 196.1 167.11C191.2 180.58 180.58 191.2 167.11 196.1C154.77 200 143.31 200 120.38 200L79.62 200C56.69 200 45.23 200 32.89 196.1C19.42 191.2 8.8 180.58 3.9 167.11C0 154.77 0 143.31 0 120.38L0 79.62C0 56.69 0 45.23 3.9 32.89C8.8 19.42 19.42 8.8 32.89 3.9C45.23 0 56.69 0 79.62 0Z"/>
+    <clipPath id="inside"><use href="#tile"/></clipPath>
+  </defs>
+  <use href="#tile" fill="#0f172a"/>
   <!-- Offset observing positions share a single distant reference. -->
   <path d="M66 47 A62 62 0 0 0 66 153" fill="none" stroke="#f5c568" stroke-width="7" stroke-linecap="round"/>
   <path d="M112 47 A62 62 0 0 0 112 153" fill="none" stroke="#f5c568" stroke-width="7" stroke-linecap="round" opacity=".5"/>
@@ -7,4 +13,5 @@
   <circle cx="144" cy="100" r="16" fill="#0f172a"/>
   <circle cx="144" cy="100" r="10" fill="#f5c568"/>
   <circle cx="144" cy="100" r="4" fill="#fff" opacity=".95"/>
+  <use href="#tile" fill="none" stroke="#f5c568" stroke-width="10" clip-path="url(#inside)"/>
 </svg>

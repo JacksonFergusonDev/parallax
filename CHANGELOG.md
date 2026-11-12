@@ -4,6 +4,9 @@ What changed in each release of Parallax, for people using it. The release workf
 
 ## Unreleased
 
+- The app icon keeps its full gold outline on macOS 26 and later, where it was trimmed at the edges and corners.
+- The disk image opens in an arranged window, with Parallax beside a shortcut to Applications on its background.
+
 ## 0.1.0 (2026-11-11)
 
 - The first release: a library for books and comics, a reader for each, and sending to a Kobo as KEPUB with collections, series and reading progress.
