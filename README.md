@@ -11,7 +11,7 @@
 
 [![Latest version](https://img.shields.io/github/v/release/JacksonFergusonDev/parallax?style=flat-square&label=version&labelColor=0f172a&color=f5c568)](https://github.com/JacksonFergusonDev/parallax/releases/latest) ![macOS](https://img.shields.io/badge/platform-macOS-f5c568?style=flat-square&labelColor=0f172a&logo=apple&logoColor=white) [![CI](https://img.shields.io/github/actions/workflow/status/JacksonFergusonDev/parallax/ci.yml?branch=main&style=flat-square&labelColor=0f172a)](https://github.com/JacksonFergusonDev/parallax/actions/workflows/ci.yml) [![Rust](https://img.shields.io/badge/built_with-Rust-f5c568?style=flat-square&labelColor=0f172a&logo=rust&logoColor=white)](https://www.rust-lang.org/) [![Tauri](https://img.shields.io/badge/desktop-Tauri-f5c568?style=flat-square&labelColor=0f172a&logo=tauri&logoColor=white)](https://tauri.app/) [![GPLv3](https://img.shields.io/badge/license-GPLv3-f5c568?style=flat-square&labelColor=0f172a)](LICENSE)
 
-[Using Parallax](#using-it) · [Kobo compatibility](docs/device-support.md) · [Development](#development)
+| [Using Parallax](#using-it) | [Download](https://parallax.jacksonferguson.me/download/) | [Kobo compatibility](docs/device-support.md) | [Development](#development) |
 
 </div>
 <!-- rumdl-enable MD033 MD041 -->
