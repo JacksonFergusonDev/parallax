@@ -105,4 +105,34 @@ describe("cover dimension caching", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it("peeks only at finished, unexpired reads", async () => {
+    vi.useFakeTimers();
+    const cache = new ReadCache();
+    let finish!: (v: string) => void;
+    const pending = cache.get(
+      ["stats"],
+      () => new Promise<string>((r) => (finish = r)),
+      ["reading"],
+      100,
+    );
+    expect(cache.peek(["stats"])).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(0);
+    finish("loaded");
+    await pending;
+    expect(cache.peek(["stats"])).toBe("loaded");
+    vi.advanceTimersByTime(101);
+    expect(cache.peek(["stats"])).toBeUndefined();
+  });
+
+  it("stores a value read elsewhere and forgets it with its tags", async () => {
+    const cache = new ReadCache();
+    const load = vi.fn(async () => "stale");
+    cache.put(["stats"], "fresh", ["reading"]);
+    expect(cache.peek(["stats"])).toBe("fresh");
+    expect(await cache.get(["stats"], load, ["reading"])).toBe("fresh");
+    expect(load).not.toHaveBeenCalled();
+    cache.invalidate("reading");
+    expect(cache.peek(["stats"])).toBeUndefined();
+  });
 });

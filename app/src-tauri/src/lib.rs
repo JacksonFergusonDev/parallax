@@ -395,6 +395,23 @@ fn goodreads_edit(
     parallax_core::goodreads::edit_today(&mut state.library(), &goodreads_id, &edit).map_err(err)
 }
 
+/// What your saved Goodreads shelves say about your reading, with every book.
+#[tauri::command]
+async fn goodreads_insights(
+    state: State<'_, AppState>,
+) -> CmdResult<parallax_core::goodreads_insights::Insights> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        use parallax_core::goodreads_insights::{insights, today};
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        insights(&lib, today()).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
 /// Points the library can go back to, newest first.
 #[tauri::command]
 fn library_snapshots(state: State<AppState>) -> Vec<Snapshot> {
@@ -1622,6 +1639,7 @@ pub fn run() {
             goodreads_import,
             goodreads_matches,
             goodreads_edit,
+            goodreads_insights,
             library_snapshots,
             library_restore,
             device_backups,

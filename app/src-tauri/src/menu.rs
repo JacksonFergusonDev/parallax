@@ -98,6 +98,7 @@ const VIEWS: &[Command] = &[
     check(key(command("view.library", "Library", Main), "CmdOrCtrl+1")),
     check(key(command("view.device", "On Kobo", Main), "CmdOrCtrl+2")),
     check(key(command("view.reading", "Reading", Main), "CmdOrCtrl+3")),
+    check(command("view.goodreads", "Goodreads Insights", Main)),
 ];
 
 const LAYOUTS: &[Command] = &[

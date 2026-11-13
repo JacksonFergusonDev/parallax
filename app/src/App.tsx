@@ -27,6 +27,7 @@ import {
   reviewBooks,
   listBooks,
   goodreadsMatches,
+  prefetchReading,
   type GoodreadsMatch,
   listDevices,
   removeBooks,
@@ -81,7 +82,12 @@ import { BookCard } from "./components/BookCard";
 import { CalibreImport } from "./components/CalibreImport";
 import { GoodreadsImport } from "./components/GoodreadsImport";
 import { goodreadsSummary } from "./goodreads";
-import { ReadingView } from "./components/ReadingView";
+import {
+  ReadingTab,
+  saveReadingSource,
+  savedReadingSource,
+  type ReadingSource,
+} from "./components/ReadingTab";
 import { ShelfArt } from "./components/ShelfArt";
 import { TidyGenres } from "./components/TidyGenres";
 import { CollectionMenu } from "./components/CollectionMenu";
@@ -251,6 +257,12 @@ export default function App() {
   }, []);
   const [fromCalibre, setFromCalibre] = useState(false);
   const [fromGoodreads, setFromGoodreads] = useState(false);
+  const [readingSource, setReadingSourceState] =
+    useState<ReadingSource>(savedReadingSource);
+  const setReadingSource = (source: ReadingSource) => {
+    setReadingSourceState(source);
+    saveReadingSource(source);
+  };
   const [tidying, setTidying] = useState(false);
   /** Bumped when an enhance saves, so an open edit form reloads. */
   const [enhanced, setEnhanced] = useState(0);
@@ -806,6 +818,13 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
   }, [books, onDevice]);
   // The Kobo tab only exists while one is connected.
   const activeView = !device && view === "device" ? "library" : view;
+  // Reading mounts the first time it's opened and stays, hidden, after that
+  // (engineering/decisions/retained-views.md). Its data is prefetched below.
+  const [readingOpened, setReadingOpened] = useState(false);
+  if (activeView === "reading" && !readingOpened) setReadingOpened(true);
+  useEffect(() => {
+    if (loaded && detected) prefetchReading();
+  }, [loaded, detected]);
 
   const onSelect = useCallback(
     (id: number, e: React.MouseEvent) =>
@@ -1134,8 +1153,18 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
       checked: activeView === "device",
     },
     "view.reading": {
-      run: () => setView("reading"),
-      checked: activeView === "reading",
+      run: () => {
+        setView("reading");
+        setReadingSource("kobo");
+      },
+      checked: activeView === "reading" && readingSource === "kobo",
+    },
+    "view.goodreads": {
+      run: () => {
+        setView("reading");
+        setReadingSource("goodreads");
+      },
+      checked: activeView === "reading" && readingSource === "goodreads",
     },
     ...(inLibrary && {
       "view.grid": { run: () => setMode("grid"), checked: mode === "grid" },
@@ -1284,10 +1313,23 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
 
         {/* Retain loaded data, decoded images and scroll positions across tabs.
           Disconnecting unmounts the device panel, so reconnects read fresh data. */}
-        {activeView === "reading" && (
-          <div className="tab-panel" role="tabpanel" aria-label="Reading">
+        {readingOpened && (
+          <div
+            className="tab-panel"
+            role="tabpanel"
+            aria-label="Reading"
+            hidden={activeView !== "reading"}
+          >
             <div className="scroll reading-scroll">
-              <ReadingView mount={device?.mount ?? null} library={books} />
+              <ReadingTab
+                active={activeView === "reading"}
+                source={readingSource}
+                onSource={setReadingSource}
+                mount={device?.mount ?? null}
+                library={books}
+                goodreadsStamp={goodreads}
+                onGoodreadsImport={() => setFromGoodreads(true)}
+              />
             </div>
           </div>
         )}
@@ -1783,7 +1825,10 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
           onClose={() => setFromGoodreads(false)}
           onImported={(report) => {
             goodreadsMatches().then(setGoodreads, () => undefined);
-            setNotice({ kind: "info", text: goodreadsSummary(report) });
+            setNotice({
+              kind: "info",
+              text: `${goodreadsSummary(report)} See what they say about your reading in Reading › Goodreads.`,
+            });
           }}
         />
       )}

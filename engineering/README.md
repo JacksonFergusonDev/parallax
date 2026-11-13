@@ -15,6 +15,7 @@
 
 - [EPUB reader architecture](decisions/epub-reader.md)
 - [Comic preparation for Kobo](decisions/kobo-comics.md)
+- [Retained views and prefetched data](decisions/retained-views.md)
 - [Archive reader benchmark on Apple Silicon](benchmarks/archive-reader-benchmark.md)
 
 ## Plans

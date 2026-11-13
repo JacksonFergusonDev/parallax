@@ -15,10 +15,12 @@ that identifies the books or their reader:
   consistent. Short function words (the, of, de, van) and generic publisher
   words (Press, Books) stay, so article-stripping and sorting still behave.
   No other original word of three or more letters survives in the output.
-- Book Ids are random numbers of the same length. ISBN-10 and ISBN-13 are new
+- Book Ids are random numbers of the same length, never an original one. ISBN-10 and ISBN-13 are new
   valid pairs; an ISBN-10 ending in X still ends in X.
 - Dates all move by one random offset, which keeps every interval and order.
 - Page counts move by up to 10%.
+- Goodreads' average rating, which older exports have, moves by up to 0.1
+  stars, so it can't pick out the book but still compares with your rating.
 
 Ratings, years, bindings, shelves, read counts and the row order are kept.
 Each run draws a new random mapping unless `--seed` is given. Don't commit the
@@ -106,7 +108,8 @@ class Anonymizer:
             for column in TEXT_COLUMNS
             for word in WORD.findall(TAG.sub(" ", row.get(column, "")))
         }
-        self.used_ids: set[str] = set()
+        # New ids never reuse an original one, even by chance.
+        self.used_ids: set[str] = {row.get("Book Id", "") for row in rows}
         self.day_offset = self.rng.randint(-900, -300)
 
     def letter(self, char: str) -> str:
@@ -197,6 +200,15 @@ class Anonymizer:
             return value
         return str(max(1, round(int(value) * self.rng.uniform(0.9, 1.1))))
 
+    def average(self, value: str) -> str:
+        try:
+            stars = float(value)
+        except ValueError:
+            return value
+        if stars <= 0:
+            return value
+        return f"{min(5.0, max(1.0, stars + self.rng.uniform(-0.1, 0.1))):.2f}"
+
     def row(self, row: dict[str, str]) -> dict[str, str]:
         out = dict(row)
         for column in TEXT_COLUMNS:
@@ -206,6 +218,8 @@ class Anonymizer:
         out["Date Read"] = self.date(row["Date Read"])
         out["Date Added"] = self.date(row["Date Added"])
         out["Number of Pages"] = self.pages(row["Number of Pages"])
+        if "Average Rating" in row:
+            out["Average Rating"] = self.average(row["Average Rating"])
         return out
 
 

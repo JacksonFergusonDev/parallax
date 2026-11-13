@@ -95,3 +95,47 @@ fn importing_twice_saves_once_and_json_stays_clean() {
     assert_eq!(counts["read"], 116);
     assert_eq!(counts["to-read"], 166);
 }
+
+#[test]
+fn json_stats_from_an_export_without_saving_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_parallax-cli"))
+        .args(["--json", "goodreads", "stats", "--file"])
+        .arg(fixture())
+        .env("HOME", dir.path())
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stats: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(stats["totals"]["read"], 116);
+    assert_eq!(stats["books"].as_array().unwrap().len(), 283);
+    assert!(stats["import"].is_null());
+}
+
+#[test]
+fn stats_of_the_saved_books_include_the_import() {
+    let dir = tempfile::tempdir().unwrap();
+    let cli = |args: &[&str]| {
+        let out = Command::new(env!("CARGO_BIN_EXE_parallax-cli"))
+            .args(args)
+            .arg("--library")
+            .arg(dir.path())
+            .env("NO_COLOR", "1")
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8(out.stdout).unwrap()
+    };
+    cli(&["--json", "goodreads", "import", fixture().to_str().unwrap()]);
+    let text = cli(&["goodreads", "stats"]);
+    assert!(text.contains("From library-export.csv"), "{text}");
+    assert!(text.contains("283 books: 116 read"), "{text}");
+}

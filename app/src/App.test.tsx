@@ -835,17 +835,32 @@ describe("selection and collections", () => {
 });
 
 describe("reading stats", () => {
-  it("reads fresh stats from a connected Kobo and saved ones without it", async () => {
+  it("prefetches saved stats and reads the Kobo only once Reading opens", async () => {
     await render();
+    expect(calls("reading_stats").map((c) => c[1])).toEqual([{ mount: null }]);
+    expect(calls("goodreads_insights")).toHaveLength(1);
     await click(button("Reading"));
     expect(calls("reading_stats").at(-1)?.[1]).toEqual({ mount: "/kobo" });
     expect(panel("Reading").textContent).toContain("No reading stats yet");
+  });
+
+  it("keeps Reading as it was when you come back to it", async () => {
+    await render();
+    await click(button("Reading"));
+    const page = panel("Reading").querySelector(".reading-tab");
+    const reads = calls("reading_stats").length;
+    await click(button("Library"));
+    expect(panel("Reading").hidden).toBe(true);
+    await click(button("Reading"));
+    expect(panel("Reading").querySelector(".reading-tab")).toBe(page);
+    expect(calls("reading_stats")).toHaveLength(reads);
+    expect(panel("Reading").textContent).not.toContain("Reading your stats");
     connected = [];
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2000);
     });
-    expect(calls("reading_stats").at(-1)?.[1]).toEqual({ mount: null });
-    expect(panel("Reading")).not.toBeNull();
+    expect(calls("reading_stats")).toHaveLength(reads);
+    expect(panel("Reading").textContent).toContain("No reading stats yet");
   });
 });
 

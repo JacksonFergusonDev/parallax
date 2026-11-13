@@ -1,6 +1,8 @@
 # App caching
 
-The Library and On Kobo panels remain mounted when switching tabs. The inactive panel uses `display: none`, keeping it out of layout, keyboard focus and the accessibility tree while preserving its data, image elements and scroll position. Device data starts loading as soon as a Kobo connects. Switching tabs does not issue reads or rebuild either book grid.
+Every tab panel remains mounted once shown, following the [retained views decision](decisions/retained-views.md). Library and On Kobo mount at launch; Reading mounts the first time it's opened, and its Kobo and Goodreads sources each mount the first time they're shown. The inactive panel uses `display: none`, keeping it out of layout, keyboard focus and the accessibility tree while preserving its data, image elements and scroll position. Device data starts loading as soon as a Kobo connects. Switching tabs does not issue reads or rebuild a view.
+
+Once the library and first device detection settle, `prefetchReading()` loads the saved Kobo stats and the Goodreads insights into the read cache. Views draw on their first render from `readCache.peek`, so a prefetched view never shows a loading state. A connected Kobo's stats are read only when its Reading view is on screen, once per connection; `refreshReadingStats` then stores the result with `readCache.put` as the saved stats.
 
 `app/src/readCache.ts` provides a shared cache for API reads and cover dimensions. Identical pending requests share one promise, including React Strict Mode's repeated effects and collection reads requested by both screens. Successful reads expire after five minutes; online cover searches last ten minutes and image dimensions last one hour. Errors are discarded immediately. The cache holds at most 128 entries and evicts the least recently used entry. It is memory-only and is never persisted across app launches.
 

@@ -1,22 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   coverSrc,
-  readingStats,
+  peekSavedReadingStats,
+  refreshReadingStats,
+  savedReadingStats,
   type Book,
   type SavedStats,
   type StatBook,
 } from "../api";
-import { spineColor } from "../coverArt";
 import {
   finishedByMonth,
   finishedByYear,
   hours,
   readingHeadline,
   startedBooks,
-  ticks,
   titleKey,
-  type Bucket,
 } from "../stats";
+import { ColumnChart, Tile } from "./charts";
 import { GeneratedCover } from "./GeneratedCover";
 import { ShelfArt } from "./ShelfArt";
 
@@ -25,6 +25,8 @@ interface Props {
   mount: string | null;
   /** The library, for real covers of books being read. */
   library: Book[];
+  /** On screen. A connected Kobo is only read while it is. */
+  active: boolean;
 }
 
 const dateFmt = (iso: string | null) =>
@@ -37,24 +39,63 @@ const dateFmt = (iso: string | null) =>
     : "";
 
 /** Reading statistics from the Kobo, or the last ones saved. */
-export function ReadingView({ mount, library }: Props) {
-  const [saved, setSaved] = useState<SavedStats | null | undefined>(undefined);
+export function ReadingView({ mount, library, active }: Props) {
+  // Saved stats prefetched at launch draw on the first render, with no
+  // loading state; a connected Kobo's fresh ones replace them when read.
+  const [saved, setSaved] = useState<SavedStats | null | undefined>(
+    peekSavedReadingStats,
+  );
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<"years" | "months">("years");
+  /** The Kobo whose stats are on screen, read this session. */
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshed = useRef<string | null>(null);
 
   useEffect(() => {
+    if (saved !== undefined) return;
     let alive = true;
-    readingStats(mount)
-      .then((s) => {
-        if (!alive) return;
-        setSaved(s);
-        setError(null);
-      })
+    savedReadingStats()
+      .then((s) => alive && setSaved((current) => current ?? s))
       .catch((e) => alive && setError(String(e)));
     return () => {
       alive = false;
     };
+  }, [saved]);
+
+  // A read finishing after its Kobo left, or after the view did, is dropped.
+  const current = useRef(mount);
+  const gone = useRef(false);
+  useEffect(() => {
+    current.current = mount;
+    if (!mount) refreshed.current = null;
   }, [mount]);
+  useEffect(() => {
+    // Strict Mode mounts twice; the second mount is live again.
+    gone.current = false;
+    return () => {
+      gone.current = true;
+    };
+  }, []);
+
+  // Read a connected Kobo once per connection, and only when its stats are
+  // looked at: it reads the device over USB. Looking away mid-read doesn't
+  // cancel it.
+  useEffect(() => {
+    if (!mount || !active || refreshed.current === mount) return;
+    refreshed.current = mount;
+    const still = () => !gone.current && current.current === mount;
+    setRefreshing(true);
+    refreshReadingStats(mount)
+      .then((s) => {
+        if (!still()) return;
+        setSaved(s);
+        setFresh(mount);
+        setError(null);
+      })
+      .catch((e) => still() && setError(String(e)))
+      .finally(() => !gone.current && setRefreshing(false));
+  }, [mount, active]);
 
   const now = useMemo(() => new Date(), []);
   const covers = useMemo(() => {
@@ -76,7 +117,7 @@ export function ReadingView({ mount, library }: Props) {
     [stats, range, now],
   );
 
-  if (saved === undefined && !error)
+  if ((saved === undefined || (!saved && refreshing)) && !error)
     return <p className="muted empty">Reading your stats…</p>;
   if (!stats)
     return (
@@ -112,9 +153,11 @@ export function ReadingView({ mount, library }: Props) {
       </h2>
       <p className="muted reading-source">
         {stats.device_model}
-        {mount
+        {mount && fresh === mount
           ? " · connected now"
-          : ` · as of ${dateFmt(saved!.taken_at)}, when it was last connected`}
+          : refreshing
+            ? ` · as of ${dateFmt(saved!.taken_at)}, updating from your Kobo…`
+            : ` · as of ${dateFmt(saved!.taken_at)}, when it was last connected`}
         {error && ` · couldn't refresh: ${error}`}
       </p>
 
@@ -157,7 +200,11 @@ export function ReadingView({ mount, library }: Props) {
           </div>
         </div>
         {buckets.length ? (
-          <ColumnChart buckets={buckets} />
+          <ColumnChart
+            buckets={buckets}
+            unit={["book", "books"]}
+            label="Books finished"
+          />
         ) : (
           <p className="muted">No finished books yet.</p>
         )}
@@ -260,24 +307,6 @@ export function ReadingView({ mount, library }: Props) {
   );
 }
 
-function Tile({
-  label,
-  value,
-  note,
-}: {
-  label: string;
-  value: string;
-  note?: string;
-}) {
-  return (
-    <div className="stat-tile">
-      <span className="stat-label">{label}</span>
-      <span className="stat-value">{value}</span>
-      {note && <span className="muted stat-note">{note}</span>}
-    </div>
-  );
-}
-
 function BookName({
   book,
   author = true,
@@ -294,95 +323,5 @@ function BookName({
       {author && book.author && <span className="muted"> · {book.author}</span>}
       {!book.on_device && <span className="muted"> · removed</span>}
     </span>
-  );
-}
-
-/** One series of columns: a hover tooltip per column, the tallest labelled. */
-function ColumnChart({ buckets }: { buckets: Bucket[] }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const max = Math.max(...buckets.map((b) => b.count));
-  const axis = ticks(max);
-  const top = axis[axis.length - 1];
-  const peak = buckets.findIndex((b) => b.count === max && max > 0);
-  // Each finished book is drawn as a spine while they stay thick enough.
-  const stacked = top <= 30;
-
-  return (
-    <div
-      className="column-chart"
-      role="img"
-      aria-label={`Books finished: ${buckets.map((b) => `${b.label} ${b.count}`).join(", ")}`}
-    >
-      <div className="chart-plot">
-        {axis.map((t) => (
-          <div
-            key={t}
-            className="gridline"
-            style={{ bottom: `${(t / top) * 100}%` }}
-          >
-            <span className="tick">{t}</span>
-          </div>
-        ))}
-        <div className="columns">
-          {buckets.map((b, i) => (
-            <div
-              key={b.key}
-              className="column-slot"
-              onMouseEnter={() => setHover(i)}
-              onMouseLeave={() => setHover(null)}
-            >
-              {i === peak && hover === null && (
-                <span
-                  className="column-value"
-                  style={{ bottom: `${(b.count / top) * 100}%` }}
-                >
-                  {b.count}
-                </span>
-              )}
-              {b.count > 0 &&
-                (stacked ? (
-                  <div
-                    className={`spine-stack ${hover === i ? "hovered" : ""}`}
-                    style={{ height: `${(b.count / top) * 100}%` }}
-                  >
-                    {Array.from({ length: b.count }, (_, n) => (
-                      <span
-                        key={n}
-                        className="spine"
-                        style={
-                          {
-                            "--spine": spineColor(`${b.key}:${n}`),
-                            "--tilt": `${((n * 7) % 5) - 2}px`,
-                            "--w": `${84 + ((n * 13) % 17)}%`,
-                          } as React.CSSProperties
-                        }
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div
-                    className={`column ${hover === i ? "hovered" : ""}`}
-                    style={{ height: `${(b.count / top) * 100}%` }}
-                  />
-                ))}
-              {hover === i && (
-                <div
-                  className="chart-tooltip"
-                  style={{ bottom: `calc(${(b.count / top) * 100}% + 8px)` }}
-                >
-                  <strong>{b.count}</strong> {b.count === 1 ? "book" : "books"}
-                  <span className="muted"> · {b.key}</span>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="column-labels">
-        {buckets.map((b) => (
-          <span key={b.key}>{b.label}</span>
-        ))}
-      </div>
-    </div>
   );
 }

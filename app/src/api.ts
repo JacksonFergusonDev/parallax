@@ -627,6 +627,8 @@ export interface GoodreadsBook {
   original_year: number | null;
   /** 1 to 5, or null when unrated. */
   rating: number | null;
+  /** Goodreads readers' average; only older exports have it. */
+  average_rating?: number;
   shelf: "read" | "to_read" | "currently_reading" | { other: string };
   shelves: GoodreadsShelfEntry[];
   date_read: string | null;
@@ -721,6 +723,117 @@ export const goodreadsMatches = () =>
   ]);
 export const goodreadsEdit = (goodreadsId: string, edit: GoodreadsEdit) =>
   write<GoodreadsBook>("goodreads_edit", { goodreadsId, edit }, ["goodreads"]);
+/** An export you imported, as recorded then. */
+export interface GoodreadsImport {
+  imported_at: string;
+  file_name: string | null;
+  /** When the file was last changed: usually when you downloaded it. */
+  file_modified: string | null;
+  /** The latest date added or read in the export. */
+  latest_activity: string | null;
+  books: number;
+  added: number;
+  updated: number;
+}
+export interface GoodreadsCount {
+  name: string;
+  books: number;
+}
+/** What your saved Goodreads shelves say about your reading. Books refer to
+ * each other by Goodreads Book Id; `books` has every one. */
+export interface GoodreadsInsights {
+  import: GoodreadsImport | null;
+  imports: number;
+  totals: {
+    books: number;
+    read: number;
+    to_read: number;
+    reading: number;
+    other: number;
+    rated: number;
+    reviewed: number;
+    pages_read: number;
+    read_undated: number;
+    in_library: number;
+  };
+  /** Dated reads per year, first to this year, with empty years. */
+  years: { year: number; books: number; pages: number }[];
+  pace: {
+    year: number;
+    this_year: number;
+    last_year_by_now: number;
+    last_year: number;
+  } | null;
+  ratings: {
+    /** Read books with each rating, one star first. */
+    stars: [number, number, number, number, number];
+    unrated: number;
+    average: number | null;
+    against_goodreads: {
+      books: number;
+      mine: number;
+      goodreads: number;
+    } | null;
+  };
+  to_read: {
+    books: number;
+    in_library: number;
+    pages: number;
+    median_age_days: number | null;
+    oldest: string | null;
+    years_to_clear: number | null;
+    read_last_year: number;
+  };
+  wait: {
+    books: number;
+    median_days: number;
+    longest: string;
+    longest_days: number;
+    logged_after: number;
+  } | null;
+  authors: {
+    name: string;
+    read: number;
+    books: number;
+    average: number | null;
+  }[];
+  series: {
+    name: string;
+    author: string | null;
+    read: string[];
+    unread: string[];
+    missing: number[];
+  }[];
+  /** `decade` is null for anything before 1900. */
+  decades: { decade: number | null; read: number; to_read: number }[];
+  lengths: {
+    buckets: {
+      min: number;
+      max: number | null;
+      read: number;
+      to_read: number;
+    }[];
+    average: number | null;
+    longest: string | null;
+    shortest: string | null;
+  };
+  formats: GoodreadsCount[];
+  shelves: GoodreadsCount[];
+  rereads: string[];
+  books: (GoodreadsBook & { library: number[] })[];
+}
+export const goodreadsInsights = () =>
+  read<GoodreadsInsights>("goodreads_insights", {}, ["library", "goodreads"]);
+/** Insights already loaded, or undefined when they aren't yet. */
+export const peekGoodreadsInsights = () =>
+  readCache.peek<GoodreadsInsights>(["goodreads_insights", {}]);
+
+/** Loads what Reading shows from the library in the background, so its
+ * first opening draws at once. Only reads the library, never a device. */
+export function prefetchReading() {
+  void savedReadingStats().catch(() => undefined);
+  void goodreadsInsights().catch(() => undefined);
+}
 export const librarySnapshots = () => invoke<Snapshot[]>("library_snapshots");
 export const libraryRestore = (file: string) =>
   write<{
@@ -815,8 +928,21 @@ export const genresApply = (
     ["library", "plans", ...(mount ? [deviceTag(mount)] : [])],
   );
 /** Fresh from the Kobo at `mount` (and saved), else the last saved. */
-export const readingStats = (mount: string | null) =>
-  invoke<SavedStats | null>("reading_stats", { mount });
+const SAVED_STATS = ["reading_stats", { mount: null }] as const;
+/** The reading stats last saved from a Kobo, cached like other reads. */
+export const savedReadingStats = () =>
+  read<SavedStats | null>(...SAVED_STATS, ["reading-stats"]);
+/** Saved stats already loaded, or undefined when they aren't yet. */
+export const peekSavedReadingStats = () =>
+  readCache.peek<SavedStats | null>(SAVED_STATS);
+/** Reads fresh stats from the Kobo at `mount`, which saves them, and makes
+ * them the cached saved stats. Reads the device over USB, so call it when
+ * someone looks at the stats rather than ahead of time. */
+export async function refreshReadingStats(mount: string) {
+  const stats = await invoke<SavedStats | null>("reading_stats", { mount });
+  readCache.put(SAVED_STATS, stats, ["reading-stats"]);
+  return stats;
+}
 export const calibreDefaultLibrary = () =>
   invoke<string | null>("calibre_default_library");
 export const calibrePreview = (path: string) =>

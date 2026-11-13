@@ -19,6 +19,7 @@
     "allow-goodreads-import",
     "allow-goodreads-matches",
     "allow-goodreads-edit",
+    "allow-goodreads-insights",
     "allow-library-review",
     "allow-library-update",
     "allow-library-set-comic-kind",
