@@ -73,16 +73,19 @@ export function GoodreadsImport({ onClose, onImported }: Props) {
 
   const choose = async (first = false) => {
     setPicking(true);
+    let failed = false;
     const picked = await open({
       title: "Choose your Goodreads export",
       filters: [{ name: "CSV", extensions: ["csv"] }],
     }).catch((e: unknown) => {
+      failed = true;
       setError(String(e));
       return null;
     });
     if (typeof picked !== "string") {
-      // Cancelled before anything was shown: leave nothing behind.
-      if (first) onClose();
+      // Cancelled before anything was shown: leave nothing behind. A picker
+      // that failed stays open to say why.
+      if (first && !failed) onClose();
       else setPicking(false);
       return;
     }

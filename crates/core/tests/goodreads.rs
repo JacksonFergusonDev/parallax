@@ -319,6 +319,99 @@ mod saved {
     }
 
     #[test]
+    fn the_exports_date_read_replaces_the_day_you_marked_it_read() {
+        let (_dir, mut lib) = library();
+        let mut books = export();
+        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        let id = first_to_read(&books);
+        let edit = Edit {
+            shelf: Some(Shelf::Read),
+            ..Edit::default()
+        };
+        let mine = goodreads::edit(&mut lib, &id, &edit, TODAY).unwrap();
+        assert_eq!(mine.date_read, Some(TODAY));
+        assert!(mine.shelves.iter().any(|s| s.name == "read"));
+        assert!(!mine.shelves.iter().any(|s| s.name == "to-read"));
+
+        // You marked it read on Goodreads too, a few days earlier.
+        let real = NaiveDate::from_ymd_opt(2026, 11, 9).unwrap();
+        let theirs = books.iter_mut().find(|b| b.goodreads_id == id).unwrap();
+        theirs.shelf = Shelf::Read;
+        theirs.read_count = 1;
+        theirs.date_read = Some(real);
+        let plan = goodreads::plan(&lib, &books).unwrap();
+        assert!(
+            plan.conflicts.is_empty(),
+            "no question about a made-up date"
+        );
+        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        let book = saved(&lib, &id);
+        assert_eq!(book.date_read, Some(real));
+        assert!(!book.date_read_guessed);
+    }
+
+    #[test]
+    fn a_date_you_chose_is_still_asked_about() {
+        let (_dir, mut lib) = library();
+        let mut books = export();
+        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        let id = first_to_read(&books);
+        let chosen = NaiveDate::from_ymd_opt(2026, 1, 2).unwrap();
+        let edit = Edit {
+            shelf: Some(Shelf::Read),
+            date_read: Some(chosen),
+            ..Edit::default()
+        };
+        goodreads::edit(&mut lib, &id, &edit, TODAY).unwrap();
+        let theirs = books.iter_mut().find(|b| b.goodreads_id == id).unwrap();
+        theirs.shelf = Shelf::Read;
+        theirs.read_count = 1;
+        theirs.date_read = NaiveDate::from_ymd_opt(2026, 11, 9);
+        let plan = goodreads::plan(&lib, &books).unwrap();
+        assert_eq!(plan.conflicts[0].changes[0].field, Field::DateRead);
+    }
+
+    #[test]
+    fn a_status_cant_be_added_as_your_own_shelf() {
+        let (_dir, mut lib) = library();
+        let books = export();
+        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        let id = first_to_read(&books);
+        let edit = Edit {
+            add_shelves: vec!["read".into()],
+            ..Edit::default()
+        };
+        let err = goodreads::edit(&mut lib, &id, &edit, TODAY).unwrap_err();
+        assert!(matches!(err, GoodreadsError::SystemShelf(_)));
+        assert_eq!(saved(&lib, &id).shelf, Shelf::ToRead);
+    }
+
+    #[test]
+    fn importing_with_one_choice_for_everything() {
+        let (_dir, mut lib) = library();
+        let mut books = export();
+        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        let id = first_to_read(&books);
+        let edit = Edit {
+            rating: Some(4),
+            ..Edit::default()
+        };
+        goodreads::edit(&mut lib, &id, &edit, TODAY).unwrap();
+        books
+            .iter_mut()
+            .find(|b| b.goodreads_id == id)
+            .unwrap()
+            .rating = Some(2);
+        books.remove(5);
+        let report =
+            goodreads::import_choosing(&mut lib, &books, Pick::Goodreads, MissingPick::Remove)
+                .unwrap();
+        assert_eq!((report.took_goodreads, report.removed), (1, 1));
+        assert_eq!(saved(&lib, &id).rating, Some(2));
+        assert_eq!(goodreads::saved(&lib).unwrap().len(), 282);
+    }
+
+    #[test]
     fn editing_an_unknown_book_fails() {
         let (_dir, mut lib) = library();
         goodreads::import(&mut lib, &export(), &Resolutions::default()).unwrap();

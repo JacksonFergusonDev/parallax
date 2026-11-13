@@ -630,6 +630,8 @@ export interface GoodreadsBook {
   shelf: "read" | "to_read" | "currently_reading" | { other: string };
   shelves: GoodreadsShelfEntry[];
   date_read: string | null;
+  /** The date read was filled in when you marked it read here. */
+  date_read_guessed?: boolean;
   date_added: string | null;
   read_count: number;
   review: string | null;
@@ -717,7 +719,6 @@ export const goodreadsMatches = () =>
     "library",
     "goodreads",
   ]);
-export const goodreadsSaved = () => invoke<GoodreadsBook[]>("goodreads_saved");
 export const goodreadsEdit = (goodreadsId: string, edit: GoodreadsEdit) =>
   write<GoodreadsBook>("goodreads_edit", { goodreadsId, edit }, ["goodreads"]);
 export const librarySnapshots = () => invoke<Snapshot[]>("library_snapshots");

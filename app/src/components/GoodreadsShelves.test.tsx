@@ -81,4 +81,26 @@ describe("GoodreadsShelves", () => {
       edit: { remove_shelves: ["favorites"] },
     });
   });
+
+  it("explains instead of adding a status as a shelf", async () => {
+    await show(book(match));
+    const input = host.querySelector(
+      '[aria-label="Add to a shelf"]',
+    ) as HTMLInputElement;
+    await act(async () => {
+      const set = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!;
+      set.call(input, "Read");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      );
+    });
+    expect(edits()).toEqual([]);
+    expect(host.textContent).toContain("is a Goodreads status");
+  });
 });

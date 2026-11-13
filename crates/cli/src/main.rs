@@ -621,13 +621,13 @@ fn main() -> Result<()> {
                 conflicts,
                 missing,
             } => {
-                use parallax_core::goodreads::{self, MissingPick, Pick, Resolutions};
+                use parallax_core::goodreads::{self, MissingPick, Pick};
                 let root = library.map_or_else(default_library_root, Ok)?;
                 let mut lib = Library::open(&root)?;
                 let books = goodreads::read_file(&file)
                     .with_context(|| format!("reading {}", file.display()))?;
-                let plan = goodreads::plan(&lib, &books)?;
                 if dry_run {
+                    let plan = goodreads::plan(&lib, &books)?;
                     if cli.json {
                         return print_json(&plan);
                     }
@@ -650,26 +650,15 @@ fn main() -> Result<()> {
                     }
                     return Ok(());
                 }
-                let mut resolutions = Resolutions::default();
-                for c in &plan.conflicts {
-                    resolutions.conflicts.insert(
-                        c.goodreads_id.clone(),
-                        match conflicts {
-                            ConflictChoice::Mine => Pick::Mine,
-                            ConflictChoice::Goodreads => Pick::Goodreads,
-                        },
-                    );
-                }
-                for m in &plan.missing {
-                    resolutions.missing.insert(
-                        m.goodreads_id.clone(),
-                        match missing {
-                            MissingChoice::Keep => MissingPick::Keep,
-                            MissingChoice::Remove => MissingPick::Remove,
-                        },
-                    );
-                }
-                let report = goodreads::import(&mut lib, &books, &resolutions)
+                let conflicts = match conflicts {
+                    ConflictChoice::Mine => Pick::Mine,
+                    ConflictChoice::Goodreads => Pick::Goodreads,
+                };
+                let missing = match missing {
+                    MissingChoice::Keep => MissingPick::Keep,
+                    MissingChoice::Remove => MissingPick::Remove,
+                };
+                let report = goodreads::import_choosing(&mut lib, &books, conflicts, missing)
                     .with_context(|| format!("importing {}", file.display()))?;
                 if cli.json {
                     return print_json(&report);

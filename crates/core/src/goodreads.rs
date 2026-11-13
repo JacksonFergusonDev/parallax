@@ -38,6 +38,8 @@ pub enum GoodreadsError {
     Json(#[from] serde_json::Error),
     #[error("this doesn't look like a Goodreads export: no {0} column")]
     MissingColumn(&'static str),
+    #[error("\"{0}\" is a Goodreads status, so set it as the book's status instead")]
+    SystemShelf(String),
 }
 
 /// The exclusive shelf every Goodreads book is on.
@@ -110,6 +112,10 @@ pub struct Book {
     #[serde(default)]
     pub shelves: Vec<OnShelf>,
     pub date_read: Option<NaiveDate>,
+    /// The date read was filled in with the day you marked it read here,
+    /// rather than chosen, so an export's real date replaces it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub date_read_guessed: bool,
     pub date_added: Option<NaiveDate>,
     #[serde(default)]
     pub read_count: u32,
@@ -119,12 +125,9 @@ pub struct Book {
 impl Book {
     /// The shelves you made yourself.
     pub fn custom_shelves(&self) -> impl Iterator<Item = &OnShelf> {
-        self.shelves.iter().filter(|s| {
-            !matches!(
-                Shelf::parse(&s.name),
-                Shelf::Read | Shelf::ToRead | Shelf::CurrentlyReading
-            )
-        })
+        self.shelves
+            .iter()
+            .filter(|s| !is_system(&s.name) && s.name != self.shelf.name())
     }
 }
 
@@ -219,6 +222,7 @@ impl Columns {
             ),
             shelf,
             date_read: date(self.get(record, "Date Read")),
+            date_read_guessed: false,
             date_added: date(self.get(record, "Date Added")),
             read_count: self.get(record, "Read Count").parse().unwrap_or(0),
             review: self
@@ -312,8 +316,11 @@ fn shelves(names: &str, with_positions: &str) -> Vec<OnShelf> {
 // - only the export changed it: the export's value;
 // - only you changed it: yours;
 // - both changed it, differently: a conflict you decide, for the whole book.
-// Everything else (title, ISBN, pages...) always follows the export. After a
-// merge both copies are the result, so nothing is left marked or half-decided.
+// A date read filled in here when you marked the book read gives way to the
+// export's date without asking. Everything else (title, ISBN, pages...) always
+// follows the export. After a merge the book you see is the result and the
+// export's copy is the new export, so the next import compares against it and
+// nothing is left half-decided.
 
 /// Fields you can change here that an export can also change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -349,15 +356,17 @@ impl Field {
     }
 }
 
-fn is_system(name: &str) -> bool {
+/// One of Goodreads' own exclusive shelves (read, to-read, currently-reading).
+pub fn is_system(name: &str) -> bool {
     !matches!(Shelf::parse(name), Shelf::Other(_))
 }
 
-/// The shelves you made, by name.
+/// The shelves you made, by name. An unusual exclusive shelf (such as
+/// did-not-finish) is the book's status, not one of yours.
 fn custom_names(book: &Book) -> BTreeSet<String> {
     book.shelves
         .iter()
-        .filter(|s| !is_system(&s.name))
+        .filter(|s| !is_system(&s.name) && s.name != book.shelf.name())
         .map(|s| s.name.clone())
         .collect()
 }
@@ -423,14 +432,19 @@ fn copy_field(to: &mut Book, from: &Book, field: Field) {
     match field {
         Field::Shelf => to.shelf = from.shelf.clone(),
         Field::Rating => to.rating = from.rating,
-        Field::DateRead => to.date_read = from.date_read,
+        Field::DateRead => {
+            to.date_read = from.date_read;
+            to.date_read_guessed = from.date_read_guessed;
+        }
         Field::ReadCount => to.read_count = from.read_count,
         Field::Review => to.review.clone_from(&from.review),
         Field::Shelves => {} // Rebuilt together with the status; see `rebuild_shelves`.
     }
 }
 
-/// Lists each shelf the merged book is on, with its place from whichever side knows it.
+/// Lists each shelf the merged book is on, once, with its place from whichever
+/// side knows it. The status's shelf is always listed, even when neither side
+/// had an entry for it.
 fn rebuild_shelves(out: &mut Book, mine: &Book, theirs: &Book, custom: &BTreeSet<String>) {
     let place = |name: &str| {
         theirs
@@ -440,9 +454,18 @@ fn rebuild_shelves(out: &mut Book, mine: &Book, theirs: &Book, custom: &BTreeSet
             .find(|s| s.name == name)
             .cloned()
     };
-    out.shelves = std::iter::once(out.shelf.name().to_owned())
-        .chain(custom.iter().cloned())
-        .filter_map(|name| place(&name))
+    let status = out.shelf.name().to_owned();
+    let status_entry = place(&status).unwrap_or(OnShelf {
+        name: status.clone(),
+        position: None,
+    });
+    out.shelves = std::iter::once(status_entry)
+        .chain(
+            custom
+                .iter()
+                .filter(|name| **name != status)
+                .filter_map(|name| place(name)),
+        )
         .collect();
 }
 
@@ -633,6 +656,8 @@ fn merge(mine: &Book, base: &Book, theirs: &Book, pick: Pick) -> Merged {
         }
         if t == b {
             from_mine.push(field); // only you changed it
+        } else if field == Field::DateRead && mine.date_read_guessed {
+            continue; // the export's real date over the day you marked it read
         } else {
             conflicts.push(FieldChange {
                 field,
@@ -813,6 +838,24 @@ pub fn import(
     Ok(report)
 }
 
+/// [`import`] with one choice for every conflict and every book the export no
+/// longer has, without planning first.
+pub fn import_choosing(
+    lib: &mut Library,
+    books: &[Book],
+    conflicts: Pick,
+    missing: MissingPick,
+) -> Result<ImportReport, GoodreadsError> {
+    let saved = load(lib)?;
+    let resolutions = Resolutions {
+        conflicts: saved.keys().map(|id| (id.clone(), conflicts)).collect(),
+        missing: saved.keys().map(|id| (id.clone(), missing)).collect(),
+    };
+    let (_, report, writes) = reconcile(&saved, books, &resolutions)?;
+    lib.goodreads_write(&writes)?;
+    Ok(report)
+}
+
 /// The saved books as you see them.
 pub fn saved(lib: &Library) -> Result<Vec<Book>, GoodreadsError> {
     Ok(load(lib)?.into_values().map(|s| s.mine).collect())
@@ -831,9 +874,9 @@ pub struct LibraryMatch {
 
 /// Finds the library books on your saved Goodreads shelves, by ISBN first and
 /// then by title and author (the same way duplicates are found), keyed by
-/// library book id. Each Goodreads book matches at most one library book per
-/// key, and the first library book wins, so the result doesn't depend on
-/// anything but the two lists.
+/// library book id. Each library book matches at most one Goodreads book, the
+/// first saved one with that key. One Goodreads book can match several library
+/// books, such as two editions or copies of it, and each shows its status.
 pub fn library_matches(
     saved: &[Book],
     books: &[parallax_library::Book],
@@ -922,23 +965,39 @@ pub fn edit(
             book.read_count = book.read_count.max(1);
             if book.date_read.is_none() && edit.date_read.is_none() && !edit.clear_date_read {
                 book.date_read = Some(today);
+                book.date_read_guessed = true;
             }
         }
-        // The old status's entry goes; positions on it no longer apply.
-        book.shelves.retain(|s| s.name != book.shelf.name());
-        book.shelf = shelf.clone();
+        if *shelf != book.shelf {
+            // The old status's entry goes; positions on it no longer apply.
+            book.shelves.retain(|s| s.name != book.shelf.name());
+            book.shelves.insert(
+                0,
+                OnShelf {
+                    name: shelf.name().to_owned(),
+                    position: None,
+                },
+            );
+            book.shelf = shelf.clone();
+        }
     }
     if let Some(rating) = edit.rating {
         book.rating = (1..=5).contains(&rating).then_some(rating);
     }
     if let Some(date) = edit.date_read {
         book.date_read = Some(date);
+        book.date_read_guessed = false;
     } else if edit.clear_date_read {
         book.date_read = None;
+        book.date_read_guessed = false;
     }
+    // Only your own shelves come and go here; the status is set above.
     book.shelves
-        .retain(|s| !edit.remove_shelves.contains(&s.name));
+        .retain(|s| is_system(&s.name) || !edit.remove_shelves.contains(&s.name));
     for name in &edit.add_shelves {
+        if is_system(name) {
+            return Err(GoodreadsError::SystemShelf(name.clone()));
+        }
         if !book.shelves.iter().any(|s| &s.name == name) {
             book.shelves.push(OnShelf {
                 name: name.clone(),
@@ -1062,6 +1121,31 @@ mod tests {
     fn parse_rows(rows: &[&str]) -> Vec<Book> {
         let text = format!("{HEADER}\n{}\n", rows.join("\n"));
         parse(text.as_bytes()).unwrap()
+    }
+
+    #[test]
+    fn an_unusual_status_is_listed_once_after_a_merge() {
+        let base = parse_rows(&[
+            r#"1,One,Ann Author,"Author, Ann",,="",="",0,,,,,,,,"did-not-finish, sci-fi","did-not-finish (#1), sci-fi (#1)",did-not-finish,,,0,"#,
+        ])
+        .remove(0);
+        let shelf = |name: &str| OnShelf {
+            name: name.into(),
+            position: None,
+        };
+        let mut mine = base.clone();
+        mine.shelves.push(shelf("horror"));
+        let mut theirs = base.clone();
+        theirs.shelves.push(shelf("fantasy"));
+        let merged = merge(&mine, &base, &theirs, Pick::Mine);
+        assert_eq!(merged.conflicts.len(), 1);
+        let names: Vec<&str> = merged
+            .book
+            .shelves
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect();
+        assert_eq!(names, ["did-not-finish", "horror", "sci-fi"]);
     }
 
     #[test]

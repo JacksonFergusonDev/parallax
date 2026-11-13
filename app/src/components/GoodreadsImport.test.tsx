@@ -148,6 +148,15 @@ describe("GoodreadsImport", () => {
     expect(host.querySelector("[role=dialog]")).toBeNull();
   });
 
+  it("stays open to say why when the file picker fails", async () => {
+    vi.mocked(open).mockRejectedValue(new Error("no dialog"));
+    await start(quiet);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(host.querySelector("[role=dialog]")?.textContent).toContain(
+      "no dialog",
+    );
+  });
+
   it("describes the export and its new shelves before importing", async () => {
     await start(quiet);
     expect(host.textContent).toContain(

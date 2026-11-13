@@ -417,4 +417,15 @@ describe("read state from Goodreads", () => {
     expect(readState(b)).toBe("reading");
     expect(progressLabel(b)).toBe("40%");
   });
+
+  it("shows a book read elsewhere even when a Kobo hasn't opened it", () => {
+    const b = book(1, "A", [], {
+      goodreads: match("read"),
+      reading: reading("unread"),
+    });
+    expect(readState(b)).toBe("finished");
+    expect(progressLabel(b)).toBe("Read");
+    const unmatched = book(2, "B", [], { reading: reading("unread") });
+    expect(progressLabel(unmatched)).toBe("Unread");
+  });
 });

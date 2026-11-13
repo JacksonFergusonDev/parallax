@@ -7,6 +7,9 @@ const STATUSES = [
   ["read", "Read"],
 ] as const;
 
+/** Goodreads' own shelves, which are statuses rather than shelves you add. */
+const STATUS_SHELVES = new Set(["read", "to-read", "currently-reading"]);
+
 /**
  * Your Goodreads status, rating and shelves for a library book. Changes save
  * at once and are kept here; the next import asks before overwriting one.
@@ -40,6 +43,12 @@ export function GoodreadsShelves({
     const name = shelf.trim().toLowerCase().replace(/\s+/g, "-");
     if (!name) return;
     setShelf("");
+    if (STATUS_SHELVES.has(name)) {
+      setError(
+        `"${name}" is a Goodreads status. Choose it above to change the book's status.`,
+      );
+      return;
+    }
     if (!match.shelves.includes(name)) void apply({ add_shelves: [name] });
   };
 

@@ -374,7 +374,11 @@ export function plainDescription(html: string): string {
   return (doc.body.textContent ?? "").replace(/\n\s*\n+/g, "\n").trim();
 }
 
-/** Finished or reading, from a Kobo or else your Goodreads shelves. */
+/**
+ * Finished or reading, from a Kobo that has opened the book, or else your
+ * Goodreads shelves. A Kobo's "unread" only means it hasn't opened the book,
+ * so it doesn't hide a book you read elsewhere.
+ */
 export function readState(b: Book): "unread" | "reading" | "finished" {
   if (b.reading?.status === "finished" || b.reading?.status === "reading")
     return b.reading.status;
