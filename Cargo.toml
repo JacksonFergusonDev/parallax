@@ -66,6 +66,7 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 clap = { version = "4", features = ["derive"] }
 comfy-table = "8"
 console = "0.16"
+csv = "1"
 indicatif = "0.18"
 reqwest = { version = "0.13", features = ["blocking", "json", "query"] }
 roxmltree = "0.21"

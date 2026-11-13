@@ -10,7 +10,9 @@ import {
   languageLabel,
   libraryColumns,
   pagesLabel,
+  progressLabel,
   publishedLabel,
+  readState,
   skippedPagesNote,
   summarizeImport,
   toForm,
@@ -371,5 +373,59 @@ describe("skippedPagesNote", () => {
     ).toBe(
       "Damaged pages were left out: Storm (02.png, 03.png). Check library lists them.",
     );
+  });
+});
+
+describe("read state from Goodreads", () => {
+  const match = (shelf: "read" | "to_read" | "currently_reading") => ({
+    goodreads_id: "1",
+    shelf,
+    rating: null,
+    date_read: null,
+    shelves: [],
+  });
+  const reading = (status: "unread" | "reading" | "finished") => ({
+    device_serial: "x",
+    status,
+    percent: 40,
+    last_read: null,
+    time_spent_secs: null,
+    seen_at: "2026-11-01T00:00:00Z",
+  });
+
+  it("marks books on your read and reading shelves", () => {
+    const read = book(1, "A", [], { goodreads: match("read") });
+    expect(readState(read)).toBe("finished");
+    expect(progressLabel(read)).toBe("Read");
+    const now = book(2, "B", [], { goodreads: match("currently_reading") });
+    expect(readState(now)).toBe("reading");
+    expect(progressLabel(now)).toBe("Reading");
+  });
+
+  it("leaves want-to-read and unmatched books unread", () => {
+    expect(readState(book(1, "A", [], { goodreads: match("to_read") }))).toBe(
+      "unread",
+    );
+    expect(readState(book(2, "B", []))).toBe("unread");
+  });
+
+  it("prefers what a Kobo reports", () => {
+    const b = book(1, "A", [], {
+      goodreads: match("read"),
+      reading: reading("reading"),
+    });
+    expect(readState(b)).toBe("reading");
+    expect(progressLabel(b)).toBe("40%");
+  });
+
+  it("shows a book read elsewhere even when a Kobo hasn't opened it", () => {
+    const b = book(1, "A", [], {
+      goodreads: match("read"),
+      reading: reading("unread"),
+    });
+    expect(readState(b)).toBe("finished");
+    expect(progressLabel(b)).toBe("Read");
+    const unmatched = book(2, "B", [], { reading: reading("unread") });
+    expect(progressLabel(unmatched)).toBe("Unread");
   });
 });

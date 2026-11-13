@@ -9,6 +9,7 @@ license.workspace = true
 [dependencies]
 chrono.workspace = true
 compress-tools.workspace = true
+csv.workspace = true
 parallax-comic.workspace = true
 parallax-convert.workspace = true
 parallax-device.workspace = true

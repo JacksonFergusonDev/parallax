@@ -5,6 +5,7 @@ import { coverSrc, type Book } from "../api";
 import {
   deviceStateLabel,
   progressLabel,
+  readState,
   sendStatusLabel,
   type DeviceState,
   type SendStatus,
@@ -64,8 +65,8 @@ export const BookCard = memo(function BookCard({
             {sendStatusLabel(status)}
           </span>
         )}
-        {book.reading && book.reading.status !== "unread" && (
-          <span className={`read-badge ${book.reading.status}`}>
+        {readState(book) !== "unread" && (
+          <span className={`read-badge ${readState(book)}`}>
             {progressLabel(book)}
           </span>
         )}

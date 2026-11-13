@@ -337,6 +337,64 @@ async fn library_remove(
     .map_err(err)?
 }
 
+/// What importing a Goodreads export would change and what needs a decision. Writes nothing.
+#[tauri::command]
+async fn goodreads_plan(
+    state: State<'_, AppState>,
+    path: PathBuf,
+) -> CmdResult<parallax_core::goodreads::ImportPlan> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        parallax_core::goodreads::plan_file(&lib, &path).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Saves a Goodreads export with the user's decisions (anything undecided
+/// gets the recommended choice). A newer export updates the books saved
+/// before by their Goodreads Book Id instead of adding them again.
+#[tauri::command]
+async fn goodreads_import(
+    state: State<'_, AppState>,
+    path: PathBuf,
+    resolutions: parallax_core::goodreads::Resolutions,
+) -> CmdResult<parallax_core::goodreads::ImportReport> {
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        parallax_core::goodreads::import_file(&mut lib, &path, &resolutions).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Which library books are on your saved Goodreads shelves, by library id.
+#[tauri::command]
+fn goodreads_matches(
+    state: State<AppState>,
+) -> CmdResult<std::collections::HashMap<i64, parallax_core::goodreads::LibraryMatch>> {
+    let lib = state.library();
+    let saved = parallax_core::goodreads::saved(&lib).map_err(err)?;
+    let books = lib.books().map_err(err)?;
+    Ok(parallax_core::goodreads::library_matches(&saved, &books))
+}
+
+/// Changes a saved Goodreads book here: its status, rating, date read or shelves.
+#[tauri::command]
+fn goodreads_edit(
+    state: State<AppState>,
+    goodreads_id: String,
+    edit: parallax_core::goodreads::Edit,
+) -> CmdResult<parallax_core::goodreads::Book> {
+    parallax_core::goodreads::edit_today(&mut state.library(), &goodreads_id, &edit).map_err(err)
+}
+
 /// Points the library can go back to, newest first.
 #[tauri::command]
 fn library_snapshots(state: State<AppState>) -> Vec<Snapshot> {
@@ -1560,6 +1618,10 @@ pub fn run() {
             library_set_comic_kind,
             library_comic_spreads,
             library_remove,
+            goodreads_plan,
+            goodreads_import,
+            goodreads_matches,
+            goodreads_edit,
             library_snapshots,
             library_restore,
             device_backups,

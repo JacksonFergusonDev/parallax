@@ -46,6 +46,8 @@ export interface Contributor {
 
 export interface Book {
   id: number;
+  /** From your saved Goodreads shelves; added by the app, not the library. */
+  goodreads?: GoodreadsMatch;
   title: string;
   authors: string[];
   /** Translators, illustrators…; null when not read from the EPUB yet. */
@@ -607,6 +609,118 @@ export const removeBooks = (ids: number[], report?: ReportBookProgress) =>
     "plans",
     ...ids.map(coverSearchTag),
   ]);
+export interface GoodreadsShelfEntry {
+  name: string;
+  position: number | null;
+}
+export interface GoodreadsBook {
+  goodreads_id: string;
+  title: string;
+  series: { name: string; number: string } | null;
+  authors: string[];
+  isbn: string | null;
+  isbn13: string | null;
+  publisher: string | null;
+  binding: string | null;
+  pages: number | null;
+  year_published: number | null;
+  original_year: number | null;
+  /** 1 to 5, or null when unrated. */
+  rating: number | null;
+  shelf: "read" | "to_read" | "currently_reading" | { other: string };
+  shelves: GoodreadsShelfEntry[];
+  date_read: string | null;
+  /** The date read was filled in when you marked it read here. */
+  date_read_guessed?: boolean;
+  date_added: string | null;
+  read_count: number;
+  review: string | null;
+}
+/** A book you changed here and the new export changed too, differently. */
+export interface GoodreadsConflict {
+  goodreads_id: string;
+  title: string;
+  authors: string[];
+  changes: { field: string; label: string; mine: string; theirs: string }[];
+}
+/** A saved book the new export no longer has. */
+export interface GoodreadsMissing {
+  goodreads_id: string;
+  title: string;
+  authors: string[];
+  status: string;
+}
+/** What importing an export would do, before anything is saved. */
+export interface GoodreadsPlan {
+  added: number;
+  updated: number;
+  unchanged: number;
+  skipped: number;
+  conflicts: GoodreadsConflict[];
+  missing: GoodreadsMissing[];
+  summary: GoodreadsExportSummary;
+}
+/** What the export holds, to show before importing. */
+export interface GoodreadsExportSummary {
+  books: number;
+  read: number;
+  to_read: number;
+  currently_reading: number;
+  /** Your own shelves, biggest first; `new` when not saved from an earlier export. */
+  shelves: { name: string; books: number; new: boolean }[];
+  /** Books in the export that match a book in your library. */
+  in_library: number;
+}
+/** Decisions by Goodreads Book Id; anything left out gets the recommended choice. */
+export interface GoodreadsResolutions {
+  conflicts: Record<string, "mine" | "goodreads">;
+  missing: Record<string, "keep" | "remove">;
+}
+export interface GoodreadsReport {
+  added: number;
+  updated: number;
+  unchanged: number;
+  skipped: number;
+  kept: number;
+  removed: number;
+  kept_yours: number;
+  took_goodreads: number;
+}
+export interface GoodreadsEdit {
+  shelf?: GoodreadsBook["shelf"];
+  /** 1 to 5; 0 clears it. */
+  rating?: number;
+  date_read?: string;
+  clear_date_read?: boolean;
+  add_shelves?: string[];
+  remove_shelves?: string[];
+}
+export const goodreadsPlan = (path: string) =>
+  invoke<GoodreadsPlan>("goodreads_plan", { path });
+export const goodreadsImport = (
+  path: string,
+  resolutions: GoodreadsResolutions,
+) =>
+  write<GoodreadsReport>("goodreads_import", { path, resolutions }, [
+    "goodreads",
+  ]);
+/** Where a library book sits on your Goodreads shelves. */
+export interface GoodreadsMatch {
+  goodreads_id: string;
+  shelf: GoodreadsBook["shelf"];
+  rating: number | null;
+  date_read: string | null;
+  /** Your own shelves it's on. */
+  shelves: string[];
+}
+/** Library book ids on your saved Goodreads shelves. */
+export const goodreadsMatches = () =>
+  read<Record<string, GoodreadsMatch>>("goodreads_matches", {}, [
+    "library",
+    "goodreads",
+  ]);
+export const goodreadsEdit = (goodreadsId: string, edit: GoodreadsEdit) =>
+  write<GoodreadsBook>("goodreads_edit", { goodreadsId, edit }, ["goodreads"]);
 export const librarySnapshots = () => invoke<Snapshot[]>("library_snapshots");
 export const libraryRestore = (file: string) =>
   write<{

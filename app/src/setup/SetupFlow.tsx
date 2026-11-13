@@ -3,6 +3,7 @@
 // it's finished or skipped; see setup.ts for when it shows.
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
+  BookCheck,
   BookOpen,
   Check as CheckIcon,
   FileUp,
@@ -52,6 +53,7 @@ interface Props {
   onChooseFiles: () => void;
   onChooseComicFolder: () => void;
   onCalibre: () => void;
+  onGoodreads: () => void;
   onFinish: (outcome: SetupOutcome) => void;
 }
 
@@ -394,6 +396,7 @@ function Books({
   onChooseFiles,
   onChooseComicFolder,
   onCalibre,
+  onGoodreads,
   imported,
   onImported,
   ...props
@@ -422,20 +425,30 @@ function Books({
   };
 
   const others = (
-    <div className="setup-sources">
-      <button onClick={onChooseFiles} disabled={adding}>
-        <FileUp aria-hidden="true" />
-        Choose Files…
-      </button>
-      <button onClick={onChooseComicFolder} disabled={adding}>
-        <FolderOpen aria-hidden="true" />
-        Add Comic Folder…
-      </button>
-      <button onClick={onCalibre} disabled={adding}>
-        <LibraryBig aria-hidden="true" />
-        Import from calibre…
-      </button>
-    </div>
+    <>
+      <div className="setup-sources">
+        <button onClick={onChooseFiles} disabled={adding}>
+          <FileUp aria-hidden="true" />
+          Choose Files…
+        </button>
+        <button onClick={onChooseComicFolder} disabled={adding}>
+          <FolderOpen aria-hidden="true" />
+          Add Comic Folder…
+        </button>
+        <button onClick={onCalibre} disabled={adding}>
+          <LibraryBig aria-hidden="true" />
+          Import from calibre…
+        </button>
+        <button onClick={onGoodreads} disabled={adding}>
+          <BookCheck aria-hidden="true" />
+          Import from Goodreads…
+        </button>
+      </div>
+      <p className="setup-hint muted">
+        Optional: import your Goodreads export to see which of your books you've
+        read. You can do this later from the Library tools menu.
+      </p>
+    </>
   );
 
   const newOnKobo = total === null ? null : Math.max(0, total - onKobo);

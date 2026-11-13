@@ -103,7 +103,7 @@ pub fn group(candidates: &[Candidate]) -> Vec<Group> {
     out
 }
 
-fn normalise_isbn(isbn: &str) -> String {
+pub(crate) fn normalise_isbn(isbn: &str) -> String {
     isbn.chars()
         .filter(char::is_ascii_alphanumeric)
         .flat_map(char::to_uppercase)
@@ -119,7 +119,7 @@ fn alnum(s: &str) -> String {
 
 /// "The Color of Magic: A Discworld Novel (Discworld, #1)" and
 /// "Color of Magic, The" by "Pratchett, Terry" share a key.
-fn title_author_key(title: &str, authors: &[String]) -> Option<String> {
+pub(crate) fn title_author_key(title: &str, authors: &[String]) -> Option<String> {
     let mut t = title.trim();
     if let Some(i) = t.find(['(', '[']).filter(|&i| i > 0) {
         t = &t[..i];

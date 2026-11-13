@@ -82,6 +82,59 @@ enum Command {
         #[command(subcommand)]
         command: LibraryCommand,
     },
+    /// Goodreads library exports (the CSV from My Books › Import and export).
+    Goodreads {
+        /// Library folder (default: the desktop app's).
+        #[arg(long, global = true)]
+        library: Option<PathBuf>,
+        #[command(subcommand)]
+        command: GoodreadsCommand,
+    },
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum ConflictChoice {
+    Mine,
+    Goodreads,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum MissingChoice {
+    Keep,
+    Remove,
+}
+
+#[derive(Subcommand)]
+enum GoodreadsCommand {
+    /// Show shelf counts, or the books on one shelf, from an export file. Reads only.
+    Show {
+        file: PathBuf,
+        /// List the books on this shelf (read, to-read, currently-reading or one of yours).
+        #[arg(long)]
+        shelf: Option<String>,
+    },
+    /// Save an export in the library. Importing a newer export updates the
+    /// books saved before, matched by Goodreads Book Id, without duplicating
+    /// them. Where you changed a book here and the export changed it too, and
+    /// for books the export no longer has, it uses the recommended choices
+    /// unless you say otherwise.
+    Import {
+        file: PathBuf,
+        /// Only report what would change and what needs a decision.
+        #[arg(long)]
+        dry_run: bool,
+        /// When you and the export both changed a book: keep yours (recommended) or use Goodreads'.
+        #[arg(long, value_enum, default_value = "mine")]
+        conflicts: ConflictChoice,
+        /// For books the export no longer has: keep them (recommended) or remove them.
+        #[arg(long, value_enum, default_value = "keep")]
+        missing: MissingChoice,
+    },
+    /// Show the saved books, as shelf counts or the books on one shelf.
+    Saved {
+        #[arg(long)]
+        shelf: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -556,6 +609,83 @@ fn main() -> Result<()> {
             drop(progress);
             finish_send(&kobo, &outcomes, no_eject, cli.json)?;
         }
+        Command::Goodreads { library, command } => match command {
+            GoodreadsCommand::Show { file, shelf } => {
+                let books = parallax_core::goodreads::read_file(&file)
+                    .with_context(|| format!("reading {}", file.display()))?;
+                goodreads_command(&books, shelf.as_deref(), cli.json)?;
+            }
+            GoodreadsCommand::Import {
+                file,
+                dry_run,
+                conflicts,
+                missing,
+            } => {
+                use parallax_core::goodreads::{self, MissingPick, Pick};
+                let root = library.map_or_else(default_library_root, Ok)?;
+                let mut lib = Library::open(&root)?;
+                let books = goodreads::read_file(&file)
+                    .with_context(|| format!("reading {}", file.display()))?;
+                if dry_run {
+                    let plan = goodreads::plan(&lib, &books)?;
+                    if cli.json {
+                        return print_json(&plan);
+                    }
+                    println!(
+                        "{} to add, {} to update, {} unchanged",
+                        plan.added, plan.updated, plan.unchanged
+                    );
+                    for c in &plan.conflicts {
+                        let changes: Vec<_> = c
+                            .changes
+                            .iter()
+                            .map(|f| {
+                                format!("{}: yours {}, Goodreads {}", f.label, f.mine, f.theirs)
+                            })
+                            .collect();
+                        println!("Changed in both: {} ({})", c.title, changes.join("; "));
+                    }
+                    for m in &plan.missing {
+                        println!("No longer in the export: {} ({})", m.title, m.status);
+                    }
+                    return Ok(());
+                }
+                let conflicts = match conflicts {
+                    ConflictChoice::Mine => Pick::Mine,
+                    ConflictChoice::Goodreads => Pick::Goodreads,
+                };
+                let missing = match missing {
+                    MissingChoice::Keep => MissingPick::Keep,
+                    MissingChoice::Remove => MissingPick::Remove,
+                };
+                let report = goodreads::import_choosing(&mut lib, &books, conflicts, missing)
+                    .with_context(|| format!("importing {}", file.display()))?;
+                if cli.json {
+                    return print_json(&report);
+                }
+                println!(
+                    "{} added, {} updated, {} unchanged; {} kept and {} removed of the books no longer in the export; {} conflicts settled your way, {} Goodreads'{}",
+                    report.added,
+                    report.updated,
+                    report.unchanged,
+                    report.kept,
+                    report.removed,
+                    report.kept_yours,
+                    report.took_goodreads,
+                    if report.skipped > 0 {
+                        format!("; {} skipped (no Goodreads Book Id)", report.skipped)
+                    } else {
+                        String::new()
+                    }
+                );
+            }
+            GoodreadsCommand::Saved { shelf } => {
+                let root = library.map_or_else(default_library_root, Ok)?;
+                let lib = Library::open(&root)?;
+                let books = parallax_core::goodreads::saved(&lib)?;
+                goodreads_command(&books, shelf.as_deref(), cli.json)?;
+            }
+        },
         Command::Library { library, command } => {
             let root = library.map_or_else(default_library_root, Ok)?;
             let mut lib = Library::open(&root)?;
@@ -1739,6 +1869,57 @@ fn finish_send(
     if failed > 0 {
         bail!("{failed} of {} books failed", outcomes.len());
     }
+    Ok(())
+}
+
+fn goodreads_command(
+    books: &[parallax_core::goodreads::Book],
+    shelf: Option<&str>,
+    json: bool,
+) -> Result<()> {
+    let Some(shelf) = shelf else {
+        let counts = parallax_core::goodreads::shelf_counts(books);
+        if json {
+            return print_json(&counts);
+        }
+        let mut rows = table(&["Shelf", "Books"]);
+        for (name, count) in counts {
+            rows.add_row([name, count.to_string()]);
+        }
+        println!("{rows}");
+        return Ok(());
+    };
+    let mut on_shelf: Vec<_> = books
+        .iter()
+        .filter(|b| b.shelves.iter().any(|s| s.name == shelf) || b.shelf.name() == shelf)
+        .collect();
+    if on_shelf.is_empty() {
+        bail!("no books on a shelf called {shelf}");
+    }
+    on_shelf.sort_by_key(|b| {
+        b.shelves
+            .iter()
+            .find(|s| s.name == shelf)
+            .and_then(|s| s.position)
+            .unwrap_or(u32::MAX)
+    });
+    if json {
+        return print_json(&on_shelf);
+    }
+    let mut rows = table(&["Title", "Author", "Series", "Rating", "Read"]);
+    for b in on_shelf {
+        rows.add_row([
+            b.title.clone(),
+            b.authors.first().cloned().unwrap_or_default(),
+            b.series
+                .as_ref()
+                .map_or_default(|s| format!("{} #{}", s.name, s.number)),
+            b.rating.map_or_default(|r| format!("{r}/5")),
+            b.date_read
+                .map_or_default(|d| d.format("%Y-%m-%d").to_string()),
+        ]);
+    }
+    println!("{rows}");
     Ok(())
 }
 

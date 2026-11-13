@@ -88,6 +88,7 @@ const SETTINGS: Command = key(command("settings", "Settings…", App), "CmdOrCtr
 const FILE: &[Command] = &[
     key(command("file.add", "Add Books…", Main), "CmdOrCtrl+O"),
     command("file.calibre", "Import from calibre…", Main),
+    command("file.goodreads", "Import from Goodreads…", Main),
     command("kobo.addAll", "Add All from Kobo to Library", Main),
 ];
 
