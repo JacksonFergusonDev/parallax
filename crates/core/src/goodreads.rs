@@ -657,7 +657,7 @@ fn merge(mine: &Book, base: &Book, theirs: &Book, pick: Pick) -> Merged {
         if t == b {
             from_mine.push(field); // only you changed it
         } else if field == Field::DateRead && mine.date_read_guessed {
-            continue; // the export's real date over the day you marked it read
+            // The export's real date wins over the day you marked it read.
         } else {
             conflicts.push(FieldChange {
                 field,
