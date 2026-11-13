@@ -54,14 +54,16 @@ def book(**values: str) -> dict[str, str]:
     return row
 
 
-def run(tmp_path: Path, rows: list[dict[str, str]]) -> list[dict[str, str]]:
+def run(
+    tmp_path: Path, rows: list[dict[str, str]], fields: list[str] = FIELDS
+) -> list[dict[str, str]]:
     source, dest = tmp_path / "in.csv", tmp_path / "out.csv"
     with source.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, FIELDS, lineterminator="\n")
+        writer = csv.DictWriter(handle, fields, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
     assert fixture.anonymize(source, dest, seed=1) == len(rows)
-    assert dest.read_text(encoding="utf-8").splitlines()[0] == ",".join(FIELDS)
+    assert dest.read_text(encoding="utf-8").splitlines()[0] == ",".join(fields)
     with dest.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
 
@@ -168,3 +170,27 @@ def test_untouched_columns_and_pages(tmp_path: Path) -> None:
 
 def test_seed_makes_runs_repeatable(tmp_path: Path) -> None:
     assert run(tmp_path, [book()]) == run(tmp_path, [book()])
+
+
+def test_older_exports_average_rating_moves_a_little(tmp_path: Path) -> None:
+    fields = [*FIELDS[:8], "Average Rating", *FIELDS[8:]]
+    rated, unrated, top = run(
+        tmp_path,
+        [
+            book(**{"Average Rating": "3.87"}),
+            book(**{"Average Rating": "0.00"}),
+            book(**{"Average Rating": "4.98"}),
+        ],
+        fields,
+    )
+    assert rated["Average Rating"] != "3.87"
+    assert abs(float(rated["Average Rating"]) - 3.87) <= 0.1
+    assert re.fullmatch(r"\d\.\d\d", rated["Average Rating"])
+    assert unrated["Average Rating"] == "0.00"
+    assert float(top["Average Rating"]) <= 5.0
+
+
+def test_new_book_ids_never_reuse_an_original(tmp_path: Path) -> None:
+    # Three of nine one-digit ids are taken, so a reuse would be likely.
+    out = run(tmp_path, [book(**{"Book Id": n}) for n in "123"])
+    assert {r["Book Id"] for r in out}.isdisjoint({"1", "2", "3"})
