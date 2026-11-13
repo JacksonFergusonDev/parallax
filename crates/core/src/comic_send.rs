@@ -1,9 +1,12 @@
 //! Preparation settings shared by sending, estimates and update detection.
+//! The screen and colour-page settings also size and tone EPUB covers.
 
-use parallax_comic::prepare::{Metadata, Options, Prepared, Profile, Spreads, prepare};
+use image::ImageFormat;
+use parallax_comic::prepare::{Metadata, Options, Prepared, Profile, Spreads, fit_cover, prepare};
 use parallax_convert::Converter;
 use parallax_device::{Screen, ScreenSource};
 use parallax_device_kobo::KoboDevice;
+use parallax_epub::Cover;
 use parallax_library::{Book, Direction, Format, Library};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -145,6 +148,27 @@ impl ComicTarget {
             progress,
         )
         .map_err(|e| e.to_string())
+    }
+
+    /// A book's cover sized and toned for this screen, keeping its media
+    /// type so it replaces the original in place. `None` keeps the cover as
+    /// it is: it already suits the screen, or it isn't a readable JPEG or PNG.
+    pub fn fit_cover(&self, cover: &Cover) -> Option<Cover> {
+        let declared = match cover.media_type.as_str() {
+            "image/jpeg" => ImageFormat::Jpeg,
+            "image/png" => ImageFormat::Png,
+            _ => return None,
+        };
+        // fit_cover keeps PNG as PNG and writes JPEG otherwise, so the
+        // bytes must be what the manifest says for the type to carry over.
+        if image::guess_format(&cover.data).ok()? != declared {
+            return None;
+        }
+        let data = fit_cover(&cover.data, self.profile, self.options).ok()??;
+        Some(Cover {
+            data,
+            media_type: cover.media_type.clone(),
+        })
     }
 
     fn estimate(&self, book: &Book) -> u64 {

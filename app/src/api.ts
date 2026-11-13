@@ -1295,16 +1295,14 @@ export function coverSrc(book: Book): string | null {
     : `${url}?v=${encodeURIComponent(book.modified_at)}`;
 }
 
-/** Use original library artwork for linked comics. Nickel's thumbnail
- * can be greyscale on an otherwise colour cover. */
+/** Use original library artwork for linked books. Covers are sent sized
+ * and greyed for greyscale Kobos, so Nickel's thumbnail can be greyscale on
+ * an otherwise colour cover. */
 export function deviceCoverPath(
   book: DeviceBook,
   library?: Book,
 ): string | null {
-  if (library?.cover && (library.format === "cbz" || !book.cover)) {
-    return library.cover;
-  }
-  return book.cover ?? null;
+  return library?.cover ?? book.cover ?? null;
 }
 
 export function deviceCoverSrc(

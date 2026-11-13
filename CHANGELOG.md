@@ -4,6 +4,7 @@ What changed in each release of Parallax, for people using it. The release workf
 
 ## Unreleased
 
+- Book and comic covers sent to your Kobo are sized to its screen, so a large cover is smaller to copy and quicker for your Kobo to process. On a black-and-white Kobo, colour covers get the same grey treatment as colour comic pages, which keeps shapes and contrast that plain greyscale washes out. Your library keeps the original cover, and On Kobo shows it in full colour.
 - Book details keep the cover and Read button aligned, group cover actions under Change cover, and show resolution advice below the cover.
 - First-run setup is larger and easier to read, and you can move through it from the keyboard: Return continues, ⌘← goes back and ⌘. skips setup. Each button shows its shortcut.
 - Reading opens straight away, without a loading screen, and keeps its place when you switch tabs or between Kobo and Goodreads. With a Kobo connected, it shows your last saved stats at once and updates them from the Kobo while you look.

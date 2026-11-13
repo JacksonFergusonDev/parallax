@@ -22,20 +22,20 @@ describe("device cover URLs", () => {
     modified_at: "2026-10-31",
   } as Book;
 
-  it("uses the Kobo thumbnail even without a library copy", () => {
+  it("uses the Kobo thumbnail without a library copy", () => {
     expect(deviceCoverSrc(device)).toBe("asset:/cache/kobo-cover.jpg");
-    expect(deviceCoverSrc(device, library)).toBe("asset:/cache/kobo-cover.jpg");
   });
 
-  it("uses the library art and its colour-sorting path for linked comics", () => {
-    const comic: Book = { ...library, format: "cbz" };
-    expect(deviceCoverPath(device, comic)).toBe("/library/cover.jpg");
-    expect(deviceCoverSrc(device, comic)).toBe(
-      "asset:/library/cover.jpg?v=2026-10-31",
-    );
-    expect(deviceCoverSrc(device, { ...comic, cover: null })).toBe(
-      "asset:/cache/kobo-cover.jpg",
-    );
+  it("uses the library art and its colour-sorting path for linked books", () => {
+    for (const book of [library, { ...library, format: "cbz" } as Book]) {
+      expect(deviceCoverPath(device, book)).toBe("/library/cover.jpg");
+      expect(deviceCoverSrc(device, book)).toBe(
+        "asset:/library/cover.jpg?v=2026-10-31",
+      );
+      expect(deviceCoverSrc(device, { ...book, cover: null })).toBe(
+        "asset:/cache/kobo-cover.jpg",
+      );
+    }
   });
 
   it("falls back to the library and handles books with no available cover", () => {

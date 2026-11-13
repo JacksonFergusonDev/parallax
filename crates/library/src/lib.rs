@@ -586,13 +586,26 @@ impl Library {
     /// applied to `out`.
     /// Comics get a CBZ with their metadata in its ComicInfo.xml.
     pub fn export(&self, id: i64, out: &Path) -> Result<Book> {
+        self.export_with_cover(id, out, None)
+    }
+
+    /// Like [`Library::export`], with the EPUB's cover (the custom one if
+    /// set, else its own) passed through `adjust`, which returns a
+    /// replacement or `None` to keep it. A replacement must keep the cover's
+    /// media type so it is swapped in place. Comics are exported unchanged.
+    pub fn export_with_cover(
+        &self,
+        id: i64,
+        out: &Path,
+        adjust: Option<&dyn Fn(&Cover) -> Option<Cover>>,
+    ) -> Result<Book> {
         let book = self.book(id)?;
         if book.format == Format::Cbz {
             self.export_comic(&book, out)?;
             return Ok(book);
         }
         let epub = Epub::open(self.book_file(id))?;
-        let cover = if book.custom_cover {
+        let custom = if book.custom_cover {
             let jpeg = fs::read(self.custom_cover_file(id))
                 .map_err(|e| io_err(&self.custom_cover_file(id), e))?;
             Some(match epub.cover_media_type().as_deref() {
@@ -608,6 +621,17 @@ impl Library {
             })
         } else {
             None
+        };
+        let cover = match adjust {
+            Some(adjust) => {
+                // An unreadable cover of the EPUB's own is left as it is.
+                let own = custom
+                    .is_none()
+                    .then(|| epub.cover().ok().flatten())
+                    .flatten();
+                custom.as_ref().or(own.as_ref()).and_then(adjust).or(custom)
+            }
+            None => custom,
         };
         epub.write(&book.edit(), cover.as_ref(), out)?;
         Ok(book)

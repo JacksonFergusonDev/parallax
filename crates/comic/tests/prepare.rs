@@ -172,14 +172,10 @@ fn whole_modes_emit_an_unrotated_spread_before_any_halves() {
 }
 
 #[test]
-fn greyscale_kepubs_keep_the_original_or_custom_colour_cover() {
+fn greyscale_kepubs_fit_and_grey_the_original_or_custom_cover() {
     let dir = tempfile::tempdir().unwrap();
     let cbz = dir.path().join("test.cbz");
     sample(&cbz);
-    let original = entry(
-        &mut ZipArchive::new(File::open(&cbz).unwrap()).unwrap(),
-        "3.png",
-    );
     let mut custom = Cursor::new(Vec::new());
     RgbImage::from_pixel(29, 42, Rgb([20, 190, 90]))
         .write_to(&mut custom, ImageFormat::Jpeg)
@@ -187,13 +183,10 @@ fn greyscale_kepubs_keep_the_original_or_custom_colour_cover() {
 
     let mut profile = profile();
     profile.colour = false;
-    for (custom_cover, extension, expected) in [
-        (None, "png", original.as_slice()),
-        (
-            Some(custom.get_ref().as_slice()),
-            "jpg",
-            custom.get_ref().as_slice(),
-        ),
+    // The 36 × 20 red page and the 29 × 42 custom cover, fitted to 24 × 30.
+    for (custom_cover, extension, size) in [
+        (None, "png", (24, 13)),
+        (Some(custom.get_ref().as_slice()), "jpg", (21, 30)),
     ] {
         let prepared = prepare(
             &cbz,
@@ -212,10 +205,11 @@ fn greyscale_kepubs_keep_the_original_or_custom_colour_cover() {
         )
         .unwrap();
         let mut zip = ZipArchive::new(File::open(prepared.path()).unwrap()).unwrap();
-        assert_eq!(
-            entry(&mut zip, &format!("OEBPS/images/cover.{extension}")),
-            expected
-        );
+        let cover =
+            image::load_from_memory(&entry(&mut zip, &format!("OEBPS/images/cover.{extension}")))
+                .unwrap();
+        assert_eq!((cover.width(), cover.height()), size);
+        assert_eq!(cover.color(), image::ColorType::L8);
         let cover_page = entry(&mut zip, "OEBPS/images/p00004.png");
         assert_eq!(
             &cover_page[24..26],

@@ -158,6 +158,21 @@ struct Done {
     size: u64,
 }
 
+/// A book cover for `profile`'s screen: no larger than the screen and, on a
+/// greyscale screen, colour art turned to grey with the colour-page
+/// settings in `options`. PNG stays PNG; anything else becomes JPEG.
+/// `Ok(None)` means the cover already suits the screen as it is.
+pub fn fit_cover(
+    bytes: &[u8],
+    profile: Profile,
+    options: Options,
+) -> Result<Option<Vec<u8>>, String> {
+    if profile.width == 0 || profile.height == 0 {
+        return Ok(None);
+    }
+    raster::fit_cover(bytes, profile, options)
+}
+
 /// Prepare a fixed-layout KEPUB in a private temporary folder. Dropping the
 /// result removes the output. Progress starts at zero and counts input pages
 /// in archive order.
@@ -187,7 +202,8 @@ pub fn prepare(
     let mut output_pages = 0;
     let mut epub = epub::FixedLayout::new(&epub_path)?;
     if let Some(bytes) = metadata.custom_cover {
-        epub.add_cover(bytes, "custom cover")?;
+        let fitted = fit_cover(bytes, profile, options).ok().flatten();
+        epub.add_cover(fitted.as_deref().unwrap_or(bytes), "custom cover")?;
     }
     // A damaged cover page passes the cover to the next readable page.
     let mut cover_pending = metadata.custom_cover.is_none();
@@ -248,7 +264,8 @@ pub fn prepare(
             let chapter = chapters.next_if(|chapter| chapter.page == index);
             if let Some((data, Ok(pages))) = page {
                 if cover_pending && index >= cover {
-                    epub.add_cover(&data, &name)?;
+                    let fitted = fit_cover(&data, profile, options).ok().flatten();
+                    epub.add_cover(fitted.as_deref().unwrap_or(&data), &name)?;
                     cover_pending = false;
                 }
                 if let Some(chapter) = chapter {

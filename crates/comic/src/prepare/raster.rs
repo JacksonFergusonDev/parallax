@@ -5,7 +5,7 @@
 // https://github.com/ciromattia/kcc/blob/v13.0.0/kindlecomicconverter/image.py
 use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer, images::Image};
 use image::imageops::{crop_imm, rotate270};
-use image::{GrayImage, RgbImage, codecs::jpeg::JpegEncoder};
+use image::{GrayImage, ImageEncoder, RgbImage, codecs::jpeg::JpegEncoder};
 
 use super::{Options, Profile, Spreads};
 use crate::shape::{PageShape, classify};
@@ -187,6 +187,66 @@ fn encode(
         jpeg: colour,
         side,
     })
+}
+
+/// A cover sized to fit the screen, never enlarged, and on a greyscale
+/// screen turned to grey the way colour pages are. Nickel builds its library
+/// thumbnails and sleep-screen cover from this image with plain luma, so
+/// colour art gets the same washed-out band of grey as an untreated colour
+/// page. The output is 8-bit, not 16 dithered levels: Nickel rescales the
+/// cover for each of those uses, and rescaling dither turns it into noise.
+///
+/// PNG stays PNG and anything else becomes JPEG. `None` means the cover
+/// already fits and needs no grey treatment, so it is best left as it is.
+pub(super) fn fit_cover(
+    bytes: &[u8],
+    profile: Profile,
+    options: Options,
+) -> Result<Option<Vec<u8>>, String> {
+    let rgb = decode(bytes)?;
+    let (w, h) = rgb.dimensions();
+    let scale = (f64::from(profile.width) / f64::from(w))
+        .min(f64::from(profile.height) / f64::from(h))
+        .min(1.0);
+    let colour = is_colour(&rgb);
+    if scale >= 1.0 && (profile.colour || !colour) {
+        return Ok(None);
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let fit = |n: u32| (f64::from(n) * scale).round().max(1.0) as u32;
+    let (width, height) = (fit(w), fit(h));
+    // Resized before the grey treatment: covers are often several times the
+    // screen's size, and the treatment's work grows with the pixel count.
+    let rgb = resized(
+        w,
+        h,
+        rgb.into_raw(),
+        width,
+        height,
+        fast_image_resize::PixelType::U8x3,
+    )?;
+    let rgb = RgbImage::from_raw(width, height, rgb).expect("three bytes per pixel");
+    let (pixels, layout) = if profile.colour {
+        (rgb.into_raw(), image::ExtendedColorType::Rgb8)
+    } else if colour {
+        (
+            super::tone::colour_page_to_grey(&rgb, options).into_raw(),
+            image::ExtendedColorType::L8,
+        )
+    } else {
+        (luma(&rgb).into_raw(), image::ExtendedColorType::L8)
+    };
+    let mut out = Vec::new();
+    if image::guess_format(bytes).ok() == Some(image::ImageFormat::Png) {
+        image::codecs::png::PngEncoder::new(&mut out)
+            .write_image(&pixels, width, height, layout)
+            .map_err(|e| e.to_string())?;
+    } else {
+        JpegEncoder::new_with_quality(&mut out, 90)
+            .encode(&pixels, width, height, layout)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(Some(out))
 }
 
 /// Rec. 601 luma. Written over the raw bytes, without per-pixel
@@ -487,6 +547,89 @@ mod tests {
         let page = image::load_from_memory(&raster.bytes).unwrap().into_luma8();
         let values = page.as_raw();
         (*values.iter().min().unwrap(), *values.iter().max().unwrap())
+    }
+
+    fn screen(colour: bool) -> Profile {
+        Profile {
+            width: 300,
+            height: 400,
+            colour,
+            landscape_spreads: false,
+        }
+    }
+
+    fn jpeg_bytes(image: &RgbImage) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        JpegEncoder::new_with_quality(&mut bytes, 90)
+            .encode_image(image)
+            .unwrap();
+        bytes
+    }
+
+    fn rainbow(width: u32, height: u32) -> RgbImage {
+        RgbImage::from_fn(width, height, |x, y| {
+            image::Rgb([
+                u8::try_from(x * 255 / width).unwrap(),
+                u8::try_from(y * 255 / height).unwrap(),
+                160,
+            ])
+        })
+    }
+
+    #[test]
+    fn large_colour_covers_fit_a_greyscale_screen_in_grey() {
+        let cover = jpeg_bytes(&rainbow(900, 1500));
+        let fitted = fit_cover(&cover, screen(false), Options::default())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            image::guess_format(&fitted).unwrap(),
+            image::ImageFormat::Jpeg
+        );
+        let fitted = image::load_from_memory(&fitted).unwrap();
+        // Limited by height: 900 × 400/1500 = 240.
+        assert_eq!((fitted.width(), fitted.height()), (240, 400));
+        assert_eq!(fitted.color(), image::ColorType::L8);
+    }
+
+    #[test]
+    fn covers_on_a_colour_screen_are_only_resized() {
+        let large = png_bytes(&rainbow(600, 800));
+        let fitted = fit_cover(&large, screen(true), Options::default())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            image::guess_format(&fitted).unwrap(),
+            image::ImageFormat::Png
+        );
+        let fitted = image::load_from_memory(&fitted).unwrap();
+        assert_eq!((fitted.width(), fitted.height()), (300, 400));
+        assert_eq!(fitted.color(), image::ColorType::Rgb8);
+        // A colour cover that already fits is left as it is.
+        let small = png_bytes(&rainbow(200, 300));
+        assert!(
+            fit_cover(&small, screen(true), Options::default())
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn small_covers_are_left_alone_unless_colour_on_grey() {
+        let grey = png_bytes(&RgbImage::from_pixel(200, 300, image::Rgb([90, 90, 90])));
+        assert!(
+            fit_cover(&grey, screen(false), Options::default())
+                .unwrap()
+                .is_none()
+        );
+        let colour = png_bytes(&rainbow(200, 300));
+        let fitted = fit_cover(&colour, screen(false), Options::default())
+            .unwrap()
+            .unwrap();
+        let fitted = image::load_from_memory(&fitted).unwrap();
+        assert_eq!((fitted.width(), fitted.height()), (200, 300));
+        assert_eq!(fitted.color(), image::ColorType::L8);
+        assert!(fit_cover(b"not an image", screen(false), Options::default()).is_err());
     }
 
     #[test]
