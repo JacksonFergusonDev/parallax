@@ -144,6 +144,7 @@ describe("first-run setup", () => {
       onChooseFiles: vi.fn(),
       onChooseComicFolder: vi.fn(),
       onCalibre: vi.fn(),
+      onGoodreads: vi.fn(),
       onFinish: vi.fn(),
     };
     host = document.body.appendChild(document.createElement("div"));
@@ -182,6 +183,8 @@ describe("first-run setup", () => {
     expect(title()).toBe("Add your books");
     await click("Import from calibre…");
     expect(props.onCalibre).toHaveBeenCalled();
+    await click("Import from Goodreads…");
+    expect(props.onGoodreads).toHaveBeenCalled();
     await render({ libraryBooks: 12 });
     expect(host.textContent).toContain("12 books in your library");
   });

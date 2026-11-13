@@ -1740,6 +1740,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
           onChooseFiles={() => void chooseFiles()}
           onChooseComicFolder={() => void chooseComicFolder()}
           onCalibre={() => setFromCalibre(true)}
+          onGoodreads={() => setFromGoodreads(true)}
           onFinish={(outcome) => {
             setup.finish(outcome);
             setView("library");
