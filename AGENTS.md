@@ -53,6 +53,7 @@
 - Follow [the Parallax design system](engineering/design-system.md) and use `app/src/design/tokens.css` for shared type, color, spacing, control dimensions, radii, and motion. Do not introduce literal UI font sizes or inline typography overrides.
 - Keep the main window and reader controls cohesive; publisher content and cover artwork retain the documented exceptions.
 - Verify presentation at default and minimum window sizes; adapt layout instead of shrinking text. Keep the design contract tests in the standard verification path.
+- Keep views mounted once shown and draw cached data on first render, following [retained views](engineering/decisions/retained-views.md): hide inactive tabs and sub-views instead of unmounting them, prefetch cheap library reads at launch, and read devices only when their view is on screen.
 
 ## Site
 
