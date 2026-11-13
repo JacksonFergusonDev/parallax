@@ -67,6 +67,10 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Gives a replacement for a cover being exported, or `None` to keep it;
+/// see [`Library::export_with_cover`].
+pub type AdjustCover<'a> = &'a dyn Fn(&Cover) -> Option<Cover>;
+
 const COVER_HEIGHT: u32 = 600;
 /// Custom covers are stored at most this tall: the Kobo Libra 2's screen
 /// height, which is also the tallest current Kobo screen.
@@ -597,7 +601,7 @@ impl Library {
         &self,
         id: i64,
         out: &Path,
-        adjust: Option<&dyn Fn(&Cover) -> Option<Cover>>,
+        adjust: Option<AdjustCover<'_>>,
     ) -> Result<Book> {
         let book = self.book(id)?;
         if book.format == Format::Cbz {
