@@ -1,3 +1,4 @@
+import { ActionMenu } from "./ActionMenu";
 import { GeneratedCover } from "./GeneratedCover";
 import { Fragment, useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -53,11 +54,11 @@ interface Props {
 function coverAdvice(cover: CoverInfo, canUpscale: boolean) {
   const look =
     cover.quality === "low"
-      ? "Will look pixellated on an e-reader."
-      : "May look slightly soft on an e-reader.";
+      ? "This cover may look pixelated on an e-reader."
+      : "This cover may look slightly soft on an e-reader.";
   return canUpscale
-    ? `${look} Upscaling or a sharper cover would help.`
-    : `${look} A sharper cover would help.`;
+    ? `${look} Find a sharper image or upscale this one.`
+    : `${look} Find a sharper image.`;
 }
 
 /** Longer descriptions start collapsed. */
@@ -262,46 +263,43 @@ export function EditPanel({
             >
               Read
             </button>
+            <ActionMenu
+              label="Change cover…"
+              disabled={coverBusy}
+              items={[
+                { label: "Find cover online…", onPick: () => setPicker(true) },
+                { label: "Choose image…", onPick: chooseImage },
+                ...(offerUpscale
+                  ? [
+                      {
+                        label: "Upscale cover…",
+                        onPick: () => setUpscaling(true),
+                      },
+                    ]
+                  : []),
+                ...(book.custom_cover
+                  ? [
+                      {
+                        label: "Use original cover",
+                        onPick: () => changeCover(() => resetCover(book.id)),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
             {cover && (
               <div className="cover-size">
                 <span>
-                  {cover.width}×{cover.height}{" "}
-                  <span className={`cover-quality ${cover.quality}`}>
-                    ({cover.quality})
-                  </span>
+                  {cover.width} × {cover.height}
                 </span>
-                {cover.quality !== "excellent" && (
-                  <p className="hint">{coverAdvice(cover, offerUpscale)}</p>
-                )}
+                <span className={`cover-quality ${cover.quality}`}>
+                  {cover.quality === "low"
+                    ? "Low resolution"
+                    : cover.quality === "decent"
+                      ? "Medium resolution"
+                      : "High resolution"}
+                </span>
               </div>
-            )}
-            <button
-              className="link"
-              disabled={coverBusy}
-              onClick={() => setPicker(true)}
-            >
-              Find cover online…
-            </button>
-            <button className="link" disabled={coverBusy} onClick={chooseImage}>
-              Choose image…
-            </button>
-            {offerUpscale && (
-              <button
-                className="link"
-                disabled={coverBusy}
-                onClick={() => setUpscaling(true)}
-              >
-                Upscale cover…
-              </button>
-            )}
-            {book.custom_cover && (
-              <button
-                className="link"
-                disabled={coverBusy}
-                onClick={() => changeCover(() => resetCover(book.id))}
-              >
-                Use original cover
-              </button>
             )}
           </div>
         </div>
@@ -309,6 +307,9 @@ export function EditPanel({
           ×
         </button>
       </div>
+      {cover && cover.quality !== "excellent" && (
+        <p className="hint cover-advice">{coverAdvice(cover, offerUpscale)}</p>
+      )}
       {highlights && (
         <AnnotationsDialog book={book} onClose={() => setHighlights(false)} />
       )}

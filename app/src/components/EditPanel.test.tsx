@@ -56,6 +56,14 @@ describe("EditPanel cover details", () => {
     });
   };
 
+  const openCoverMenu = async () => {
+    await act(async () =>
+      host
+        .querySelector<HTMLButtonElement>(".cover-actions [aria-haspopup]")
+        ?.click(),
+    );
+  };
+
   beforeEach(() => {
     (
       globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -72,23 +80,30 @@ describe("EditPanel cover details", () => {
 
   it("offers upscaling and says why for a low-resolution cover", async () => {
     await show({ width: 525, height: 791, quality: "low" });
-    expect(host.textContent).toContain("525×791 (low)");
-    expect(host.textContent).toContain("pixellated");
-    expect(host.textContent).toContain("Upscaling or a sharper cover");
+    expect(host.textContent).toContain("525 × 791Low resolution");
+    expect(host.textContent).toContain("pixelated");
+    expect(host.textContent).toContain(
+      "Find a sharper image or upscale this one.",
+    );
+    expect(host.textContent).not.toContain("Upscale cover…");
+    await openCoverMenu();
     expect(host.textContent).toContain("Upscale cover…");
   });
 
   it("offers upscaling a decent cover, more gently", async () => {
     await show({ width: 900, height: 1400, quality: "decent" });
-    expect(host.textContent).toContain("900×1400 (decent)");
+    expect(host.textContent).toContain("900 × 1400Medium resolution");
     expect(host.textContent).toContain("slightly soft");
+    expect(host.textContent).not.toContain("Upscale cover…");
+    await openCoverMenu();
     expect(host.textContent).toContain("Upscale cover…");
   });
 
   it("says nothing more about an excellent cover", async () => {
     await show({ width: 1120, height: 1680, quality: "excellent" });
-    expect(host.textContent).toContain("1120×1680 (excellent)");
+    expect(host.textContent).toContain("1120 × 1680High resolution");
     expect(host.textContent).not.toContain("e-reader");
+    await openCoverMenu();
     expect(host.textContent).not.toContain("Upscale cover…");
   });
 
@@ -96,20 +111,23 @@ describe("EditPanel cover details", () => {
     await show({ width: 400, height: 600, quality: "low" }, true, {
       cover_upscaled: true,
     });
+    await openCoverMenu();
     expect(host.textContent).not.toContain("Upscale cover…");
-    expect(host.textContent).not.toContain("Upscaling");
-    expect(host.textContent).toContain("A sharper cover would help.");
+    expect(host.textContent).not.toContain("upscale");
+    expect(host.textContent).toContain("Find a sharper image.");
   });
 
   it("doesn't suggest upscaling when the model isn't in this build", async () => {
     await show({ width: 525, height: 791, quality: "low" }, false);
+    await openCoverMenu();
     expect(host.textContent).not.toContain("Upscale cover…");
-    expect(host.textContent).not.toContain("Upscaling");
+    expect(host.textContent).not.toContain("upscale");
   });
 
   it("shows no size without a cover", async () => {
     await show(null, true, { has_cover: false });
     expect(host.querySelector(".cover-size")).toBeNull();
+    await openCoverMenu();
     expect(host.textContent).not.toContain("Upscale cover…");
   });
 });
