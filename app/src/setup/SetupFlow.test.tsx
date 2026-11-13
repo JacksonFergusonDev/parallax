@@ -64,10 +64,16 @@ describe("first-run setup", () => {
 
   const calls = (command: string) =>
     vi.mocked(invoke).mock.calls.filter(([c]) => c === command);
+  // A button's name, without the shortcut shown beside it.
+  const name = (b: HTMLButtonElement) =>
+    [...b.childNodes]
+      .filter((n) => !(n instanceof HTMLElement && n.tagName === "KBD"))
+      .map((n) => n.textContent)
+      .join("")
+      .trim();
   const button = (text: string) =>
-    [...host.querySelectorAll("button")].find(
-      (b) => b.textContent?.trim() === text,
-    ) as HTMLButtonElement | undefined;
+    [...host.querySelectorAll("button")].find((b) => name(b) === text) as
+      HTMLButtonElement | undefined;
   const title = () => host.querySelector("h1")?.textContent;
   const settle = () =>
     act(async () => {
@@ -183,10 +189,22 @@ describe("first-run setup", () => {
     expect(title()).toBe("Add your books");
     await click("Import from calibre…");
     expect(props.onCalibre).toHaveBeenCalled();
-    await click("Import from Goodreads…");
-    expect(props.onGoodreads).toHaveBeenCalled();
+    expect(button("Import from Goodreads…")).toBeUndefined();
     await render({ libraryBooks: 12 });
     expect(host.textContent).toContain("12 books in your library");
+  });
+
+  it("explains how to get a Goodreads export in a step of its own", async () => {
+    await click("Get Started");
+    await click("Continue Without a Kobo");
+    await click("Continue");
+    expect(title()).toBe("Import from Goodreads");
+    expect(host.textContent).toContain("Import and export");
+    expect(host.textContent).toContain("Export Library");
+    await click("Import from Goodreads…");
+    expect(props.onGoodreads).toHaveBeenCalled();
+    await click("Continue");
+    expect(title()).toBe("Choose your settings");
   });
 
   it("adds the Kobo's books and remembers it did", async () => {
@@ -247,6 +265,7 @@ describe("first-run setup", () => {
     await click("Get Started");
     await click("Continue");
     await click("Continue");
+    await click("Continue");
     expect(title()).toBe("Choose your settings");
     expect(input("Recommended settings").checked).toBe(true);
     expect(host.textContent).not.toContain("Eject the Kobo");
@@ -289,6 +308,7 @@ describe("first-run setup", () => {
     await click("Get Started");
     await click("Continue Without a Kobo");
     await click("Continue");
+    await click("Continue");
     expect(input("Customise").checked).toBe(true);
     const open = [...host.querySelectorAll("select")].find((s) =>
       s.labels?.[0]?.textContent?.includes("Open Parallax to"),
@@ -308,31 +328,59 @@ describe("first-run setup", () => {
     expect(calls("kobo_health")).toHaveLength(0);
   });
 
-  it("continues on Return, but never skips on Escape", async () => {
-    const card = host.querySelector(".setup")!;
-    const key = (k: string) =>
-      act(async () => {
-        host
-          .querySelector("h1")!
-          .dispatchEvent(
-            new KeyboardEvent("keydown", { key: k, bubbles: true }),
-          );
-      });
+  const key = async (k: string, init: KeyboardEventInit = {}, on?: Element) => {
+    await act(async () => {
+      (on ?? host.querySelector("h1")!).dispatchEvent(
+        new KeyboardEvent("keydown", { key: k, bubbles: true, ...init }),
+      );
+    });
+    await settle();
+  };
+
+  it("moves through setup from the keyboard", async () => {
+    await key("Enter");
+    expect(title()).toBe("Connect your Kobo");
+    // Return goes on without a Kobo while it waits for one.
+    await key("Enter");
+    expect(title()).toBe("Add your books");
+    await key("ArrowLeft", { metaKey: true });
+    expect(title()).toBe("Connect your Kobo");
+    await key("Enter", { metaKey: true });
+    expect(title()).toBe("Add your books");
+    // Plain Return on a focused button presses that button instead.
+    await key("Enter", {}, button("Choose Files…"));
+    expect(title()).toBe("Add your books");
+    await key("Enter", { metaKey: true }, button("Choose Files…"));
+    expect(title()).toBe("Import from Goodreads");
+    // With nothing focused the keys still work, but not inside a dialog
+    // opened over setup.
+    await key("Enter", {}, document.body);
+    expect(title()).toBe("Choose your settings");
+    const dialog = document.body.appendChild(document.createElement("div"));
+    await key("Enter", { metaKey: true }, dialog);
+    expect(title()).toBe("Choose your settings");
+    dialog.remove();
+  });
+
+  it("shows each button's shortcut", async () => {
+    await click("Get Started");
+    const keys = [...host.querySelectorAll(".setup-footer kbd")].map(
+      (k) => k.textContent,
+    );
+    expect(keys).toEqual(["⌘.", "⌘←", "↩"]);
+  });
+
+  it("skips on Command-period, but never on Escape", async () => {
     await key("Escape");
     expect(props.onFinish).not.toHaveBeenCalled();
-    await key("Enter");
-    await settle();
-    expect(title()).toBe("Connect your Kobo");
-    // Nothing to continue to while it waits for a Kobo.
-    await key("Enter");
-    expect(title()).toBe("Connect your Kobo");
-    expect(card).toBeTruthy();
+    await key(".", { metaKey: true });
+    expect(props.onFinish).toHaveBeenCalledWith("skipped");
   });
 
   it("finishes with a summary and opens the library", async () => {
     await render({ device: kobo(), libraryBooks: 5 });
     await click("Get Started");
-    for (let i = 0; i < 5; i++) await click("Continue");
+    for (let i = 0; i < 6; i++) await click("Continue");
     expect(title()).toBe("You're all set");
     expect(host.textContent).toContain("Kobo Libra 2 set up");
     expect(host.textContent).toContain("Recommended settings");

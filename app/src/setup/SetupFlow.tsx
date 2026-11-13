@@ -1,5 +1,5 @@
-// First-run setup: connect a Kobo, bring its books in, choose how Parallax
-// looks after it, then a short tour. It takes over the main window until
+// First-run setup: connect a Kobo, bring its books in, optionally import
+// Goodreads, choose how Parallax looks after it, then a short tour. It takes over the main window until
 // it's finished or skipped; see setup.ts for when it shows.
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
@@ -100,20 +100,44 @@ export function SetupFlow(props: Props) {
       : step === "done"
         ? "Open Library"
         : "Continue";
+  const canGoBack = step !== "welcome" && step !== "done";
+  const back = () => setStep(previousStep(step));
+  // While it waits for a Kobo, going on means going on without one.
+  const go = waiting ? () => setStep("books") : forward;
 
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    // Return continues unless a control has it; Escape never skips setup.
-    if (e.key !== "Enter" || e.metaKey || e.ctrlKey || e.altKey) return;
-    if ((e.target as HTMLElement).closest("button, input, select, a")) return;
-    if (waiting) return;
+  const root = useRef<HTMLDivElement>(null);
+  const onKeyDown = (e: KeyboardEvent) => {
+    // Setup's own keys, or the window's when nothing has focus, but never
+    // a dialog's opened over it, such as the file picker or an import.
+    const target = e.target as HTMLElement;
+    if (target !== document.body && !root.current?.contains(target)) return;
+    const command = e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
+    const plain = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
+    let action: (() => void) | null = null;
+    if (e.key === "Enter" && command) action = go;
+    // Plain Return belongs to a focused control, such as a button or list.
+    else if (e.key === "Enter" && plain) {
+      if (!target.closest("button, input, select, textarea, a")) action = go;
+    } else if (e.key === "ArrowLeft" && command) {
+      if (canGoBack) action = back;
+    } else if (e.key === "." && command) {
+      // Escape is too easy to press by accident to skip setup.
+      if (step !== "done") action = () => onFinish("skipped");
+    }
+    if (!action) return;
     e.preventDefault();
-    forward();
+    action();
   };
+  // Listened for anew each render, so it always sees the current step.
+  useEffect(() => {
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
 
   const counted = COUNTED.indexOf(step);
 
   return (
-    <div className="setup" onKeyDown={onKeyDown}>
+    <div className="setup" ref={root}>
       <section
         className="setup-card"
         role="dialog"
@@ -134,6 +158,14 @@ export function SetupFlow(props: Props) {
               heading={heading}
               imported={imported}
               onImported={setImported}
+            />
+          )}
+          {step === "goodreads" && (
+            <GoodreadsStep
+              titleId={titleId}
+              heading={heading}
+              adding={props.adding}
+              onGoodreads={props.onGoodreads}
             />
           )}
           {step === "settings" && settings.values && (
@@ -181,8 +213,10 @@ export function SetupFlow(props: Props) {
               className="setup-skip"
               onClick={() => onFinish("skipped")}
               title="Setup won't show again. Run it any time from Help › Welcome to Parallax."
+              aria-keyshortcuts="Meta+Period"
             >
               Skip Setup
+              <Keys>⌘.</Keys>
             </button>
           ) : (
             <span />
@@ -203,18 +237,21 @@ export function SetupFlow(props: Props) {
             </ol>
           )}
           <div className="setup-nav">
-            {step !== "welcome" && step !== "done" && (
-              <button onClick={() => setStep(previousStep(step))}>Back</button>
-            )}
-            {waiting ? (
-              <button key="without" onClick={() => setStep("books")}>
-                Continue Without a Kobo
-              </button>
-            ) : (
-              <button key="primary" className="primary" onClick={forward}>
-                {primary}
+            {canGoBack && (
+              <button onClick={back} aria-keyshortcuts="Meta+ArrowLeft">
+                Back
+                <Keys>⌘←</Keys>
               </button>
             )}
+            <button
+              key={waiting ? "without" : "primary"}
+              className={waiting ? undefined : "primary"}
+              onClick={go}
+              aria-keyshortcuts="Enter Meta+Enter"
+            >
+              {waiting ? "Continue Without a Kobo" : primary}
+              <Keys>↩</Keys>
+            </button>
           </div>
         </footer>
       </section>
@@ -254,6 +291,15 @@ function useKoboRead<T>(
   return result && result.mount === mount ? result : undefined;
 }
 
+/** A button's keyboard shortcut, shown beside its name. */
+function Keys({ children }: { children: string }) {
+  return (
+    <kbd className="setup-keys" aria-hidden="true">
+      {children}
+    </kbd>
+  );
+}
+
 interface StepProps {
   titleId: string;
   heading: React.RefObject<HTMLHeadingElement | null>;
@@ -277,9 +323,12 @@ function Welcome(props: StepProps) {
       <img className="setup-mark" src="/parallax.svg" alt="" />
       <Title {...props}>Welcome to Parallax</Title>
       <p className="setup-lead">
-        Your books, your Kobo and your reading, kept in step. A few quick steps
-        will connect your Kobo, bring its books into your library and set things
-        up the way you like.
+        A few quick setup steps will connect your Kobo, bring its books into
+        your library and set things up the way you like.
+      </p>
+      <p className="setup-hint muted">
+        Press <kbd>↩</kbd> to continue, <kbd>⌘←</kbd> to go back or{" "}
+        <kbd>⌘.</kbd> to skip setup.
       </p>
     </div>
   );
@@ -396,7 +445,6 @@ function Books({
   onChooseFiles,
   onChooseComicFolder,
   onCalibre,
-  onGoodreads,
   imported,
   onImported,
   ...props
@@ -439,15 +487,7 @@ function Books({
           <LibraryBig aria-hidden="true" />
           Import from calibre…
         </button>
-        <button onClick={onGoodreads} disabled={adding}>
-          <BookCheck aria-hidden="true" />
-          Import from Goodreads…
-        </button>
       </div>
-      <p className="setup-hint muted">
-        Optional: import your Goodreads export to see which of your books you've
-        read. You can do this later from the Library tools menu.
-      </p>
     </>
   );
 
@@ -523,6 +563,49 @@ function Books({
           {failed ?? books?.error}
         </p>
       )}
+    </>
+  );
+}
+
+function GoodreadsStep({
+  adding,
+  onGoodreads,
+  ...props
+}: StepProps & { adding: boolean; onGoodreads: () => void }) {
+  return (
+    <>
+      <Title {...props}>Import from Goodreads</Title>
+      <p className="setup-lead">
+        Optional. Bring in your Goodreads shelves to see which of your books
+        you've read, with your ratings and a look back at your reading.
+      </p>
+      <ol className="setup-steps">
+        <li>
+          On the Goodreads website, open <strong>My Books</strong>, then{" "}
+          <strong>Import and export</strong> under Tools in the sidebar. The
+          page is at goodreads.com/review/import.
+        </li>
+        <li>
+          Click <strong>Export Library</strong>. Goodreads takes a minute or so
+          to prepare it.
+        </li>
+        <li>
+          Click the <strong>Your export from…</strong> link that appears below
+          the button to download the CSV file.
+        </li>
+        <li>Click Import from Goodreads below and choose that file.</li>
+      </ol>
+      <div className="setup-sources">
+        <button onClick={onGoodreads} disabled={adding}>
+          <BookCheck aria-hidden="true" />
+          Import from Goodreads…
+        </button>
+      </div>
+      <p className="setup-hint muted">
+        You can skip this and import later from the File menu or the Library
+        tools menu. Importing a newer export updates your books without adding
+        them twice.
+      </p>
     </>
   );
 }

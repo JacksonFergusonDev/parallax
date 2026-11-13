@@ -26,6 +26,7 @@ export const STEPS = [
   "welcome",
   "connect",
   "books",
+  "goodreads",
   "settings",
   "appearance",
   "tour",

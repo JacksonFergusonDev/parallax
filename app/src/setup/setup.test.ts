@@ -42,6 +42,7 @@ describe("setup steps", () => {
     expect(COUNTED).toEqual([
       "connect",
       "books",
+      "goodreads",
       "settings",
       "appearance",
       "tour",

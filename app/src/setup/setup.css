@@ -21,9 +21,9 @@
 }
 
 .setup-card {
-  width: min(640px, 100%);
+  width: min(760px, 100%);
   /* One height for every step, so the buttons don't move between them. */
-  height: min(520px, 100%);
+  height: min(640px, 100%);
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -40,6 +40,9 @@
   flex-direction: column;
   gap: var(--space-4);
   padding: var(--space-8) var(--space-8) var(--space-6);
+  /* A step larger than the main window's text, so setup reads easily. */
+  font-size: var(--text-label);
+  line-height: 1.5;
   animation: setup-in var(--duration-normal) var(--ease-out);
 }
 
@@ -68,9 +71,28 @@
   line-height: 1.5;
 }
 
+/* Secondary text in setup stays at the body size rather than going small. */
 .setup-hint {
-  font-size: var(--text-small);
+  font-size: var(--text-body);
   margin: 0;
+}
+
+.setup-body .hint {
+  font-size: var(--text-body);
+}
+
+.setup-hint kbd {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+/* Shortcuts beside the footer buttons' names. */
+.setup-keys {
+  margin-left: var(--space-2);
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  opacity: 0.7;
 }
 
 .setup-welcome {
@@ -262,7 +284,7 @@
   align-items: flex-start;
   gap: var(--space-2);
   margin: 0;
-  font-size: var(--text-small);
+  font-size: var(--text-body);
   color: var(--muted);
   line-height: 1.45;
 }
@@ -398,7 +420,7 @@
 
 .setup-choice-hint {
   color: var(--muted);
-  font-size: var(--text-small);
+  font-size: var(--text-body);
   line-height: 1.45;
 }
 
@@ -418,7 +440,7 @@
 
 .setup-custom legend {
   padding: 0 0 var(--space-2);
-  font-size: var(--text-small);
+  font-size: var(--text-body);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -499,7 +521,7 @@
 }
 
 .setup-tour .muted {
-  font-size: var(--text-small);
+  font-size: var(--text-body);
 }
 
 .setup-tour-icon {
@@ -525,7 +547,7 @@
 .setup-tour kbd {
   margin-left: var(--space-1);
   font-family: var(--font-ui);
-  font-size: var(--text-small);
+  font-size: var(--text-body);
   font-weight: 400;
   color: var(--muted);
 }
@@ -556,7 +578,7 @@
 }
 
 /* Small windows: tighter padding, and the dots give way to the buttons. */
-@media (max-width: 640px), (max-height: 620px) {
+@media (max-width: 800px), (max-height: 720px) {
   .setup {
     padding: var(--space-3);
   }
@@ -570,7 +592,7 @@
   }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 640px) {
   .setup-dots {
     display: none;
   }
