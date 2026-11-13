@@ -135,6 +135,14 @@ enum GoodreadsCommand {
         #[arg(long)]
         shelf: Option<String>,
     },
+    /// Reading insights from the saved books: books a year, ratings, the
+    /// to-read pile, authors, series and more.
+    Stats {
+        /// Work them out from this export instead, without saving it. The
+        /// library is only read for matches when `--library` is given.
+        #[arg(long)]
+        file: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -658,8 +666,14 @@ fn main() -> Result<()> {
                     MissingChoice::Keep => MissingPick::Keep,
                     MissingChoice::Remove => MissingPick::Remove,
                 };
-                let report = goodreads::import_choosing(&mut lib, &books, conflicts, missing)
-                    .with_context(|| format!("importing {}", file.display()))?;
+                let report = goodreads::import_choosing(
+                    &mut lib,
+                    &books,
+                    &goodreads::ExportFile::of(&file),
+                    conflicts,
+                    missing,
+                )
+                .with_context(|| format!("importing {}", file.display()))?;
                 if cli.json {
                     return print_json(&report);
                 }
@@ -684,6 +698,28 @@ fn main() -> Result<()> {
                 let lib = Library::open(&root)?;
                 let books = parallax_core::goodreads::saved(&lib)?;
                 goodreads_command(&books, shelf.as_deref(), cli.json)?;
+            }
+            GoodreadsCommand::Stats { file } => {
+                use parallax_core::goodreads_insights;
+                let today = goodreads_insights::today();
+                let insights = if let Some(file) = file {
+                    let books = parallax_core::goodreads::read_file(&file)
+                        .with_context(|| format!("reading {}", file.display()))?;
+                    let library = if let Some(root) = library {
+                        Library::open(&root)?.books()?
+                    } else {
+                        Vec::new()
+                    };
+                    goodreads_insights::compute(&books, &library, today)
+                } else {
+                    let root = library.map_or_else(default_library_root, Ok)?;
+                    goodreads_insights::insights(&Library::open(&root)?, today)?
+                };
+                if cli.json {
+                    print_json(&insights)?;
+                } else {
+                    print_insights(&insights);
+                }
             }
         },
         Command::Library { library, command } => {
@@ -1870,6 +1906,95 @@ fn finish_send(
         bail!("{failed} of {} books failed", outcomes.len());
     }
     Ok(())
+}
+
+fn print_insights(i: &parallax_core::goodreads_insights::Insights) {
+    let t = &i.totals;
+    let title = |id: &str| {
+        i.books
+            .iter()
+            .find(|b| b.book.goodreads_id == id)
+            .map_or_else(|| id.to_owned(), |b| b.book.title.clone())
+    };
+    if let Some(import) = &i.import {
+        println!(
+            "From {}, imported {}",
+            import.file_name.as_deref().unwrap_or("an export"),
+            import.imported_at.format("%Y-%m-%d")
+        );
+    }
+    println!(
+        "{} books: {} read, {} to read, {} reading; {} pages read; {} in your library",
+        t.books, t.read, t.to_read, t.reading, t.pages_read, t.in_library
+    );
+    if t.read_undated > 0 {
+        println!("{} read books have no date read", t.read_undated);
+    }
+    let mut years = table(&["Year", "Books", "Pages"]);
+    for y in &i.years {
+        years.add_row([y.year.to_string(), y.books.to_string(), y.pages.to_string()]);
+    }
+    println!("{years}");
+    if let Some(p) = &i.pace {
+        println!(
+            "{}: {} so far, against {} by this date last year ({} in all)",
+            p.year, p.this_year, p.last_year_by_now, p.last_year
+        );
+    }
+    let r = &i.ratings;
+    println!(
+        "Ratings 1-5: {:?}, {} unrated, average {}",
+        r.stars,
+        r.unrated,
+        r.average
+            .map_or_else(|| "none".into(), |a| format!("{a:.2}"))
+    );
+    let b = &i.to_read;
+    println!(
+        "To read: {} books ({} in your library), median {} days on the shelf{}",
+        b.books,
+        b.in_library,
+        b.median_age_days.unwrap_or(0),
+        b.years_to_clear
+            .map_or_default(|y| format!(", {y:.1} years at your pace"))
+    );
+    if let Some(w) = &i.wait {
+        println!(
+            "Median wait before reading: {} days over {} books; longest {} days ({})",
+            w.median_days,
+            w.books,
+            w.longest_days,
+            title(&w.longest)
+        );
+    }
+    if !i.authors.is_empty() {
+        let mut authors = table(&["Author", "Read", "Books", "Your average"]);
+        for a in &i.authors {
+            authors.add_row([
+                a.name.clone(),
+                a.read.to_string(),
+                a.books.to_string(),
+                a.average.map_or_default(|v| format!("{v:.1}")),
+            ]);
+        }
+        println!("{authors}");
+    }
+    if !i.series.is_empty() {
+        let mut series = table(&["Series", "Read", "On your shelves", "Missing"]);
+        for s in &i.series {
+            series.add_row([
+                s.name.clone(),
+                s.read.join(", "),
+                s.unread.join(", "),
+                s.missing
+                    .iter()
+                    .map(u32::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ]);
+        }
+        println!("{series}");
+    }
 }
 
 fn goodreads_command(

@@ -151,6 +151,26 @@ const MIGRATIONS: &[&str] = &[
         first_imported_at TEXT NOT NULL,
         updated_at        TEXT NOT NULL
     );",
+    // 18: each Goodreads export imported, so you can see what the saved books
+    // came from. Goodreads doesn't date its exports, so the file's modified
+    // time and the latest date in it stand in for the export's date. Books
+    // saved before this get one record from what they hold.
+    "CREATE TABLE goodreads_imports (
+        id              INTEGER PRIMARY KEY,
+        imported_at     TEXT NOT NULL,
+        file_name       TEXT,
+        file_modified   TEXT,
+        latest_activity TEXT,
+        books           INTEGER NOT NULL,
+        added           INTEGER NOT NULL,
+        updated         INTEGER NOT NULL
+    );
+    INSERT INTO goodreads_imports
+        (imported_at, latest_activity, books, added, updated)
+    SELECT MAX(first_imported_at),
+           MAX(MAX(json_extract(base, '$.date_added')), MAX(json_extract(base, '$.date_read'))),
+           COUNT(*), COUNT(*), 0
+    FROM goodreads_books HAVING COUNT(*) > 0;",
 ];
 
 /// The schema version this build creates.

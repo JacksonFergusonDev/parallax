@@ -38,7 +38,7 @@ pub use authors::normalize_authors;
 pub use color::{dominant_color, dominant_colors};
 pub use comics::COMICS_KIND;
 pub use format::{Direction, Format, Kind};
-pub use goodreads::{GoodreadsRow, GoodreadsWrite};
+pub use goodreads::{GoodreadsImport, GoodreadsImportRecord, GoodreadsRow, GoodreadsWrite};
 pub use rules::{Rule, RuleKind};
 pub use snapshots::{REMOVED_KEPT_DAYS, SNAPSHOTS_KEPT, Snapshot, SnapshotRestore};
 pub use stores::{Annotation, HighlightDraft, ReaderHighlight, ReaderPosition, Reading};

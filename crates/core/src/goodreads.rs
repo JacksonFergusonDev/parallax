@@ -7,7 +7,8 @@
 //! - ISBNs are written as `="0618057072"` so spreadsheets keep leading zeros;
 //! - the series is a trailing `(Series, #N)` in the title, after any
 //!   subtitle or other parenthetical;
-//! - a rating of 0 means unrated;
+//! - a rating of 0 means unrated, as does an average rating of 0 (older
+//!   exports only);
 //! - reviews use `<br/>` for line breaks;
 //! - dates are `YYYY/MM/DD`, blank when unset;
 //! - `Bookshelves` lists every shelf, including the exclusive one, and
@@ -17,9 +18,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::Path;
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use csv::StringRecord;
-use parallax_library::{GoodreadsWrite, Library};
+use parallax_library::{GoodreadsImportRecord, GoodreadsWrite, Library};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
@@ -107,6 +108,10 @@ pub struct Book {
     pub original_year: Option<i32>,
     /// 1 to 5; `None` when you haven't rated it.
     pub rating: Option<u8>,
+    /// Goodreads readers' average, 1 to 5. Older exports have it; Goodreads
+    /// dropped the column by 2026.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub average_rating: Option<f32>,
     pub shelf: Shelf,
     /// Every shelf it's on, the exclusive one and your own.
     #[serde(default)]
@@ -216,6 +221,11 @@ impl Columns {
                 .ok()
                 .filter(|&y| y != 0),
             rating: rating(self.get(record, "My Rating")),
+            average_rating: self
+                .get(record, "Average Rating")
+                .parse::<f32>()
+                .ok()
+                .filter(|r| (1.0..=5.0).contains(r)),
             shelves: shelves(
                 self.get(record, "Bookshelves"),
                 self.get(record, "Bookshelves with positions"),
@@ -825,16 +835,52 @@ pub fn import_file(
     path: &Path,
     resolutions: &Resolutions,
 ) -> Result<ImportReport, GoodreadsError> {
-    import(lib, &read_file(path)?, resolutions)
+    import(lib, &read_file(path)?, &ExportFile::of(path), resolutions)
+}
+
+/// The file an export came from, recorded with the import.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExportFile {
+    pub name: Option<String>,
+    pub modified: Option<DateTime<Utc>>,
+}
+
+impl ExportFile {
+    /// Its name and modified time, as far as the file system tells.
+    pub fn of(path: &Path) -> Self {
+        Self {
+            name: path.file_name().map(|n| n.to_string_lossy().into_owned()),
+            modified: std::fs::metadata(path)
+                .and_then(|m| m.modified())
+                .ok()
+                .map(DateTime::<Utc>::from),
+        }
+    }
+}
+
+fn record(file: &ExportFile, books: &[Book], report: &ImportReport) -> GoodreadsImportRecord {
+    GoodreadsImportRecord {
+        file_name: file.name.clone(),
+        file_modified: file.modified,
+        latest_activity: books
+            .iter()
+            .flat_map(|b| [b.date_added, b.date_read])
+            .flatten()
+            .max(),
+        books: report.added + report.updated + report.unchanged,
+        added: report.added,
+        updated: report.updated,
+    }
 }
 
 pub fn import(
     lib: &mut Library,
     books: &[Book],
+    file: &ExportFile,
     resolutions: &Resolutions,
 ) -> Result<ImportReport, GoodreadsError> {
     let (_, report, writes) = reconcile(&load(lib)?, books, resolutions)?;
-    lib.goodreads_write(&writes)?;
+    lib.goodreads_import(&writes, &record(file, books, &report))?;
     Ok(report)
 }
 
@@ -843,6 +889,7 @@ pub fn import(
 pub fn import_choosing(
     lib: &mut Library,
     books: &[Book],
+    file: &ExportFile,
     conflicts: Pick,
     missing: MissingPick,
 ) -> Result<ImportReport, GoodreadsError> {
@@ -852,7 +899,7 @@ pub fn import_choosing(
         missing: saved.keys().map(|id| (id.clone(), missing)).collect(),
     };
     let (_, report, writes) = reconcile(&saved, books, &resolutions)?;
-    lib.goodreads_write(&writes)?;
+    lib.goodreads_import(&writes, &record(file, books, &report))?;
     Ok(report)
 }
 
@@ -1284,6 +1331,16 @@ mod tests {
         assert_eq!(books[0].authors, ["Ann Author"]);
         assert_eq!(books[0].shelf, Shelf::Read);
         assert_eq!(books[0].goodreads_id, "");
+    }
+
+    #[test]
+    fn reads_an_older_exports_average_rating() {
+        let text = "Title,Author,My Rating,Average Rating\nA,X,4,3.87\nB,X,0,0.00\nC,X,0,\n";
+        let books = parse(text.as_bytes()).unwrap();
+        let averages: Vec<_> = books.iter().map(|b| b.average_rating).collect();
+        assert_eq!(averages, [Some(3.87), None, None]);
+        let json = serde_json::to_string(&books[1]).unwrap();
+        assert!(!json.contains("average_rating"), "left out when unknown");
     }
 
     #[test]

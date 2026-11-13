@@ -10,6 +10,7 @@ pub mod duplicates;
 pub mod enhance;
 pub mod genres;
 pub mod goodreads;
+pub mod goodreads_insights;
 pub mod health;
 pub mod import;
 pub mod ingest;

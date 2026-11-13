@@ -67,7 +67,7 @@ mod saved {
     use super::fixture;
     use chrono::NaiveDate;
     use parallax_core::goodreads::{
-        self, Book, Edit, Field, GoodreadsError, MissingPick, Pick, Resolutions, Shelf,
+        self, Book, Edit, ExportFile, Field, GoodreadsError, MissingPick, Pick, Resolutions, Shelf,
     };
     use parallax_library::Library;
 
@@ -104,14 +104,26 @@ mod saved {
     fn importing_the_same_export_again_changes_nothing() {
         let (_dir, mut lib) = library();
         let books = export();
-        let first = goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        let first = goodreads::import(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         assert_eq!((first.added, first.skipped), (283, 0));
         let before = goodreads::saved(&lib).unwrap();
 
         let plan = goodreads::plan(&lib, &books).unwrap();
         assert_eq!((plan.unchanged, plan.added, plan.updated), (283, 0, 0));
         assert!(!plan.needs_decisions());
-        let second = goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        let second = goodreads::import(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         assert_eq!(
             (second.unchanged, second.added, second.updated),
             (283, 0, 0)
@@ -123,7 +135,13 @@ mod saved {
     fn a_book_new_to_the_export_is_added_and_a_changed_one_updated() {
         let (_dir, mut lib) = library();
         let mut books = export();
-        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        goodreads::import(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         let id = first_to_read(&books);
         let changed = books.iter_mut().find(|b| b.goodreads_id == id).unwrap();
         changed.rating = Some(3);
@@ -135,7 +153,13 @@ mod saved {
         let plan = goodreads::plan(&lib, &books).unwrap();
         assert_eq!((plan.added, plan.updated, plan.unchanged), (1, 1, 282));
         assert!(!plan.needs_decisions());
-        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        goodreads::import(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         let book = saved(&lib, &id);
         assert_eq!((book.rating, book.pages), (Some(3), Some(999)));
         assert_eq!(goodreads::saved(&lib).unwrap().len(), 284);
@@ -145,7 +169,13 @@ mod saved {
     fn your_edit_survives_an_export_that_didnt_touch_it() {
         let (_dir, mut lib) = library();
         let mut books = export();
-        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        goodreads::import(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         let id = first_to_read(&books);
         let edit = Edit {
             shelf: Some(Shelf::Read),
@@ -167,7 +197,13 @@ mod saved {
             .pages = Some(1234);
         let plan = goodreads::plan(&lib, &books).unwrap();
         assert!(plan.conflicts.is_empty(), "only the export changed pages");
-        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        goodreads::import(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         let book = saved(&lib, &id);
         assert_eq!(
             (book.shelf, book.rating, book.pages),
@@ -175,7 +211,13 @@ mod saved {
         );
 
         // And importing it again is still a no-op.
-        let again = goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        let again = goodreads::import(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         assert_eq!(again.updated, 0);
     }
 
@@ -184,7 +226,13 @@ mod saved {
         for (pick, rating) in [(Pick::Mine, Some(4)), (Pick::Goodreads, Some(2))] {
             let (_dir, mut lib) = library();
             let mut books = export();
-            goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+            goodreads::import(
+                &mut lib,
+                &books,
+                &ExportFile::default(),
+                &Resolutions::default(),
+            )
+            .unwrap();
             let id = first_to_read(&books);
             let edit = Edit {
                 shelf: Some(Shelf::Read),
@@ -215,7 +263,7 @@ mod saved {
 
             let mut resolutions = Resolutions::default();
             resolutions.conflicts.insert(id.clone(), pick);
-            goodreads::import(&mut lib, &books, &resolutions).unwrap();
+            goodreads::import(&mut lib, &books, &ExportFile::default(), &resolutions).unwrap();
             let book = saved(&lib, &id);
             assert_eq!(book.rating, rating);
             assert_eq!(book.shelf, Shelf::Read, "your other edits stay either way");
@@ -229,7 +277,13 @@ mod saved {
     fn recommended_choices_keep_your_changes_and_missing_books() {
         let (_dir, mut lib) = library();
         let mut books = export();
-        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        goodreads::import(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         let id = first_to_read(&books);
         let edit = Edit {
             rating: Some(4),
@@ -243,7 +297,13 @@ mod saved {
             .rating = Some(2);
         let gone = books.remove(5).goodreads_id;
 
-        let report = goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        let report = goodreads::import(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         assert_eq!((report.kept_yours, report.kept, report.removed), (1, 1, 0));
         assert_eq!(saved(&lib, &id).rating, Some(4));
         assert_eq!(
@@ -258,18 +318,36 @@ mod saved {
     fn a_kept_missing_book_isnt_asked_about_again_and_can_come_back() {
         let (_dir, mut lib) = library();
         let all = export();
-        goodreads::import(&mut lib, &all, &Resolutions::default()).unwrap();
+        goodreads::import(
+            &mut lib,
+            &all,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         let mut fewer = all.clone();
         let gone = fewer.remove(5);
         assert_eq!(goodreads::plan(&lib, &fewer).unwrap().missing.len(), 1);
-        goodreads::import(&mut lib, &fewer, &Resolutions::default()).unwrap();
+        goodreads::import(
+            &mut lib,
+            &fewer,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         assert!(
             !goodreads::plan(&lib, &fewer).unwrap().needs_decisions(),
             "decided once"
         );
 
         // It returns in a later export: back to normal, and still asked about if it vanishes again.
-        let back = goodreads::import(&mut lib, &all, &Resolutions::default()).unwrap();
+        let back = goodreads::import(
+            &mut lib,
+            &all,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         assert_eq!(back.added, 0);
         assert_eq!(saved(&lib, &gone.goodreads_id), gone);
         assert_eq!(goodreads::plan(&lib, &fewer).unwrap().missing.len(), 1);
@@ -279,7 +357,13 @@ mod saved {
     fn a_missing_book_can_be_removed() {
         let (_dir, mut lib) = library();
         let mut books = export();
-        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        goodreads::import(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         let gone = books.remove(5).goodreads_id;
         let plan = goodreads::plan(&lib, &books).unwrap();
         assert_eq!(plan.missing[0].goodreads_id, gone);
@@ -287,7 +371,8 @@ mod saved {
         resolutions
             .missing
             .insert(gone.clone(), MissingPick::Remove);
-        let report = goodreads::import(&mut lib, &books, &resolutions).unwrap();
+        let report =
+            goodreads::import(&mut lib, &books, &ExportFile::default(), &resolutions).unwrap();
         assert_eq!((report.removed, report.kept), (1, 0));
         assert_eq!(goodreads::saved(&lib).unwrap().len(), 282);
         assert!(!goodreads::plan(&lib, &books).unwrap().needs_decisions());
@@ -297,6 +382,10 @@ mod saved {
     fn an_empty_or_foreign_file_changes_nothing() {
         let (dir, mut lib) = library();
         goodreads::import_file(&mut lib, &fixture(), &Resolutions::default()).unwrap();
+        let (last, _) = lib.goodreads_last_import().unwrap().unwrap();
+        assert_eq!(last.file_name.as_deref(), Some("library-export.csv"));
+        assert!(last.file_modified.is_some());
+        assert_eq!(last.books, 283);
         let header = std::fs::read_to_string(fixture())
             .unwrap()
             .lines()
@@ -316,13 +405,24 @@ mod saved {
         let foreign = goodreads::import_file(&mut lib, &other, &Resolutions::default());
         assert!(matches!(foreign, Err(GoodreadsError::MissingColumn(_))));
         assert_eq!(goodreads::saved(&lib).unwrap().len(), 283);
+        assert_eq!(
+            lib.goodreads_last_import().unwrap().unwrap().1,
+            1,
+            "refusals aren't recorded"
+        );
     }
 
     #[test]
     fn the_exports_date_read_replaces_the_day_you_marked_it_read() {
         let (_dir, mut lib) = library();
         let mut books = export();
-        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        goodreads::import(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         let id = first_to_read(&books);
         let edit = Edit {
             shelf: Some(Shelf::Read),
@@ -344,7 +444,13 @@ mod saved {
             plan.conflicts.is_empty(),
             "no question about a made-up date"
         );
-        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        goodreads::import(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         let book = saved(&lib, &id);
         assert_eq!(book.date_read, Some(real));
         assert!(!book.date_read_guessed);
@@ -354,7 +460,13 @@ mod saved {
     fn a_date_you_chose_is_still_asked_about() {
         let (_dir, mut lib) = library();
         let mut books = export();
-        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        goodreads::import(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         let id = first_to_read(&books);
         let chosen = NaiveDate::from_ymd_opt(2026, 1, 2).unwrap();
         let edit = Edit {
@@ -375,7 +487,13 @@ mod saved {
     fn a_status_cant_be_added_as_your_own_shelf() {
         let (_dir, mut lib) = library();
         let books = export();
-        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        goodreads::import(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         let id = first_to_read(&books);
         let edit = Edit {
             add_shelves: vec!["read".into()],
@@ -390,7 +508,13 @@ mod saved {
     fn importing_with_one_choice_for_everything() {
         let (_dir, mut lib) = library();
         let mut books = export();
-        goodreads::import(&mut lib, &books, &Resolutions::default()).unwrap();
+        goodreads::import(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         let id = first_to_read(&books);
         let edit = Edit {
             rating: Some(4),
@@ -403,9 +527,14 @@ mod saved {
             .unwrap()
             .rating = Some(2);
         books.remove(5);
-        let report =
-            goodreads::import_choosing(&mut lib, &books, Pick::Goodreads, MissingPick::Remove)
-                .unwrap();
+        let report = goodreads::import_choosing(
+            &mut lib,
+            &books,
+            &ExportFile::default(),
+            Pick::Goodreads,
+            MissingPick::Remove,
+        )
+        .unwrap();
         assert_eq!((report.took_goodreads, report.removed), (1, 1));
         assert_eq!(saved(&lib, &id).rating, Some(2));
         assert_eq!(goodreads::saved(&lib).unwrap().len(), 282);
@@ -414,7 +543,13 @@ mod saved {
     #[test]
     fn editing_an_unknown_book_fails() {
         let (_dir, mut lib) = library();
-        goodreads::import(&mut lib, &export(), &Resolutions::default()).unwrap();
+        goodreads::import(
+            &mut lib,
+            &export(),
+            &ExportFile::default(),
+            &Resolutions::default(),
+        )
+        .unwrap();
         let err = goodreads::edit(&mut lib, "nope", &Edit::default(), TODAY).unwrap_err();
         assert!(matches!(err, GoodreadsError::NotSaved(_)));
     }
