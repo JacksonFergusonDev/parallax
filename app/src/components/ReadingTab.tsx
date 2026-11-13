@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Book } from "../api";
 import { GoodreadsView } from "./GoodreadsView";
 import { ReadingView } from "./ReadingView";
@@ -43,6 +44,12 @@ export function ReadingTab({
   goodreadsStamp,
   onGoodreadsImport,
 }: Props) {
+  // Each source stays mounted once shown, so switching back to it keeps what
+  // it loaded and where it was instead of flashing its loading text.
+  const [shown, setShown] = useState<Set<ReadingSource>>(
+    () => new Set([source]),
+  );
+  if (!shown.has(source)) setShown(new Set([...shown, source]));
   return (
     <div className="reading-tab">
       <div
@@ -66,10 +73,15 @@ export function ReadingTab({
           </button>
         ))}
       </div>
-      {source === "kobo" ? (
-        <ReadingView mount={mount} library={library} />
-      ) : (
-        <GoodreadsView stamp={goodreadsStamp} onImport={onGoodreadsImport} />
+      {shown.has("kobo") && (
+        <div className="reading-source-panel" hidden={source !== "kobo"}>
+          <ReadingView mount={mount} library={library} />
+        </div>
+      )}
+      {shown.has("goodreads") && (
+        <div className="reading-source-panel" hidden={source !== "goodreads"}>
+          <GoodreadsView stamp={goodreadsStamp} onImport={onGoodreadsImport} />
+        </div>
       )}
     </div>
   );
