@@ -6,17 +6,15 @@ import {
   type SavedStats,
   type StatBook,
 } from "../api";
-import { spineColor } from "../coverArt";
 import {
   finishedByMonth,
   finishedByYear,
   hours,
   readingHeadline,
   startedBooks,
-  ticks,
   titleKey,
-  type Bucket,
 } from "../stats";
+import { ColumnChart, Tile } from "./charts";
 import { GeneratedCover } from "./GeneratedCover";
 import { ShelfArt } from "./ShelfArt";
 
@@ -157,7 +155,11 @@ export function ReadingView({ mount, library }: Props) {
           </div>
         </div>
         {buckets.length ? (
-          <ColumnChart buckets={buckets} />
+          <ColumnChart
+            buckets={buckets}
+            unit={["book", "books"]}
+            label="Books finished"
+          />
         ) : (
           <p className="muted">No finished books yet.</p>
         )}
@@ -260,24 +262,6 @@ export function ReadingView({ mount, library }: Props) {
   );
 }
 
-function Tile({
-  label,
-  value,
-  note,
-}: {
-  label: string;
-  value: string;
-  note?: string;
-}) {
-  return (
-    <div className="stat-tile">
-      <span className="stat-label">{label}</span>
-      <span className="stat-value">{value}</span>
-      {note && <span className="muted stat-note">{note}</span>}
-    </div>
-  );
-}
-
 function BookName({
   book,
   author = true,
@@ -294,95 +278,5 @@ function BookName({
       {author && book.author && <span className="muted"> · {book.author}</span>}
       {!book.on_device && <span className="muted"> · removed</span>}
     </span>
-  );
-}
-
-/** One series of columns: a hover tooltip per column, the tallest labelled. */
-function ColumnChart({ buckets }: { buckets: Bucket[] }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const max = Math.max(...buckets.map((b) => b.count));
-  const axis = ticks(max);
-  const top = axis[axis.length - 1];
-  const peak = buckets.findIndex((b) => b.count === max && max > 0);
-  // Each finished book is drawn as a spine while they stay thick enough.
-  const stacked = top <= 30;
-
-  return (
-    <div
-      className="column-chart"
-      role="img"
-      aria-label={`Books finished: ${buckets.map((b) => `${b.label} ${b.count}`).join(", ")}`}
-    >
-      <div className="chart-plot">
-        {axis.map((t) => (
-          <div
-            key={t}
-            className="gridline"
-            style={{ bottom: `${(t / top) * 100}%` }}
-          >
-            <span className="tick">{t}</span>
-          </div>
-        ))}
-        <div className="columns">
-          {buckets.map((b, i) => (
-            <div
-              key={b.key}
-              className="column-slot"
-              onMouseEnter={() => setHover(i)}
-              onMouseLeave={() => setHover(null)}
-            >
-              {i === peak && hover === null && (
-                <span
-                  className="column-value"
-                  style={{ bottom: `${(b.count / top) * 100}%` }}
-                >
-                  {b.count}
-                </span>
-              )}
-              {b.count > 0 &&
-                (stacked ? (
-                  <div
-                    className={`spine-stack ${hover === i ? "hovered" : ""}`}
-                    style={{ height: `${(b.count / top) * 100}%` }}
-                  >
-                    {Array.from({ length: b.count }, (_, n) => (
-                      <span
-                        key={n}
-                        className="spine"
-                        style={
-                          {
-                            "--spine": spineColor(`${b.key}:${n}`),
-                            "--tilt": `${((n * 7) % 5) - 2}px`,
-                            "--w": `${84 + ((n * 13) % 17)}%`,
-                          } as React.CSSProperties
-                        }
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div
-                    className={`column ${hover === i ? "hovered" : ""}`}
-                    style={{ height: `${(b.count / top) * 100}%` }}
-                  />
-                ))}
-              {hover === i && (
-                <div
-                  className="chart-tooltip"
-                  style={{ bottom: `calc(${(b.count / top) * 100}% + 8px)` }}
-                >
-                  <strong>{b.count}</strong> {b.count === 1 ? "book" : "books"}
-                  <span className="muted"> · {b.key}</span>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="column-labels">
-        {buckets.map((b) => (
-          <span key={b.key}>{b.label}</span>
-        ))}
-      </div>
-    </div>
   );
 }

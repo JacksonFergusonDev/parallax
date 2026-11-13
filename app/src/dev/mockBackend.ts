@@ -18,6 +18,7 @@ import type {
   Rule,
 } from "../api";
 import { DEFAULT_SETTINGS } from "../reader/backend";
+import { emptyInsights, mockInsights } from "./goodreadsMock";
 
 const PALETTE = [
   "#2f6f5e",
@@ -277,8 +278,10 @@ const onDevice = new Map<number, string>([
 ]);
 // A comic that was on the Kobo as its original CBZ before it was added to
 // the library, so updating it changes only its details.
-const originalComic = books.find((b) => b.title === "Signal Fires Vol. 1")!.id;
-onDevice.set(originalComic, "2026-10-01T00:00:00Z");
+// `?setup` empties the library, so the comic may not be there.
+const originalComic = books.find((b) => b.title === "Signal Fires Vol. 1")?.id;
+if (originalComic !== undefined)
+  onDevice.set(originalComic, "2026-10-01T00:00:00Z");
 const pendingImport = new Set<number>();
 const deviceOnlyBooks = new Map<number, Book>();
 const shelves = new Map<string, Set<string>>([["Favourites", new Set()]]);
@@ -781,6 +784,9 @@ export function installMockBackend(label = "main") {
           }
           return null;
         }
+        case "goodreads_insights":
+          // `?setup` starts with nothing imported from Goodreads.
+          return firstLaunch ? emptyInsights() : mockInsights(books);
         case "goodreads_matches":
           return Object.fromEntries(goodreadsMatches);
         case "goodreads_edit": {

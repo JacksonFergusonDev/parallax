@@ -2434,6 +2434,10 @@ form.enhance-key input {
   text-align: center;
 }
 
+.reading-empty button {
+  margin-top: var(--space-3);
+}
+
 .reading-source,
 .reading-note {
   font-size: var(--text-small);
@@ -2782,6 +2786,287 @@ form.enhance-key input {
   font-size: var(--text-small);
   color: var(--muted);
   padding-top: var(--space-1);
+}
+
+/* Reading's sources: the Kobo's own stats or your Goodreads shelves. */
+.reading-tab {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.reading-switch {
+  align-self: flex-start;
+}
+
+/* Goodreads insights: pairs of sections side by side when there's room. */
+.insight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 22px var(--space-8);
+}
+
+.bar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-small);
+}
+
+.bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-track {
+  height: 10px;
+  border-radius: 0 4px 4px 0;
+  background: var(--sunken);
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--accent);
+  transform-origin: left;
+  animation: grow-in 700ms var(--ease-out) both;
+}
+
+.bar-value {
+  min-width: 3ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.reading-section .reading-note {
+  margin: var(--space-3) 0 0;
+}
+
+.insight-facts {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 72ch;
+}
+
+.insight-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.insight-chips li {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: var(--text-small);
+}
+
+.series-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-small);
+}
+
+/* Every Goodreads book: a sortable table whose rows open to their details. */
+.gr-table-head {
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.gr-search {
+  width: min(320px, 100%);
+}
+
+.gr-status {
+  margin-bottom: var(--space-3);
+}
+
+.gr-owned {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: fit-content;
+  margin-bottom: var(--space-3);
+  font-size: var(--text-small);
+}
+
+.insight-more {
+  margin-top: var(--space-3);
+}
+
+.gr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-small);
+}
+
+.gr-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.gr-table th button {
+  border: none;
+  background: none;
+  padding: var(--space-1) 0;
+  color: inherit;
+  font: inherit;
+  min-height: 32px;
+}
+
+.gr-table th[aria-sort] button {
+  color: var(--fg);
+}
+
+.gr-table td {
+  padding: var(--space-1) var(--space-2) var(--space-1) 0;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.gr-table td.num,
+.gr-table th[data-column="pages"],
+.gr-table th[data-column="year"] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.gr-table th[data-column="title"] {
+  width: 34%;
+}
+
+.gr-expand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: 32px;
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  /* Buttons don't wrap by default; long titles must, or the table overflows. */
+  white-space: normal;
+}
+
+.gr-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.gr-expand[aria-expanded="true"] .gr-chevron {
+  transform: rotate(90deg);
+}
+
+.gr-title {
+  min-width: 0;
+}
+
+.gr-title .stat-title {
+  font-weight: 600;
+}
+
+.gr-in-library {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--accent);
+}
+
+.gr-stars {
+  color: var(--accent);
+  letter-spacing: 1px;
+}
+
+.gr-table tr.open td {
+  border-bottom-color: transparent;
+}
+
+.gr-detail td {
+  padding: 0 0 var(--space-3) 20px;
+}
+
+.gr-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-3) var(--space-8);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--sunken);
+}
+
+.gr-details dl {
+  margin: 0;
+  align-content: start;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+}
+
+.gr-details dt {
+  color: var(--muted);
+}
+
+.gr-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.gr-review {
+  margin: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-left: var(--space-3);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.gr-review p {
+  margin: 0 0 var(--space-2);
+}
+
+.gr-more {
+  align-self: center;
+  margin: var(--space-3) auto 0;
+  display: block;
+}
+
+@media (max-width: 1000px) {
+  .gr-table [data-column="year"],
+  .gr-table [data-column="pages"] {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {

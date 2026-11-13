@@ -8,6 +8,8 @@ export interface Bucket {
   key: string;
   label: string;
   count: number;
+  /** Names the column in its tooltip; the key otherwise. */
+  tip?: string;
 }
 
 /** Books finished per year, from the first year with one to `now`'s year. */
