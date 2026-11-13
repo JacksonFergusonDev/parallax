@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   coverSrc,
-  readingStats,
+  peekSavedReadingStats,
+  refreshReadingStats,
+  savedReadingStats,
   type Book,
   type SavedStats,
   type StatBook,
@@ -23,6 +25,8 @@ interface Props {
   mount: string | null;
   /** The library, for real covers of books being read. */
   library: Book[];
+  /** On screen. A connected Kobo is only read while it is. */
+  active: boolean;
 }
 
 const dateFmt = (iso: string | null) =>
@@ -35,24 +39,63 @@ const dateFmt = (iso: string | null) =>
     : "";
 
 /** Reading statistics from the Kobo, or the last ones saved. */
-export function ReadingView({ mount, library }: Props) {
-  const [saved, setSaved] = useState<SavedStats | null | undefined>(undefined);
+export function ReadingView({ mount, library, active }: Props) {
+  // Saved stats prefetched at launch draw on the first render, with no
+  // loading state; a connected Kobo's fresh ones replace them when read.
+  const [saved, setSaved] = useState<SavedStats | null | undefined>(
+    peekSavedReadingStats,
+  );
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<"years" | "months">("years");
+  /** The Kobo whose stats are on screen, read this session. */
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshed = useRef<string | null>(null);
 
   useEffect(() => {
+    if (saved !== undefined) return;
     let alive = true;
-    readingStats(mount)
-      .then((s) => {
-        if (!alive) return;
-        setSaved(s);
-        setError(null);
-      })
+    savedReadingStats()
+      .then((s) => alive && setSaved((current) => current ?? s))
       .catch((e) => alive && setError(String(e)));
     return () => {
       alive = false;
     };
+  }, [saved]);
+
+  // A read finishing after its Kobo left, or after the view did, is dropped.
+  const current = useRef(mount);
+  const gone = useRef(false);
+  useEffect(() => {
+    current.current = mount;
+    if (!mount) refreshed.current = null;
   }, [mount]);
+  useEffect(() => {
+    // Strict Mode mounts twice; the second mount is live again.
+    gone.current = false;
+    return () => {
+      gone.current = true;
+    };
+  }, []);
+
+  // Read a connected Kobo once per connection, and only when its stats are
+  // looked at: it reads the device over USB. Looking away mid-read doesn't
+  // cancel it.
+  useEffect(() => {
+    if (!mount || !active || refreshed.current === mount) return;
+    refreshed.current = mount;
+    const still = () => !gone.current && current.current === mount;
+    setRefreshing(true);
+    refreshReadingStats(mount)
+      .then((s) => {
+        if (!still()) return;
+        setSaved(s);
+        setFresh(mount);
+        setError(null);
+      })
+      .catch((e) => still() && setError(String(e)))
+      .finally(() => !gone.current && setRefreshing(false));
+  }, [mount, active]);
 
   const now = useMemo(() => new Date(), []);
   const covers = useMemo(() => {
@@ -74,7 +117,7 @@ export function ReadingView({ mount, library }: Props) {
     [stats, range, now],
   );
 
-  if (saved === undefined && !error)
+  if ((saved === undefined || (!saved && refreshing)) && !error)
     return <p className="muted empty">Reading your stats…</p>;
   if (!stats)
     return (
@@ -110,9 +153,11 @@ export function ReadingView({ mount, library }: Props) {
       </h2>
       <p className="muted reading-source">
         {stats.device_model}
-        {mount
+        {mount && fresh === mount
           ? " · connected now"
-          : ` · as of ${dateFmt(saved!.taken_at)}, when it was last connected`}
+          : refreshing
+            ? ` · as of ${dateFmt(saved!.taken_at)}, updating from your Kobo…`
+            : ` · as of ${dateFmt(saved!.taken_at)}, when it was last connected`}
         {error && ` · couldn't refresh: ${error}`}
       </p>
 

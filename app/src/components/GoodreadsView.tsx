@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { goodreadsInsights, type GoodreadsInsights } from "../api";
+import {
+  goodreadsInsights,
+  peekGoodreadsInsights,
+  type GoodreadsInsights,
+} from "../api";
 import {
   dateFmt,
   decadeBuckets,
@@ -28,7 +32,11 @@ const READY_CHIPS = 12;
 
 /** What your saved Goodreads shelves say about your reading. */
 export function GoodreadsView({ stamp, onImport }: Props) {
-  const [insights, setInsights] = useState<GoodreadsInsights | null>(null);
+  // Insights prefetched at launch draw on the first render; the read below
+  // then only refreshes them after an import or edit.
+  const [insights, setInsights] = useState<GoodreadsInsights | null>(
+    () => peekGoodreadsInsights() ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [metric, setMetric] = useState<"books" | "pages">("books");
   const [filter, setFilter] = useState<TableFilter>({

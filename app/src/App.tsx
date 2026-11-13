@@ -27,6 +27,7 @@ import {
   reviewBooks,
   listBooks,
   goodreadsMatches,
+  prefetchReading,
   type GoodreadsMatch,
   listDevices,
   removeBooks,
@@ -817,6 +818,13 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
   }, [books, onDevice]);
   // The Kobo tab only exists while one is connected.
   const activeView = !device && view === "device" ? "library" : view;
+  // Reading mounts the first time it's opened and stays, hidden, after that
+  // (engineering/decisions/retained-views.md). Its data is prefetched below.
+  const [readingOpened, setReadingOpened] = useState(false);
+  if (activeView === "reading" && !readingOpened) setReadingOpened(true);
+  useEffect(() => {
+    if (loaded && detected) prefetchReading();
+  }, [loaded, detected]);
 
   const onSelect = useCallback(
     (id: number, e: React.MouseEvent) =>
@@ -1305,10 +1313,16 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
 
         {/* Retain loaded data, decoded images and scroll positions across tabs.
           Disconnecting unmounts the device panel, so reconnects read fresh data. */}
-        {activeView === "reading" && (
-          <div className="tab-panel" role="tabpanel" aria-label="Reading">
+        {readingOpened && (
+          <div
+            className="tab-panel"
+            role="tabpanel"
+            aria-label="Reading"
+            hidden={activeView !== "reading"}
+          >
             <div className="scroll reading-scroll">
               <ReadingTab
+                active={activeView === "reading"}
                 source={readingSource}
                 onSource={setReadingSource}
                 mount={device?.mount ?? null}

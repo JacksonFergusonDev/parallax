@@ -25,6 +25,8 @@ export function saveReadingSource(source: ReadingSource) {
 }
 
 interface Props {
+  /** Reading is the tab on screen. */
+  active: boolean;
   source: ReadingSource;
   onSource: (source: ReadingSource) => void;
   /** The connected Kobo; null shows the last saved stats. */
@@ -37,6 +39,7 @@ interface Props {
 
 /** Reading: your Kobo's own stats, or what your Goodreads shelves say. */
 export function ReadingTab({
+  active,
   source,
   onSource,
   mount,
@@ -75,7 +78,11 @@ export function ReadingTab({
       </div>
       {shown.has("kobo") && (
         <div className="reading-source-panel" hidden={source !== "kobo"}>
-          <ReadingView mount={mount} library={library} />
+          <ReadingView
+            mount={mount}
+            library={library}
+            active={active && source === "kobo"}
+          />
         </div>
       )}
       {shown.has("goodreads") && (

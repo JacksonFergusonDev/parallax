@@ -2,6 +2,8 @@ interface Entry {
   promise: Promise<unknown>;
   expires: number;
   tags: readonly string[];
+  /** Set once the read succeeds, for `peek`. */
+  settled?: { value: unknown };
 }
 
 /** Bounded, session-only cache for reads. Shares pending requests, never caches
@@ -33,6 +35,7 @@ export class ReadCache {
     entry.promise = entry.promise.then(
       (value) => {
         entry.expires = Date.now() + maxAge;
+        entry.settled = { value };
         return value;
       },
       (error: unknown) => {
@@ -46,6 +49,34 @@ export class ReadCache {
       this.entries.delete(this.entries.keys().next().value!);
     }
     return entry.promise as Promise<T>;
+  }
+
+  /** A finished, unexpired read's value right away, so a view can draw
+   * loaded data on its first render instead of a loading state. */
+  peek<T>(key: readonly unknown[]): T | undefined {
+    const entry = this.entries.get(JSON.stringify(key));
+    if (!entry?.settled || entry.expires <= Date.now()) return undefined;
+    return entry.settled.value as T;
+  }
+
+  /** Stores a value read some other way, replacing any entry for `key`. */
+  put<T>(
+    key: readonly unknown[],
+    value: T,
+    tags: readonly string[],
+    maxAge = 5 * 60_000,
+  ) {
+    const id = JSON.stringify(key);
+    this.entries.delete(id);
+    this.entries.set(id, {
+      promise: Promise.resolve(value),
+      expires: Date.now() + maxAge,
+      tags,
+      settled: { value },
+    });
+    while (this.entries.size > this.capacity) {
+      this.entries.delete(this.entries.keys().next().value!);
+    }
   }
 
   invalidate(...tags: string[]) {

@@ -824,6 +824,16 @@ export interface GoodreadsInsights {
 }
 export const goodreadsInsights = () =>
   read<GoodreadsInsights>("goodreads_insights", {}, ["library", "goodreads"]);
+/** Insights already loaded, or undefined when they aren't yet. */
+export const peekGoodreadsInsights = () =>
+  readCache.peek<GoodreadsInsights>(["goodreads_insights", {}]);
+
+/** Loads what Reading shows from the library in the background, so its
+ * first opening draws at once. Only reads the library, never a device. */
+export function prefetchReading() {
+  void savedReadingStats().catch(() => undefined);
+  void goodreadsInsights().catch(() => undefined);
+}
 export const librarySnapshots = () => invoke<Snapshot[]>("library_snapshots");
 export const libraryRestore = (file: string) =>
   write<{
@@ -918,8 +928,21 @@ export const genresApply = (
     ["library", "plans", ...(mount ? [deviceTag(mount)] : [])],
   );
 /** Fresh from the Kobo at `mount` (and saved), else the last saved. */
-export const readingStats = (mount: string | null) =>
-  invoke<SavedStats | null>("reading_stats", { mount });
+const SAVED_STATS = ["reading_stats", { mount: null }] as const;
+/** The reading stats last saved from a Kobo, cached like other reads. */
+export const savedReadingStats = () =>
+  read<SavedStats | null>(...SAVED_STATS, ["reading-stats"]);
+/** Saved stats already loaded, or undefined when they aren't yet. */
+export const peekSavedReadingStats = () =>
+  readCache.peek<SavedStats | null>(SAVED_STATS);
+/** Reads fresh stats from the Kobo at `mount`, which saves them, and makes
+ * them the cached saved stats. Reads the device over USB, so call it when
+ * someone looks at the stats rather than ahead of time. */
+export async function refreshReadingStats(mount: string) {
+  const stats = await invoke<SavedStats | null>("reading_stats", { mount });
+  readCache.put(SAVED_STATS, stats, ["reading-stats"]);
+  return stats;
+}
 export const calibreDefaultLibrary = () =>
   invoke<string | null>("calibre_default_library");
 export const calibrePreview = (path: string) =>
