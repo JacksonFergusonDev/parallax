@@ -18,6 +18,8 @@ import {
   coverSrc,
   comicTransferEstimate,
   onSettingChange,
+  onWatchFolderFound,
+  watchFolderAdded,
   deviceBooks,
   dismissDuplicates,
   ejectDevice,
@@ -666,6 +668,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
         setNotice({ kind: "info", text: summarizeImport(results) });
         await refresh();
         void reviewAdded(addedIds(results), failedFiles(results));
+        return results;
       } catch (e) {
         setNotice({ kind: "error", text: String(e) });
       } finally {
@@ -674,6 +677,38 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     },
     [refresh, reviewAdded, runBookOperation],
   );
+
+  // Books from the watched folder are added like dropped ones, one batch at
+  // a time; ones that arrive mid-import wait for it to finish.
+  const watched = useRef<{ waiting: string[]; adding: boolean }>({
+    waiting: [],
+    adding: false,
+  });
+  const addWatched = useCallback(async () => {
+    const queue = watched.current;
+    if (queue.adding || queue.waiting.length === 0) return;
+    queue.adding = true;
+    const paths = queue.waiting.splice(0);
+    try {
+      const results = await doImport(paths);
+      const done = (results ?? [])
+        .filter((r) => "Ok" in r.outcome)
+        .map((r) => r.path);
+      if (done.length) await watchFolderAdded(done).catch(console.error);
+    } finally {
+      queue.adding = false;
+      if (queue.waiting.length) void addWatched();
+    }
+  }, [doImport]);
+  useEffect(() => {
+    const unlisten = onWatchFolderFound((paths) => {
+      watched.current.waiting.push(...paths);
+      void addWatched();
+    });
+    return () => {
+      void unlisten.then((f) => f());
+    };
+  }, [addWatched]);
 
   useEffect(() => {
     const unlisten = getCurrentWebview().onDragDropEvent((event) => {

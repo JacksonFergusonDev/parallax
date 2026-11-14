@@ -215,6 +215,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.settings-path {
+  max-width: 400px;
+  overflow-wrap: anywhere;
+}
+
 .settings-control .segmented {
   flex-wrap: wrap;
 }

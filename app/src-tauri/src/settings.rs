@@ -58,7 +58,7 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 35] = [
+const SETTINGS: [(&str, Allowed); 37] = [
     (parallax_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (parallax_core::enhance::METRON_TOKEN, Allowed::Text(256)),
     (
@@ -97,6 +97,11 @@ const SETTINGS: [(&str, Allowed); 35] = [
     (KEPUB_SMART_PUNCTUATION, Allowed::OneOf(&["on"])),
     (KEPUB_FULLSCREEN_FIXES, Allowed::OneOf(&["on"])),
     (KEPUB_CSS, Allowed::Text(4000)),
+    (parallax_core::watch::WATCH_FOLDER, Allowed::Text(1024)),
+    (
+        parallax_core::watch::WATCH_FOLDER_TRASH,
+        Allowed::OneOf(&["on"]),
+    ),
     (layout::KOBO_LAYOUT, Allowed::OneOf(&["on"])),
     (layout::KOBO_LAYOUT_FONT, Allowed::Text(80)),
     (
@@ -118,7 +123,7 @@ const SETTINGS: [(&str, Allowed); 35] = [
 ];
 
 /// Settings that are preferences, which Reset puts back. Credentials stay.
-const PREFERENCES: [&str; 29] = [
+const PREFERENCES: [&str; 31] = [
     parallax_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
@@ -142,6 +147,8 @@ const PREFERENCES: [&str; 29] = [
     KEPUB_SMART_PUNCTUATION,
     KEPUB_FULLSCREEN_FIXES,
     KEPUB_CSS,
+    parallax_core::watch::WATCH_FOLDER,
+    parallax_core::watch::WATCH_FOLDER_TRASH,
     layout::KOBO_LAYOUT,
     layout::KOBO_LAYOUT_FONT,
     layout::KOBO_LAYOUT_SIZE,

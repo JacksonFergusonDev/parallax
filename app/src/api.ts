@@ -996,6 +996,8 @@ export type SettingKey =
   | "kepub_smart_punctuation"
   | "kepub_fullscreen_fixes"
   | "kepub_css"
+  | "watch_folder"
+  | "watch_folder_trash"
   | "kobo_layout"
   | "kobo_layout_font"
   | "kobo_layout_size"
@@ -1035,6 +1037,16 @@ export const onSettingChange = (
   handler: (change: SettingChange) => void,
 ): Promise<UnlistenFn> =>
   listen<SettingChange>("setting-changed", (e) => handler(e.payload));
+
+/** New books found in the watched folder (src-tauri/src/watch.rs). */
+export const onWatchFolderFound = (
+  handler: (paths: string[]) => void,
+): Promise<UnlistenFn> =>
+  listen<string[]>("watch-folder-found", (e) => handler(e.payload));
+/** Tells the app these watched-folder files are in the library, so it can
+ * move them to the Trash if Settings says to. */
+export const watchFolderAdded = (paths: string[]) =>
+  invoke<void>("watch_folder_added", { paths });
 
 /** A newer Parallax, found by the update check (src-tauri/src/updates.rs). */
 export interface UpdateInfo {

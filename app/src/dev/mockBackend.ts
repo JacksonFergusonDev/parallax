@@ -412,6 +412,8 @@ const SETTING_KEYS = [
   "kepub_smart_punctuation",
   "kepub_fullscreen_fixes",
   "kepub_css",
+  "watch_folder",
+  "watch_folder_trash",
   "kobo_layout",
   "kobo_layout_font",
   "kobo_layout_size",
@@ -557,6 +559,8 @@ export function installMockBackend(label = "main") {
           ];
         case "reconcile_device":
           return { series: 0, grouped: 0 };
+        case "watch_folder_added":
+          return null;
         case "set_reading_layout":
           return (a.contentIds as string[]).length;
         case "rules_list":

@@ -19,3 +19,4 @@ pub mod review;
 pub mod rules;
 pub mod send;
 pub mod stats;
+pub mod watch;

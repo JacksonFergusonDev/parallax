@@ -41,6 +41,7 @@ mod menu;
 mod reader;
 mod settings;
 mod updates;
+mod watch;
 
 /// Event carrying [`ImportProgress`] while series and genres are looked up.
 const ENHANCE_PROGRESS: &str = "enhance-progress";
@@ -1672,6 +1673,7 @@ pub fn run() {
             e2e::start(app);
             size_first_window(app)?;
             updates::start(app.handle());
+            watch::start(app.handle())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1722,6 +1724,7 @@ pub fn run() {
             merge_collections,
             set_reading_status,
             set_reading_layout,
+            watch::watch_folder_added,
             enhance_apply,
             settings::setting_get,
             settings::setting_set,

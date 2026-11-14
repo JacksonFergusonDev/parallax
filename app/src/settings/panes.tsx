@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import {
   COMIC_PAGE_SETTINGS,
   resetSettings,
@@ -255,6 +255,53 @@ function Credential({
   );
 }
 
+/** A folder whose new books are added on their own, like calibre's
+ * auto-add folder. Off until you choose one. */
+function WatchFolder(props: PaneProps) {
+  const { values, set } = props;
+  const folder = values.watch_folder;
+  const choose = async () => {
+    const picked = await open({
+      directory: true,
+      title: "Add books from this folder",
+      defaultPath: folder ?? undefined,
+    });
+    if (typeof picked === "string") set("watch_folder", picked);
+  };
+  return (
+    <Row
+      label="Add automatically"
+      hint={
+        folder
+          ? "Books saved here are added to your library while Parallax is open, once they've finished downloading. Subfolders are left alone."
+          : "Choose a folder, such as Downloads, and books saved in it are added to your library while Parallax is open."
+      }
+    >
+      {folder && <p className="settings-value settings-path">{folder}</p>}
+      <div className="settings-inline">
+        <button onClick={() => void choose()}>
+          {folder ? "Change folder…" : "Choose folder…"}
+        </button>
+        {folder && (
+          <button onClick={() => set("watch_folder", null)}>
+            Stop watching
+          </button>
+        )}
+      </div>
+      {folder && (
+        <Check
+          {...props}
+          name="watch_folder_trash"
+          defaultOn={false}
+          hint="Once a book is in your library, its file in the folder moves to the Trash. Your library keeps its own copy."
+        >
+          Move added files to the Trash
+        </Check>
+      )}
+    </Row>
+  );
+}
+
 export function LibraryPane(props: PaneProps) {
   return (
     <>
@@ -267,6 +314,7 @@ export function LibraryPane(props: PaneProps) {
           Review books when added
         </Check>
       </Row>
+      <WatchFolder {...props} />
       <Row
         label="Google Books"
         hint="Optional. A free API key lets Look up details find genres for more books."

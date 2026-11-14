@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import { DEFAULT_SETTINGS } from "../reader/backend";
 import { deletesNow, formatBytes } from "./BackupsPane";
 import { SettingsApp } from "./SettingsApp";
@@ -16,7 +16,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(async () => () => {}),
 }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn(), open: vi.fn() }));
 
 describe("backup sizes", () => {
   it("reads like Finder", () => {
@@ -200,6 +200,18 @@ describe("Settings window", () => {
       key: "kobo_layout_font",
       value: "Georgia",
     });
+  });
+
+  it("watches a folder only once you choose one", async () => {
+    await tab("Library");
+    expect(host.textContent).not.toContain("Move added files to the Trash");
+    vi.mocked(open).mockResolvedValueOnce("/Users/me/Downloads");
+    await click(button("Choose folder…"));
+    expect(calls("setting_set").at(-1)?.[1]).toEqual({
+      key: "watch_folder",
+      value: "/Users/me/Downloads",
+    });
+    expect(labelled("Move added files to the Trash").checked).toBe(false);
   });
 
   it("tunes comic pages and resets them to recommended", async () => {

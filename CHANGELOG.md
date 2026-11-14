@@ -4,6 +4,7 @@ What changed in each release of Parallax, for people using it. The release workf
 
 ## Unreleased
 
+- **Add automatically** in Settings › Library watches a folder you choose, such as Downloads, and adds books saved there to your library while Parallax is open, as calibre's auto-add folder does. It waits for downloads to finish and adds each file once. You can also have added files moved to the Trash. It's off until you choose a folder.
 - **Reading layout** in Settings › Kobo sets a font, size, line spacing, margins and alignment on books, as Kobo Utilities does, so they open the way you like without adjusting each one on your Kobo. Select books in On Kobo and choose **Set layout**, or turn on **Set this layout on new books** to have books without settings of their own get it when your Kobo connects. It's off until you set it up.
 - When you send a book again, or send it to another Kobo, it opens where you last were rather than at the start, as Kobo Utilities' restore bookmark does. Parallax saves your place each time a Kobo connects and puts it back once the Kobo has imported the new copy. A book you've opened or marked unread since is left alone. Turn it off in Settings › Kobo.
 - Settings › Kobo › Sending books changes books as they go to your Kobo: hyphenate always or never, smarten quotes and dashes, add fixes for reading in full screen, and add your own CSS to every book, as calibre's kobo_extra.css does. Each is off until you turn it on.

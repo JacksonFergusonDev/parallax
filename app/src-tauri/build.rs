@@ -51,6 +51,7 @@ const COMMANDS: &[&str] = &[
     "merge_collections",
     "set_reading_status",
     "set_reading_layout",
+    "watch_folder_added",
     "enhance_apply",
     "setting_get",
     "setting_set",
