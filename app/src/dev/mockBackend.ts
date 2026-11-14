@@ -404,9 +404,28 @@ const SETTING_KEYS = [
   "reader_windows",
   "kobo_series",
   "kobo_rules",
+  "kobo_positions",
+  "kobo_firmware_check",
   "eject_after_send",
   "updates_auto",
   "updates_download",
+  "kepub_hyphenation",
+  "kepub_smart_punctuation",
+  "kepub_fullscreen_fixes",
+  "kepub_css",
+  "library_saved_searches",
+  "saved_searches",
+  "save_template",
+  "save_archive",
+  "save_compression",
+  "watch_folder",
+  "watch_folder_trash",
+  "kobo_layout",
+  "kobo_layout_font",
+  "kobo_layout_size",
+  "kobo_layout_line_height",
+  "kobo_layout_margins",
+  "kobo_layout_alignment",
 ];
 
 /** `?theme=sepia` in the URL starts the mock with that theme. */
@@ -546,6 +565,18 @@ export function installMockBackend(label = "main") {
           ];
         case "reconcile_device":
           return { series: 0, grouped: 0 };
+        case "kobo_firmware_check":
+          return null;
+        case "library_save":
+          return (a.ids as number[]).map((id) => ({
+            book_id: id,
+            title: `Book ${id}`,
+            result: { Ok: `${a.destination}/Book ${id}.epub` },
+          }));
+        case "watch_folder_added":
+          return null;
+        case "set_reading_layout":
+          return (a.contentIds as string[]).length;
         case "rules_list":
           return rules;
         case "rules_save": {
@@ -1522,7 +1553,11 @@ export function installMockBackend(label = "main") {
           );
         case "settings_reset":
           for (const key of SETTING_KEYS)
-            if (key !== "google_books_key" && key !== "metron_token") {
+            if (
+              key !== "google_books_key" &&
+              key !== "metron_token" &&
+              key !== "saved_searches"
+            ) {
               settings.delete(key);
               await emit("setting-changed", { key, value: null });
             }

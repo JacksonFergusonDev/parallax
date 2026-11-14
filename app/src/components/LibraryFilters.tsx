@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Book } from "../api";
 import {
   isFiltered,
@@ -16,6 +17,8 @@ interface Props {
   /** A Kobo is connected, so its status and collections can be filtered. */
   connected: boolean;
   onChange: (filter: LibraryFilter) => void;
+  /** Controls shown first, such as saved searches. */
+  leading?: ReactNode;
 }
 
 const READING: [ReadingFilter, string][] = [
@@ -65,7 +68,13 @@ function FilterSelect({
 }
 
 /** Narrows the library: what's on the Kobo, then collection, genre, status. */
-export function LibraryFilters({ filter, facets, connected, onChange }: Props) {
+export function LibraryFilters({
+  filter,
+  facets,
+  connected,
+  onChange,
+  leading,
+}: Props) {
   const kobo: [KoboFilter, string, number][] = [
     ["all", "All", facets.kobo.all],
     ["on", "On Kobo", facets.kobo.on],
@@ -76,6 +85,7 @@ export function LibraryFilters({ filter, facets, connected, onChange }: Props) {
   }
   return (
     <div className="filter-bar" role="group" aria-label="Filter books">
+      {leading}
       <select
         className={`sort-select filter-select ${filter.kind ? "active" : ""}`}
         aria-label="Filter by kind"

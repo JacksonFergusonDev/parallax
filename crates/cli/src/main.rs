@@ -16,8 +16,8 @@ use parallax_convert::{Kepubify, ToKepub};
 use parallax_core::calibre;
 use parallax_core::collections::{self, CollectionChange, folder_groups, reconcile_series};
 use parallax_core::device::{
-    change_reading_status, health, merge_collections, remove_from_device, sync_annotations,
-    sync_reading,
+    change_reading_status, health, merge_collections, remove_from_device, restore_positions,
+    sync_annotations, sync_reading,
 };
 use parallax_core::duplicates::{Reason, device_duplicates, library_duplicates};
 use parallax_core::enhance;
@@ -25,7 +25,9 @@ use parallax_core::health::check_library;
 use parallax_core::import::{DeviceImport, import_from_device};
 use parallax_core::ingest::import_file;
 use parallax_core::rules;
-use parallax_core::send::{SendOutcome, send_books, send_library_books, update_on_device};
+use parallax_core::send::{
+    SendOutcome, kepub_options, send_books, send_library_books, update_on_device,
+};
 use parallax_device::{DeviceBook, ReadStatus};
 use parallax_device_kobo::{
     BookCheck, KoboDb, KoboDevice, MACOS_VOLUMES, ONBOARD_PREFIX, remove_orphaned_images,
@@ -292,6 +294,23 @@ enum LibraryCommand {
     },
     /// Write a book with its edits applied (what a device receives, before KEPUB conversion).
     Export { id: i64, out: PathBuf },
+    /// Save books with their edits to a folder, or one ZIP archive, named by
+    /// a template (the app's Save to Disk). No ids saves every book.
+    Save {
+        ids: Vec<i64>,
+        /// The folder, or with --zip the archive file, to save to.
+        #[arg(long)]
+        to: PathBuf,
+        /// File names, such as "{author}/{title}". Defaults to the app's setting.
+        #[arg(long)]
+        template: Option<String>,
+        /// Save into one ZIP archive at --to.
+        #[arg(long)]
+        zip: bool,
+        /// Archive compression: store, fast, normal or best.
+        #[arg(long, default_value = "normal")]
+        compression: String,
+    },
     /// Automatic grouping rules (series/tag/author → collection).
     #[command(subcommand)]
     Rules(RulesCommand),
@@ -481,6 +500,12 @@ enum KoboCommand {
         /// How many log entries to show, newest first.
         #[arg(short = 'n', long, default_value_t = 20)]
         limit: usize,
+    },
+    /// Ask Kobo whether newer software is available for the connected Kobo.
+    /// Sends Kobo the model and current version, not the serial number.
+    Firmware {
+        #[arg(long)]
+        mount: Option<PathBuf>,
     },
     /// Save a device report: model, firmware and database layout, without
     /// book titles, serial number or reading data. Send it to whoever adds
@@ -954,6 +979,30 @@ fn main() -> Result<()> {
                 println!("{rows}");
             }
         }
+        Command::Kobo(KoboCommand::Firmware { mount }) => {
+            let kobo = find_kobo(mount.as_deref())?;
+            let update = parallax_core::firmware::check_online(kobo.version())
+                .map_err(anyhow::Error::msg)?;
+            if cli.json {
+                return print_json(&update);
+            }
+            match update {
+                Some(u) => println!(
+                    "Kobo software {} is available (this Kobo has {}). Connect your Kobo to Wi-Fi and sync to install it.{}",
+                    u.available,
+                    u.current,
+                    if u.beyond_support {
+                        " Parallax hasn't been tested with it yet, so it won't change this Kobo after the update."
+                    } else {
+                        ""
+                    }
+                ),
+                None => println!(
+                    "This Kobo has the latest software, {}.",
+                    kobo.version().firmware
+                ),
+            }
+        }
         Command::Kobo(KoboCommand::Report { mount, out }) => {
             let report = find_kobo(mount.as_deref())?.report();
             let json = serde_json::to_string_pretty(&report)?;
@@ -1227,6 +1276,43 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             let book = lib.export(id, &out)?;
             println!("exported #{} {} to {}", book.id, book.title, out.display());
         }
+        LibraryCommand::Save {
+            ids,
+            to,
+            template,
+            zip,
+            compression,
+        } => {
+            use parallax_core::save::{
+                Compression, DEFAULT_TEMPLATE, Destination, SAVE_TEMPLATE, save_books,
+            };
+            let ids = if ids.is_empty() {
+                lib.books()?.iter().map(|b| b.id).collect()
+            } else {
+                ids
+            };
+            let template = template
+                .or(lib.setting(SAVE_TEMPLATE)?)
+                .unwrap_or_else(|| DEFAULT_TEMPLATE.to_owned());
+            let destination = if zip {
+                Destination::Archive(to, Compression::parse(Some(compression.as_str())))
+            } else {
+                Destination::Folder(to)
+            };
+            let saved = save_books(lib, &ids, &template, &destination, |_, _| {})
+                .map_err(anyhow::Error::msg)?;
+            if json {
+                return print_json(&saved);
+            }
+            for s in &saved {
+                match &s.result {
+                    Ok(path) => {
+                        println!("{} #{} {} → {path}", success("saved"), s.book_id, s.title);
+                    }
+                    Err(e) => eprintln!("failed #{} {}: {e}", s.book_id, s.title),
+                }
+            }
+        }
         LibraryCommand::Rm { id } => {
             let title = lib.book(id)?.title;
             lib.snapshot("remove", Some(&title))?;
@@ -1269,7 +1355,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             let outcomes = update_on_device(
                 lib,
                 &kobo,
-                &Kepubify::locate()?,
+                &Kepubify::locate()?.with_options(kepub_options(lib)),
                 &backup_root()?,
                 &ids,
                 |p| progress.send(p),
@@ -1687,6 +1773,10 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                 reconcile_series(lib, &kobo, &backup_root()?)?
             );
             println!(
+                "put back the place in {} books sent again",
+                restore_positions(lib, &kobo, &backup_root()?)?
+            );
+            println!(
                 "updated reading progress for {} books",
                 sync_reading(lib, &kobo)?
             );
@@ -1703,8 +1793,13 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
         } => {
             let kobo = find_kobo(mount.as_deref())?;
             let progress = Reporter::new(json);
-            let outcomes =
-                send_library_books(lib, &kobo, &Kepubify::locate()?, &ids, |p| progress.send(p));
+            let outcomes = send_library_books(
+                lib,
+                &kobo,
+                &Kepubify::locate()?.with_options(kepub_options(lib)),
+                &ids,
+                |p| progress.send(p),
+            );
             drop(progress);
             if let Some(name) = collection {
                 let content_ids: Vec<String> = outcomes

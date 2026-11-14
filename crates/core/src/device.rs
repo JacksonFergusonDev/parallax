@@ -5,10 +5,10 @@ use std::{collections::BTreeMap, path::Path};
 use parallax_device::{DeviceBook, ReadStatus};
 use parallax_device_kobo::{
     AnnotationKind, BOOKS_DIR, DuplicateCollection, KoboDb, KoboDevice, Mismatch, ONBOARD_PREFIX,
-    duplicate_collections, files_not_in_database, merge_duplicate_collections, missing_files,
-    orphaned_images, remove_book_with_progress, set_read_status,
+    Position, duplicate_collections, files_not_in_database, merge_duplicate_collections,
+    missing_files, orphaned_images, remove_book_with_progress, set_read_status,
 };
-use parallax_library::{Format, Library};
+use parallax_library::{Format, Library, Reading};
 use serde::Serialize;
 
 use crate::comic_send::{ComicTarget, is_original_comic};
@@ -234,11 +234,14 @@ pub fn sync_reading(library: &Library, device: &KoboDevice) -> parallax_device_k
     if copies.is_empty() {
         return Ok(0);
     }
+    let db = device.open_db()?;
+    let chapters = db.bookmarked_chapters()?;
     let mut n = 0;
-    for book in device.open_db()?.books()? {
+    for book in db.books()? {
         let Some(copy) = copies.iter().find(|c| c.content_id == book.id) else {
             continue;
         };
+        let chapter = chapters.get(&book.id).map(String::as_str);
         let status = match book.read_status {
             ReadStatus::Unread => "unread",
             ReadStatus::Reading => "reading",
@@ -255,16 +258,21 @@ pub fn sync_reading(library: &Library, device: &KoboDevice) -> parallax_device_k
                     && r.percent == book.percent_read
                     && r.last_read == last_read
                     && r.time_spent_secs == book.reading_time_secs
+                    && r.chapter.as_deref() == chapter
             });
         if !unchanged
             && library
                 .record_reading(
                     copy.book_id,
-                    &serial,
-                    status,
-                    book.percent_read,
-                    last_read.as_deref(),
-                    book.reading_time_secs,
+                    &Reading {
+                        device_serial: serial.clone(),
+                        status: status.to_owned(),
+                        percent: book.percent_read,
+                        last_read: last_read.clone(),
+                        time_spent_secs: book.reading_time_secs,
+                        chapter: chapter.map(str::to_owned),
+                        seen_at: String::new(),
+                    },
                 )
                 .is_ok()
         {
@@ -272,6 +280,72 @@ pub fn sync_reading(library: &Library, device: &KoboDevice) -> parallax_device_k
         }
     }
     Ok(n)
+}
+
+/// Puts back where library books were open, in copies sent since a device
+/// last reported them and that Nickel shows as never opened: a book removed
+/// and sent again, sent to another Kobo, or a comic sent again as a newly
+/// prepared copy. The place is the latest any device reported. Run it before
+/// [`sync_reading`], which would record the fresh copy as unread. Returns
+/// how many books were restored.
+pub fn restore_positions(
+    library: &Library,
+    device: &KoboDevice,
+    backup_root: &Path,
+) -> parallax_device_kobo::Result<usize> {
+    let serial = device.version().serial.clone();
+    let copies = library.device_copies(&serial).unwrap_or_default();
+    if copies.is_empty() {
+        return Ok(0);
+    }
+    let unopened: Vec<String> = device
+        .open_db()?
+        .books()?
+        .into_iter()
+        .filter(|b| b.read_status == ReadStatus::Unread && b.percent_read == 0)
+        .map(|b| b.id)
+        .collect();
+    let mut pending = Vec::new();
+    for copy in copies.iter().filter(|c| unopened.contains(&c.content_id)) {
+        // Reported by this device since it was sent: what it shows is
+        // current. Times are to the second, so a tie counts as reported.
+        let reported = library
+            .reading_on(copy.book_id, &serial)
+            .ok()
+            .flatten()
+            .is_some_and(|r| r.seen_at >= copy.sent_at);
+        if reported {
+            continue;
+        }
+        let Some(saved) = library.saved_position(copy.book_id).ok().flatten() else {
+            continue;
+        };
+        pending.push((
+            copy.content_id.clone(),
+            Position {
+                chapter: saved.chapter,
+                status: if saved.status == "finished" { 2 } else { 1 },
+                percent: saved.percent,
+                last_read: saved
+                    .last_read
+                    .as_deref()
+                    .and_then(|d| chrono::DateTime::parse_from_rfc3339(d).ok())
+                    .map(|d| {
+                        d.with_timezone(&chrono::Utc)
+                            .format("%Y-%m-%dT%H:%M:%SZ")
+                            .to_string()
+                    }),
+                time_spent_secs: saved.time_spent_secs,
+            },
+        ));
+    }
+    if pending.is_empty() {
+        return Ok(0);
+    }
+    let mut writer = device.open_writer(backup_root)?;
+    let restored = parallax_device_kobo::restore_positions(&mut writer, &pending);
+    writer.close()?;
+    Ok(restored?.len())
 }
 
 /// What "Check this Kobo" found. Only reads the device.

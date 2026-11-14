@@ -171,6 +171,9 @@ const MIGRATIONS: &[&str] = &[
            MAX(MAX(json_extract(base, '$.date_added')), MAX(json_extract(base, '$.date_read'))),
            COUNT(*), COUNT(*), 0
     FROM goodreads_books HAVING COUNT(*) > 0;",
+    // 19: where in the book each device had it open (Nickel's
+    // ChapterIDBookmarked), so the place can be put back after it's sent again.
+    "ALTER TABLE reading ADD COLUMN chapter TEXT;",
 ];
 
 /// The schema version this build creates.

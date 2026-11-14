@@ -4,6 +4,13 @@ What changed in each release of Parallax, for people using it. The release workf
 
 ## Unreleased
 
+- **Saved searches** keep a search and its filters under a name, such as Unread sci-fi, so you can bring them back from the library's filter bar, as calibre's saved searches do. Turn them on with **Show saved searches** in Settings › Library.
+- **Check for new Kobo software** in Settings › Kobo asks Kobo, when your Kobo connects, whether newer software is available for it, as Kobo Utilities does, and tells you how to install it. Kobo is told your model and software version, not your serial number. It's off until you turn it on. `parallax-cli kobo firmware` checks from the terminal.
+- **Save to Disk…** (File menu, ⇧⌘S, and Library tools) saves the selected books, or every book shown, with your edits and covers, as calibre's save to disk does. Settings › Library sets how files are named, such as a folder for each author with series books numbered, and can save everything into one ZIP archive instead, with a choice of compression. `parallax-cli library save` does the same.
+- **Add automatically** in Settings › Library watches a folder you choose, such as Downloads, and adds books saved there to your library while Parallax is open, as calibre's auto-add folder does. It waits for downloads to finish and adds each file once. You can also have added files moved to the Trash. It's off until you choose a folder.
+- **Reading layout** in Settings › Kobo sets a font, size, line spacing, margins and alignment on books, as Kobo Utilities does, so they open the way you like without adjusting each one on your Kobo. Select books in On Kobo and choose **Set layout**, or turn on **Set this layout on new books** to have books without settings of their own get it when your Kobo connects. It's off until you set it up.
+- When you send a book again, or send it to another Kobo, it opens where you last were rather than at the start, as Kobo Utilities' restore bookmark does. Parallax saves your place each time a Kobo connects and puts it back once the Kobo has imported the new copy. A book you've opened or marked unread since is left alone. Turn it off in Settings › Kobo.
+- Settings › Kobo › Sending books changes books as they go to your Kobo: hyphenate always or never, smarten quotes and dashes, add fixes for reading in full screen, and add your own CSS to every book, as calibre's kobo_extra.css does. Each is off until you turn it on.
 - Covers sent to a black-and-white Kobo stay in colour again, still sized to its screen. The grey treatment from 0.1.2 is off until it's been compared on a Kobo.
 
 ## 0.1.2 (2026-11-13)

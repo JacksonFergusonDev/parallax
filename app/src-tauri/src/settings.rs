@@ -5,11 +5,15 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use parallax_core::layout;
 use parallax_core::send::{
     COMIC_AUTOCONTRAST, COMIC_COLOUR_CONTRAST, COMIC_COLOUR_SEPARATION, COMIC_CROP, COMIC_DITHER,
-    COMIC_MIDTONE_DARKENING, COMIC_SPREADS, COMIC_STRENGTHS, COMIC_UPSCALE,
+    COMIC_MIDTONE_DARKENING, COMIC_SPREADS, COMIC_STRENGTHS, COMIC_UPSCALE, KEPUB_CSS,
+    KEPUB_FULLSCREEN_FIXES, KEPUB_HYPHENATION, KEPUB_SMART_PUNCTUATION,
 };
-use parallax_device_kobo::{BackupPolicy, backups_size, delete_all_backups};
+use parallax_device_kobo::{
+    BackupPolicy, FONT_SIZES, LINE_HEIGHTS, MARGINS, backups_size, delete_all_backups,
+};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, EventTarget, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
@@ -27,6 +31,8 @@ pub const READER_WINDOWS: &str = "reader_windows";
 pub const KOBO_SERIES: &str = "kobo_series";
 /// `off` to stop grouping rules running on their own after sends and on connect.
 pub const KOBO_RULES: &str = "kobo_rules";
+/// `off` to leave books sent again at the start rather than where they were.
+pub const KOBO_POSITIONS: &str = "kobo_positions";
 /// `on` to eject the Kobo once books are sent.
 pub const EJECT_AFTER_SEND: &str = "eject_after_send";
 /// Where first-run setup stands: `started` once shown, then `skipped` or
@@ -35,6 +41,12 @@ pub const SETUP: &str = "setup";
 /// Models, one per line, whose "not tested yet" notice was dismissed for
 /// good. Like `setup`, Reset leaves it alone.
 pub const KOBO_NOTICES: &str = "kobo_notices";
+
+/// `on` to show saved searches in the library's filter bar.
+pub const SAVED_SEARCHES_ON: &str = "library_saved_searches";
+/// The saved searches themselves, as JSON the main window reads. Not a
+/// preference, so Reset keeps them.
+pub const SAVED_SEARCHES: &str = "saved_searches";
 
 /// The event main and Settings windows get when a setting changes.
 const CHANGED: &str = "setting-changed";
@@ -47,10 +59,12 @@ enum Allowed {
     Text(usize),
     /// One of these; no value means the default.
     OneOf(&'static [&'static str]),
+    /// A whole number in this range.
+    Integer(i64, i64),
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 24] = [
+const SETTINGS: [(&str, Allowed); 43] = [
     (parallax_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (parallax_core::enhance::METRON_TOKEN, Allowed::Text(256)),
     (
@@ -66,6 +80,11 @@ const SETTINGS: [(&str, Allowed); 24] = [
     (READER_WINDOWS, Allowed::OneOf(&["one"])),
     (KOBO_SERIES, Allowed::OneOf(&["off"])),
     (KOBO_RULES, Allowed::OneOf(&["off"])),
+    (KOBO_POSITIONS, Allowed::OneOf(&["off"])),
+    (
+        parallax_core::firmware::KOBO_FIRMWARE_CHECK,
+        Allowed::OneOf(&["on"]),
+    ),
     (EJECT_AFTER_SEND, Allowed::OneOf(&["on"])),
     (SETUP, Allowed::OneOf(&["started", "skipped", "done"])),
     (KOBO_NOTICES, Allowed::Text(2000)),
@@ -84,10 +103,45 @@ const SETTINGS: [(&str, Allowed); 24] = [
     (COMIC_COLOUR_SEPARATION, Allowed::OneOf(&COMIC_STRENGTHS)),
     (COMIC_COLOUR_CONTRAST, Allowed::OneOf(&["off"])),
     (COMIC_MIDTONE_DARKENING, Allowed::OneOf(&COMIC_STRENGTHS)),
+    (KEPUB_HYPHENATION, Allowed::OneOf(&["on", "off"])),
+    (KEPUB_SMART_PUNCTUATION, Allowed::OneOf(&["on"])),
+    (KEPUB_FULLSCREEN_FIXES, Allowed::OneOf(&["on"])),
+    (KEPUB_CSS, Allowed::Text(4000)),
+    (SAVED_SEARCHES_ON, Allowed::OneOf(&["on"])),
+    (SAVED_SEARCHES, Allowed::Text(20_000)),
+    (parallax_core::save::SAVE_TEMPLATE, Allowed::Text(300)),
+    (parallax_core::save::SAVE_ARCHIVE, Allowed::OneOf(&["on"])),
+    (
+        parallax_core::save::SAVE_COMPRESSION,
+        Allowed::OneOf(&parallax_core::save::SAVE_COMPRESSIONS),
+    ),
+    (parallax_core::watch::WATCH_FOLDER, Allowed::Text(1024)),
+    (
+        parallax_core::watch::WATCH_FOLDER_TRASH,
+        Allowed::OneOf(&["on"]),
+    ),
+    (layout::KOBO_LAYOUT, Allowed::OneOf(&["on"])),
+    (layout::KOBO_LAYOUT_FONT, Allowed::Text(80)),
+    (
+        layout::KOBO_LAYOUT_SIZE,
+        Allowed::Integer(*FONT_SIZES.start(), *FONT_SIZES.end()),
+    ),
+    (
+        layout::KOBO_LAYOUT_LINE_HEIGHT,
+        Allowed::OneOf(&LINE_HEIGHTS),
+    ),
+    (
+        layout::KOBO_LAYOUT_MARGINS,
+        Allowed::Integer(*MARGINS.start(), *MARGINS.end()),
+    ),
+    (
+        layout::KOBO_LAYOUT_ALIGNMENT,
+        Allowed::OneOf(&["left", "justify"]),
+    ),
 ];
 
 /// Settings that are preferences, which Reset puts back. Credentials stay.
-const PREFERENCES: [&str; 18] = [
+const PREFERENCES: [&str; 36] = [
     parallax_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
@@ -95,6 +149,8 @@ const PREFERENCES: [&str; 18] = [
     READER_WINDOWS,
     KOBO_SERIES,
     KOBO_RULES,
+    KOBO_POSITIONS,
+    parallax_core::firmware::KOBO_FIRMWARE_CHECK,
     EJECT_AFTER_SEND,
     crate::updates::AUTO,
     parallax_library::COMICS_KIND,
@@ -106,6 +162,22 @@ const PREFERENCES: [&str; 18] = [
     COMIC_COLOUR_SEPARATION,
     COMIC_COLOUR_CONTRAST,
     COMIC_MIDTONE_DARKENING,
+    KEPUB_HYPHENATION,
+    KEPUB_SMART_PUNCTUATION,
+    KEPUB_FULLSCREEN_FIXES,
+    KEPUB_CSS,
+    parallax_core::watch::WATCH_FOLDER,
+    parallax_core::watch::WATCH_FOLDER_TRASH,
+    SAVED_SEARCHES_ON,
+    parallax_core::save::SAVE_TEMPLATE,
+    parallax_core::save::SAVE_ARCHIVE,
+    parallax_core::save::SAVE_COMPRESSION,
+    layout::KOBO_LAYOUT,
+    layout::KOBO_LAYOUT_FONT,
+    layout::KOBO_LAYOUT_SIZE,
+    layout::KOBO_LAYOUT_LINE_HEIGHT,
+    layout::KOBO_LAYOUT_MARGINS,
+    layout::KOBO_LAYOUT_ALIGNMENT,
 ];
 
 /// `value` trimmed, with empty meaning the default, if `key` may hold it.
@@ -115,10 +187,20 @@ fn checked(key: &str, value: Option<String>) -> CmdResult<Option<String>> {
         .find(|(k, _)| *k == key)
         .ok_or_else(|| format!("unknown setting {key}"))?;
     let value = value.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty());
+    if key == parallax_core::save::SAVE_TEMPLATE
+        && let Some(template) = &value
+    {
+        parallax_core::save::check_template(template)?;
+    }
     match (allowed, &value) {
         (_, None) => Ok(None),
         (Allowed::Text(max), Some(v)) if v.chars().count() <= *max => Ok(value),
         (Allowed::OneOf(values), Some(v)) if values.contains(&v.as_str()) => Ok(value),
+        (Allowed::Integer(min, max), Some(v))
+            if v.parse::<i64>().is_ok_and(|n| (*min..=*max).contains(&n)) =>
+        {
+            Ok(value)
+        }
         _ => Err(format!("{key} can't be set to that")),
     }
 }
@@ -409,11 +491,21 @@ mod tests {
     }
 
     #[test]
+    fn numbers_stay_in_range() {
+        let size = layout::KOBO_LAYOUT_SIZE;
+        assert_eq!(checked(size, Some("24".into())), Ok(Some("24".into())));
+        assert!(checked(size, Some("9".into())).is_err());
+        assert!(checked(size, Some("big".into())).is_err());
+        assert!(checked(layout::KOBO_LAYOUT_MARGINS, Some("17".into())).is_err());
+    }
+
+    #[test]
     fn setup_survives_reset() {
         assert_eq!(checked(SETUP, Some("done".into())), Ok(Some("done".into())));
         assert!(checked(SETUP, Some("later".into())).is_err());
         assert!(!PREFERENCES.contains(&SETUP));
         assert!(!PREFERENCES.contains(&KOBO_NOTICES));
+        assert!(!PREFERENCES.contains(&SAVED_SEARCHES));
     }
 
     #[test]

@@ -34,6 +34,7 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
   ask: vi.fn(),
   message: vi.fn(),
   open: vi.fn(),
+  save: vi.fn(),
 }));
 
 const device: DeviceInfo = {
@@ -615,6 +616,7 @@ describe("library toolbar", () => {
       "Import from calibre…",
       "Import from Goodreads…",
       "Tidy genres…",
+      "Save to disk…",
       "Find metadata…",
     ]);
     await act(async () => {

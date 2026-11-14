@@ -40,16 +40,64 @@ pub trait Converter {
 /// Environment variable that overrides where kepubify is found.
 pub const KEPUBIFY_ENV: &str = "PARALLAX_KEPUBIFY";
 
+/// Changes kepubify makes to reflowable books, as calibre's KoboTouch driver
+/// and kepubify offer them. The default changes nothing beyond the KEPUB
+/// conversion itself. Fixed-layout books (prepared comics) ignore these.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct KepubOptions {
+    /// `Some(true)` forces hyphenation on, `Some(false)` off; `None` leaves
+    /// it to the book and the Kobo.
+    pub hyphenate: Option<bool>,
+    /// Curly quotes, dashes and ellipses in place of straight ones.
+    pub smarten_punctuation: bool,
+    /// Works around firmware bugs when reading in full screen.
+    pub fullscreen_fixes: bool,
+    /// Extra CSS added to every book, like calibre's `kobo_extra.css`.
+    pub css: Option<String>,
+}
+
+impl KepubOptions {
+    /// The kepubify arguments these options add.
+    pub fn args(&self) -> Vec<String> {
+        let mut args = Vec::new();
+        match self.hyphenate {
+            Some(true) => args.push("--hyphenate".to_owned()),
+            Some(false) => args.push("--no-hyphenate".to_owned()),
+            None => {}
+        }
+        if self.smarten_punctuation {
+            args.push("--smarten-punctuation".to_owned());
+        }
+        if self.fullscreen_fixes {
+            args.push("--fullscreen-reading-fixes".to_owned());
+        }
+        if let Some(css) = self.css.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
+            args.push("--css".to_owned());
+            args.push(css.to_owned());
+        }
+        args
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Kepubify {
     binary: PathBuf,
+    options: KepubOptions,
 }
 
 impl Kepubify {
     pub fn new(binary: impl Into<PathBuf>) -> Self {
         Self {
             binary: binary.into(),
+            options: KepubOptions::default(),
         }
+    }
+
+    /// This converter with `options` applied to reflowable books.
+    #[must_use]
+    pub fn with_options(mut self, options: KepubOptions) -> Self {
+        self.options = options;
+        self
     }
 
     /// Finds kepubify: `$PARALLAX_KEPUBIFY`, then next to the running executable
@@ -93,6 +141,8 @@ impl Kepubify {
         let mut command = Command::new(&self.binary);
         if fixed_layout {
             command.arg("--no-add-dummy-titlepage");
+        } else {
+            command.args(self.options.args());
         }
         let out = command
             .arg("--output")
@@ -152,9 +202,14 @@ impl ToKepub {
 
     /// The real converters: kepubify, and boko in a child of this executable.
     pub fn locate() -> Result<Self> {
+        Self::locate_with(KepubOptions::default())
+    }
+
+    /// [`Self::locate`], with kepubify making `options`' changes.
+    pub fn locate_with(options: KepubOptions) -> Result<Self> {
         Ok(Self::new(
             amazon::ChildProcess::current()?,
-            Kepubify::locate()?,
+            Kepubify::locate()?.with_options(options),
         ))
     }
 }
@@ -184,5 +239,41 @@ fn target_triple() -> &'static str {
         ("x86_64", "windows") => "x86_64-pc-windows-msvc",
         ("aarch64", "windows") => "aarch64-pc-windows-msvc",
         _ => "unknown",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_options_add_no_arguments() {
+        assert!(KepubOptions::default().args().is_empty());
+    }
+
+    #[test]
+    fn options_become_kepubify_arguments() {
+        let options = KepubOptions {
+            hyphenate: Some(false),
+            smarten_punctuation: true,
+            fullscreen_fixes: true,
+            css: Some("  p { text-indent: 1em }  ".to_owned()),
+        };
+        assert_eq!(
+            options.args(),
+            [
+                "--no-hyphenate",
+                "--smarten-punctuation",
+                "--fullscreen-reading-fixes",
+                "--css",
+                "p { text-indent: 1em }",
+            ]
+        );
+        let blank = KepubOptions {
+            hyphenate: Some(true),
+            css: Some("   ".to_owned()),
+            ..KepubOptions::default()
+        };
+        assert_eq!(blank.args(), ["--hyphenate"]);
     }
 }

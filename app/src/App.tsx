@@ -11,13 +11,23 @@ import {
   Trash2,
 } from "lucide-react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { ask, message, open } from "@tauri-apps/plugin-dialog";
+import {
+  ask,
+  message,
+  open,
+  save as saveDialog,
+} from "@tauri-apps/plugin-dialog";
 import {
   booksOnDevice,
   changeCollections,
   coverSrc,
   comicTransferEstimate,
   onSettingChange,
+  onWatchFolderFound,
+  checkKoboFirmware,
+  type FirmwareUpdate,
+  saveBooks,
+  watchFolderAdded,
   deviceBooks,
   dismissDuplicates,
   ejectDevice,
@@ -105,6 +115,7 @@ import {
 import { ActionMenu } from "./components/ActionMenu";
 import { EditPanel } from "./components/EditPanel";
 import { LibraryFilters } from "./components/LibraryFilters";
+import { SavedSearches } from "./components/SavedSearches";
 import { usePanelBook } from "./panelBook";
 import { UpscaleReview } from "./components/UpscaleReview";
 import {
@@ -164,6 +175,20 @@ const NO_KOBO_CHANGES = new Map<number, KoboChange>();
 const NO_DEVICE_COPIES = new Map<number, OnDevice>();
 
 const none = new Set<number>();
+
+/** "a", "a and b", "a, b and c". */
+function joinList(parts: string[]) {
+  return parts.length < 2
+    ? (parts[0] ?? "")
+    : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+function firmwareMessage(update: FirmwareUpdate) {
+  const caveat = update.beyond_support
+    ? " Parallax hasn't been tested with it yet, so it won't change books on your Kobo after you update."
+    : "";
+  return `Kobo software ${update.available} is available for your Kobo, which has ${update.current}. To install it, connect your Kobo to Wi-Fi and sync.${caveat}`;
+}
 
 export default function App() {
   const [stored, setBooks] = useState<Book[]>([]);
@@ -238,9 +263,17 @@ export default function App() {
   const [batchTransfer, setBatchTransfer] =
     useState<BatchTransferProgress | null>(null);
   const [busy, setBusy] = useState<
-    "importing" | "removing" | "sending" | "updating" | "ejecting" | null
+    | "importing"
+    | "removing"
+    | "sending"
+    | "updating"
+    | "ejecting"
+    | "saving"
+    | null
   >(null);
   const [dragging, setDragging] = useState(false);
+  /** Kobos asked about new software this session, by mount. */
+  const firmwareAsked = useRef(new Set<string>());
   const [duplicates, setDuplicates] = useState<Promise<ReviewGroup[]> | null>(
     null,
   );
@@ -363,9 +396,22 @@ export default function App() {
       : Promise.resolve([]);
     shelves.then((list) => alive && setCollections(list));
     if (device) {
-      reconcileDevice(device.mount)
-        .then(({ series, grouped }) => {
+      const mount = device.mount;
+      const firmware = firmwareAsked.current.has(mount)
+        ? Promise.resolve(null)
+        : checkKoboFirmware(mount).catch(() => null);
+      firmwareAsked.current.add(mount);
+      reconcileDevice(mount)
+        .then(async ({ series, grouped, positions, layout }) => {
           const parts = [];
+          if (layout)
+            parts.push(
+              `set your reading layout on ${layout} ${layout === 1 ? "book" : "books"}`,
+            );
+          if (positions)
+            parts.push(
+              `put back your place in ${positions} ${positions === 1 ? "book" : "books"} you sent again`,
+            );
           if (series)
             parts.push(
               `added series details to ${series} ${series === 1 ? "book" : "books"}`,
@@ -374,17 +420,22 @@ export default function App() {
             parts.push(
               `filed ${grouped} ${grouped === 1 ? "book" : "books"} into collections`,
             );
-          if (alive && parts.length) {
-            setDeviceRevision((revision) => revision + 1);
-            listCollections(device.mount)
-              .then((list) => alive && setCollections(list))
-              .catch(() => {});
-            const text = parts.join(" and ");
-            setNotice({
-              kind: "info",
-              text: `Parallax ${text} on your Kobo. Eject to see the changes.`,
-            });
+          const messages = [];
+          if (parts.length) {
+            if (alive) {
+              setDeviceRevision((revision) => revision + 1);
+              listCollections(mount)
+                .then((list) => alive && setCollections(list))
+                .catch(() => {});
+            }
+            messages.push(
+              `Parallax ${joinList(parts)} on your Kobo. Eject to see the changes.`,
+            );
           }
+          const update = await firmware;
+          if (update) messages.push(firmwareMessage(update));
+          if (alive && messages.length)
+            setNotice({ kind: "info", text: messages.join(" ") });
         })
         .catch((e) => {
           if (alive) {
@@ -658,6 +709,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
         setNotice({ kind: "info", text: summarizeImport(results) });
         await refresh();
         void reviewAdded(addedIds(results), failedFiles(results));
+        return results;
       } catch (e) {
         setNotice({ kind: "error", text: String(e) });
       } finally {
@@ -666,6 +718,38 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     },
     [refresh, reviewAdded, runBookOperation],
   );
+
+  // Books from the watched folder are added like dropped ones, one batch at
+  // a time; ones that arrive mid-import wait for it to finish.
+  const watched = useRef<{ waiting: string[]; adding: boolean }>({
+    waiting: [],
+    adding: false,
+  });
+  const addWatched = useCallback(async () => {
+    const queue = watched.current;
+    if (queue.adding || queue.waiting.length === 0) return;
+    queue.adding = true;
+    const paths = queue.waiting.splice(0);
+    try {
+      const results = await doImport(paths);
+      const done = (results ?? [])
+        .filter((r) => "Ok" in r.outcome)
+        .map((r) => r.path);
+      if (done.length) await watchFolderAdded(done).catch(console.error);
+    } finally {
+      queue.adding = false;
+      if (queue.waiting.length) void addWatched();
+    }
+  }, [doImport]);
+  useEffect(() => {
+    const unlisten = onWatchFolderFound((paths) => {
+      watched.current.waiting.push(...paths);
+      void addWatched();
+    });
+    return () => {
+      void unlisten.then((f) => f());
+    };
+  }, [addWatched]);
 
   useEffect(() => {
     const unlisten = getCurrentWebview().onDragDropEvent((event) => {
@@ -839,6 +923,50 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     });
     if (picked) doImport(Array.isArray(picked) ? picked : [picked]);
   }, [doImport]);
+
+  /** Saves the selected books, or every book shown, to a folder or a ZIP
+   * archive, as Settings › Library says. */
+  const saveToDisk = async () => {
+    const ids = selected.size ? [...selected] : visible.map((b) => b.id);
+    if (ids.length === 0) return;
+    const archive =
+      (await getSetting("save_archive").catch(() => null)) === "on";
+    const destination = archive
+      ? await saveDialog({
+          title: `Save ${ids.length === 1 ? "1 book" : `${ids.length} books`} as an archive`,
+          defaultPath: "Parallax Books.zip",
+          filters: [{ name: "ZIP archive", extensions: ["zip"] }],
+        })
+      : await open({
+          directory: true,
+          title: `Save ${ids.length === 1 ? "1 book" : `${ids.length} books`} to a folder`,
+        });
+    if (typeof destination !== "string") return;
+    setNotice(null);
+    try {
+      const saved = await runBookOperation("Saving", (report) => {
+        setBusy("saving");
+        return saveBooks(ids, destination, report);
+      });
+      const failed = saved.filter((s) => "Err" in s.result);
+      const done = saved.length - failed.length;
+      setNotice(
+        failed.length
+          ? {
+              kind: "error",
+              text: `Saved ${done} of ${saved.length}. ${failed[0].title}: ${"Err" in failed[0].result ? failed[0].result.Err : ""}`,
+            }
+          : {
+              kind: "info",
+              text: `Saved ${done === 1 ? "1 book" : `${done} books`} ${archive ? "to the archive" : "to the folder"}.`,
+            },
+      );
+    } catch (e) {
+      setNotice({ kind: "error", text: String(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const chooseComicFolder = async () => {
     const folder = await open({
@@ -1137,6 +1265,10 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     "file.add": { run: () => void chooseFiles() },
     "file.calibre": { run: () => setFromCalibre(true) },
     "file.goodreads": { run: () => setFromGoodreads(true) },
+    "file.save": {
+      run: fromLibrary(() => void saveToDisk()),
+      enabled: books.length > 0 && busy === null,
+    },
     "edit.find": {
       run: () => {
         searchRef.current?.focus();
@@ -1430,6 +1562,13 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                         },
                         {
                           label: selected.size
+                            ? `Save ${selected.size} to disk…`
+                            : "Save to disk…",
+                          onPick: () => void saveToDisk(),
+                          disabled: busy !== null || books.length === 0,
+                        },
+                        {
+                          label: selected.size
                             ? `Find metadata for ${selected.size}…`
                             : "Find metadata…",
                           onPick: enhance,
@@ -1461,6 +1600,16 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                     facets={facets}
                     connected={device !== null}
                     onChange={changeFilter}
+                    leading={
+                      <SavedSearches
+                        query={query}
+                        filter={shownFilter}
+                        onApply={(saved) => {
+                          setQuery(saved.query);
+                          changeFilter(saved.filter);
+                        }}
+                      />
+                    }
                   />
                 </section>
               )}

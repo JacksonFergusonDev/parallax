@@ -586,6 +586,22 @@ export const importBooks = (
     { paths, ...(comicFolder ? { comicFolder } : {}), ...progressArgs(report) },
     ["library", "plans"],
   );
+export interface Saved {
+  book_id: number;
+  title: string;
+  result: { Ok: string } | { Err: string };
+}
+/** Saves books to a folder, or a ZIP archive when Settings says so. */
+export const saveBooks = (
+  ids: number[],
+  destination: string,
+  report?: ReportBookProgress,
+) =>
+  invoke<Saved[]>("library_save", {
+    ids,
+    destination,
+    ...progressArgs(report),
+  });
 export const setComicKind = (
   id: number,
   kind: Book["kind"],
@@ -976,6 +992,8 @@ export type SettingKey =
   | "reader_windows"
   | "kobo_series"
   | "kobo_rules"
+  | "kobo_positions"
+  | "kobo_firmware_check"
   | "eject_after_send"
   | "setup"
   | "kobo_notices"
@@ -990,7 +1008,24 @@ export type SettingKey =
   | "comic_dither"
   | "comic_colour_separation"
   | "comic_colour_contrast"
-  | "comic_midtone_darkening";
+  | "comic_midtone_darkening"
+  | "kepub_hyphenation"
+  | "kepub_smart_punctuation"
+  | "kepub_fullscreen_fixes"
+  | "kepub_css"
+  | "library_saved_searches"
+  | "saved_searches"
+  | "save_template"
+  | "save_archive"
+  | "save_compression"
+  | "watch_folder"
+  | "watch_folder_trash"
+  | "kobo_layout"
+  | "kobo_layout_font"
+  | "kobo_layout_size"
+  | "kobo_layout_line_height"
+  | "kobo_layout_margins"
+  | "kobo_layout_alignment";
 
 /** Every comic page setting; "Reset to recommended" clears them together.
  * Matches `COMIC_PAGE_SETTINGS` in crates/core/src/send.rs. */
@@ -1024,6 +1059,16 @@ export const onSettingChange = (
   handler: (change: SettingChange) => void,
 ): Promise<UnlistenFn> =>
   listen<SettingChange>("setting-changed", (e) => handler(e.payload));
+
+/** New books found in the watched folder (src-tauri/src/watch.rs). */
+export const onWatchFolderFound = (
+  handler: (paths: string[]) => void,
+): Promise<UnlistenFn> =>
+  listen<string[]>("watch-folder-found", (e) => handler(e.payload));
+/** Tells the app these watched-folder files are in the library, so it can
+ * move them to the Trash if Settings says to. */
+export const watchFolderAdded = (paths: string[]) =>
+  invoke<void>("watch_folder_added", { paths });
 
 /** A newer Parallax, found by the update check (src-tauri/src/updates.rs). */
 export interface UpdateInfo {
@@ -1170,6 +1215,29 @@ export const setReadingStatus = (
     { mount, contentIds, status, resetPosition, resetTime },
     [deviceTag(mount), "library"],
   );
+/** Newer Kobo software than a Kobo has (crates/core/src/firmware.rs). */
+export interface FirmwareUpdate {
+  current: string;
+  available: string;
+  release_notes: string | null;
+  beyond_support: boolean;
+}
+/** Asks Kobo about newer software, if Settings allows it. */
+export const checkKoboFirmware = (mount: string) =>
+  invoke<FirmwareUpdate | null>("kobo_firmware_check", { mount });
+/** Sets the reading layout from Settings › Kobo on these books. */
+export const setReadingLayout = (mount: string, contentIds: string[]) =>
+  write<number>("set_reading_layout", { mount, contentIds }, [
+    deviceTag(mount),
+  ]);
+/** The settings a reading layout is made of; any set means there is one. */
+export const KOBO_LAYOUT_PARTS = [
+  "kobo_layout_font",
+  "kobo_layout_size",
+  "kobo_layout_line_height",
+  "kobo_layout_margins",
+  "kobo_layout_alignment",
+] as const satisfies readonly SettingKey[];
 export const libraryDuplicates = () =>
   read<LibraryDuplicateGroup[]>("library_duplicates", {}, ["library"]);
 export const deviceDuplicates = (mount: string) =>
@@ -1193,10 +1261,13 @@ export async function reconcileDevice(mount: string) {
     const result = await invoke<{
       series: number;
       grouped: number;
+      positions: number;
+      layout: number;
       reading: number;
       annotations: number;
     }>("reconcile_device", { mount });
-    if (result.series || result.grouped) readCache.invalidate(deviceTag(mount));
+    if (result.series || result.grouped || result.positions || result.layout)
+      readCache.invalidate(deviceTag(mount));
     if (result.reading || result.annotations) readCache.invalidate("library");
     return result;
   } catch (e) {

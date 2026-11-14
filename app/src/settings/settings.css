@@ -134,6 +134,22 @@ body {
   color: var(--fg);
 }
 
+.settings-control textarea {
+  width: 100%;
+  max-width: 400px;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: var(--text-small);
+  resize: vertical;
+}
+
+.settings-control input.settings-number {
+  width: 200px;
+}
+
 .settings-choices {
   display: grid;
   gap: var(--space-3);
@@ -197,6 +213,16 @@ body {
   margin: 0;
   padding-top: var(--space-2);
   font-variant-numeric: tabular-nums;
+}
+
+.settings-inline input.settings-template {
+  width: 320px;
+  max-width: 100%;
+}
+
+.settings-path {
+  max-width: 400px;
+  overflow-wrap: anywhere;
 }
 
 .settings-control .segmented {

@@ -1,5 +1,5 @@
 import { useId, useState, type ReactNode } from "react";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import {
   COMIC_PAGE_SETTINGS,
   resetSettings,
@@ -255,6 +255,155 @@ function Credential({
   );
 }
 
+/** A folder whose new books are added on their own, like calibre's
+ * auto-add folder. Off until you choose one. */
+function WatchFolder(props: PaneProps) {
+  const { values, set } = props;
+  const folder = values.watch_folder;
+  const choose = async () => {
+    const picked = await open({
+      directory: true,
+      title: "Add books from this folder",
+      defaultPath: folder ?? undefined,
+    });
+    if (typeof picked === "string") set("watch_folder", picked);
+  };
+  return (
+    <Row
+      label="Add automatically"
+      hint={
+        folder
+          ? "Books saved here are added to your library while Parallax is open, once they've finished downloading. Subfolders are left alone."
+          : "Choose a folder, such as Downloads, and books saved in it are added to your library while Parallax is open."
+      }
+    >
+      {folder && <p className="settings-value settings-path">{folder}</p>}
+      <div className="settings-inline">
+        <button onClick={() => void choose()}>
+          {folder ? "Change folder…" : "Choose folder…"}
+        </button>
+        {folder && (
+          <button onClick={() => set("watch_folder", null)}>
+            Stop watching
+          </button>
+        )}
+      </div>
+      {folder && (
+        <Check
+          {...props}
+          name="watch_folder_trash"
+          defaultOn={false}
+          hint="Once a book is in your library, its file in the folder moves to the Trash. Your library keeps its own copy."
+        >
+          Move added files to the Trash
+        </Check>
+      )}
+    </Row>
+  );
+}
+
+/** Matches DEFAULT_TEMPLATE in crates/core/src/save.rs. */
+const DEFAULT_TEMPLATE = "{author}/[{series} {series_index} - ]{title}";
+
+/** How Save to Disk names books, and whether it makes a ZIP archive. */
+function SavingSection(props: PaneProps) {
+  const { values, set } = props;
+  const template = useId();
+  const templateHint = useId();
+  const compression = useId();
+  const compressionHint = useId();
+  const archive = values.save_archive === "on";
+  return (
+    <>
+      <h2 className="settings-section">Saving to disk</h2>
+      <p className="settings-intro">
+        Save to Disk in the File menu and Library tools saves the selected
+        books, or every book shown, with your edits and covers.
+      </p>
+      <Row label="File names" labelFor={template}>
+        <TemplateSetting {...props} id={template} describedBy={templateHint} />
+        <p className="hint" id={templateHint}>
+          Use {"{title}"}, {"{author}"}, {"{authors}"}, {"{series}"},{" "}
+          {"{series_index}"}, {"{publisher}"}, {"{year}"}, {"{language}"} and{" "}
+          {"{id}"}. A / starts a folder. Text in [ ] is left out when a field in
+          it is empty.
+        </p>
+      </Row>
+      <Row label="Archive">
+        <Check
+          {...props}
+          name="save_archive"
+          defaultOn={false}
+          hint="Saves into one ZIP file instead of a folder, which is easier to keep as a backup or copy elsewhere."
+        >
+          Save as a compressed archive
+        </Check>
+      </Row>
+      {archive && (
+        <Row label="Compression" labelFor={compression}>
+          <select
+            id={compression}
+            aria-describedby={compressionHint}
+            value={values.save_compression ?? "normal"}
+            onChange={(e) =>
+              set(
+                "save_compression",
+                e.target.value === "normal" ? null : e.target.value,
+              )
+            }
+          >
+            <option value="store">None (quickest)</option>
+            <option value="fast">Fast</option>
+            <option value="normal">Normal (recommended)</option>
+            <option value="best">Smallest</option>
+          </select>
+          <p className="hint" id={compressionHint}>
+            Books are already compressed inside, so the archive is only a few
+            percent smaller at any setting. Normal opens anywhere and saves that
+            little without taking long.
+          </p>
+        </Row>
+      )}
+    </>
+  );
+}
+
+/** The file name template, checked by the app when you leave the field. */
+function TemplateSetting({
+  values,
+  set,
+  id,
+  describedBy,
+}: PaneProps & { id: string; describedBy: string }) {
+  const saved = values.save_template ?? DEFAULT_TEMPLATE;
+  const [draft, setDraft] = useDraft(saved);
+  return (
+    <div className="settings-inline">
+      <input
+        id={id}
+        className="settings-template"
+        aria-describedby={describedBy}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const next = draft.trim();
+          if (next === saved) return;
+          set(
+            "save_template",
+            !next || next === DEFAULT_TEMPLATE ? null : next,
+          );
+        }}
+      />
+      {saved !== DEFAULT_TEMPLATE && (
+        <button onClick={() => set("save_template", null)}>Reset</button>
+      )}
+    </div>
+  );
+}
+
 export function LibraryPane(props: PaneProps) {
   return (
     <>
@@ -267,6 +416,17 @@ export function LibraryPane(props: PaneProps) {
           Review books when added
         </Check>
       </Row>
+      <Row label="Searching">
+        <Check
+          {...props}
+          name="library_saved_searches"
+          defaultOn={false}
+          hint="Keep a search and its filters under a name, such as Unread sci-fi, and bring it back from the filter bar. Turning this off keeps the ones you've saved."
+        >
+          Show saved searches
+        </Check>
+      </Row>
+      <WatchFolder {...props} />
       <Row
         label="Google Books"
         hint="Optional. A free API key lets Look up details find genres for more books."
@@ -285,6 +445,310 @@ export function LibraryPane(props: PaneProps) {
           </button>
         </div>
       </Row>
+      <SavingSection {...props} />
+    </>
+  );
+}
+
+/** What you're typing in a field saved when you leave it, starting again
+ * from the saved value whenever that changes, such as from another window. */
+function useDraft(saved: string) {
+  const [draft, setDraft] = useState(saved);
+  const [base, setBase] = useState(saved);
+  if (saved !== base) {
+    setBase(saved);
+    setDraft(saved);
+  }
+  return [draft, setDraft] as const;
+}
+
+/** Multi-line text saved when you leave the field, not on every key. */
+function TextSetting({
+  values,
+  set,
+  name,
+  id,
+  label,
+  placeholder,
+  describedBy,
+}: PaneProps & {
+  name: SettingKey;
+  id: string;
+  label?: string;
+  placeholder?: string;
+  describedBy?: string;
+}) {
+  const saved = values[name] ?? "";
+  const [draft, setDraft] = useDraft(saved);
+  return (
+    <textarea
+      id={id}
+      aria-label={label}
+      aria-describedby={describedBy}
+      rows={4}
+      spellCheck={false}
+      autoCapitalize="off"
+      autoCorrect="off"
+      placeholder={placeholder}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft.trim() !== saved.trim()) set(name, draft.trim() || null);
+      }}
+    />
+  );
+}
+
+/** How kepubify changes reflowable books on the way to the Kobo. All off
+ * by default, so books arrive as their publisher made them. */
+function SendingSection(props: PaneProps) {
+  const hyphenation = useId();
+  const css = useId();
+  const cssHint = useId();
+  return (
+    <>
+      <h2 className="settings-section">Sending books</h2>
+      <p className="settings-intro">
+        These change books you send from now on. To change a book already on
+        your Kobo, choose Update on Kobo.
+      </p>
+      <Row
+        label="Hyphenation"
+        labelFor={hyphenation}
+        hint="Hyphenating long words evens out the spacing in justified text."
+      >
+        <select
+          id={hyphenation}
+          value={props.values.kepub_hyphenation ?? "book"}
+          onChange={(e) =>
+            props.set(
+              "kepub_hyphenation",
+              e.target.value === "book" ? null : e.target.value,
+            )
+          }
+        >
+          <option value="book">As the book sets it</option>
+          <option value="on">Always hyphenate</option>
+          <option value="off">Never hyphenate</option>
+        </select>
+      </Row>
+      <Row label="Text">
+        <Check
+          {...props}
+          name="kepub_smart_punctuation"
+          defaultOn={false}
+          hint="Straight quotes and double hyphens become curly quotes and dashes."
+        >
+          Smarten punctuation
+        </Check>
+        <Check
+          {...props}
+          name="kepub_fullscreen_fixes"
+          defaultOn={false}
+          hint="Works around Kobo firmware bugs that cut off or misplace text when you read in full screen."
+        >
+          Add full-screen reading fixes
+        </Check>
+      </Row>
+      <Row label="Extra CSS" labelFor={css}>
+        <TextSetting
+          {...props}
+          name="kepub_css"
+          id={css}
+          describedBy={cssHint}
+          placeholder="p { text-indent: 1.5em; }"
+        />
+        <p className="hint" id={cssHint}>
+          Added to every book you send, like calibre&rsquo;s kobo_extra.css.
+          Leave it empty to use each book&rsquo;s own styles.
+        </p>
+      </Row>
+    </>
+  );
+}
+
+/** Fonts every current Kobo has built in. Nickel stores the name as shown. */
+const KOBO_FONTS = [
+  "Amasis",
+  "Avenir Next",
+  "Caecilia",
+  "Georgia",
+  "Gill Sans",
+  "Kobo Nickel",
+  "Malabar",
+  "Optima",
+  "Rakuten Sans",
+  "Rakuten Serif",
+];
+/** Matches LINE_HEIGHTS in crates/device-kobo/src/layout.rs. */
+const LINE_HEIGHTS = [
+  "1.0",
+  "1.05",
+  "1.07",
+  "1.1",
+  "1.2",
+  "1.35",
+  "1.5",
+  "1.7",
+  "1.8",
+  "2.0",
+  "2.2",
+  "2.4",
+  "2.6",
+  "2.8",
+  "3.0",
+];
+
+/** A whole number saved when you leave the field; empty is the default. */
+function NumberSetting({
+  values,
+  set,
+  name,
+  id,
+  min,
+  max,
+  placeholder,
+}: PaneProps & {
+  name: SettingKey;
+  id: string;
+  min: number;
+  max: number;
+  placeholder: string;
+}) {
+  const saved = values[name] ?? "";
+  const [draft, setDraft] = useDraft(saved);
+  const commit = () => {
+    const text = draft.trim();
+    if (!text) {
+      if (saved) set(name, null);
+      return;
+    }
+    const n = Math.round(Number(text));
+    if (!Number.isFinite(n)) {
+      setDraft(saved);
+      return;
+    }
+    const clamped = String(Math.min(max, Math.max(min, n)));
+    setDraft(clamped);
+    if (clamped !== saved) set(name, clamped);
+  };
+  return (
+    <input
+      id={id}
+      type="number"
+      inputMode="numeric"
+      className="settings-number"
+      min={min}
+      max={max}
+      step={1}
+      placeholder={placeholder}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+      }}
+    />
+  );
+}
+
+/** The font and layout Parallax sets on books on the Kobo, as Kobo
+ * Utilities does. Off by default: most people set these on the Kobo. */
+function LayoutSection(props: PaneProps) {
+  const { values, set } = props;
+  const font = useId();
+  const size = useId();
+  const spacing = useId();
+  const margins = useId();
+  const alignment = useId();
+  const fonts =
+    values.kobo_layout_font && !KOBO_FONTS.includes(values.kobo_layout_font)
+      ? [...KOBO_FONTS, values.kobo_layout_font]
+      : KOBO_FONTS;
+  const pick = (key: SettingKey) => (e: React.ChangeEvent<HTMLSelectElement>) =>
+    set(key, e.target.value || null);
+  return (
+    <>
+      <h2 className="settings-section">Reading layout</h2>
+      <p className="settings-intro">
+        A font and layout to set on books, so they open the way you like without
+        adjusting each one on your Kobo. Anything left as the Kobo sets it is
+        unchanged. Select books in On Kobo and choose Set layout, or have it set
+        for you below.
+      </p>
+      <Row label="Font" labelFor={font}>
+        <select
+          id={font}
+          value={values.kobo_layout_font ?? ""}
+          onChange={pick("kobo_layout_font")}
+        >
+          <option value="">As the Kobo sets it</option>
+          {fonts.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </Row>
+      <Row
+        label="Font size"
+        labelFor={size}
+        hint="The number your Kobo shows for font size, from 10 to 60."
+      >
+        <NumberSetting
+          {...props}
+          name="kobo_layout_size"
+          id={size}
+          min={10}
+          max={60}
+          placeholder="As the Kobo sets it"
+        />
+      </Row>
+      <Row label="Line spacing" labelFor={spacing}>
+        <select
+          id={spacing}
+          value={values.kobo_layout_line_height ?? ""}
+          onChange={pick("kobo_layout_line_height")}
+        >
+          <option value="">As the Kobo sets it</option>
+          {LINE_HEIGHTS.map((h) => (
+            <option key={h} value={h}>
+              {h}
+            </option>
+          ))}
+        </select>
+      </Row>
+      <Row label="Margins" labelFor={margins} hint="From 0 to 16, both sides.">
+        <NumberSetting
+          {...props}
+          name="kobo_layout_margins"
+          id={margins}
+          min={0}
+          max={16}
+          placeholder="As the Kobo sets it"
+        />
+      </Row>
+      <Row label="Alignment" labelFor={alignment}>
+        <select
+          id={alignment}
+          value={values.kobo_layout_alignment ?? ""}
+          onChange={pick("kobo_layout_alignment")}
+        >
+          <option value="">As the book sets it</option>
+          <option value="left">Left</option>
+          <option value="justify">Justified</option>
+        </select>
+      </Row>
+      <Row label="Automatically">
+        <Check
+          {...props}
+          name="kobo_layout"
+          defaultOn={false}
+          hint="When a Kobo connects, books from your library that have no font settings of their own get this layout. Books you've adjusted on the Kobo keep theirs."
+        >
+          Set this layout on new books
+        </Check>
+      </Row>
     </>
   );
 }
@@ -299,6 +763,21 @@ export function KoboPane(props: PaneProps) {
           hint="The Kobo ignores series in books copied to it, so Parallax adds them once it has imported them."
         >
           Add series to newly imported books
+        </Check>
+        <Check
+          {...props}
+          name="kobo_positions"
+          hint="When you send a book again, or to another Kobo, it opens where you last were instead of at the start. Your place is saved each time a Kobo connects."
+        >
+          Put back your place in books sent again
+        </Check>
+        <Check
+          {...props}
+          name="kobo_firmware_check"
+          defaultOn={false}
+          hint="Asks Kobo once each time you connect. Kobo is told your model and software version, not your serial number."
+        >
+          Check for new Kobo software
         </Check>
       </Row>
       <Row label="Collections">
@@ -320,6 +799,8 @@ export function KoboPane(props: PaneProps) {
           Eject the Kobo
         </Check>
       </Row>
+      <SendingSection {...props} />
+      <LayoutSection {...props} />
     </>
   );
 }

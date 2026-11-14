@@ -1091,3 +1091,48 @@ fn refused_changes_are_not_logged() {
     writer.close().unwrap();
     assert!(kobo.parallax_state().log.is_empty());
 }
+
+#[test]
+fn sets_reading_layout_on_imported_books_only() {
+    use parallax_device_kobo::{Alignment, Layout, apply_layout};
+    let dir = tempfile::tempdir().unwrap();
+    let (kobo, db) = fake_kobo(dir.path());
+    assert!(
+        kobo.open_db()
+            .unwrap()
+            .books_with_layout()
+            .unwrap()
+            .is_empty()
+    );
+    let layout = Layout {
+        font_family: Some("Georgia".into()),
+        font_size: Some(24),
+        line_height: Some(1.5),
+        margins: Some(4),
+        alignment: Some(Alignment::Left),
+    };
+    let mut writer = kobo.open_writer(&dir.path().join("backups")).unwrap();
+    let changed = apply_layout(
+        &mut writer,
+        &[cid(BOOK), cid("KEpub/Not imported.kepub.epub")],
+        &layout,
+    )
+    .unwrap();
+    writer.close().unwrap();
+    assert_eq!(changed, 1);
+    assert_eq!(
+        count(
+            &db,
+            &format!(
+                "SELECT count(*) FROM content_settings WHERE ContentID = '{}' AND ReadingFontFamily = 'Georgia' AND ReadingFontSize = 24 AND ReadingLineHeight = 1.5 AND ReadingLeftMargin = 4 AND ReadingRightMargin = 4 AND ReadingAlignment = 'Left'",
+                cid(BOOK)
+            )
+        ),
+        1
+    );
+    assert_eq!(count(&db, "SELECT count(*) FROM content_settings"), 2);
+    assert_eq!(
+        kobo.open_db().unwrap().books_with_layout().unwrap(),
+        [cid(BOOK)].into_iter().collect()
+    );
+}

@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import { DEFAULT_SETTINGS } from "../reader/backend";
 import { deletesNow, formatBytes } from "./BackupsPane";
 import { SettingsApp } from "./SettingsApp";
@@ -16,7 +16,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(async () => () => {}),
 }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn(), open: vi.fn() }));
 
 describe("backup sizes", () => {
   it("reads like Finder", () => {
@@ -169,6 +169,62 @@ describe("Settings window", () => {
       key: "eject_after_send",
       value: "on",
     });
+  });
+
+  it("leaves books as published until you choose otherwise", async () => {
+    await tab("Kobo");
+    const hyphenation = select("Hyphenation");
+    expect(hyphenation.value).toBe("book");
+    await change(hyphenation, "off");
+    expect(calls("setting_set").at(-1)?.[1]).toEqual({
+      key: "kepub_hyphenation",
+      value: "off",
+    });
+    const punctuation = labelled("Smarten punctuation");
+    expect(punctuation.checked).toBe(false);
+    await click(punctuation);
+    expect(calls("setting_set").at(-1)?.[1]).toEqual({
+      key: "kepub_smart_punctuation",
+      value: "on",
+    });
+    expect(labelled("Add full-screen reading fixes").checked).toBe(false);
+  });
+
+  it("keeps a reading layout that is off until you choose it", async () => {
+    await tab("Kobo");
+    expect(labelled("Set this layout on new books").checked).toBe(false);
+    const font = select("Font");
+    expect(font.value).toBe("");
+    await change(font, "Georgia");
+    expect(calls("setting_set").at(-1)?.[1]).toEqual({
+      key: "kobo_layout_font",
+      value: "Georgia",
+    });
+  });
+
+  it("watches a folder only once you choose one", async () => {
+    await tab("Library");
+    expect(host.textContent).not.toContain("Move added files to the Trash");
+    vi.mocked(open).mockResolvedValueOnce("/Users/me/Downloads");
+    await click(button("Choose folder…"));
+    expect(calls("setting_set").at(-1)?.[1]).toEqual({
+      key: "watch_folder",
+      value: "/Users/me/Downloads",
+    });
+    expect(labelled("Move added files to the Trash").checked).toBe(false);
+  });
+
+  it("saves to folders unless you choose an archive", async () => {
+    await tab("Library");
+    expect(host.textContent).not.toContain("Compression");
+    const archive = labelled("Save as a compressed archive");
+    expect(archive.checked).toBe(false);
+    await click(archive);
+    expect(calls("setting_set").at(-1)?.[1]).toEqual({
+      key: "save_archive",
+      value: "on",
+    });
+    expect(select("Compression").value).toBe("normal");
   });
 
   it("tunes comic pages and resets them to recommended", async () => {

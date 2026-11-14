@@ -41,6 +41,7 @@ mod menu;
 mod reader;
 mod settings;
 mod updates;
+mod watch;
 
 /// Event carrying [`ImportProgress`] while series and genres are looked up.
 const ENHANCE_PROGRESS: &str = "enhance-progress";
@@ -563,10 +564,12 @@ async fn update_books(
     let backups = state.backup_root.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        let converter = Kepubify::locate().map_err(err)?;
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let converter = Kepubify::locate()
+            .map_err(err)?
+            .with_options(parallax_core::send::kepub_options(&lib));
         update_on_device(&lib, &kobo, &converter, &backups, &ids, |event| {
             if let Some(channel) = &progress {
                 let _ = channel.send(event);
@@ -675,10 +678,12 @@ async fn send_books(
     let rules = !settings::is(&state, settings::KOBO_RULES, "off");
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        let converter = Kepubify::locate().map_err(err)?;
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let converter = Kepubify::locate()
+            .map_err(err)?
+            .with_options(parallax_core::send::kepub_options(&lib));
         let outcomes = send_library_books(&lib, &kobo, &converter, &ids, |event| {
             if let Some(channel) = &progress {
                 let _ = channel.send(event);
@@ -794,6 +799,90 @@ async fn merge_collections(state: State<'_, AppState>, mount: PathBuf) -> CmdRes
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         parallax_core::device::merge_collections(&kobo, &backups).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Saves books to `destination`, a folder or, when Settings says to save
+/// archives, a ZIP file, named by the template in Settings.
+#[tauri::command]
+async fn library_save(
+    webview: Webview,
+    progress: Option<JavaScriptChannelId>,
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+    destination: PathBuf,
+) -> CmdResult<Vec<parallax_core::save::Saved>> {
+    use parallax_core::save::{
+        Compression, DEFAULT_TEMPLATE, Destination, SAVE_ARCHIVE, SAVE_COMPRESSION, SAVE_TEMPLATE,
+    };
+    let progress = progress.map(|id| id.channel_on(webview));
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let get = |key| lib.setting(key).ok().flatten();
+        let template = get(SAVE_TEMPLATE).unwrap_or_else(|| DEFAULT_TEMPLATE.to_owned());
+        let destination = if get(SAVE_ARCHIVE).as_deref() == Some("on") {
+            Destination::Archive(
+                destination,
+                Compression::parse(get(SAVE_COMPRESSION).as_deref()),
+            )
+        } else {
+            Destination::Folder(destination)
+        };
+        let total = ids.len();
+        parallax_core::save::save_books(&lib, &ids, &template, &destination, |index, title| {
+            report_books(progress.as_ref(), index, total, Some(title));
+        })
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Asks Kobo whether newer software is available for this Kobo, when
+/// Settings allows it; otherwise answers nothing without asking.
+#[tauri::command]
+async fn kobo_firmware_check(
+    state: State<'_, AppState>,
+    mount: PathBuf,
+) -> CmdResult<Option<parallax_core::firmware::FirmwareUpdate>> {
+    if !settings::is(&state, parallax_core::firmware::KOBO_FIRMWARE_CHECK, "on") {
+        return Ok(None);
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        parallax_core::firmware::check_online(kobo.version())
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Sets the reading layout from Settings on these books.
+#[tauri::command]
+async fn set_reading_layout(
+    state: State<'_, AppState>,
+    mount: PathBuf,
+    content_ids: Vec<String>,
+) -> CmdResult<usize> {
+    let library = state.library.clone();
+    let backups = state.backup_root.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let layout = {
+            let lib = library
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            parallax_core::layout::saved_layout(&lib)
+        };
+        if layout.is_empty() {
+            return Err(
+                "Choose a font or layout in Settings › Kobo › Reading layout first.".to_owned(),
+            );
+        }
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        parallax_core::layout::apply(&kobo, &backups, &content_ids, &layout).map_err(err)
     })
     .await
     .map_err(err)?
@@ -1221,6 +1310,10 @@ struct Reconciled {
     series: usize,
     /// Books added to collections by grouping rules.
     grouped: usize,
+    /// Books sent again whose place was put back.
+    positions: usize,
+    /// Books given the reading layout from Settings.
+    layout: usize,
     /// Library books whose reading progress changed.
     reading: usize,
     /// Highlights, notes and bookmarks new, changed or removed on the device.
@@ -1228,14 +1321,17 @@ struct Reconciled {
 }
 
 /// On connect: applies series to books Nickel has imported since they were
-/// sent, then runs enabled grouping rules, each unless turned off in
-/// Settings. Opens no write session when there's nothing to do.
+/// sent, runs enabled grouping rules and puts back places in books sent
+/// again, each unless turned off in Settings, then copies reading progress
+/// and annotations into the library. Opens no write session when there's nothing to do.
 #[tauri::command]
 async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<Reconciled> {
     let library = state.library.clone();
     let backups = state.backup_root.clone();
     let series = !settings::is(&state, settings::KOBO_SERIES, "off");
     let rules = !settings::is(&state, settings::KOBO_RULES, "off");
+    let positions = !settings::is(&state, settings::KOBO_POSITIONS, "off");
+    let layout = settings::is(&state, parallax_core::layout::KOBO_LAYOUT, "on");
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let mut lib = library
@@ -1249,6 +1345,18 @@ async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResu
             },
             grouped: if rules {
                 parallax_core::rules::run(&lib, &kobo, &backups, Trigger::Automatic).map_err(err)?
+            } else {
+                0
+            },
+            // Before reading progress is synced, which would record a book
+            // sent again as unread.
+            positions: if positions {
+                parallax_core::device::restore_positions(&lib, &kobo, &backups).map_err(err)?
+            } else {
+                0
+            },
+            layout: if layout {
+                parallax_core::layout::apply_to_new(&lib, &kobo, &backups).map_err(err)?
             } else {
                 0
             },
@@ -1621,6 +1729,7 @@ pub fn run() {
             e2e::start(app);
             size_first_window(app)?;
             updates::start(app.handle());
+            watch::start(app.handle())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1670,6 +1779,10 @@ pub fn run() {
             clean_images,
             merge_collections,
             set_reading_status,
+            set_reading_layout,
+            library_save,
+            kobo_firmware_check,
+            watch::watch_folder_added,
             enhance_apply,
             settings::setting_get,
             settings::setting_set,

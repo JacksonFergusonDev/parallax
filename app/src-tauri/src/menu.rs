@@ -89,6 +89,10 @@ const FILE: &[Command] = &[
     key(command("file.add", "Add Books…", Main), "CmdOrCtrl+O"),
     command("file.calibre", "Import from calibre…", Main),
     command("file.goodreads", "Import from Goodreads…", Main),
+    key(
+        command("file.save", "Save to Disk…", Main),
+        "CmdOrCtrl+Shift+S",
+    ),
     command("kobo.addAll", "Add All from Kobo to Library", Main),
 ];
 

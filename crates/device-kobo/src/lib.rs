@@ -6,8 +6,10 @@ mod collections;
 mod covers;
 mod db;
 mod error;
+mod layout;
 mod maintenance;
 mod ops;
+mod positions;
 mod report;
 mod screen;
 mod state;
@@ -35,6 +37,7 @@ pub use db::{
     KoboDb, MAX_TESTED_DB_VERSION, MIN_SUPPORTED_DB_VERSION, ONBOARD_PREFIX, parse_kobo_date,
 };
 pub use error::{Error, Result};
+pub use layout::{Alignment, FONT_SIZES, LINE_HEIGHTS, Layout, MARGINS, apply_layout};
 pub use maintenance::{
     DuplicateCollection, Mismatch, duplicate_collections, files_not_in_database,
     merge_duplicate_collections, missing_files, orphaned_images, remove_orphaned_images,
@@ -44,6 +47,7 @@ pub use ops::{
     DisplayMetadata, image_id_for, qhash, remove_book, remove_book_with_progress, replace_book,
     replace_book_with_progress, set_series, tidy_apple_double, update_details,
 };
+pub use positions::{Position, restore_positions};
 pub use report::{CoverFiles, DeviceReport, REPORT_FORMAT};
 pub use screen::ASSUMED_SCREEN;
 pub use state::{
