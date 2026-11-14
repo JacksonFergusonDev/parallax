@@ -52,6 +52,7 @@ const COMMANDS: &[&str] = &[
     "set_reading_status",
     "set_reading_layout",
     "library_save",
+    "kobo_firmware_check",
     "watch_folder_added",
     "enhance_apply",
     "setting_get",

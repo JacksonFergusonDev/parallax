@@ -57,6 +57,7 @@
     "allow-set-reading-status",
     "allow-set-reading-layout",
     "allow-library-save",
+    "allow-kobo-firmware-check",
     "allow-watch-folder-added",
     "allow-enhance-apply",
     "allow-setting-get",

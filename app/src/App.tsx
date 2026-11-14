@@ -24,6 +24,8 @@ import {
   comicTransferEstimate,
   onSettingChange,
   onWatchFolderFound,
+  checkKoboFirmware,
+  type FirmwareUpdate,
   saveBooks,
   watchFolderAdded,
   deviceBooks,
@@ -173,6 +175,20 @@ const NO_DEVICE_COPIES = new Map<number, OnDevice>();
 
 const none = new Set<number>();
 
+/** "a", "a and b", "a, b and c". */
+function joinList(parts: string[]) {
+  return parts.length < 2
+    ? (parts[0] ?? "")
+    : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+function firmwareMessage(update: FirmwareUpdate) {
+  const caveat = update.beyond_support
+    ? " Parallax hasn't been tested with it yet, so it won't change books on your Kobo after you update."
+    : "";
+  return `Kobo software ${update.available} is available for your Kobo, which has ${update.current}. To install it, connect your Kobo to Wi-Fi and sync.${caveat}`;
+}
+
 export default function App() {
   const [stored, setBooks] = useState<Book[]>([]);
   /** Which books are on your Goodreads shelves, by library id. */
@@ -255,6 +271,8 @@ export default function App() {
     | null
   >(null);
   const [dragging, setDragging] = useState(false);
+  /** Kobos asked about new software this session, by mount. */
+  const firmwareAsked = useRef(new Set<string>());
   const [duplicates, setDuplicates] = useState<Promise<ReviewGroup[]> | null>(
     null,
   );
@@ -377,8 +395,13 @@ export default function App() {
       : Promise.resolve([]);
     shelves.then((list) => alive && setCollections(list));
     if (device) {
-      reconcileDevice(device.mount)
-        .then(({ series, grouped, positions, layout }) => {
+      const mount = device.mount;
+      const firmware = firmwareAsked.current.has(mount)
+        ? Promise.resolve(null)
+        : checkKoboFirmware(mount).catch(() => null);
+      firmwareAsked.current.add(mount);
+      reconcileDevice(mount)
+        .then(async ({ series, grouped, positions, layout }) => {
           const parts = [];
           if (layout)
             parts.push(
@@ -396,17 +419,22 @@ export default function App() {
             parts.push(
               `filed ${grouped} ${grouped === 1 ? "book" : "books"} into collections`,
             );
-          if (alive && parts.length) {
-            setDeviceRevision((revision) => revision + 1);
-            listCollections(device.mount)
-              .then((list) => alive && setCollections(list))
-              .catch(() => {});
-            const text = parts.join(" and ");
-            setNotice({
-              kind: "info",
-              text: `Parallax ${text} on your Kobo. Eject to see the changes.`,
-            });
+          const messages = [];
+          if (parts.length) {
+            if (alive) {
+              setDeviceRevision((revision) => revision + 1);
+              listCollections(mount)
+                .then((list) => alive && setCollections(list))
+                .catch(() => {});
+            }
+            messages.push(
+              `Parallax ${joinList(parts)} on your Kobo. Eject to see the changes.`,
+            );
           }
+          const update = await firmware;
+          if (update) messages.push(firmwareMessage(update));
+          if (alive && messages.length)
+            setNotice({ kind: "info", text: messages.join(" ") });
         })
         .catch((e) => {
           if (alive) {

@@ -501,6 +501,12 @@ enum KoboCommand {
         #[arg(short = 'n', long, default_value_t = 20)]
         limit: usize,
     },
+    /// Ask Kobo whether newer software is available for the connected Kobo.
+    /// Sends Kobo the model and current version, not the serial number.
+    Firmware {
+        #[arg(long)]
+        mount: Option<PathBuf>,
+    },
     /// Save a device report: model, firmware and database layout, without
     /// book titles, serial number or reading data. Send it to whoever adds
     /// support for new Kobos. Only reads the device.
@@ -971,6 +977,30 @@ fn main() -> Result<()> {
                     ]);
                 }
                 println!("{rows}");
+            }
+        }
+        Command::Kobo(KoboCommand::Firmware { mount }) => {
+            let kobo = find_kobo(mount.as_deref())?;
+            let update = parallax_core::firmware::check_online(kobo.version())
+                .map_err(anyhow::Error::msg)?;
+            if cli.json {
+                return print_json(&update);
+            }
+            match update {
+                Some(u) => println!(
+                    "Kobo software {} is available (this Kobo has {}). Connect your Kobo to Wi-Fi and sync to install it.{}",
+                    u.available,
+                    u.current,
+                    if u.beyond_support {
+                        " Parallax hasn't been tested with it yet, so it won't change this Kobo after the update."
+                    } else {
+                        ""
+                    }
+                ),
+                None => println!(
+                    "This Kobo has the latest software, {}.",
+                    kobo.version().firmware
+                ),
             }
         }
         Command::Kobo(KoboCommand::Report { mount, out }) => {

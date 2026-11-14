@@ -405,6 +405,7 @@ const SETTING_KEYS = [
   "kobo_series",
   "kobo_rules",
   "kobo_positions",
+  "kobo_firmware_check",
   "eject_after_send",
   "updates_auto",
   "updates_download",
@@ -562,6 +563,8 @@ export function installMockBackend(label = "main") {
           ];
         case "reconcile_device":
           return { series: 0, grouped: 0 };
+        case "kobo_firmware_check":
+          return null;
         case "library_save":
           return (a.ids as number[]).map((id) => ({
             book_id: id,

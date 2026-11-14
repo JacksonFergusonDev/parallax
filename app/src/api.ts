@@ -993,6 +993,7 @@ export type SettingKey =
   | "kobo_series"
   | "kobo_rules"
   | "kobo_positions"
+  | "kobo_firmware_check"
   | "eject_after_send"
   | "setup"
   | "kobo_notices"
@@ -1212,6 +1213,16 @@ export const setReadingStatus = (
     { mount, contentIds, status, resetPosition, resetTime },
     [deviceTag(mount), "library"],
   );
+/** Newer Kobo software than a Kobo has (crates/core/src/firmware.rs). */
+export interface FirmwareUpdate {
+  current: string;
+  available: string;
+  release_notes: string | null;
+  beyond_support: boolean;
+}
+/** Asks Kobo about newer software, if Settings allows it. */
+export const checkKoboFirmware = (mount: string) =>
+  invoke<FirmwareUpdate | null>("kobo_firmware_check", { mount });
 /** Sets the reading layout from Settings › Kobo on these books. */
 export const setReadingLayout = (mount: string, contentIds: string[]) =>
   write<number>("set_reading_layout", { mount, contentIds }, [

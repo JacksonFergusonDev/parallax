@@ -58,7 +58,7 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 40] = [
+const SETTINGS: [(&str, Allowed); 41] = [
     (parallax_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (parallax_core::enhance::METRON_TOKEN, Allowed::Text(256)),
     (
@@ -75,6 +75,10 @@ const SETTINGS: [(&str, Allowed); 40] = [
     (KOBO_SERIES, Allowed::OneOf(&["off"])),
     (KOBO_RULES, Allowed::OneOf(&["off"])),
     (KOBO_POSITIONS, Allowed::OneOf(&["off"])),
+    (
+        parallax_core::firmware::KOBO_FIRMWARE_CHECK,
+        Allowed::OneOf(&["on"]),
+    ),
     (EJECT_AFTER_SEND, Allowed::OneOf(&["on"])),
     (SETUP, Allowed::OneOf(&["started", "skipped", "done"])),
     (KOBO_NOTICES, Allowed::Text(2000)),
@@ -129,7 +133,7 @@ const SETTINGS: [(&str, Allowed); 40] = [
 ];
 
 /// Settings that are preferences, which Reset puts back. Credentials stay.
-const PREFERENCES: [&str; 34] = [
+const PREFERENCES: [&str; 35] = [
     parallax_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
@@ -138,6 +142,7 @@ const PREFERENCES: [&str; 34] = [
     KOBO_SERIES,
     KOBO_RULES,
     KOBO_POSITIONS,
+    parallax_core::firmware::KOBO_FIRMWARE_CHECK,
     EJECT_AFTER_SEND,
     crate::updates::AUTO,
     parallax_library::COMICS_KIND,

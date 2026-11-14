@@ -761,6 +761,14 @@ export function KoboPane(props: PaneProps) {
         >
           Put back your place in books sent again
         </Check>
+        <Check
+          {...props}
+          name="kobo_firmware_check"
+          defaultOn={false}
+          hint="Asks Kobo once each time you connect. Kobo is told your model and software version, not your serial number."
+        >
+          Check for new Kobo software
+        </Check>
       </Row>
       <Row label="Collections">
         <Check

@@ -842,6 +842,24 @@ async fn library_save(
     .map_err(err)?
 }
 
+/// Asks Kobo whether newer software is available for this Kobo, when
+/// Settings allows it; otherwise answers nothing without asking.
+#[tauri::command]
+async fn kobo_firmware_check(
+    state: State<'_, AppState>,
+    mount: PathBuf,
+) -> CmdResult<Option<parallax_core::firmware::FirmwareUpdate>> {
+    if !settings::is(&state, parallax_core::firmware::KOBO_FIRMWARE_CHECK, "on") {
+        return Ok(None);
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let kobo = KoboDevice::open(&mount).map_err(err)?;
+        parallax_core::firmware::check_online(kobo.version())
+    })
+    .await
+    .map_err(err)?
+}
+
 /// Sets the reading layout from Settings on these books.
 #[tauri::command]
 async fn set_reading_layout(
@@ -1763,6 +1781,7 @@ pub fn run() {
             set_reading_status,
             set_reading_layout,
             library_save,
+            kobo_firmware_check,
             watch::watch_folder_added,
             enhance_apply,
             settings::setting_get,

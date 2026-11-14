@@ -8,6 +8,7 @@ pub mod comic_send;
 pub mod device;
 pub mod duplicates;
 pub mod enhance;
+pub mod firmware;
 pub mod genres;
 pub mod goodreads;
 pub mod goodreads_insights;
