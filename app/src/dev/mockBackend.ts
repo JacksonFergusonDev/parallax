@@ -413,6 +413,8 @@ const SETTING_KEYS = [
   "kepub_smart_punctuation",
   "kepub_fullscreen_fixes",
   "kepub_css",
+  "library_saved_searches",
+  "saved_searches",
   "save_template",
   "save_archive",
   "save_compression",
@@ -1551,7 +1553,11 @@ export function installMockBackend(label = "main") {
           );
         case "settings_reset":
           for (const key of SETTING_KEYS)
-            if (key !== "google_books_key" && key !== "metron_token") {
+            if (
+              key !== "google_books_key" &&
+              key !== "metron_token" &&
+              key !== "saved_searches"
+            ) {
               settings.delete(key);
               await emit("setting-changed", { key, value: null });
             }

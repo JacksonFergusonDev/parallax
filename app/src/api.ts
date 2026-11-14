@@ -1013,6 +1013,8 @@ export type SettingKey =
   | "kepub_smart_punctuation"
   | "kepub_fullscreen_fixes"
   | "kepub_css"
+  | "library_saved_searches"
+  | "saved_searches"
   | "save_template"
   | "save_archive"
   | "save_compression"

@@ -115,6 +115,7 @@ import {
 import { ActionMenu } from "./components/ActionMenu";
 import { EditPanel } from "./components/EditPanel";
 import { LibraryFilters } from "./components/LibraryFilters";
+import { SavedSearches } from "./components/SavedSearches";
 import { usePanelBook } from "./panelBook";
 import { UpscaleReview } from "./components/UpscaleReview";
 import {
@@ -1599,6 +1600,16 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                     facets={facets}
                     connected={device !== null}
                     onChange={changeFilter}
+                    leading={
+                      <SavedSearches
+                        query={query}
+                        filter={shownFilter}
+                        onApply={(saved) => {
+                          setQuery(saved.query);
+                          changeFilter(saved.filter);
+                        }}
+                      />
+                    }
                   />
                 </section>
               )}

@@ -42,6 +42,12 @@ pub const SETUP: &str = "setup";
 /// good. Like `setup`, Reset leaves it alone.
 pub const KOBO_NOTICES: &str = "kobo_notices";
 
+/// `on` to show saved searches in the library's filter bar.
+pub const SAVED_SEARCHES_ON: &str = "library_saved_searches";
+/// The saved searches themselves, as JSON the main window reads. Not a
+/// preference, so Reset keeps them.
+pub const SAVED_SEARCHES: &str = "saved_searches";
+
 /// The event main and Settings windows get when a setting changes.
 const CHANGED: &str = "setting-changed";
 /// The windows that may hear about settings: never a reader.
@@ -58,7 +64,7 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 41] = [
+const SETTINGS: [(&str, Allowed); 43] = [
     (parallax_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (parallax_core::enhance::METRON_TOKEN, Allowed::Text(256)),
     (
@@ -101,6 +107,8 @@ const SETTINGS: [(&str, Allowed); 41] = [
     (KEPUB_SMART_PUNCTUATION, Allowed::OneOf(&["on"])),
     (KEPUB_FULLSCREEN_FIXES, Allowed::OneOf(&["on"])),
     (KEPUB_CSS, Allowed::Text(4000)),
+    (SAVED_SEARCHES_ON, Allowed::OneOf(&["on"])),
+    (SAVED_SEARCHES, Allowed::Text(20_000)),
     (parallax_core::save::SAVE_TEMPLATE, Allowed::Text(300)),
     (parallax_core::save::SAVE_ARCHIVE, Allowed::OneOf(&["on"])),
     (
@@ -133,7 +141,7 @@ const SETTINGS: [(&str, Allowed); 41] = [
 ];
 
 /// Settings that are preferences, which Reset puts back. Credentials stay.
-const PREFERENCES: [&str; 35] = [
+const PREFERENCES: [&str; 36] = [
     parallax_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
@@ -160,6 +168,7 @@ const PREFERENCES: [&str; 35] = [
     KEPUB_CSS,
     parallax_core::watch::WATCH_FOLDER,
     parallax_core::watch::WATCH_FOLDER_TRASH,
+    SAVED_SEARCHES_ON,
     parallax_core::save::SAVE_TEMPLATE,
     parallax_core::save::SAVE_ARCHIVE,
     parallax_core::save::SAVE_COMPRESSION,
@@ -496,6 +505,7 @@ mod tests {
         assert!(checked(SETUP, Some("later".into())).is_err());
         assert!(!PREFERENCES.contains(&SETUP));
         assert!(!PREFERENCES.contains(&KOBO_NOTICES));
+        assert!(!PREFERENCES.contains(&SAVED_SEARCHES));
     }
 
     #[test]

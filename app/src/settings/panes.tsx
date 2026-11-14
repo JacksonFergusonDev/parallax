@@ -416,6 +416,16 @@ export function LibraryPane(props: PaneProps) {
           Review books when added
         </Check>
       </Row>
+      <Row label="Searching">
+        <Check
+          {...props}
+          name="library_saved_searches"
+          defaultOn={false}
+          hint="Keep a search and its filters under a name, such as Unread sci-fi, and bring it back from the filter bar. Turning this off keeps the ones you've saved."
+        >
+          Show saved searches
+        </Check>
+      </Row>
       <WatchFolder {...props} />
       <Row
         label="Google Books"
