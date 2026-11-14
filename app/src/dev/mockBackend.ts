@@ -404,6 +404,7 @@ const SETTING_KEYS = [
   "reader_windows",
   "kobo_series",
   "kobo_rules",
+  "kobo_positions",
   "eject_after_send",
   "updates_auto",
   "updates_download",

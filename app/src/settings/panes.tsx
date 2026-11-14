@@ -406,6 +406,13 @@ export function KoboPane(props: PaneProps) {
         >
           Add series to newly imported books
         </Check>
+        <Check
+          {...props}
+          name="kobo_positions"
+          hint="When you send a book again, or to another Kobo, it opens where you last were instead of at the start. Your place is saved each time a Kobo connects."
+        >
+          Put back your place in books sent again
+        </Check>
       </Row>
       <Row label="Collections">
         <Check

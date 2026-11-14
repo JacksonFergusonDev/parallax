@@ -4,8 +4,8 @@ What changed in each release of Parallax, for people using it. The release workf
 
 ## Unreleased
 
+- When you send a book again, or send it to another Kobo, it opens where you last were rather than at the start, as Kobo Utilities' restore bookmark does. Parallax saves your place each time a Kobo connects and puts it back once the Kobo has imported the new copy. A book you've opened or marked unread since is left alone. Turn it off in Settings › Kobo.
 - Settings › Kobo › Sending books changes books as they go to your Kobo: hyphenate always or never, smarten quotes and dashes, add fixes for reading in full screen, and add your own CSS to every book, as calibre's kobo_extra.css does. Each is off until you turn it on.
-
 - Covers sent to a black-and-white Kobo stay in colour again, still sized to its screen. The grey treatment from 0.1.2 is off until it's been compared on a Kobo.
 
 ## 0.1.2 (2026-11-13)

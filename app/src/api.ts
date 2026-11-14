@@ -976,6 +976,7 @@ export type SettingKey =
   | "reader_windows"
   | "kobo_series"
   | "kobo_rules"
+  | "kobo_positions"
   | "eject_after_send"
   | "setup"
   | "kobo_notices"
@@ -1197,10 +1198,12 @@ export async function reconcileDevice(mount: string) {
     const result = await invoke<{
       series: number;
       grouped: number;
+      positions: number;
       reading: number;
       annotations: number;
     }>("reconcile_device", { mount });
-    if (result.series || result.grouped) readCache.invalidate(deviceTag(mount));
+    if (result.series || result.grouped || result.positions)
+      readCache.invalidate(deviceTag(mount));
     if (result.reading || result.annotations) readCache.invalidate("library");
     return result;
   } catch (e) {

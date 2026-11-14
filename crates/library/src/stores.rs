@@ -37,8 +37,25 @@ pub struct Reading {
     pub percent: u8,
     pub last_read: Option<String>,
     pub time_spent_secs: Option<u64>,
+    /// Where the book was open on the device (Nickel's ChapterIDBookmarked).
+    #[serde(skip)]
+    pub chapter: Option<String>,
     /// When the app read it from the device.
     pub seen_at: String,
+}
+
+fn reading_from_row(r: &rusqlite::Row) -> rusqlite::Result<Reading> {
+    Ok(Reading {
+        device_serial: r.get(0)?,
+        status: r.get(1)?,
+        percent: u8::try_from(r.get::<_, i64>(2)?.clamp(0, 100)).unwrap_or(0),
+        last_read: r.get(3)?,
+        time_spent_secs: r
+            .get::<_, Option<i64>>(4)?
+            .map(|t| u64::try_from(t).unwrap_or(0)),
+        seen_at: r.get(5)?,
+        chapter: r.get(6)?,
+    })
 }
 
 /// Where the in-app reader was last in a book.
@@ -268,28 +285,22 @@ impl Library {
         Ok(())
     }
 
-    /// Stores what a device says about a book's reading.
-    pub fn record_reading(
-        &self,
-        book_id: i64,
-        device_serial: &str,
-        status: &str,
-        percent: u8,
-        last_read: Option<&str>,
-        time_spent_secs: Option<u64>,
-    ) -> Result<()> {
+    /// Stores what a device says about a book's reading. `reading.seen_at`
+    /// is ignored: it's recorded as now.
+    pub fn record_reading(&self, book_id: i64, reading: &Reading) -> Result<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO reading
-                 (book_id, device_serial, status, percent, last_read, time_spent, seen_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                 (book_id, device_serial, status, percent, last_read, time_spent, seen_at, chapter)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 book_id,
-                device_serial,
-                status,
-                percent,
-                last_read,
-                time_spent_secs,
-                now()
+                reading.device_serial,
+                reading.status,
+                reading.percent,
+                reading.last_read,
+                reading.time_spent_secs,
+                now(),
+                reading.chapter
             ],
         )?;
         Ok(())
@@ -300,22 +311,39 @@ impl Library {
         Ok(self
             .conn
             .query_row(
-                "SELECT device_serial, status, percent, last_read, time_spent, seen_at
+                "SELECT device_serial, status, percent, last_read, time_spent, seen_at, chapter
                  FROM reading WHERE book_id = ?1
                  ORDER BY coalesce(last_read, '') DESC, seen_at DESC LIMIT 1",
                 [book_id],
-                |r| {
-                    Ok(Reading {
-                        device_serial: r.get(0)?,
-                        status: r.get(1)?,
-                        percent: u8::try_from(r.get::<_, i64>(2)?.clamp(0, 100)).unwrap_or(0),
-                        last_read: r.get(3)?,
-                        time_spent_secs: r
-                            .get::<_, Option<i64>>(4)?
-                            .map(|t| u64::try_from(t).unwrap_or(0)),
-                        seen_at: r.get(5)?,
-                    })
-                },
+                reading_from_row,
+            )
+            .optional()?)
+    }
+
+    /// The latest place a book was open on any device, if it was ever
+    /// opened: what can be put back when the book is sent again.
+    pub fn saved_position(&self, book_id: i64) -> Result<Option<Reading>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT device_serial, status, percent, last_read, time_spent, seen_at, chapter
+                 FROM reading WHERE book_id = ?1 AND status <> 'unread'
+                 ORDER BY coalesce(last_read, '') DESC, seen_at DESC LIMIT 1",
+                [book_id],
+                reading_from_row,
+            )
+            .optional()?)
+    }
+
+    /// What `device_serial` last reported about `book_id`.
+    pub fn reading_on(&self, book_id: i64, device_serial: &str) -> Result<Option<Reading>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT device_serial, status, percent, last_read, time_spent, seen_at, chapter
+                 FROM reading WHERE book_id = ?1 AND device_serial = ?2",
+                params![book_id, device_serial],
+                reading_from_row,
             )
             .optional()?)
     }

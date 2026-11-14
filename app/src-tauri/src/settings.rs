@@ -28,6 +28,8 @@ pub const READER_WINDOWS: &str = "reader_windows";
 pub const KOBO_SERIES: &str = "kobo_series";
 /// `off` to stop grouping rules running on their own after sends and on connect.
 pub const KOBO_RULES: &str = "kobo_rules";
+/// `off` to leave books sent again at the start rather than where they were.
+pub const KOBO_POSITIONS: &str = "kobo_positions";
 /// `on` to eject the Kobo once books are sent.
 pub const EJECT_AFTER_SEND: &str = "eject_after_send";
 /// Where first-run setup stands: `started` once shown, then `skipped` or
@@ -51,7 +53,7 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 28] = [
+const SETTINGS: [(&str, Allowed); 29] = [
     (parallax_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (parallax_core::enhance::METRON_TOKEN, Allowed::Text(256)),
     (
@@ -67,6 +69,7 @@ const SETTINGS: [(&str, Allowed); 28] = [
     (READER_WINDOWS, Allowed::OneOf(&["one"])),
     (KOBO_SERIES, Allowed::OneOf(&["off"])),
     (KOBO_RULES, Allowed::OneOf(&["off"])),
+    (KOBO_POSITIONS, Allowed::OneOf(&["off"])),
     (EJECT_AFTER_SEND, Allowed::OneOf(&["on"])),
     (SETUP, Allowed::OneOf(&["started", "skipped", "done"])),
     (KOBO_NOTICES, Allowed::Text(2000)),
@@ -92,7 +95,7 @@ const SETTINGS: [(&str, Allowed); 28] = [
 ];
 
 /// Settings that are preferences, which Reset puts back. Credentials stay.
-const PREFERENCES: [&str; 22] = [
+const PREFERENCES: [&str; 23] = [
     parallax_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
@@ -100,6 +103,7 @@ const PREFERENCES: [&str; 22] = [
     READER_WINDOWS,
     KOBO_SERIES,
     KOBO_RULES,
+    KOBO_POSITIONS,
     EJECT_AFTER_SEND,
     crate::updates::AUTO,
     parallax_library::COMICS_KIND,

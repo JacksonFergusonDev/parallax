@@ -16,8 +16,8 @@ use parallax_convert::{Kepubify, ToKepub};
 use parallax_core::calibre;
 use parallax_core::collections::{self, CollectionChange, folder_groups, reconcile_series};
 use parallax_core::device::{
-    change_reading_status, health, merge_collections, remove_from_device, sync_annotations,
-    sync_reading,
+    change_reading_status, health, merge_collections, remove_from_device, restore_positions,
+    sync_annotations, sync_reading,
 };
 use parallax_core::duplicates::{Reason, device_duplicates, library_duplicates};
 use parallax_core::enhance;
@@ -1687,6 +1687,10 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             println!(
                 "applied series to {} books",
                 reconcile_series(lib, &kobo, &backup_root()?)?
+            );
+            println!(
+                "put back the place in {} books sent again",
+                restore_positions(lib, &kobo, &backup_root()?)?
             );
             println!(
                 "updated reading progress for {} books",

@@ -1225,6 +1225,8 @@ struct Reconciled {
     series: usize,
     /// Books added to collections by grouping rules.
     grouped: usize,
+    /// Books sent again whose place was put back.
+    positions: usize,
     /// Library books whose reading progress changed.
     reading: usize,
     /// Highlights, notes and bookmarks new, changed or removed on the device.
@@ -1232,14 +1234,16 @@ struct Reconciled {
 }
 
 /// On connect: applies series to books Nickel has imported since they were
-/// sent, then runs enabled grouping rules, each unless turned off in
-/// Settings. Opens no write session when there's nothing to do.
+/// sent, runs enabled grouping rules and puts back places in books sent
+/// again, each unless turned off in Settings, then copies reading progress
+/// and annotations into the library. Opens no write session when there's nothing to do.
 #[tauri::command]
 async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<Reconciled> {
     let library = state.library.clone();
     let backups = state.backup_root.clone();
     let series = !settings::is(&state, settings::KOBO_SERIES, "off");
     let rules = !settings::is(&state, settings::KOBO_RULES, "off");
+    let positions = !settings::is(&state, settings::KOBO_POSITIONS, "off");
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let mut lib = library
@@ -1253,6 +1257,13 @@ async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResu
             },
             grouped: if rules {
                 parallax_core::rules::run(&lib, &kobo, &backups, Trigger::Automatic).map_err(err)?
+            } else {
+                0
+            },
+            // Before reading progress is synced, which would record a book
+            // sent again as unread.
+            positions: if positions {
+                parallax_core::device::restore_positions(&lib, &kobo, &backups).map_err(err)?
             } else {
                 0
             },

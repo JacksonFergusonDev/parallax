@@ -813,3 +813,97 @@ fn covers_are_fitted_to_the_kobo_screen_in_colour() {
     let stored = image::load_from_memory(&library.cover_source(book.id).unwrap().unwrap()).unwrap();
     assert_eq!((stored.width(), stored.height()), (1120, 1680));
 }
+
+#[test]
+fn puts_back_the_place_in_a_book_sent_again() {
+    use parallax_core::device::{restore_positions, sync_reading};
+    use rusqlite::Connection;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mount = dir.path().join("KOBOeReader");
+    fs::create_dir_all(mount.join(".kobo")).unwrap();
+    fs::write(mount.join(".kobo/version"), VERSION).unwrap();
+    let db = mount.join(".kobo/KoboReader.sqlite");
+    empty_database(&mount);
+    let conn = Connection::open(&db).unwrap();
+    conn.pragma_update(None, "journal_mode", "wal").unwrap();
+    drop(conn);
+    let kobo = KoboDevice::open(&mount).unwrap();
+    let backups = dir.path().join("backups");
+    let mut library = Library::open(dir.path().join("lib")).unwrap();
+    let ImportOutcome::Added { book, .. } = library.import(&fixture("minimal.epub")).unwrap()
+    else {
+        panic!();
+    };
+    let converter = Kepubify::locate().unwrap();
+    let send = || {
+        send_library_books(&library, &kobo, &converter, &[book.id], |_| {})[0]
+            .result
+            .as_ref()
+            .unwrap()
+            .content_id
+            .clone()
+    };
+    let import = |id: &str| {
+        Connection::open(&db)
+            .unwrap()
+            .execute(
+                "INSERT INTO content (ContentID, ContentType, MimeType, ___UserID, Title, Accessibility, IsDownloaded, ReadStatus, ___PercentRead)
+                 VALUES (?1, 6, 'application/x-kobo-epub+zip', 'kepub_user', 'Parallax Test Book', -1, 'true', 0, 0)",
+                [id],
+            )
+            .unwrap();
+    };
+    let place = |id: &str| -> (i64, i64, Option<String>) {
+        Connection::open(&db)
+            .unwrap()
+            .query_row(
+                "SELECT ReadStatus, ___PercentRead, ChapterIDBookmarked FROM content WHERE ContentID = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap()
+    };
+
+    // Read part of the way, and the library hears about it.
+    let id = send();
+    import(&id);
+    Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE content SET ReadStatus = 1, ___PercentRead = 42, ChapterIDBookmarked = 'OEBPS/ch2.xhtml#kobo.3.1', DateLastRead = '2026-11-01T20:00:00Z' WHERE ContentID = ?1",
+            [&id],
+        )
+        .unwrap();
+    assert_eq!(restore_positions(&library, &kobo, &backups).unwrap(), 0);
+    assert_eq!(sync_reading(&library, &kobo).unwrap(), 1);
+
+    // Removed on the Kobo, then sent again after a moment: it comes back
+    // where it was once Nickel has imported it.
+    Connection::open(&db)
+        .unwrap()
+        .execute("DELETE FROM content WHERE ContentID = ?1", [&id])
+        .unwrap();
+    fs::remove_file(mount.join(id.trim_start_matches("file:///mnt/onboard/"))).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    let id = send();
+    assert_eq!(restore_positions(&library, &kobo, &backups).unwrap(), 0);
+    import(&id);
+    assert_eq!(restore_positions(&library, &kobo, &backups).unwrap(), 1);
+    assert_eq!(
+        place(&id),
+        (1, 42, Some("OEBPS/ch2.xhtml#kobo.3.1".to_owned()))
+    );
+
+    // Marked unread on the Kobo afterwards: left alone.
+    sync_reading(&library, &kobo).unwrap();
+    Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE content SET ReadStatus = 0, ___PercentRead = 0, ChapterIDBookmarked = NULL WHERE ContentID = ?1",
+            [&id],
+        )
+        .unwrap();
+    sync_reading(&library, &kobo).unwrap();
+    assert_eq!(restore_positions(&library, &kobo, &backups).unwrap(), 0);
+}

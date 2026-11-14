@@ -8,6 +8,7 @@ mod db;
 mod error;
 mod maintenance;
 mod ops;
+mod positions;
 mod report;
 mod screen;
 mod state;
@@ -44,6 +45,7 @@ pub use ops::{
     DisplayMetadata, image_id_for, qhash, remove_book, remove_book_with_progress, replace_book,
     replace_book_with_progress, set_series, tidy_apple_double, update_details,
 };
+pub use positions::{Position, restore_positions};
 pub use report::{CoverFiles, DeviceReport, REPORT_FORMAT};
 pub use screen::ASSUMED_SCREEN;
 pub use state::{

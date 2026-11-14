@@ -331,7 +331,10 @@ mod tests {
         ])
         .unwrap();
         lib.conn
-            .execute_batch("DROP TABLE goodreads_imports; PRAGMA user_version = 17;")
+            .execute_batch(
+                "DROP TABLE goodreads_imports; ALTER TABLE reading DROP COLUMN chapter;
+                 PRAGMA user_version = 17;",
+            )
             .unwrap();
         drop(lib);
         let lib = Library::open(dir.path()).unwrap();
