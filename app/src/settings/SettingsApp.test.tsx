@@ -171,6 +171,25 @@ describe("Settings window", () => {
     });
   });
 
+  it("leaves books as published until you choose otherwise", async () => {
+    await tab("Kobo");
+    const hyphenation = select("Hyphenation");
+    expect(hyphenation.value).toBe("book");
+    await change(hyphenation, "off");
+    expect(calls("setting_set").at(-1)?.[1]).toEqual({
+      key: "kepub_hyphenation",
+      value: "off",
+    });
+    const punctuation = labelled("Smarten punctuation");
+    expect(punctuation.checked).toBe(false);
+    await click(punctuation);
+    expect(calls("setting_set").at(-1)?.[1]).toEqual({
+      key: "kepub_smart_punctuation",
+      value: "on",
+    });
+    expect(labelled("Add full-screen reading fixes").checked).toBe(false);
+  });
+
   it("tunes comic pages and resets them to recommended", async () => {
     await tab("Comics");
     const reset = button("Using recommended settings");

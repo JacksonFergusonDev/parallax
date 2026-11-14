@@ -7,7 +7,8 @@ use std::path::PathBuf;
 
 use parallax_core::send::{
     COMIC_AUTOCONTRAST, COMIC_COLOUR_CONTRAST, COMIC_COLOUR_SEPARATION, COMIC_CROP, COMIC_DITHER,
-    COMIC_MIDTONE_DARKENING, COMIC_SPREADS, COMIC_STRENGTHS, COMIC_UPSCALE,
+    COMIC_MIDTONE_DARKENING, COMIC_SPREADS, COMIC_STRENGTHS, COMIC_UPSCALE, KEPUB_CSS,
+    KEPUB_FULLSCREEN_FIXES, KEPUB_HYPHENATION, KEPUB_SMART_PUNCTUATION,
 };
 use parallax_device_kobo::{BackupPolicy, backups_size, delete_all_backups};
 use serde::{Deserialize, Serialize};
@@ -50,7 +51,7 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 24] = [
+const SETTINGS: [(&str, Allowed); 28] = [
     (parallax_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (parallax_core::enhance::METRON_TOKEN, Allowed::Text(256)),
     (
@@ -84,10 +85,14 @@ const SETTINGS: [(&str, Allowed); 24] = [
     (COMIC_COLOUR_SEPARATION, Allowed::OneOf(&COMIC_STRENGTHS)),
     (COMIC_COLOUR_CONTRAST, Allowed::OneOf(&["off"])),
     (COMIC_MIDTONE_DARKENING, Allowed::OneOf(&COMIC_STRENGTHS)),
+    (KEPUB_HYPHENATION, Allowed::OneOf(&["on", "off"])),
+    (KEPUB_SMART_PUNCTUATION, Allowed::OneOf(&["on"])),
+    (KEPUB_FULLSCREEN_FIXES, Allowed::OneOf(&["on"])),
+    (KEPUB_CSS, Allowed::Text(4000)),
 ];
 
 /// Settings that are preferences, which Reset puts back. Credentials stay.
-const PREFERENCES: [&str; 18] = [
+const PREFERENCES: [&str; 22] = [
     parallax_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
@@ -106,6 +111,10 @@ const PREFERENCES: [&str; 18] = [
     COMIC_COLOUR_SEPARATION,
     COMIC_COLOUR_CONTRAST,
     COMIC_MIDTONE_DARKENING,
+    KEPUB_HYPHENATION,
+    KEPUB_SMART_PUNCTUATION,
+    KEPUB_FULLSCREEN_FIXES,
+    KEPUB_CSS,
 ];
 
 /// `value` trimmed, with empty meaning the default, if `key` may hold it.

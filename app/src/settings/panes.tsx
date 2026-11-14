@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   COMIC_PAGE_SETTINGS,
@@ -289,6 +289,112 @@ export function LibraryPane(props: PaneProps) {
   );
 }
 
+/** Multi-line text saved when you leave the field, not on every key. */
+function TextSetting({
+  values,
+  set,
+  name,
+  id,
+  label,
+  placeholder,
+  describedBy,
+}: PaneProps & {
+  name: SettingKey;
+  id: string;
+  label?: string;
+  placeholder?: string;
+  describedBy?: string;
+}) {
+  const saved = values[name] ?? "";
+  const [draft, setDraft] = useState(saved);
+  useEffect(() => setDraft(saved), [saved]);
+  return (
+    <textarea
+      id={id}
+      aria-label={label}
+      aria-describedby={describedBy}
+      rows={4}
+      spellCheck={false}
+      autoCapitalize="off"
+      autoCorrect="off"
+      placeholder={placeholder}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft.trim() !== saved.trim()) set(name, draft.trim() || null);
+      }}
+    />
+  );
+}
+
+/** How kepubify changes reflowable books on the way to the Kobo. All off
+ * by default, so books arrive as their publisher made them. */
+function SendingSection(props: PaneProps) {
+  const hyphenation = useId();
+  const css = useId();
+  const cssHint = useId();
+  return (
+    <>
+      <h2 className="settings-section">Sending books</h2>
+      <p className="settings-intro">
+        These change books you send from now on. To change a book already on
+        your Kobo, choose Update on Kobo.
+      </p>
+      <Row
+        label="Hyphenation"
+        labelFor={hyphenation}
+        hint="Hyphenating long words evens out the spacing in justified text."
+      >
+        <select
+          id={hyphenation}
+          value={props.values.kepub_hyphenation ?? "book"}
+          onChange={(e) =>
+            props.set(
+              "kepub_hyphenation",
+              e.target.value === "book" ? null : e.target.value,
+            )
+          }
+        >
+          <option value="book">As the book sets it</option>
+          <option value="on">Always hyphenate</option>
+          <option value="off">Never hyphenate</option>
+        </select>
+      </Row>
+      <Row label="Text">
+        <Check
+          {...props}
+          name="kepub_smart_punctuation"
+          defaultOn={false}
+          hint="Straight quotes and double hyphens become curly quotes and dashes."
+        >
+          Smarten punctuation
+        </Check>
+        <Check
+          {...props}
+          name="kepub_fullscreen_fixes"
+          defaultOn={false}
+          hint="Works around Kobo firmware bugs that cut off or misplace text when you read in full screen."
+        >
+          Add full-screen reading fixes
+        </Check>
+      </Row>
+      <Row label="Extra CSS" labelFor={css}>
+        <TextSetting
+          {...props}
+          name="kepub_css"
+          id={css}
+          describedBy={cssHint}
+          placeholder="p { text-indent: 1.5em; }"
+        />
+        <p className="hint" id={cssHint}>
+          Added to every book you send, like calibre&rsquo;s kobo_extra.css.
+          Leave it empty to use each book&rsquo;s own styles.
+        </p>
+      </Row>
+    </>
+  );
+}
+
 export function KoboPane(props: PaneProps) {
   return (
     <>
@@ -320,6 +426,7 @@ export function KoboPane(props: PaneProps) {
           Eject the Kobo
         </Check>
       </Row>
+      <SendingSection {...props} />
     </>
   );
 }

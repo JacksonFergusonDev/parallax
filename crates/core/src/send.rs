@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use parallax_comic::prepare::{Prepared, safe_kobo_component};
-use parallax_convert::Converter;
+use parallax_convert::{Converter, KepubOptions};
 use parallax_device_kobo::{
     BOOKS_DIR, DisplayMetadata, KoboDevice, device_file_name, replace_book_with_progress,
     update_details,
@@ -103,6 +103,39 @@ pub const COMIC_PAGE_SETTINGS: [&str; 8] = [
     COMIC_COLOUR_CONTRAST,
     COMIC_MIDTONE_DARKENING,
 ];
+
+/// Hyphenation in sent books: `on` or `off` forces it; unset leaves it to
+/// the book and the Kobo.
+pub const KEPUB_HYPHENATION: &str = "kepub_hyphenation";
+/// `on` to smarten quotes, dashes and ellipses in sent books.
+pub const KEPUB_SMART_PUNCTUATION: &str = "kepub_smart_punctuation";
+/// `on` to add kepubify's full-screen reading fixes to sent books.
+pub const KEPUB_FULLSCREEN_FIXES: &str = "kepub_fullscreen_fixes";
+/// CSS added to every sent book, like calibre's `kobo_extra.css`.
+pub const KEPUB_CSS: &str = "kepub_css";
+/// Every setting that changes how books are converted.
+pub const KEPUB_SETTINGS: [&str; 4] = [
+    KEPUB_HYPHENATION,
+    KEPUB_SMART_PUNCTUATION,
+    KEPUB_FULLSCREEN_FIXES,
+    KEPUB_CSS,
+];
+
+/// How the library's settings say books should be converted. An unreadable
+/// setting is its default.
+pub fn kepub_options(library: &Library) -> KepubOptions {
+    let get = |key| library.setting(key).ok().flatten();
+    KepubOptions {
+        hyphenate: match get(KEPUB_HYPHENATION).as_deref() {
+            Some("on") => Some(true),
+            Some("off") => Some(false),
+            _ => None,
+        },
+        smarten_punctuation: get(KEPUB_SMART_PUNCTUATION).as_deref() == Some("on"),
+        fullscreen_fixes: get(KEPUB_FULLSCREEN_FIXES).as_deref() == Some("on"),
+        css: get(KEPUB_CSS),
+    }
+}
 
 const KEPUB_EXT: &str = ".kepub.epub";
 
@@ -509,6 +542,29 @@ fn deliver(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn kepub_options_follow_the_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let library = Library::open(dir.path()).unwrap();
+        assert_eq!(kepub_options(&library), KepubOptions::default());
+        library.set_setting(KEPUB_HYPHENATION, Some("off")).unwrap();
+        library
+            .set_setting(KEPUB_SMART_PUNCTUATION, Some("on"))
+            .unwrap();
+        library
+            .set_setting(KEPUB_CSS, Some("p { margin: 0 }"))
+            .unwrap();
+        assert_eq!(
+            kepub_options(&library),
+            KepubOptions {
+                hyphenate: Some(false),
+                smarten_punctuation: true,
+                fullscreen_fixes: false,
+                css: Some("p { margin: 0 }".to_owned()),
+            }
+        );
+    }
 
     #[test]
     fn device_paths() {

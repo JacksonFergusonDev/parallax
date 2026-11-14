@@ -563,10 +563,12 @@ async fn update_books(
     let backups = state.backup_root.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        let converter = Kepubify::locate().map_err(err)?;
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let converter = Kepubify::locate()
+            .map_err(err)?
+            .with_options(parallax_core::send::kepub_options(&lib));
         update_on_device(&lib, &kobo, &converter, &backups, &ids, |event| {
             if let Some(channel) = &progress {
                 let _ = channel.send(event);
@@ -675,10 +677,12 @@ async fn send_books(
     let rules = !settings::is(&state, settings::KOBO_RULES, "off");
     tauri::async_runtime::spawn_blocking(move || {
         let kobo = KoboDevice::open(&mount).map_err(err)?;
-        let converter = Kepubify::locate().map_err(err)?;
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let converter = Kepubify::locate()
+            .map_err(err)?
+            .with_options(parallax_core::send::kepub_options(&lib));
         let outcomes = send_library_books(&lib, &kobo, &converter, &ids, |event| {
             if let Some(channel) = &progress {
                 let _ = channel.send(event);

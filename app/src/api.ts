@@ -990,7 +990,11 @@ export type SettingKey =
   | "comic_dither"
   | "comic_colour_separation"
   | "comic_colour_contrast"
-  | "comic_midtone_darkening";
+  | "comic_midtone_darkening"
+  | "kepub_hyphenation"
+  | "kepub_smart_punctuation"
+  | "kepub_fullscreen_fixes"
+  | "kepub_css";
 
 /** Every comic page setting; "Reset to recommended" clears them together.
  * Matches `COMIC_PAGE_SETTINGS` in crates/core/src/send.rs. */

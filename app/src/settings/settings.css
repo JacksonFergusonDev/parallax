@@ -134,6 +134,18 @@ body {
   color: var(--fg);
 }
 
+.settings-control textarea {
+  width: 100%;
+  max-width: 400px;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: var(--text-small);
+  resize: vertical;
+}
+
 .settings-choices {
   display: grid;
   gap: var(--space-3);

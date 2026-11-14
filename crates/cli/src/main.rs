@@ -25,7 +25,9 @@ use parallax_core::health::check_library;
 use parallax_core::import::{DeviceImport, import_from_device};
 use parallax_core::ingest::import_file;
 use parallax_core::rules;
-use parallax_core::send::{SendOutcome, send_books, send_library_books, update_on_device};
+use parallax_core::send::{
+    SendOutcome, kepub_options, send_books, send_library_books, update_on_device,
+};
 use parallax_device::{DeviceBook, ReadStatus};
 use parallax_device_kobo::{
     BookCheck, KoboDb, KoboDevice, MACOS_VOLUMES, ONBOARD_PREFIX, remove_orphaned_images,
@@ -1269,7 +1271,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             let outcomes = update_on_device(
                 lib,
                 &kobo,
-                &Kepubify::locate()?,
+                &Kepubify::locate()?.with_options(kepub_options(lib)),
                 &backup_root()?,
                 &ids,
                 |p| progress.send(p),
@@ -1703,8 +1705,13 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
         } => {
             let kobo = find_kobo(mount.as_deref())?;
             let progress = Reporter::new(json);
-            let outcomes =
-                send_library_books(lib, &kobo, &Kepubify::locate()?, &ids, |p| progress.send(p));
+            let outcomes = send_library_books(
+                lib,
+                &kobo,
+                &Kepubify::locate()?.with_options(kepub_options(lib)),
+                &ids,
+                |p| progress.send(p),
+            );
             drop(progress);
             if let Some(name) = collection {
                 let content_ids: Vec<String> = outcomes

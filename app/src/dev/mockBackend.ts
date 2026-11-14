@@ -407,6 +407,10 @@ const SETTING_KEYS = [
   "eject_after_send",
   "updates_auto",
   "updates_download",
+  "kepub_hyphenation",
+  "kepub_smart_punctuation",
+  "kepub_fullscreen_fixes",
+  "kepub_css",
 ];
 
 /** `?theme=sepia` in the URL starts the mock with that theme. */
