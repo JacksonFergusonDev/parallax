@@ -412,6 +412,9 @@ const SETTING_KEYS = [
   "kepub_smart_punctuation",
   "kepub_fullscreen_fixes",
   "kepub_css",
+  "save_template",
+  "save_archive",
+  "save_compression",
   "watch_folder",
   "watch_folder_trash",
   "kobo_layout",
@@ -559,6 +562,12 @@ export function installMockBackend(label = "main") {
           ];
         case "reconcile_device":
           return { series: 0, grouped: 0 };
+        case "library_save":
+          return (a.ids as number[]).map((id) => ({
+            book_id: id,
+            title: `Book ${id}`,
+            result: { Ok: `${a.destination}/Book ${id}.epub` },
+          }));
         case "watch_folder_added":
           return null;
         case "set_reading_layout":

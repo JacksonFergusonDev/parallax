@@ -804,6 +804,44 @@ async fn merge_collections(state: State<'_, AppState>, mount: PathBuf) -> CmdRes
     .map_err(err)?
 }
 
+/// Saves books to `destination`, a folder or, when Settings says to save
+/// archives, a ZIP file, named by the template in Settings.
+#[tauri::command]
+async fn library_save(
+    webview: Webview,
+    progress: Option<JavaScriptChannelId>,
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+    destination: PathBuf,
+) -> CmdResult<Vec<parallax_core::save::Saved>> {
+    use parallax_core::save::{
+        Compression, DEFAULT_TEMPLATE, Destination, SAVE_ARCHIVE, SAVE_COMPRESSION, SAVE_TEMPLATE,
+    };
+    let progress = progress.map(|id| id.channel_on(webview));
+    let library = state.library.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let lib = library
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let get = |key| lib.setting(key).ok().flatten();
+        let template = get(SAVE_TEMPLATE).unwrap_or_else(|| DEFAULT_TEMPLATE.to_owned());
+        let destination = if get(SAVE_ARCHIVE).as_deref() == Some("on") {
+            Destination::Archive(
+                destination,
+                Compression::parse(get(SAVE_COMPRESSION).as_deref()),
+            )
+        } else {
+            Destination::Folder(destination)
+        };
+        let total = ids.len();
+        parallax_core::save::save_books(&lib, &ids, &template, &destination, |index, title| {
+            report_books(progress.as_ref(), index, total, Some(title));
+        })
+    })
+    .await
+    .map_err(err)?
+}
+
 /// Sets the reading layout from Settings on these books.
 #[tauri::command]
 async fn set_reading_layout(
@@ -1724,6 +1762,7 @@ pub fn run() {
             merge_collections,
             set_reading_status,
             set_reading_layout,
+            library_save,
             watch::watch_folder_added,
             enhance_apply,
             settings::setting_get,

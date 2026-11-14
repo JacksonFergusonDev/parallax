@@ -215,6 +215,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.settings-inline input.settings-template {
+  width: 320px;
+  max-width: 100%;
+}
+
 .settings-path {
   max-width: 400px;
   overflow-wrap: anywhere;

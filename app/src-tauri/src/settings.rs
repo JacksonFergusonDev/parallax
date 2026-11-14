@@ -58,7 +58,7 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 37] = [
+const SETTINGS: [(&str, Allowed); 40] = [
     (parallax_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (parallax_core::enhance::METRON_TOKEN, Allowed::Text(256)),
     (
@@ -97,6 +97,12 @@ const SETTINGS: [(&str, Allowed); 37] = [
     (KEPUB_SMART_PUNCTUATION, Allowed::OneOf(&["on"])),
     (KEPUB_FULLSCREEN_FIXES, Allowed::OneOf(&["on"])),
     (KEPUB_CSS, Allowed::Text(4000)),
+    (parallax_core::save::SAVE_TEMPLATE, Allowed::Text(300)),
+    (parallax_core::save::SAVE_ARCHIVE, Allowed::OneOf(&["on"])),
+    (
+        parallax_core::save::SAVE_COMPRESSION,
+        Allowed::OneOf(&parallax_core::save::SAVE_COMPRESSIONS),
+    ),
     (parallax_core::watch::WATCH_FOLDER, Allowed::Text(1024)),
     (
         parallax_core::watch::WATCH_FOLDER_TRASH,
@@ -123,7 +129,7 @@ const SETTINGS: [(&str, Allowed); 37] = [
 ];
 
 /// Settings that are preferences, which Reset puts back. Credentials stay.
-const PREFERENCES: [&str; 31] = [
+const PREFERENCES: [&str; 34] = [
     parallax_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
@@ -149,6 +155,9 @@ const PREFERENCES: [&str; 31] = [
     KEPUB_CSS,
     parallax_core::watch::WATCH_FOLDER,
     parallax_core::watch::WATCH_FOLDER_TRASH,
+    parallax_core::save::SAVE_TEMPLATE,
+    parallax_core::save::SAVE_ARCHIVE,
+    parallax_core::save::SAVE_COMPRESSION,
     layout::KOBO_LAYOUT,
     layout::KOBO_LAYOUT_FONT,
     layout::KOBO_LAYOUT_SIZE,
@@ -164,6 +173,11 @@ fn checked(key: &str, value: Option<String>) -> CmdResult<Option<String>> {
         .find(|(k, _)| *k == key)
         .ok_or_else(|| format!("unknown setting {key}"))?;
     let value = value.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty());
+    if key == parallax_core::save::SAVE_TEMPLATE
+        && let Some(template) = &value
+    {
+        parallax_core::save::check_template(template)?;
+    }
     match (allowed, &value) {
         (_, None) => Ok(None),
         (Allowed::Text(max), Some(v)) if v.chars().count() <= *max => Ok(value),

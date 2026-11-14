@@ -11,7 +11,12 @@ import {
   Trash2,
 } from "lucide-react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { ask, message, open } from "@tauri-apps/plugin-dialog";
+import {
+  ask,
+  message,
+  open,
+  save as saveDialog,
+} from "@tauri-apps/plugin-dialog";
 import {
   booksOnDevice,
   changeCollections,
@@ -19,6 +24,7 @@ import {
   comicTransferEstimate,
   onSettingChange,
   onWatchFolderFound,
+  saveBooks,
   watchFolderAdded,
   deviceBooks,
   dismissDuplicates,
@@ -240,7 +246,13 @@ export default function App() {
   const [batchTransfer, setBatchTransfer] =
     useState<BatchTransferProgress | null>(null);
   const [busy, setBusy] = useState<
-    "importing" | "removing" | "sending" | "updating" | "ejecting" | null
+    | "importing"
+    | "removing"
+    | "sending"
+    | "updating"
+    | "ejecting"
+    | "saving"
+    | null
   >(null);
   const [dragging, setDragging] = useState(false);
   const [duplicates, setDuplicates] = useState<Promise<ReviewGroup[]> | null>(
@@ -883,6 +895,50 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     if (picked) doImport(Array.isArray(picked) ? picked : [picked]);
   }, [doImport]);
 
+  /** Saves the selected books, or every book shown, to a folder or a ZIP
+   * archive, as Settings › Library says. */
+  const saveToDisk = async () => {
+    const ids = selected.size ? [...selected] : visible.map((b) => b.id);
+    if (ids.length === 0) return;
+    const archive =
+      (await getSetting("save_archive").catch(() => null)) === "on";
+    const destination = archive
+      ? await saveDialog({
+          title: `Save ${ids.length === 1 ? "1 book" : `${ids.length} books`} as an archive`,
+          defaultPath: "Parallax Books.zip",
+          filters: [{ name: "ZIP archive", extensions: ["zip"] }],
+        })
+      : await open({
+          directory: true,
+          title: `Save ${ids.length === 1 ? "1 book" : `${ids.length} books`} to a folder`,
+        });
+    if (typeof destination !== "string") return;
+    setNotice(null);
+    try {
+      const saved = await runBookOperation("Saving", (report) => {
+        setBusy("saving");
+        return saveBooks(ids, destination, report);
+      });
+      const failed = saved.filter((s) => "Err" in s.result);
+      const done = saved.length - failed.length;
+      setNotice(
+        failed.length
+          ? {
+              kind: "error",
+              text: `Saved ${done} of ${saved.length}. ${failed[0].title}: ${"Err" in failed[0].result ? failed[0].result.Err : ""}`,
+            }
+          : {
+              kind: "info",
+              text: `Saved ${done === 1 ? "1 book" : `${done} books`} ${archive ? "to the archive" : "to the folder"}.`,
+            },
+      );
+    } catch (e) {
+      setNotice({ kind: "error", text: String(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const chooseComicFolder = async () => {
     const folder = await open({
       directory: true,
@@ -1180,6 +1236,10 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     "file.add": { run: () => void chooseFiles() },
     "file.calibre": { run: () => setFromCalibre(true) },
     "file.goodreads": { run: () => setFromGoodreads(true) },
+    "file.save": {
+      run: fromLibrary(() => void saveToDisk()),
+      enabled: books.length > 0 && busy === null,
+    },
     "edit.find": {
       run: () => {
         searchRef.current?.focus();
@@ -1470,6 +1530,13 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                         {
                           label: "Tidy genres…",
                           onPick: () => setTidying(true),
+                        },
+                        {
+                          label: selected.size
+                            ? `Save ${selected.size} to disk…`
+                            : "Save to disk…",
+                          onPick: () => void saveToDisk(),
+                          disabled: busy !== null || books.length === 0,
                         },
                         {
                           label: selected.size

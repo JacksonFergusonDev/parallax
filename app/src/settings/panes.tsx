@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import {
   COMIC_PAGE_SETTINGS,
@@ -302,6 +302,108 @@ function WatchFolder(props: PaneProps) {
   );
 }
 
+/** Matches DEFAULT_TEMPLATE in crates/core/src/save.rs. */
+const DEFAULT_TEMPLATE = "{author}/[{series} {series_index} - ]{title}";
+
+/** How Save to Disk names books, and whether it makes a ZIP archive. */
+function SavingSection(props: PaneProps) {
+  const { values, set } = props;
+  const template = useId();
+  const templateHint = useId();
+  const compression = useId();
+  const compressionHint = useId();
+  const archive = values.save_archive === "on";
+  return (
+    <>
+      <h2 className="settings-section">Saving to disk</h2>
+      <p className="settings-intro">
+        Save to Disk in the File menu and Library tools saves the selected
+        books, or every book shown, with your edits and covers.
+      </p>
+      <Row label="File names" labelFor={template}>
+        <TemplateSetting {...props} id={template} describedBy={templateHint} />
+        <p className="hint" id={templateHint}>
+          Use {"{title}"}, {"{author}"}, {"{authors}"}, {"{series}"},{" "}
+          {"{series_index}"}, {"{publisher}"}, {"{year}"}, {"{language}"} and{" "}
+          {"{id}"}. A / starts a folder. Text in [ ] is left out when a field in
+          it is empty.
+        </p>
+      </Row>
+      <Row label="Archive">
+        <Check
+          {...props}
+          name="save_archive"
+          defaultOn={false}
+          hint="Saves into one ZIP file instead of a folder, which is easier to keep as a backup or copy elsewhere."
+        >
+          Save as a compressed archive
+        </Check>
+      </Row>
+      {archive && (
+        <Row label="Compression" labelFor={compression}>
+          <select
+            id={compression}
+            aria-describedby={compressionHint}
+            value={values.save_compression ?? "normal"}
+            onChange={(e) =>
+              set(
+                "save_compression",
+                e.target.value === "normal" ? null : e.target.value,
+              )
+            }
+          >
+            <option value="store">None (quickest)</option>
+            <option value="fast">Fast</option>
+            <option value="normal">Normal (recommended)</option>
+            <option value="best">Smallest</option>
+          </select>
+          <p className="hint" id={compressionHint}>
+            Books are already compressed inside, so the archive is only a few
+            percent smaller at any setting. Normal opens anywhere and saves that
+            little without taking long.
+          </p>
+        </Row>
+      )}
+    </>
+  );
+}
+
+/** The file name template, checked by the app when you leave the field. */
+function TemplateSetting({
+  values,
+  set,
+  id,
+  describedBy,
+}: PaneProps & { id: string; describedBy: string }) {
+  const saved = values.save_template ?? DEFAULT_TEMPLATE;
+  const [draft, setDraft] = useDraft(saved);
+  return (
+    <div className="settings-inline">
+      <input
+        id={id}
+        className="settings-template"
+        aria-describedby={describedBy}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const next = draft.trim();
+          if (next === saved) return;
+          set(
+            "save_template",
+            !next || next === DEFAULT_TEMPLATE ? null : next,
+          );
+        }}
+      />
+      {saved !== DEFAULT_TEMPLATE && (
+        <button onClick={() => set("save_template", null)}>Reset</button>
+      )}
+    </div>
+  );
+}
+
 export function LibraryPane(props: PaneProps) {
   return (
     <>
@@ -333,8 +435,21 @@ export function LibraryPane(props: PaneProps) {
           </button>
         </div>
       </Row>
+      <SavingSection {...props} />
     </>
   );
+}
+
+/** What you're typing in a field saved when you leave it, starting again
+ * from the saved value whenever that changes, such as from another window. */
+function useDraft(saved: string) {
+  const [draft, setDraft] = useState(saved);
+  const [base, setBase] = useState(saved);
+  if (saved !== base) {
+    setBase(saved);
+    setDraft(saved);
+  }
+  return [draft, setDraft] as const;
 }
 
 /** Multi-line text saved when you leave the field, not on every key. */
@@ -354,8 +469,7 @@ function TextSetting({
   describedBy?: string;
 }) {
   const saved = values[name] ?? "";
-  const [draft, setDraft] = useState(saved);
-  useEffect(() => setDraft(saved), [saved]);
+  const [draft, setDraft] = useDraft(saved);
   return (
     <textarea
       id={id}
@@ -492,8 +606,7 @@ function NumberSetting({
   placeholder: string;
 }) {
   const saved = values[name] ?? "";
-  const [draft, setDraft] = useState(saved);
-  useEffect(() => setDraft(saved), [saved]);
+  const [draft, setDraft] = useDraft(saved);
   const commit = () => {
     const text = draft.trim();
     if (!text) {

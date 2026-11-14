@@ -586,6 +586,22 @@ export const importBooks = (
     { paths, ...(comicFolder ? { comicFolder } : {}), ...progressArgs(report) },
     ["library", "plans"],
   );
+export interface Saved {
+  book_id: number;
+  title: string;
+  result: { Ok: string } | { Err: string };
+}
+/** Saves books to a folder, or a ZIP archive when Settings says so. */
+export const saveBooks = (
+  ids: number[],
+  destination: string,
+  report?: ReportBookProgress,
+) =>
+  invoke<Saved[]>("library_save", {
+    ids,
+    destination,
+    ...progressArgs(report),
+  });
 export const setComicKind = (
   id: number,
   kind: Book["kind"],
@@ -996,6 +1012,9 @@ export type SettingKey =
   | "kepub_smart_punctuation"
   | "kepub_fullscreen_fixes"
   | "kepub_css"
+  | "save_template"
+  | "save_archive"
+  | "save_compression"
   | "watch_folder"
   | "watch_folder_trash"
   | "kobo_layout"

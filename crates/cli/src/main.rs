@@ -294,6 +294,23 @@ enum LibraryCommand {
     },
     /// Write a book with its edits applied (what a device receives, before KEPUB conversion).
     Export { id: i64, out: PathBuf },
+    /// Save books with their edits to a folder, or one ZIP archive, named by
+    /// a template (the app's Save to Disk). No ids saves every book.
+    Save {
+        ids: Vec<i64>,
+        /// The folder, or with --zip the archive file, to save to.
+        #[arg(long)]
+        to: PathBuf,
+        /// File names, such as "{author}/{title}". Defaults to the app's setting.
+        #[arg(long)]
+        template: Option<String>,
+        /// Save into one ZIP archive at --to.
+        #[arg(long)]
+        zip: bool,
+        /// Archive compression: store, fast, normal or best.
+        #[arg(long, default_value = "normal")]
+        compression: String,
+    },
     /// Automatic grouping rules (series/tag/author → collection).
     #[command(subcommand)]
     Rules(RulesCommand),
@@ -1228,6 +1245,43 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
         LibraryCommand::Export { id, out } => {
             let book = lib.export(id, &out)?;
             println!("exported #{} {} to {}", book.id, book.title, out.display());
+        }
+        LibraryCommand::Save {
+            ids,
+            to,
+            template,
+            zip,
+            compression,
+        } => {
+            use parallax_core::save::{
+                Compression, DEFAULT_TEMPLATE, Destination, SAVE_TEMPLATE, save_books,
+            };
+            let ids = if ids.is_empty() {
+                lib.books()?.iter().map(|b| b.id).collect()
+            } else {
+                ids
+            };
+            let template = template
+                .or(lib.setting(SAVE_TEMPLATE)?)
+                .unwrap_or_else(|| DEFAULT_TEMPLATE.to_owned());
+            let destination = if zip {
+                Destination::Archive(to, Compression::parse(Some(compression.as_str())))
+            } else {
+                Destination::Folder(to)
+            };
+            let saved = save_books(lib, &ids, &template, &destination, |_, _| {})
+                .map_err(anyhow::Error::msg)?;
+            if json {
+                return print_json(&saved);
+            }
+            for s in &saved {
+                match &s.result {
+                    Ok(path) => {
+                        println!("{} #{} {} → {path}", success("saved"), s.book_id, s.title);
+                    }
+                    Err(e) => eprintln!("failed #{} {}: {e}", s.book_id, s.title),
+                }
+            }
         }
         LibraryCommand::Rm { id } => {
             let title = lib.book(id)?.title;

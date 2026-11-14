@@ -17,6 +17,7 @@ pub mod ingest;
 pub mod layout;
 pub mod review;
 pub mod rules;
+pub mod save;
 pub mod send;
 pub mod stats;
 pub mod watch;
