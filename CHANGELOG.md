@@ -4,6 +4,8 @@ What changed in each release of Parallax, for people using it. The release workf
 
 ## Unreleased
 
+## 0.1.3 (2026-11-14)
+
 - **Saved searches** keep a search and its filters under a name, such as Unread sci-fi, so you can bring them back from the library's filter bar, as calibre's saved searches do. Turn them on with **Show saved searches** in Settings › Library.
 - **Check for new Kobo software** in Settings › Kobo asks Kobo, when your Kobo connects, whether newer software is available for it, as Kobo Utilities does, and tells you how to install it. Kobo is told your model and software version, not your serial number. It's off until you turn it on. `parallax-cli kobo firmware` checks from the terminal.
 - **Save to Disk…** (File menu, ⇧⌘S, and Library tools) saves the selected books, or every book shown, with your edits and covers, as calibre's save to disk does. Settings › Library sets how files are named, such as a folder for each author with series books numbered, and can save everything into one ZIP archive instead, with a choice of compression. `parallax-cli library save` does the same.

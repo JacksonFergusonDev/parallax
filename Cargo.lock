@@ -2933,7 +2933,7 @@ dependencies = [
 
 [[package]]
 name = "parallax-app"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "parallax-comic",
  "parallax-convert",
@@ -2958,7 +2958,7 @@ dependencies = [
 
 [[package]]
 name = "parallax-cli"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -2980,7 +2980,7 @@ dependencies = [
 
 [[package]]
 name = "parallax-comic"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "compress-tools",
  "fast_image_resize",
@@ -2997,7 +2997,7 @@ dependencies = [
 
 [[package]]
 name = "parallax-convert"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "boko",
  "parallax-epub",
@@ -3008,7 +3008,7 @@ dependencies = [
 
 [[package]]
 name = "parallax-core"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "chrono",
  "compress-tools",
@@ -3033,7 +3033,7 @@ dependencies = [
 
 [[package]]
 name = "parallax-covers"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "parallax-metadata",
  "reqwest",
@@ -3044,7 +3044,7 @@ dependencies = [
 
 [[package]]
 name = "parallax-device"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "chrono",
  "serde",
@@ -3052,7 +3052,7 @@ dependencies = [
 
 [[package]]
 name = "parallax-device-kobo"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "chrono",
  "fs4",
@@ -3070,7 +3070,7 @@ dependencies = [
 
 [[package]]
 name = "parallax-epub"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "roxmltree",
  "serde",
@@ -3081,7 +3081,7 @@ dependencies = [
 
 [[package]]
 name = "parallax-library"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "chrono",
  "image",
@@ -3099,7 +3099,7 @@ dependencies = [
 
 [[package]]
 name = "parallax-metadata"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "chrono",
  "reqwest",
@@ -3113,7 +3113,7 @@ dependencies = [
 
 [[package]]
 name = "parallax-upscale"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "block2",
  "image",
