@@ -995,7 +995,13 @@ export type SettingKey =
   | "kepub_hyphenation"
   | "kepub_smart_punctuation"
   | "kepub_fullscreen_fixes"
-  | "kepub_css";
+  | "kepub_css"
+  | "kobo_layout"
+  | "kobo_layout_font"
+  | "kobo_layout_size"
+  | "kobo_layout_line_height"
+  | "kobo_layout_margins"
+  | "kobo_layout_alignment";
 
 /** Every comic page setting; "Reset to recommended" clears them together.
  * Matches `COMIC_PAGE_SETTINGS` in crates/core/src/send.rs. */
@@ -1175,6 +1181,19 @@ export const setReadingStatus = (
     { mount, contentIds, status, resetPosition, resetTime },
     [deviceTag(mount), "library"],
   );
+/** Sets the reading layout from Settings › Kobo on these books. */
+export const setReadingLayout = (mount: string, contentIds: string[]) =>
+  write<number>("set_reading_layout", { mount, contentIds }, [
+    deviceTag(mount),
+  ]);
+/** The settings a reading layout is made of; any set means there is one. */
+export const KOBO_LAYOUT_PARTS = [
+  "kobo_layout_font",
+  "kobo_layout_size",
+  "kobo_layout_line_height",
+  "kobo_layout_margins",
+  "kobo_layout_alignment",
+] as const satisfies readonly SettingKey[];
 export const libraryDuplicates = () =>
   read<LibraryDuplicateGroup[]>("library_duplicates", {}, ["library"]);
 export const deviceDuplicates = (mount: string) =>
@@ -1199,10 +1218,11 @@ export async function reconcileDevice(mount: string) {
       series: number;
       grouped: number;
       positions: number;
+      layout: number;
       reading: number;
       annotations: number;
     }>("reconcile_device", { mount });
-    if (result.series || result.grouped || result.positions)
+    if (result.series || result.grouped || result.positions || result.layout)
       readCache.invalidate(deviceTag(mount));
     if (result.reading || result.annotations) readCache.invalidate("library");
     return result;

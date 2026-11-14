@@ -16,6 +16,7 @@ Run the relevant checks on a physical Kobo with test books and disposable collec
 - Check reading-status changes and remove a disposable book. Eject and verify that the status changes persist and the removed book leaves no blank entry. If using the Library removal dialog, verify the selected library and device scopes.
 - Read a few pages of a test book and reconnect so Parallax saves the place. Remove the book, send it again, eject, let Nickel import it and reconnect. Eject and confirm the book opens at the saved chapter and shows the saved percentage. Repeat with sending it to a second Kobo, and with **Settings › Kobo › Put back your place in books sent again** off, where it should open at the start.
 - Send a book with each **Sending books** option on (hyphenation forced off and on, smart punctuation, full-screen fixes and a visible extra CSS rule, such as a large text indent). Confirm each change shows on the Kobo.
+- Choose a font, size, line spacing, margins and alignment in **Settings › Kobo › Reading layout**. Select a book in On Kobo, choose **Set layout** and eject. Confirm the book opens with that layout and that other books are unchanged. Turn on **Set this layout on new books**, send a book, eject, reconnect and confirm it gets the layout.
 - On a batch send or update, check progress and the result for each book. Check pending sends, replacements, and removals before ejecting, then reconnect and verify that imported or removed books have settled into the expected state.
 
 ## Restore a device change
@@ -42,7 +43,7 @@ After running the relevant checks on a physical device of a new model and record
 
 ## Checks still open
 
-- Verify the place is restored in a book sent again, and that the Sending books options show on the Kobo (Send step 5 and 6). Whether Nickel honours a restored `ChapterIDBookmarked` in a freshly imported KEPUB is untested.
+- Verify the place is restored in a book sent again, that the Sending books options show on the Kobo, and that Nickel opens books with a reading layout Parallax set. Whether Nickel honours a restored `ChapterIDBookmarked` in a freshly imported KEPUB is untested.
 - Verify the details-only update for a comic that is on the Kobo as its original CBZ (Comics step 5). Nickel showing series on a CBZ row is untested.
 - Repeat the production comics send and update checks on the Libra 2. Verify direction, chapter presentation, series, reading position, and the final page-processing settings. Colour and older models still need their own runs.
 - Verify batch progress, pending-eject states, Library removal scopes, Library filters with a connected device, and the physical-device restore flow.

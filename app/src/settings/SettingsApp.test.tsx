@@ -190,6 +190,18 @@ describe("Settings window", () => {
     expect(labelled("Add full-screen reading fixes").checked).toBe(false);
   });
 
+  it("keeps a reading layout that is off until you choose it", async () => {
+    await tab("Kobo");
+    expect(labelled("Set this layout on new books").checked).toBe(false);
+    const font = select("Font");
+    expect(font.value).toBe("");
+    await change(font, "Georgia");
+    expect(calls("setting_set").at(-1)?.[1]).toEqual({
+      key: "kobo_layout_font",
+      value: "Georgia",
+    });
+  });
+
   it("tunes comic pages and resets them to recommended", async () => {
     await tab("Comics");
     const reset = button("Using recommended settings");

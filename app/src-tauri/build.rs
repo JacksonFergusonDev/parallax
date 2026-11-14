@@ -50,6 +50,7 @@ const COMMANDS: &[&str] = &[
     "clean_images",
     "merge_collections",
     "set_reading_status",
+    "set_reading_layout",
     "enhance_apply",
     "setting_get",
     "setting_set",

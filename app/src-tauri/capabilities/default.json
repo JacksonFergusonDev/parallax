@@ -55,6 +55,7 @@
     "allow-clean-images",
     "allow-merge-collections",
     "allow-set-reading-status",
+    "allow-set-reading-layout",
     "allow-enhance-apply",
     "allow-setting-get",
     "allow-setting-set",

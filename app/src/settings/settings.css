@@ -146,6 +146,10 @@ body {
   resize: vertical;
 }
 
+.settings-control input.settings-number {
+  width: 200px;
+}
+
 .settings-choices {
   display: grid;
   gap: var(--space-3);

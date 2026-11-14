@@ -13,6 +13,7 @@ import {
   Trash2,
   WandSparkles,
   History,
+  Type,
 } from "lucide-react";
 import {
   colorColumn,
@@ -34,7 +35,11 @@ import {
   ejectDevice,
   importFromDevice,
   listCollections,
+  setReadingLayout,
   setReadingStatus,
+  getSetting,
+  onSettingChange,
+  KOBO_LAYOUT_PARTS,
   tidyDevice,
   type Book,
   type Collection,
@@ -121,6 +126,37 @@ type Dialog =
   | { kind: "enhance"; ids: number[] }
   | null;
 
+/** Whether Settings › Kobo has a reading layout to set on books. */
+function useHasLayout() {
+  const [parts, setParts] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let alive = true;
+    void Promise.all(
+      KOBO_LAYOUT_PARTS.map((key) =>
+        getSetting(key)
+          .then((value) => (value ? key : null))
+          .catch(() => null),
+      ),
+    ).then((keys) => {
+      if (alive) setParts(new Set(keys.filter((k) => k !== null)));
+    });
+    const stop = onSettingChange(({ key, value }) => {
+      if (!(KOBO_LAYOUT_PARTS as readonly string[]).includes(key)) return;
+      setParts((old) => {
+        const next = new Set(old);
+        if (value) next.add(key);
+        else next.delete(key);
+        return next;
+      });
+    });
+    return () => {
+      alive = false;
+      void stop.then((f) => f());
+    };
+  }, []);
+  return parts.size > 0;
+}
+
 export function DeviceView({
   device,
   revision,
@@ -153,6 +189,7 @@ export function DeviceView({
   /** Why changes are off for this Kobo; null when they're allowed. */
   const readOnly = device.read_only;
   const locked = busy !== null || readOnly !== null;
+  const hasLayout = useHasLayout();
   const anchor = useRef<string | null>(null);
   const request = useRef({ generation: 0 });
   const { mode, setMode, sort, setSort } = useViewState<DeviceKey>(
@@ -405,6 +442,13 @@ export function DeviceView({
       );
       setSelected(new Set());
       return `${done} Eject to see the change on your Kobo.`;
+    });
+
+  const applyLayout = () =>
+    run(async () => {
+      const n = await setReadingLayout(device.mount, ids(imported));
+      setSelected(new Set());
+      return `Set your reading layout on ${plural(n, "book")}. Eject to see it on your Kobo.`;
     });
 
   const tidy = () =>
@@ -808,6 +852,17 @@ export function DeviceView({
               : []),
           ]}
         />
+        {hasLayout && (
+          <button
+            className="secondary"
+            onClick={applyLayout}
+            disabled={imported.length === 0 || locked}
+            title="Give these books the font and layout from Settings › Kobo"
+          >
+            <Type />
+            Set layout
+          </button>
+        )}
         {importable.length > 0 && (
           <button
             className="secondary"

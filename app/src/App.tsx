@@ -364,8 +364,12 @@ export default function App() {
     shelves.then((list) => alive && setCollections(list));
     if (device) {
       reconcileDevice(device.mount)
-        .then(({ series, grouped, positions }) => {
+        .then(({ series, grouped, positions, layout }) => {
           const parts = [];
+          if (layout)
+            parts.push(
+              `set your reading layout on ${layout} ${layout === 1 ? "book" : "books"}`,
+            );
           if (positions)
             parts.push(
               `put back your place in ${positions} ${positions === 1 ? "book" : "books"} you sent again`,

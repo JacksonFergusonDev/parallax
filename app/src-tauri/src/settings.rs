@@ -5,12 +5,15 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use parallax_core::layout;
 use parallax_core::send::{
     COMIC_AUTOCONTRAST, COMIC_COLOUR_CONTRAST, COMIC_COLOUR_SEPARATION, COMIC_CROP, COMIC_DITHER,
     COMIC_MIDTONE_DARKENING, COMIC_SPREADS, COMIC_STRENGTHS, COMIC_UPSCALE, KEPUB_CSS,
     KEPUB_FULLSCREEN_FIXES, KEPUB_HYPHENATION, KEPUB_SMART_PUNCTUATION,
 };
-use parallax_device_kobo::{BackupPolicy, backups_size, delete_all_backups};
+use parallax_device_kobo::{
+    BackupPolicy, FONT_SIZES, LINE_HEIGHTS, MARGINS, backups_size, delete_all_backups,
+};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, EventTarget, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
@@ -50,10 +53,12 @@ enum Allowed {
     Text(usize),
     /// One of these; no value means the default.
     OneOf(&'static [&'static str]),
+    /// A whole number in this range.
+    Integer(i64, i64),
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 29] = [
+const SETTINGS: [(&str, Allowed); 35] = [
     (parallax_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (parallax_core::enhance::METRON_TOKEN, Allowed::Text(256)),
     (
@@ -92,10 +97,28 @@ const SETTINGS: [(&str, Allowed); 29] = [
     (KEPUB_SMART_PUNCTUATION, Allowed::OneOf(&["on"])),
     (KEPUB_FULLSCREEN_FIXES, Allowed::OneOf(&["on"])),
     (KEPUB_CSS, Allowed::Text(4000)),
+    (layout::KOBO_LAYOUT, Allowed::OneOf(&["on"])),
+    (layout::KOBO_LAYOUT_FONT, Allowed::Text(80)),
+    (
+        layout::KOBO_LAYOUT_SIZE,
+        Allowed::Integer(*FONT_SIZES.start(), *FONT_SIZES.end()),
+    ),
+    (
+        layout::KOBO_LAYOUT_LINE_HEIGHT,
+        Allowed::OneOf(&LINE_HEIGHTS),
+    ),
+    (
+        layout::KOBO_LAYOUT_MARGINS,
+        Allowed::Integer(*MARGINS.start(), *MARGINS.end()),
+    ),
+    (
+        layout::KOBO_LAYOUT_ALIGNMENT,
+        Allowed::OneOf(&["left", "justify"]),
+    ),
 ];
 
 /// Settings that are preferences, which Reset puts back. Credentials stay.
-const PREFERENCES: [&str; 23] = [
+const PREFERENCES: [&str; 29] = [
     parallax_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
@@ -119,6 +142,12 @@ const PREFERENCES: [&str; 23] = [
     KEPUB_SMART_PUNCTUATION,
     KEPUB_FULLSCREEN_FIXES,
     KEPUB_CSS,
+    layout::KOBO_LAYOUT,
+    layout::KOBO_LAYOUT_FONT,
+    layout::KOBO_LAYOUT_SIZE,
+    layout::KOBO_LAYOUT_LINE_HEIGHT,
+    layout::KOBO_LAYOUT_MARGINS,
+    layout::KOBO_LAYOUT_ALIGNMENT,
 ];
 
 /// `value` trimmed, with empty meaning the default, if `key` may hold it.
@@ -132,6 +161,11 @@ fn checked(key: &str, value: Option<String>) -> CmdResult<Option<String>> {
         (_, None) => Ok(None),
         (Allowed::Text(max), Some(v)) if v.chars().count() <= *max => Ok(value),
         (Allowed::OneOf(values), Some(v)) if values.contains(&v.as_str()) => Ok(value),
+        (Allowed::Integer(min, max), Some(v))
+            if v.parse::<i64>().is_ok_and(|n| (*min..=*max).contains(&n)) =>
+        {
+            Ok(value)
+        }
         _ => Err(format!("{key} can't be set to that")),
     }
 }
@@ -419,6 +453,15 @@ mod tests {
             Ok(Some("off".into()))
         );
         assert!(checked(KOBO_RULES, Some("on".into())).is_err());
+    }
+
+    #[test]
+    fn numbers_stay_in_range() {
+        let size = layout::KOBO_LAYOUT_SIZE;
+        assert_eq!(checked(size, Some("24".into())), Ok(Some("24".into())));
+        assert!(checked(size, Some("9".into())).is_err());
+        assert!(checked(size, Some("big".into())).is_err());
+        assert!(checked(layout::KOBO_LAYOUT_MARGINS, Some("17".into())).is_err());
     }
 
     #[test]

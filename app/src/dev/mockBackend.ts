@@ -412,6 +412,12 @@ const SETTING_KEYS = [
   "kepub_smart_punctuation",
   "kepub_fullscreen_fixes",
   "kepub_css",
+  "kobo_layout",
+  "kobo_layout_font",
+  "kobo_layout_size",
+  "kobo_layout_line_height",
+  "kobo_layout_margins",
+  "kobo_layout_alignment",
 ];
 
 /** `?theme=sepia` in the URL starts the mock with that theme. */
@@ -551,6 +557,8 @@ export function installMockBackend(label = "main") {
           ];
         case "reconcile_device":
           return { series: 0, grouped: 0 };
+        case "set_reading_layout":
+          return (a.contentIds as string[]).length;
         case "rules_list":
           return rules;
         case "rules_save": {

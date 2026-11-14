@@ -395,6 +395,193 @@ function SendingSection(props: PaneProps) {
   );
 }
 
+/** Fonts every current Kobo has built in. Nickel stores the name as shown. */
+const KOBO_FONTS = [
+  "Amasis",
+  "Avenir Next",
+  "Caecilia",
+  "Georgia",
+  "Gill Sans",
+  "Kobo Nickel",
+  "Malabar",
+  "Optima",
+  "Rakuten Sans",
+  "Rakuten Serif",
+];
+/** Matches LINE_HEIGHTS in crates/device-kobo/src/layout.rs. */
+const LINE_HEIGHTS = [
+  "1.0",
+  "1.05",
+  "1.07",
+  "1.1",
+  "1.2",
+  "1.35",
+  "1.5",
+  "1.7",
+  "1.8",
+  "2.0",
+  "2.2",
+  "2.4",
+  "2.6",
+  "2.8",
+  "3.0",
+];
+
+/** A whole number saved when you leave the field; empty is the default. */
+function NumberSetting({
+  values,
+  set,
+  name,
+  id,
+  min,
+  max,
+  placeholder,
+}: PaneProps & {
+  name: SettingKey;
+  id: string;
+  min: number;
+  max: number;
+  placeholder: string;
+}) {
+  const saved = values[name] ?? "";
+  const [draft, setDraft] = useState(saved);
+  useEffect(() => setDraft(saved), [saved]);
+  const commit = () => {
+    const text = draft.trim();
+    if (!text) {
+      if (saved) set(name, null);
+      return;
+    }
+    const n = Math.round(Number(text));
+    if (!Number.isFinite(n)) {
+      setDraft(saved);
+      return;
+    }
+    const clamped = String(Math.min(max, Math.max(min, n)));
+    setDraft(clamped);
+    if (clamped !== saved) set(name, clamped);
+  };
+  return (
+    <input
+      id={id}
+      type="number"
+      inputMode="numeric"
+      className="settings-number"
+      min={min}
+      max={max}
+      step={1}
+      placeholder={placeholder}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+      }}
+    />
+  );
+}
+
+/** The font and layout Parallax sets on books on the Kobo, as Kobo
+ * Utilities does. Off by default: most people set these on the Kobo. */
+function LayoutSection(props: PaneProps) {
+  const { values, set } = props;
+  const font = useId();
+  const size = useId();
+  const spacing = useId();
+  const margins = useId();
+  const alignment = useId();
+  const fonts =
+    values.kobo_layout_font && !KOBO_FONTS.includes(values.kobo_layout_font)
+      ? [...KOBO_FONTS, values.kobo_layout_font]
+      : KOBO_FONTS;
+  const pick = (key: SettingKey) => (e: React.ChangeEvent<HTMLSelectElement>) =>
+    set(key, e.target.value || null);
+  return (
+    <>
+      <h2 className="settings-section">Reading layout</h2>
+      <p className="settings-intro">
+        A font and layout to set on books, so they open the way you like without
+        adjusting each one on your Kobo. Anything left as the Kobo sets it is
+        unchanged. Select books in On Kobo and choose Set layout, or have it set
+        for you below.
+      </p>
+      <Row label="Font" labelFor={font}>
+        <select
+          id={font}
+          value={values.kobo_layout_font ?? ""}
+          onChange={pick("kobo_layout_font")}
+        >
+          <option value="">As the Kobo sets it</option>
+          {fonts.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </Row>
+      <Row
+        label="Font size"
+        labelFor={size}
+        hint="The number your Kobo shows for font size, from 10 to 60."
+      >
+        <NumberSetting
+          {...props}
+          name="kobo_layout_size"
+          id={size}
+          min={10}
+          max={60}
+          placeholder="As the Kobo sets it"
+        />
+      </Row>
+      <Row label="Line spacing" labelFor={spacing}>
+        <select
+          id={spacing}
+          value={values.kobo_layout_line_height ?? ""}
+          onChange={pick("kobo_layout_line_height")}
+        >
+          <option value="">As the Kobo sets it</option>
+          {LINE_HEIGHTS.map((h) => (
+            <option key={h} value={h}>
+              {h}
+            </option>
+          ))}
+        </select>
+      </Row>
+      <Row label="Margins" labelFor={margins} hint="From 0 to 16, both sides.">
+        <NumberSetting
+          {...props}
+          name="kobo_layout_margins"
+          id={margins}
+          min={0}
+          max={16}
+          placeholder="As the Kobo sets it"
+        />
+      </Row>
+      <Row label="Alignment" labelFor={alignment}>
+        <select
+          id={alignment}
+          value={values.kobo_layout_alignment ?? ""}
+          onChange={pick("kobo_layout_alignment")}
+        >
+          <option value="">As the book sets it</option>
+          <option value="left">Left</option>
+          <option value="justify">Justified</option>
+        </select>
+      </Row>
+      <Row label="Automatically">
+        <Check
+          {...props}
+          name="kobo_layout"
+          defaultOn={false}
+          hint="When a Kobo connects, books from your library that have no font settings of their own get this layout. Books you've adjusted on the Kobo keep theirs."
+        >
+          Set this layout on new books
+        </Check>
+      </Row>
+    </>
+  );
+}
+
 export function KoboPane(props: PaneProps) {
   return (
     <>
@@ -434,6 +621,7 @@ export function KoboPane(props: PaneProps) {
         </Check>
       </Row>
       <SendingSection {...props} />
+      <LayoutSection {...props} />
     </>
   );
 }
