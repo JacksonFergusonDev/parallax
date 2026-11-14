@@ -172,7 +172,7 @@ fn whole_modes_emit_an_unrotated_spread_before_any_halves() {
 }
 
 #[test]
-fn greyscale_kepubs_fit_and_grey_the_original_or_custom_cover() {
+fn greyscale_kepubs_fit_the_colour_original_or_custom_cover() {
     let dir = tempfile::tempdir().unwrap();
     let cbz = dir.path().join("test.cbz");
     sample(&cbz);
@@ -209,7 +209,7 @@ fn greyscale_kepubs_fit_and_grey_the_original_or_custom_cover() {
             image::load_from_memory(&entry(&mut zip, &format!("OEBPS/images/cover.{extension}")))
                 .unwrap();
         assert_eq!((cover.width(), cover.height()), size);
-        assert_eq!(cover.color(), image::ColorType::L8);
+        assert_eq!(cover.color(), image::ColorType::Rgb8);
         let cover_page = entry(&mut zip, "OEBPS/images/p00004.png");
         assert_eq!(
             &cover_page[24..26],

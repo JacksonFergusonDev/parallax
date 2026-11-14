@@ -411,8 +411,7 @@ fn prepare_upload(
     let work = tempfile::tempdir().map_err(|e| e.to_string())?;
     let exported = work.path().join("book.epub");
     let path = work.path().join(format!("book{KEPUB_EXT}"));
-    // The cover is sized for the screen, and greyed for a greyscale one, as
-    // comic pages are. Without the screen's settings it goes as it is.
+    // The cover is sized for the screen. Without the screen it goes as it is.
     let target = target
         .get_or_init(|| ComicTarget::new(library, device))
         .as_ref()

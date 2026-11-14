@@ -1,5 +1,5 @@
 //! Preparation settings shared by sending, estimates and update detection.
-//! The screen and colour-page settings also size and tone EPUB covers.
+//! The screen also sizes EPUB covers.
 
 use image::ImageFormat;
 use parallax_comic::prepare::{Metadata, Options, Prepared, Profile, Spreads, fit_cover, prepare};
@@ -150,7 +150,7 @@ impl ComicTarget {
         .map_err(|e| e.to_string())
     }
 
-    /// A book's cover sized and toned for this screen, keeping its media
+    /// A book's cover sized for this screen, keeping its media
     /// type so it replaces the original in place. `None` keeps the cover as
     /// it is: it already suits the screen, or it isn't a readable JPEG or PNG.
     pub fn fit_cover(&self, cover: &Cover) -> Option<Cover> {
@@ -164,7 +164,7 @@ impl ComicTarget {
         if image::guess_format(&cover.data).ok()? != declared {
             return None;
         }
-        let data = fit_cover(&cover.data, self.profile, self.options).ok()??;
+        let data = fit_cover(&cover.data, self.profile).ok()??;
         Some(Cover {
             data,
             media_type: cover.media_type.clone(),

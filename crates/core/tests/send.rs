@@ -772,7 +772,7 @@ fn a_guessed_screen_changing_does_not_mark_comics_out_of_date() {
 }
 
 #[test]
-fn covers_are_fitted_and_toned_for_the_kobo_screen() {
+fn covers_are_fitted_to_the_kobo_screen_in_colour() {
     let dir = tempfile::tempdir().unwrap();
     let mut library = Library::open(dir.path().join("lib")).unwrap();
     let ImportOutcome::Added { book, .. } = library.import(&fixture("minimal.epub")).unwrap()
@@ -794,10 +794,7 @@ fn covers_are_fitted_and_toned_for_the_kobo_screen() {
     library.set_cover(book.id, jpeg.get_ref()).unwrap();
     let converter = Kepubify::locate().unwrap();
     // A greyscale Kobo Touch (600 × 800) and a Kobo Clara Colour (1072 × 1448).
-    for (model, size, colour) in [
-        ("310", (533, 800), image::ColorType::L8),
-        ("393", (965, 1448), image::ColorType::Rgb8),
-    ] {
+    for (model, size) in [("310", (533, 800)), ("393", (965, 1448))] {
         let mount = dir.path().join(model);
         let kobo = comic_kobo(&mount, model);
         let sent = send_library_books(&library, &kobo, &converter, &[book.id], |_| {});
@@ -810,7 +807,7 @@ fn covers_are_fitted_and_toned_for_the_kobo_screen() {
         assert_eq!(cover.media_type, "image/jpeg");
         let cover = image::load_from_memory(&cover.data).unwrap();
         assert_eq!((cover.width(), cover.height()), size, "model {model}");
-        assert_eq!(cover.color(), colour, "model {model}");
+        assert_eq!(cover.color(), image::ColorType::Rgb8, "model {model}");
     }
     // The library keeps the colour cover at its stored size.
     let stored = image::load_from_memory(&library.cover_source(book.id).unwrap().unwrap()).unwrap();

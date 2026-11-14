@@ -189,35 +189,24 @@ fn encode(
     })
 }
 
-/// A cover sized to fit the screen, never enlarged, and on a greyscale
-/// screen turned to grey the way colour pages are. Nickel builds its library
-/// thumbnails and sleep-screen cover from this image with plain luma, so
-/// colour art gets the same washed-out band of grey as an untreated colour
-/// page. The output is 8-bit, not 16 dithered levels: Nickel rescales the
-/// cover for each of those uses, and rescaling dither turns it into noise.
+/// A cover sized to fit the screen, never enlarged, in colour on every
+/// screen: Nickel builds its thumbnails and sleep-screen cover from it, and
+/// grey treatment of covers is left until it is compared on hardware.
 ///
 /// PNG stays PNG and anything else becomes JPEG. `None` means the cover
-/// already fits and needs no grey treatment, so it is best left as it is.
-pub(super) fn fit_cover(
-    bytes: &[u8],
-    profile: Profile,
-    options: Options,
-) -> Result<Option<Vec<u8>>, String> {
-    let rgb = decode(bytes)?;
-    let (w, h) = rgb.dimensions();
-    let scale = (f64::from(profile.width) / f64::from(w))
-        .min(f64::from(profile.height) / f64::from(h))
-        .min(1.0);
-    let colour = is_colour(&rgb);
-    if scale >= 1.0 && (profile.colour || !colour) {
+/// already fits, so it is best left as it is.
+pub(super) fn fit_cover(bytes: &[u8], profile: Profile) -> Result<Option<Vec<u8>>, String> {
+    let (w, h) = crate::shape::image_dimensions(bytes).ok_or("unsupported image")?;
+    let scale =
+        (f64::from(profile.width) / f64::from(w)).min(f64::from(profile.height) / f64::from(h));
+    if scale >= 1.0 {
         return Ok(None);
     }
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let fit = |n: u32| (f64::from(n) * scale).round().max(1.0) as u32;
     let (width, height) = (fit(w), fit(h));
-    // Resized before the grey treatment: covers are often several times the
-    // screen's size, and the treatment's work grows with the pixel count.
-    let rgb = resized(
+    let rgb = decode(bytes)?;
+    let pixels = resized(
         w,
         h,
         rgb.into_raw(),
@@ -225,17 +214,7 @@ pub(super) fn fit_cover(
         height,
         fast_image_resize::PixelType::U8x3,
     )?;
-    let rgb = RgbImage::from_raw(width, height, rgb).expect("three bytes per pixel");
-    let (pixels, layout) = if profile.colour {
-        (rgb.into_raw(), image::ExtendedColorType::Rgb8)
-    } else if colour {
-        (
-            super::tone::colour_page_to_grey(&rgb, options).into_raw(),
-            image::ExtendedColorType::L8,
-        )
-    } else {
-        (luma(&rgb).into_raw(), image::ExtendedColorType::L8)
-    };
+    let layout = image::ExtendedColorType::Rgb8;
     let mut out = Vec::new();
     if image::guess_format(bytes).ok() == Some(image::ImageFormat::Png) {
         image::codecs::png::PngEncoder::new(&mut out)
@@ -577,59 +556,36 @@ mod tests {
     }
 
     #[test]
-    fn large_colour_covers_fit_a_greyscale_screen_in_grey() {
-        let cover = jpeg_bytes(&rainbow(900, 1500));
-        let fitted = fit_cover(&cover, screen(false), Options::default())
-            .unwrap()
-            .unwrap();
-        assert_eq!(
-            image::guess_format(&fitted).unwrap(),
-            image::ImageFormat::Jpeg
-        );
-        let fitted = image::load_from_memory(&fitted).unwrap();
-        // Limited by height: 900 × 400/1500 = 240.
-        assert_eq!((fitted.width(), fitted.height()), (240, 400));
-        assert_eq!(fitted.color(), image::ColorType::L8);
+    fn large_covers_fit_the_screen_in_colour() {
+        for colour_screen in [false, true] {
+            let jpeg = jpeg_bytes(&rainbow(900, 1500));
+            let fitted = fit_cover(&jpeg, screen(colour_screen)).unwrap().unwrap();
+            assert_eq!(
+                image::guess_format(&fitted).unwrap(),
+                image::ImageFormat::Jpeg
+            );
+            let fitted = image::load_from_memory(&fitted).unwrap();
+            // Limited by height: 900 × 400/1500 = 240.
+            assert_eq!((fitted.width(), fitted.height()), (240, 400));
+            assert_eq!(fitted.color(), image::ColorType::Rgb8);
+
+            let png = png_bytes(&rainbow(600, 800));
+            let fitted = fit_cover(&png, screen(colour_screen)).unwrap().unwrap();
+            assert_eq!(
+                image::guess_format(&fitted).unwrap(),
+                image::ImageFormat::Png
+            );
+            let fitted = image::load_from_memory(&fitted).unwrap();
+            assert_eq!((fitted.width(), fitted.height()), (300, 400));
+        }
     }
 
     #[test]
-    fn covers_on_a_colour_screen_are_only_resized() {
-        let large = png_bytes(&rainbow(600, 800));
-        let fitted = fit_cover(&large, screen(true), Options::default())
-            .unwrap()
-            .unwrap();
-        assert_eq!(
-            image::guess_format(&fitted).unwrap(),
-            image::ImageFormat::Png
-        );
-        let fitted = image::load_from_memory(&fitted).unwrap();
-        assert_eq!((fitted.width(), fitted.height()), (300, 400));
-        assert_eq!(fitted.color(), image::ColorType::Rgb8);
-        // A colour cover that already fits is left as it is.
+    fn covers_that_fit_are_left_alone() {
         let small = png_bytes(&rainbow(200, 300));
-        assert!(
-            fit_cover(&small, screen(true), Options::default())
-                .unwrap()
-                .is_none()
-        );
-    }
-
-    #[test]
-    fn small_covers_are_left_alone_unless_colour_on_grey() {
-        let grey = png_bytes(&RgbImage::from_pixel(200, 300, image::Rgb([90, 90, 90])));
-        assert!(
-            fit_cover(&grey, screen(false), Options::default())
-                .unwrap()
-                .is_none()
-        );
-        let colour = png_bytes(&rainbow(200, 300));
-        let fitted = fit_cover(&colour, screen(false), Options::default())
-            .unwrap()
-            .unwrap();
-        let fitted = image::load_from_memory(&fitted).unwrap();
-        assert_eq!((fitted.width(), fitted.height()), (200, 300));
-        assert_eq!(fitted.color(), image::ColorType::L8);
-        assert!(fit_cover(b"not an image", screen(false), Options::default()).is_err());
+        assert!(fit_cover(&small, screen(false)).unwrap().is_none());
+        assert!(fit_cover(&small, screen(true)).unwrap().is_none());
+        assert!(fit_cover(b"not an image", screen(false)).is_err());
     }
 
     #[test]
