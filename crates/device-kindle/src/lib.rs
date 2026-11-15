@@ -59,6 +59,8 @@ pub enum Error {
     MtpBusy,
     #[error("the Kindle didn't respond as expected: {0}")]
     Mtp(String),
+    #[error("the Kindle's files changed while Parallax was reading them; try again")]
+    MtpStale,
     #[error("couldn't make a cover thumbnail: {0}")]
     Image(String),
     #[error("not enough space on the Kindle: needs {needed} bytes, {free} free")]

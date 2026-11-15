@@ -8,10 +8,13 @@
 //! One connection per device: keep a single [`MtpStorage`] open while the
 //! Kindle is connected.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::future::Future;
 use std::ops::ControlFlow;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use futures_lite::future::{self, block_on};
 use mtp_rs::{MtpDevice, NewObjectInfo, ObjectHandle, ObjectInfo, Storage as MtpStore};
@@ -60,7 +63,17 @@ pub struct MtpIdentity {
 struct Inner {
     device: MtpDevice,
     store: MtpStore,
+    /// Recent folder listings by parent handle (`None` for the root).
+    /// Listing costs a USB round trip per entry, and finding each file means
+    /// listing its folder, so lookups in one folder share a listing for a
+    /// few seconds. Any change Parallax makes clears it.
+    listings: RefCell<Listings>,
 }
+
+type Listings = HashMap<Option<u64>, (Instant, Vec<ObjectInfo>)>;
+
+/// How long a folder listing is reused.
+const LISTING_TTL: Duration = Duration::from_secs(5);
 
 /// An open MTP connection to a Kindle's internal storage.
 pub struct MtpStorage {
@@ -80,6 +93,8 @@ fn mtp(e: impl Into<mtp_rs::Error>) -> Error {
     let e = e.into();
     if e.is_exclusive_access() {
         Error::MtpBusy
+    } else if e.is_stale_handle() {
+        Error::MtpStale
     } else {
         Error::Mtp(e.to_string())
     }
@@ -107,7 +122,11 @@ impl MtpStorage {
             .next()
             .ok_or_else(|| Error::Mtp("the Kindle reported no storage".to_owned()))?;
         Ok(Self {
-            inner: Mutex::new(Inner { device, store }),
+            inner: Mutex::new(Inner {
+                device,
+                store,
+                listings: RefCell::new(HashMap::new()),
+            }),
             identity,
         })
     }
@@ -122,6 +141,19 @@ impl MtpStorage {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
+    /// Runs `op`, and once more with fresh listings if a handle went stale:
+    /// a device may renumber objects, as mtp-rs's `StaleHandle` warns.
+    fn with<T>(&self, op: impl Fn(&Inner) -> Result<T>) -> Result<T> {
+        let inner = self.lock();
+        match op(&inner) {
+            Err(Error::MtpStale) => {
+                inner.changed();
+                op(&inner)
+            }
+            other => other,
+        }
+    }
+
     /// Closes the session so the Kindle can be unplugged cleanly.
     pub fn close(self) -> Result<()> {
         let inner = self
@@ -134,7 +166,22 @@ impl MtpStorage {
 
 impl Inner {
     fn children(&self, parent: Option<ObjectHandle>) -> Result<Vec<ObjectInfo>> {
-        block_on(self.store.list_objects(parent)).map_err(mtp)
+        let key = parent.map(|h| h.0);
+        if let Some((at, list)) = self.listings.borrow().get(&key)
+            && at.elapsed() < LISTING_TTL
+        {
+            return Ok(list.clone());
+        }
+        let list = block_on(self.store.list_objects(parent)).map_err(mtp)?;
+        self.listings
+            .borrow_mut()
+            .insert(key, (Instant::now(), list.clone()));
+        Ok(list)
+    }
+
+    /// Forgets cached listings after a change.
+    fn changed(&self) {
+        self.listings.borrow_mut().clear();
     }
 
     fn child(&self, parent: Option<ObjectHandle>, name: &str) -> Result<Option<ObjectInfo>> {
@@ -162,7 +209,11 @@ impl Inner {
             handle = Some(match self.child(handle, part)? {
                 Some(o) if o.is_folder() => o.handle,
                 Some(_) => return Err(Error::NotFound(dir.to_owned())),
-                None => block_on(self.store.create_folder(handle, part)).map_err(mtp)?,
+                None => {
+                    let created = block_on(self.store.create_folder(handle, part)).map_err(mtp);
+                    self.changed();
+                    created?
+                }
             });
         }
         Ok(handle)
@@ -185,7 +236,9 @@ impl Inner {
                 self.delete(&child)?;
             }
         }
-        block_on(self.store.delete(object.handle)).map_err(mtp)
+        let deleted = block_on(self.store.delete(object.handle)).map_err(mtp);
+        self.changed();
+        deleted
     }
 
     fn upload(
@@ -213,6 +266,7 @@ impl Inner {
         ));
         // The progress callback must be Send and this one isn't, so report
         // from here each time the upload wakes.
+        self.changed();
         let result = block_on(future::poll_fn(|cx| {
             let poll = upload.as_mut().poll(cx);
             progress(sent.load(Ordering::Relaxed).min(total), total);
@@ -235,95 +289,98 @@ impl Inner {
 
 impl Storage for MtpStorage {
     fn list(&self, dir: &str) -> Result<Vec<Entry>> {
-        let inner = self.lock();
-        let parent = match inner.folder(dir) {
-            Ok(parent) => parent,
-            Err(Error::NotFound(_)) => return Ok(Vec::new()),
-            Err(e) => return Err(e),
-        };
-        let mut entries: Vec<Entry> = inner
-            .children(parent)?
-            .into_iter()
-            .map(|o| Entry {
-                is_dir: o.is_folder(),
-                size: o.size,
-                modified: o.modified.and_then(|t| t.to_unix_seconds()),
-                name: o.filename,
-            })
-            .collect();
-        entries.sort_by(|a, b| a.name.cmp(&b.name));
-        Ok(entries)
+        self.with(|inner| {
+            let parent = match inner.folder(dir) {
+                Ok(parent) => parent,
+                Err(Error::NotFound(_)) => return Ok(Vec::new()),
+                Err(e) => return Err(e),
+            };
+            let mut entries: Vec<Entry> = inner
+                .children(parent)?
+                .into_iter()
+                .map(|o| Entry {
+                    is_dir: o.is_folder(),
+                    size: o.size,
+                    modified: o.modified.and_then(|t| t.to_unix_seconds()),
+                    name: o.filename,
+                })
+                .collect();
+            entries.sort_by(|a, b| a.name.cmp(&b.name));
+            Ok(entries)
+        })
     }
 
     fn size(&self, path: &str) -> Result<Option<u64>> {
-        Ok(self
-            .lock()
-            .file(path)?
-            .filter(|o| !o.is_folder())
-            .map(|o| o.size))
+        self.with(|inner| Ok(inner.file(path)?.filter(|o| !o.is_folder()).map(|o| o.size)))
     }
 
     fn is_dir(&self, path: &str) -> Result<bool> {
-        Ok(self.lock().file(path)?.is_some_and(|o| o.is_folder()))
+        self.with(|inner| Ok(inner.file(path)?.is_some_and(|o| o.is_folder())))
     }
 
     fn read(&self, path: &str) -> Result<Vec<u8>> {
-        let inner = self.lock();
-        let object = inner
-            .file(path)?
-            .ok_or_else(|| Error::NotFound(path.to_owned()))?;
-        block_on(inner.store.download_to_vec(object.handle)).map_err(mtp)
+        self.with(|inner| {
+            let object = inner
+                .file(path)?
+                .ok_or_else(|| Error::NotFound(path.to_owned()))?;
+            block_on(inner.store.download_to_vec(object.handle)).map_err(mtp)
+        })
     }
 
     fn read_prefix(&self, path: &str, len: u64) -> Result<Vec<u8>> {
-        let inner = self.lock();
-        let object = inner
-            .file(path)?
-            .ok_or_else(|| Error::NotFound(path.to_owned()))?;
-        let len = len.min(object.size);
-        let len = u32::try_from(len).unwrap_or(u32::MAX);
-        if len == 0 {
-            return Ok(Vec::new());
-        }
-        block_on(inner.store.read_range(object.handle, 0, len)).map_err(mtp)
+        self.with(|inner| {
+            let object = inner
+                .file(path)?
+                .ok_or_else(|| Error::NotFound(path.to_owned()))?;
+            let len = u32::try_from(len.min(object.size)).unwrap_or(u32::MAX);
+            if len == 0 {
+                return Ok(Vec::new());
+            }
+            block_on(inner.store.read_range(object.handle, 0, len)).map_err(mtp)
+        })
     }
 
     fn write(&self, path: &str, data: &[u8], progress: Progress) -> Result<()> {
-        let inner = self.lock();
-        let (dir, name) = split(path);
-        let parent = inner.ensure_folder(dir)?;
-        let existing = inner.child(parent, name)?;
-        let Some(existing) = existing else {
-            inner.upload(parent, name, data, progress)?;
-            return Ok(());
-        };
-        // MTP can't replace in place. Upload beside the old file and swap
-        // them by rename when the device can, so an interrupted write keeps
-        // the old copy; otherwise delete first, as calibre does.
-        if inner.device.supports_rename() {
-            let part = format!(".{name}.parallax-part");
-            if let Some(stale) = inner.child(parent, &part)? {
-                inner.delete(&stale)?;
+        let progress = RefCell::new(progress);
+        self.with(|inner| {
+            let mut progress = progress.borrow_mut();
+            let (dir, name) = split(path);
+            let parent = inner.ensure_folder(dir)?;
+            let Some(existing) = inner.child(parent, name)? else {
+                inner.upload(parent, name, data, &mut **progress)?;
+                return Ok(());
+            };
+            // MTP can't replace in place. Upload beside the old file and
+            // swap them by rename when the device can, so an interrupted
+            // write keeps the old copy; otherwise delete first, as calibre does.
+            if inner.device.supports_rename() {
+                let part = format!(".{name}.parallax-part");
+                if let Some(stale) = inner.child(parent, &part)? {
+                    inner.delete(&stale)?;
+                }
+                let handle = inner.upload(parent, &part, data, &mut **progress)?;
+                inner.delete(&existing)?;
+                let renamed = block_on(inner.store.rename(handle, name)).map_err(mtp);
+                inner.changed();
+                renamed
+            } else {
+                inner.delete(&existing)?;
+                inner
+                    .upload(parent, name, data, &mut **progress)
+                    .map(|_| ())
             }
-            let handle = inner.upload(parent, &part, data, progress)?;
-            inner.delete(&existing)?;
-            block_on(inner.store.rename(handle, name)).map_err(mtp)
-        } else {
-            inner.delete(&existing)?;
-            inner.upload(parent, name, data, progress).map(|_| ())
-        }
+        })
     }
 
     fn remove(&self, path: &str) -> Result<()> {
-        let inner = self.lock();
-        match inner.file(path)? {
+        self.with(|inner| match inner.file(path)? {
             Some(object) => inner.delete(&object),
             None => Ok(()),
-        }
+        })
     }
 
     fn create_dir_all(&self, path: &str) -> Result<()> {
-        self.lock().ensure_folder(path).map(|_| ())
+        self.with(|inner| inner.ensure_folder(path).map(|_| ()))
     }
 
     fn free_space(&self) -> Option<u64> {
