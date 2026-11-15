@@ -302,3 +302,38 @@ fn a_child_that_dies_is_an_error_not_a_crash() {
     assert!(err.to_string().contains("crashed"), "{err}");
     assert!(!out.exists());
 }
+
+/// EPUB to AZW3 for Kindles, then back to EPUB: the text and title survive,
+/// and the AZW3 carries a book-specific ASIN and the EBOK type a Kindle names
+/// its cover thumbnail after.
+#[test]
+fn epub_converts_to_azw3_and_back() {
+    use parallax_convert::amazon::EpubToAzw3;
+    let dir = tempfile::tempdir().unwrap();
+    let source =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/epub/minimal.epub");
+    let azw3 = dir.path().join("book.azw3");
+    EpubToAzw3.convert(&source, &azw3).unwrap();
+    assert_eq!(sniff(&azw3).unwrap(), Some(Kind::Mobi));
+    let bytes = fs::read(&azw3).unwrap();
+    let exth = bytes.windows(4).position(|w| w == b"EXTH").unwrap();
+    let count = u32::from_be_bytes(bytes[exth + 8..exth + 12].try_into().unwrap());
+    let mut records = std::collections::HashMap::new();
+    let mut p = exth + 12;
+    for _ in 0..count {
+        let kind = u32::from_be_bytes(bytes[p..p + 4].try_into().unwrap());
+        let len = u32::from_be_bytes(bytes[p + 4..p + 8].try_into().unwrap()) as usize;
+        records
+            .entry(kind)
+            .or_insert_with(|| bytes[p + 8..p + len].to_vec());
+        p += len;
+    }
+    assert_eq!(records[&501], b"EBOK");
+    assert_ne!(records[&113], b"EBOK000000");
+
+    let back = dir.path().join("back.epub");
+    InProcess.convert(&azw3, &back).unwrap();
+    let original = Epub::open(&source).unwrap().metadata().title.clone();
+    assert_eq!(Epub::open(&back).unwrap().metadata().title, original);
+    assert!(!html(&entries(&back)).is_empty());
+}

@@ -1,4 +1,4 @@
-//! Types shared by every e-reader backend. Backends (Kobo now, Kindle later)
+//! Types shared by every e-reader backend. Backends (Kobo and Kindle)
 //! describe what they can do through [`Capabilities`] so the UI can tell
 //! on-device changes apart from local-only organisation without checking the
 //! device type.
@@ -12,6 +12,17 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum DeviceKind {
     Kobo,
+    Kindle,
+}
+
+/// How the computer reaches the device's storage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Transport {
+    /// Mounted as a drive (USB mass storage).
+    Drive,
+    /// Media Transfer Protocol, used by recent Kindles. Not a drive.
+    Mtp,
 }
 
 /// What a connected device supports natively.
@@ -56,13 +67,18 @@ pub struct DeviceInfo {
     pub model: String,
     pub firmware: String,
     pub serial: String,
-    /// Where the device's storage is mounted on this computer.
+    /// Where the device's storage is mounted on this computer. For an MTP
+    /// device, which has no mount point, an `mtp:` key that identifies it.
     pub mount: PathBuf,
+    pub transport: Transport,
     pub capabilities: Capabilities,
     pub screen: Screen,
     /// Why the app won't change this device (an untested model, firmware or
     /// database); `None` when it will. Reading still works.
     pub read_only: Option<String>,
+    /// Why the app can't open the device at all (another app holds an MTP
+    /// Kindle); `None` when it can.
+    pub unavailable: Option<String>,
     /// A device of this model has been through the hardware checks. An
     /// untested one can still be changed when `read_only` is `None`: that
     /// verdict comes from its database, not its model.
