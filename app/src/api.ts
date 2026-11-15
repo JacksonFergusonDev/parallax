@@ -6,11 +6,14 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { readCache } from "./readCache";
 
 export interface DeviceInfo {
-  kind: "kobo";
+  kind: "kobo" | "kindle";
   model: string;
   firmware: string;
   serial: string;
+  /** Where it's mounted, or `mtp:<serial>` for a Kindle over MTP. */
   mount: string;
+  /** A drive, or MTP (recent Kindles), which isn't mounted. */
+  transport: "drive" | "mtp";
   capabilities: {
     native_collections: boolean;
     series: boolean;
@@ -21,6 +24,8 @@ export interface DeviceInfo {
   screen: Screen;
   /** Why the app won't change this device; null when it will. */
   read_only: string | null;
+  /** Why the app can't open it at all (another app holds it); null when it can. */
+  unavailable: string | null;
   /** A device of this model has been through the hardware checks. */
   tested: boolean;
 }
@@ -1025,7 +1030,37 @@ export type SettingKey =
   | "kobo_layout_size"
   | "kobo_layout_line_height"
   | "kobo_layout_margins"
-  | "kobo_layout_alignment";
+  | "kobo_layout_alignment"
+  | "kindle_page_numbers"
+  | "kindle_free_from_photos";
+
+/** Send to Kindle by email. The password is kept in the keychain. */
+export interface KindleEmailSettings {
+  to: string;
+  host: string;
+  port: number | null;
+  user: string;
+  from: string;
+  tls: boolean;
+}
+export const kindleEmailSettings = () =>
+  invoke<KindleEmailSettings & { password_saved: boolean }>(
+    "kindle_email_settings",
+  );
+/** `password`: a new one, "" to forget it, or undefined to keep it. */
+export const setKindleEmailSettings = (
+  settings: KindleEmailSettings,
+  password?: string,
+) =>
+  invoke<void>("kindle_email_settings_set", {
+    update: { ...settings, password: password ?? null },
+  });
+/** Emails library books to the Kindle address in Settings. */
+export const emailToKindle = (ids: number[], report?: (p: Progress) => void) =>
+  invoke<SendOutcome[]>("kindle_email_send", {
+    ids,
+    ...progressArgs(report),
+  });
 
 /** Every comic page setting; "Reset to recommended" clears them together.
  * Matches `COMIC_PAGE_SETTINGS` in crates/core/src/send.rs. */

@@ -9,13 +9,13 @@ interface Props {
   onDismiss: () => void;
 }
 
-/** A banner under the toolbar about an untested or read-only Kobo. */
+/** A banner under the toolbar about an untested or read-only device. */
 export function KoboNotice({ notice, standing, onClose, onDismiss }: Props) {
   const Icon = standing === "read_only" ? TriangleAlert : Info;
   return (
     <section
       className={`kobo-notice ${standing === "read_only" ? "warn" : ""}`}
-      aria-label="About this Kobo"
+      aria-label="About this device"
     >
       <Icon className="kobo-notice-icon" aria-hidden="true" />
       <div className="kobo-notice-text">
@@ -36,7 +36,7 @@ export function KoboNotice({ notice, standing, onClose, onDismiss }: Props) {
       <button
         className="icon kobo-notice-close"
         aria-label="Close"
-        title="Close until this Kobo reconnects"
+        title="Close until it reconnects"
         onClick={onClose}
       >
         <X />

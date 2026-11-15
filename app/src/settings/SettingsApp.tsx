@@ -18,6 +18,7 @@ import {
   KoboPane,
   LibraryPane,
 } from "./panes";
+import { KindlePane } from "./KindlePane";
 import { ReaderPane } from "./ReaderPane";
 import { useSettings } from "./useSettings";
 
@@ -25,6 +26,7 @@ const TABS = [
   { id: "general", label: "General", icon: Settings2 },
   { id: "library", label: "Library", icon: Library },
   { id: "kobo", label: "Kobo", icon: Tablet },
+  { id: "kindle", label: "Kindle", icon: Tablet },
   { id: "comics", label: "Comics", icon: BookImage },
   { id: "backups", label: "Backups", icon: Archive },
   { id: "reader", label: "Reader", icon: BookOpen },
@@ -130,6 +132,7 @@ export function SettingsApp() {
             {tab === "general" && <GeneralPane values={values} set={set} />}
             {tab === "library" && <LibraryPane values={values} set={set} />}
             {tab === "kobo" && <KoboPane values={values} set={set} />}
+            {tab === "kindle" && <KindlePane values={values} set={set} />}
             {tab === "comics" && <ComicsPane values={values} set={set} />}
             {tab === "backups" && <BackupsPane onError={onError} />}
             {tab === "reader" && (

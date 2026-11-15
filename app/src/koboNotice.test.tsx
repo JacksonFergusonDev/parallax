@@ -39,7 +39,31 @@ const kobo = (
   },
   screen: { width: 1072, height: 1448, colour: false, source: "model" },
   read_only,
+  transport: "drive",
+  unavailable: null,
   tested,
+});
+
+describe("what Parallax says about a Kindle", () => {
+  const kindle = (unavailable: string | null = null): DeviceInfo => ({
+    ...kobo("Kindle Paperwhite 6", false),
+    kind: "kindle",
+    mount: "mtp:G0033W0000000000",
+    transport: "mtp",
+    unavailable,
+  });
+
+  it("says Kindle support is new, without Kobo backups", () => {
+    const notice = koboNotice(kindle())!;
+    expect(notice.title).toBe("Kindle support is new");
+    expect(notice.body).not.toContain("Kobo");
+  });
+
+  it("passes on why a Kindle can't be opened", () => {
+    const notice = koboNotice(kindle("Another app is using your Kindle."))!;
+    expect(notice.title).toContain("can't open this Kindle Paperwhite 6");
+    expect(notice.body).toBe("Another app is using your Kindle.");
+  });
 });
 
 describe("what Parallax says about a Kobo", () => {

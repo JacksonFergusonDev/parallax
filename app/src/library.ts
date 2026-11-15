@@ -246,20 +246,24 @@ export function seriesGroups(books: Book[]) {
 
 /** Whether a copy exists and needs updating, independent of its import status. */
 export type DeviceCopyState = "on" | "stale" | undefined;
-/** The status shown next to a book for the connected Kobo. */
+/** The status shown next to a book for the connected device. */
 export type DeviceState =
   DeviceCopyState | "pending_import" | "updated" | "removed";
 
-export const deviceStateLabel = {
-  on: "On Kobo",
+/** Status labels naming the device: "Kobo" or "Kindle". */
+export const deviceStateLabels = (name = "Kobo") => ({
+  on: `On ${name}`,
   stale: "Update available",
   pending_import: "Eject to import",
   updated: "Eject to see update",
-  removed: "Removed from Kobo",
-};
+  removed: `Removed from ${name}`,
+});
+
+export const deviceStateLabel = deviceStateLabels();
 
 export const libraryColumns = (
   deviceState: (b: Book) => DeviceCopyState,
+  deviceName = "Kobo",
 ): Column<Book, LibraryKey>[] => [
   {
     key: "title",
@@ -309,7 +313,7 @@ export const libraryColumns = (
   },
   {
     key: "kobo",
-    label: "On Kobo",
+    label: `On ${deviceName}`,
     width: "92px",
     align: "end",
     // Descending puts books needing an update first, then the rest on the Kobo.
