@@ -14,10 +14,13 @@ parallax-comic.workspace = true
 parallax-convert.workspace = true
 parallax-device.workspace = true
 parallax-device-kobo.workspace = true
+parallax-device-kindle.workspace = true
 parallax-epub.workspace = true
 parallax-library.workspace = true
 parallax-metadata.workspace = true
 image.workspace = true
+keyring = { version = "3", features = ["apple-native", "windows-native"] }
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "builder", "hostname", "rustls-tls"] }
 rayon.workspace = true
 rusqlite.workspace = true
 serde.workspace = true

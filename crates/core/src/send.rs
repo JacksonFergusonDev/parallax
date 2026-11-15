@@ -460,9 +460,9 @@ fn prepare_upload(
     Ok(Upload::Epub { _work: work, path })
 }
 
-type Stage<'a> = &'a dyn Fn(usize, usize, String) -> Progress;
+pub(crate) type Stage<'a> = &'a dyn Fn(usize, usize, String) -> Progress;
 
-fn copy_progress(stage: &mut dyn FnMut(Stage<'_>)) -> impl FnMut(u64, u64) + '_ {
+pub(crate) fn copy_progress(stage: &mut dyn FnMut(Stage<'_>)) -> impl FnMut(u64, u64) + '_ {
     move |bytes, total_bytes| {
         stage(&|index, total, file| Progress::Copying {
             index,
@@ -475,7 +475,7 @@ fn copy_progress(stage: &mut dyn FnMut(Stage<'_>)) -> impl FnMut(u64, u64) + '_ 
 }
 
 /// Runs `send` for each label, wrapping it with stage and result events.
-fn run_batch(
+pub(crate) fn run_batch(
     labels: &[String],
     mut on_progress: impl FnMut(Progress),
     mut send: impl FnMut(usize, &mut dyn FnMut(Stage<'_>)) -> SendOutcome,

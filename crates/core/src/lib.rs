@@ -15,6 +15,8 @@ pub mod goodreads_insights;
 pub mod health;
 pub mod import;
 pub mod ingest;
+pub mod kindle;
+pub mod kindle_email;
 pub mod layout;
 pub mod review;
 pub mod rules;
