@@ -76,7 +76,12 @@ fn send_update_sync_and_remove() {
 
     let outcomes = kindle::send_library_books(&library, &device, &options, &[id], |_| {});
     let sent = outcomes[0].result.as_ref().unwrap().clone();
-    assert!(sent.device_path.starts_with("documents/") && sent.device_path.ends_with(".azw3"));
+    assert!(
+        sent.device_path.starts_with("documents/")
+            && Path::new(&sent.device_path)
+                .extension()
+                .is_some_and(|e| e == "azw3")
+    );
     let file = dir.path().join("Kindle").join(&sent.device_path);
     assert!(file.is_file());
     let copies = library.device_copies(device.serial()).unwrap();
@@ -150,7 +155,7 @@ fn send_update_sync_and_remove() {
     let removed = kindle::remove_from_device(
         Some(&library),
         &device,
-        &[sent.device_path.clone()],
+        std::slice::from_ref(&sent.device_path),
         |_, _| {},
     );
     assert!(removed[0].result.is_ok());

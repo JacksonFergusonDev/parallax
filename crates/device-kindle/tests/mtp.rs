@@ -57,7 +57,7 @@ fn storage_operations() {
         assert!(s.list("missing/folder").unwrap().is_empty());
         let mut last = 0;
         s.write("documents/a/b.txt", &vec![7; 1_200_000], &mut |w, _| {
-            last = w
+            last = w;
         })
         .unwrap();
         assert_eq!(last, 1_200_000);

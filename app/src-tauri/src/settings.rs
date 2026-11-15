@@ -5,12 +5,12 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use parallax_core::layout;
 use parallax_core::send::{
     COMIC_AUTOCONTRAST, COMIC_COLOUR_CONTRAST, COMIC_COLOUR_SEPARATION, COMIC_CROP, COMIC_DITHER,
     COMIC_MIDTONE_DARKENING, COMIC_SPREADS, COMIC_STRENGTHS, COMIC_UPSCALE, KEPUB_CSS,
     KEPUB_FULLSCREEN_FIXES, KEPUB_HYPHENATION, KEPUB_SMART_PUNCTUATION,
 };
+use parallax_core::{kindle, kindle_email, layout};
 use parallax_device_kobo::{
     BackupPolicy, FONT_SIZES, LINE_HEIGHTS, MARGINS, backups_size, delete_all_backups,
 };
@@ -64,7 +64,7 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 43] = [
+const SETTINGS: [(&str, Allowed); 51] = [
     (parallax_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (parallax_core::enhance::METRON_TOKEN, Allowed::Text(256)),
     (
@@ -79,6 +79,14 @@ const SETTINGS: [(&str, Allowed); 43] = [
     (LAST_VIEW, Allowed::OneOf(&["library", "device", "reading"])),
     (READER_WINDOWS, Allowed::OneOf(&["one"])),
     (KOBO_SERIES, Allowed::OneOf(&["off"])),
+    (kindle::KINDLE_PAGE_NUMBERS, Allowed::OneOf(&["off"])),
+    (kindle::KINDLE_FREE_FROM_PHOTOS, Allowed::OneOf(&["off"])),
+    (kindle_email::KINDLE_EMAIL_TO, Allowed::Text(254)),
+    (kindle_email::SMTP_HOST, Allowed::Text(253)),
+    (kindle_email::SMTP_PORT, Allowed::Integer(1, 65535)),
+    (kindle_email::SMTP_USER, Allowed::Text(254)),
+    (kindle_email::SMTP_FROM, Allowed::Text(254)),
+    (kindle_email::SMTP_SECURITY, Allowed::OneOf(&["tls"])),
     (KOBO_RULES, Allowed::OneOf(&["off"])),
     (KOBO_POSITIONS, Allowed::OneOf(&["off"])),
     (
@@ -141,7 +149,7 @@ const SETTINGS: [(&str, Allowed); 43] = [
 ];
 
 /// Settings that are preferences, which Reset puts back. Credentials stay.
-const PREFERENCES: [&str; 36] = [
+const PREFERENCES: [&str; 38] = [
     parallax_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
@@ -152,6 +160,8 @@ const PREFERENCES: [&str; 36] = [
     KOBO_POSITIONS,
     parallax_core::firmware::KOBO_FIRMWARE_CHECK,
     EJECT_AFTER_SEND,
+    kindle::KINDLE_PAGE_NUMBERS,
+    kindle::KINDLE_FREE_FROM_PHOTOS,
     crate::updates::AUTO,
     parallax_library::COMICS_KIND,
     COMIC_SPREADS,

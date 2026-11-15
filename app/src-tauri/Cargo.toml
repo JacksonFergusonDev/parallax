@@ -33,6 +33,7 @@ parallax-core.workspace = true
 parallax-covers.workspace = true
 parallax-device.workspace = true
 parallax-device-kobo.workspace = true
+parallax-device-kindle.workspace = true
 parallax-epub.workspace = true
 parallax-library.workspace = true
 parallax-metadata.workspace = true
