@@ -37,9 +37,10 @@ export function AboutKindle({ device, books, onClose }: Props) {
           <div>
             <h2>About this Kindle</h2>
             <p className="muted">
-              Kindle support is new and hasn't been tested on a Kindle yet.
               Parallax adds and removes books in the Kindle's documents folder,
               and reads your progress and highlights.
+              {!device.tested &&
+                " Kindle support is new and hasn't been tested on this model yet."}
             </p>
           </div>
         </div>
@@ -59,7 +60,11 @@ export function AboutKindle({ device, books, onClose }: Props) {
           <dt>Screen</dt>
           <dd className="wrap">{screenText(device.screen)}</dd>
           <dt>Hardware checks</dt>
-          <dd className="wrap">Not yet run on any Kindle</dd>
+          <dd className="wrap">
+            {device.tested
+              ? "Tested on this model"
+              : "Not yet run on this model"}
+          </dd>
           {books !== null && (
             <>
               <dt>Books</dt>

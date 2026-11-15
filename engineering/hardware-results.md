@@ -1,6 +1,6 @@
-# Kobo hardware results
+# Hardware results
 
-These are dated observations from the reference Kobo Libra 2. Each row covers the listed workflows on the app or prototype available at the time. See the [hardware checklist](hardware-checks.md) for repeatable procedures and checks still open.
+These are dated observations from the reference Kobo Libra 2. No Kindle results are recorded yet; add them here as rows that name the Kindle model and connection (drive or MTP). Each row covers the listed workflows on the app or prototype available at the time. See the [hardware checklist](hardware-checks.md) for repeatable procedures and checks still open.
 
 | Date | Firmware and schema | Observed result |
 | --- | --- | --- |

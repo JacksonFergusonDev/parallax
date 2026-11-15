@@ -4,6 +4,12 @@ What changed in each release of Parallax, for people using it. The release workf
 
 ## Unreleased
 
+- **Kindle support**, new and not yet tested on a Kindle. Connect a Kindle by USB and it appears in an **On Kindle** tab, whether it shows up as a drive (most Kindles before 2024) or not (the Scribe, 2024 and later Paperwhites and the Colorsoft). Send library books to it: Parallax converts them to AZW3, adds estimated page numbers and gives each its cover on the Kindle's home screen. Update books there without losing your place, remove them, and add books from the Kindle to your library. When your Kindle connects, its reading progress and highlights are copied into your library, and covers Amazon replaced with generic ones are put back, as calibre does. Collections and the Kindle's own read status are kept where Parallax can't reach them, so they aren't shown or changed.
+- **Email to Kindle** sends selected books to your Kindle's email address with Amazon's Send to Kindle, so they reach any Kindle or Kindle app without a cable. Set it up in Settings › Kindle with your email account; the password is kept in your Mac's keychain.
+- On a Mac, macOS's photo import service grabs recent Kindles as they connect, which keeps other apps out. Parallax stops it while it opens your Kindle, and macOS starts it again when it's needed. Turn this off with **Free your Kindle from photo import** in Settings › Kindle.
+- The library's labels and filters name the device you've connected, such as **On Kindle** and **Send to Kindle**.
+- `parallax-cli kindle` lists, sends, updates, removes and adds books, syncs progress and highlights, emails books and ejects, for Kindles as drives or over MTP. `parallax-cli devices` lists Kindles too.
+
 ## 0.1.3 (2026-11-14)
 
 - **Saved searches** keep a search and its filters under a name, such as Unread sci-fi, so you can bring them back from the library's filter bar, as calibre's saved searches do. Turn them on with **Show saved searches** in Settings › Library.

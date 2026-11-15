@@ -149,8 +149,7 @@ impl KindleDevice {
             },
             screen: self.model.screen(),
             read_only: None,
-            // No Kindle has been through the hardware checks yet.
-            tested: false,
+            tested: models::TESTED_MODELS.contains(&self.model_name.as_str()),
             unavailable: None,
         }
     }

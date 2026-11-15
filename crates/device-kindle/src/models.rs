@@ -161,6 +161,10 @@ const V2: &[(&[&str], Model)] = &[
     ),
 ];
 
+/// Models that have been through the Kindle hardware checks
+/// (`engineering/hardware-checks.md`), by [`Model::name`]. None yet.
+pub const TESTED_MODELS: &[&str] = &[];
+
 /// A Kindle whose serial isn't in the table.
 pub const UNKNOWN: Model = Model {
     name: "Kindle",
