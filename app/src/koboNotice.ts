@@ -20,6 +20,18 @@ export function koboStanding(device: DeviceInfo): KoboStanding {
 export function koboNotice(
   device: DeviceInfo,
 ): { title: string; body: string } | null {
+  if (device.kind === "kindle")
+    return device.unavailable
+      ? {
+          title: `Parallax can't open this ${device.model}`,
+          body: device.unavailable,
+        }
+      : device.tested
+        ? null
+        : {
+            title: "Kindle support is new",
+            body: "It hasn't been tested on a Kindle yet. Parallax only adds and removes book files on your Kindle, never its own data, so the worst that should happen is a book that doesn't show up. If anything looks wrong, please report it from the Help menu.",
+          };
   switch (koboStanding(device)) {
     case "tested":
       return null;

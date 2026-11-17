@@ -22,7 +22,7 @@ mod writer;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use parallax_device::{Capabilities, DeviceInfo, DeviceKind};
+use parallax_device::{Capabilities, DeviceInfo, DeviceKind, Transport};
 
 pub use annotations::{Annotation, AnnotationKind};
 pub use backups::{
@@ -127,6 +127,7 @@ impl KoboDevice {
             firmware: self.version.firmware.to_string(),
             serial: self.version.serial.clone(),
             mount: self.mount.clone(),
+            transport: Transport::Drive,
             capabilities: Capabilities {
                 native_collections: true,
                 series: support.series,
@@ -136,6 +137,7 @@ impl KoboDevice {
             screen: self.version.screen(&self.mount),
             read_only: support.read_only,
             tested: self.version.is_tested(),
+            unavailable: None,
         }
     }
 }

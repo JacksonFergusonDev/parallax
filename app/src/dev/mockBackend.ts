@@ -227,7 +227,42 @@ const koboFrom =
 
 // `?untested` connects a model without recorded hardware checks.
 const untested = params.has("untested") || params.has("readonly");
-const device: DeviceInfo = {
+// `?kindle` connects a Kindle over MTP instead; `?kindle=busy` one another
+// app is holding, and `?kindle=drive` one mounted as a drive.
+const kindleMode = params.get("kindle");
+const kindle = params.has("kindle");
+const kindleDevice: DeviceInfo = {
+  kind: "kindle",
+  model: "Kindle Paperwhite 6",
+  firmware: kindleMode === "drive" ? "" : "5.18.1",
+  serial: "G0033W0000000000",
+  mount: kindleMode === "drive" ? "/Volumes/Kindle" : "mtp:G0033W0000000000",
+  transport: kindleMode === "drive" ? "drive" : "mtp",
+  capabilities: {
+    native_collections: false,
+    series: false,
+    reading_progress: true,
+    reading_time: true,
+  },
+  screen: { width: 1264, height: 1680, colour: false, source: "model" },
+  read_only: null,
+  unavailable:
+    kindleMode === "busy"
+      ? "Another app is using your Kindle. Quit Amazon's Send to Kindle, Android File Transfer or OpenMTP, then unplug your Kindle and plug it in again."
+      : null,
+  tested: false,
+};
+// `?kindle_email=name@kindle.com` starts with Send to Kindle set up.
+let kindleEmail = {
+  to: params.get("kindle_email") ?? "",
+  host: "",
+  port: null as number | null,
+  user: "",
+  from: "",
+  tls: false,
+};
+let kindlePassword = false;
+const koboDevice: DeviceInfo = {
   kind: "kobo",
   model: params.has("readonly")
     ? "Tolino Shine Color"
@@ -249,7 +284,10 @@ const device: DeviceInfo = {
     ? "the Tolino Shine Color runs Tolino's version of Kobo's software, which stores data differently"
     : null,
   tested: !untested,
+  transport: "drive",
+  unavailable: null,
 };
+const device = kindle ? kindleDevice : koboDevice;
 const dismissed = new Set<string>();
 const settings = new Map<string, string>();
 const health = { missing: true, duplicates: true, images: 23 };
@@ -426,6 +464,8 @@ const SETTING_KEYS = [
   "kobo_layout_line_height",
   "kobo_layout_margins",
   "kobo_layout_alignment",
+  "kindle_page_numbers",
+  "kindle_free_from_photos",
 ];
 
 /** `?theme=sepia` in the URL starts the mock with that theme. */
@@ -497,12 +537,14 @@ export function installMockBackend(label = "main") {
                 id: contentId(b.id),
                 title: b.title,
                 author: b.authors.join(", "),
-                path: `KEpub/book-${b.id}.kepub.epub`,
+                path: kindle
+                  ? `documents/book-${b.id}.azw3`
+                  : `KEpub/book-${b.id}.kepub.epub`,
                 sideloaded: true,
-                series: b.series,
-                series_number: b.series_index,
-                read_status: "unread",
-                percent_read: 0,
+                series: kindle ? null : b.series,
+                series_number: kindle ? null : b.series_index,
+                read_status: kindle && b.id % 3 === 0 ? "reading" : "unread",
+                percent_read: kindle && b.id % 3 === 0 ? 42 : 0,
                 last_read: null,
                 reading_time_secs: null,
                 added: onDevice.get(b.id)!,
@@ -511,7 +553,7 @@ export function installMockBackend(label = "main") {
               })),
             ...storeBooks,
           ]
-            .map((b) => ({ ...b, collections: shelvesOf(b.id) }))
+            .map((b) => ({ ...b, collections: kindle ? [] : shelvesOf(b.id) }))
             .sort((x, y) => x.title.localeCompare(y.title));
         case "remove_from_device": {
           const ids = a.contentIds as string[];
@@ -555,6 +597,7 @@ export function installMockBackend(label = "main") {
           }));
         }
         case "list_collections":
+          if (kindle) throw new Error("not a Kobo");
           return [...shelves]
             .map(([name, ids]) => ({ name, book_count: ids.size }))
             .sort((x, y) => x.name.localeCompare(y.name));
@@ -567,6 +610,46 @@ export function installMockBackend(label = "main") {
           return { series: 0, grouped: 0 };
         case "kobo_firmware_check":
           return null;
+        case "kindle_email_settings":
+          return { ...kindleEmail, password_saved: kindlePassword };
+        case "kindle_email_settings_set": {
+          const { password, ...rest } = a.update as typeof kindleEmail & {
+            password: string | null;
+          };
+          kindleEmail = rest;
+          if (password !== null) kindlePassword = password !== "";
+          return null;
+        }
+        case "kindle_email_send": {
+          const ids = a.ids as number[];
+          if (!kindleEmail.to.endsWith("@kindle.com"))
+            throw new Error(
+              "Add your Kindle's email address (it ends in @kindle.com) in Settings › Kindle.",
+            );
+          for (const [i, id] of ids.entries()) {
+            const base = {
+              index: i + 1,
+              total: ids.length,
+              file: books.find((b) => b.id === id)?.title ?? String(id),
+            };
+            reportSend({ stage: "preparing", ...base });
+            await sleep(400);
+            reportSend({ stage: "done", ...base, device_path: kindleEmail.to });
+          }
+          return ids.map((id) => ({
+            source: String(id),
+            book_id: id,
+            result: {
+              Ok: {
+                device_path: kindleEmail.to,
+                content_id: "",
+                bytes: 1_000_000,
+                skipped_pages: [],
+                details_only: false,
+              },
+            },
+          }));
+        }
         case "library_save":
           return (a.ids as number[]).map((id) => ({
             book_id: id,

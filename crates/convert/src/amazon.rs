@@ -1,4 +1,5 @@
-//! Amazon formats (AZW3, MOBI, AZW, PRC, KFX) to EPUB, via boko.
+//! Amazon formats (AZW3, MOBI, AZW, PRC, KFX) to EPUB, and EPUB to AZW3 for
+//! Kindles, via boko.
 //!
 //! Files are recognised by their content, since `.azw` can hold any of them.
 //! DRM is detected and refused, never removed.
@@ -23,6 +24,8 @@ pub const EXTENSIONS: [&str; 5] = ["azw3", "azw", "mobi", "prc", "kfx"];
 
 /// First argument that turns the current binary into a converter.
 const CHILD_ARG: &str = "--parallax-amazon-to-epub";
+/// The same, converting an EPUB to AZW3.
+const CHILD_ARG_AZW3: &str = "--parallax-epub-to-azw3";
 const EXIT_DRM: i32 = 3;
 const EXIT_FAILED: i32 = 4;
 
@@ -96,6 +99,35 @@ fn export(input: &Path, output: &Path) -> Result<()> {
         .map_err(|e| failed(e.to_string()))
 }
 
+/// Converts an EPUB to AZW3 (KF8) in this process, for Kindles. As with
+/// [`InProcess`], use [`ChildProcess::to_azw3`] outside tests.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct EpubToAzw3;
+
+impl Converter for EpubToAzw3 {
+    fn convert(&self, input: &Path, output: &Path) -> Result<()> {
+        let result = export_azw3(input, output);
+        if result.is_err() {
+            let _ = fs::remove_file(output);
+        }
+        result
+    }
+}
+
+fn export_azw3(input: &Path, output: &Path) -> Result<()> {
+    let failed = |message: String| Error::Amazon {
+        input: input.to_path_buf(),
+        message,
+    };
+    let book = Book::open_format(input, Format::Epub).map_err(|e| match e {
+        boko::Error::DrmProtected(_) => Error::DrmProtected(input.to_path_buf()),
+        other => failed(other.to_string()),
+    })?;
+    let mut file = File::create(output)?;
+    book.export(Format::Azw3, &mut file)
+        .map_err(|e| failed(e.to_string()))
+}
+
 /// Opens the KF8 half when there is one: it has the book's real HTML and CSS,
 /// while the older half of a combo file has neither stylesheets nor the
 /// publisher's structure. boko picks by extension, which can't tell them apart.
@@ -111,11 +143,23 @@ fn open_mobi(input: &Path) -> boko::Result<Book> {
 #[derive(Debug, Clone)]
 pub struct ChildProcess {
     exe: PathBuf,
+    arg: &'static str,
 }
 
 impl ChildProcess {
+    /// Converts Amazon books to EPUB.
     pub fn new(exe: impl Into<PathBuf>) -> Self {
-        Self { exe: exe.into() }
+        Self {
+            exe: exe.into(),
+            arg: CHILD_ARG,
+        }
+    }
+
+    /// Converts EPUBs to AZW3 instead, like [`EpubToAzw3`].
+    #[must_use]
+    pub fn to_azw3(mut self) -> Self {
+        self.arg = CHILD_ARG_AZW3;
+        self
     }
 
     /// The running executable.
@@ -127,7 +171,7 @@ impl ChildProcess {
 impl Converter for ChildProcess {
     fn convert(&self, input: &Path, output: &Path) -> Result<()> {
         let out = Command::new(&self.exe)
-            .arg(CHILD_ARG)
+            .arg(self.arg)
             .arg(input)
             .arg(output)
             .output()?;
@@ -154,14 +198,16 @@ impl Converter for ChildProcess {
 /// otherwise returns. Call it first thing in `main`.
 pub fn run_child_if_asked() {
     let mut args = env::args_os().skip(1);
-    if args.next().is_none_or(|arg| arg != CHILD_ARG) {
-        return;
-    }
+    let converter: &dyn Converter = match args.next() {
+        Some(arg) if arg == CHILD_ARG => &InProcess,
+        Some(arg) if arg == CHILD_ARG_AZW3 => &EpubToAzw3,
+        _ => return,
+    };
     let (Some(input), Some(output)) = (args.next(), args.next()) else {
-        eprintln!("usage: {CHILD_ARG} INPUT OUTPUT");
+        eprintln!("usage: {CHILD_ARG}|{CHILD_ARG_AZW3} INPUT OUTPUT");
         process::exit(EXIT_FAILED);
     };
-    match InProcess.convert(Path::new(&input), Path::new(&output)) {
+    match converter.convert(Path::new(&input), Path::new(&output)) {
         Ok(()) => process::exit(0),
         Err(Error::DrmProtected(_)) => process::exit(EXIT_DRM),
         Err(Error::Amazon { message, .. }) => {

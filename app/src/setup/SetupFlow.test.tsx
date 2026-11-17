@@ -36,6 +36,8 @@ const kobo = (read_only: string | null = null, tested = true): DeviceInfo => ({
   },
   screen: { width: 1264, height: 1680, colour: false, source: "model" },
   read_only,
+  transport: "drive",
+  unavailable: null,
   tested,
 });
 

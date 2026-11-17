@@ -1,0 +1,250 @@
+//! Kindle workflows against a drive-mode Kindle in a temporary folder: send,
+//! update, reading progress and highlights, adding from the Kindle, removal.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use parallax_convert::amazon::{EpubToAzw3, InProcess};
+use parallax_core::import::DeviceImport;
+use parallax_core::kindle::{self, SendOptions};
+use parallax_device::Transport;
+use parallax_device_kindle::storage::DriveStorage;
+use parallax_device_kindle::{KindleDevice, MetaCache};
+use parallax_library::{ImportOutcome, Library};
+
+fn fixture(path: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures")
+        .join(path)
+}
+
+fn kindle(root: &Path) -> KindleDevice {
+    fs::create_dir_all(root.join("documents")).unwrap();
+    fs::create_dir_all(root.join("system/thumbnails")).unwrap();
+    KindleDevice::new(
+        Arc::new(DriveStorage::new(root)),
+        root.to_string_lossy().into_owned(),
+        "G0033W0000000001".into(),
+        String::new(),
+        Transport::Drive,
+        None,
+    )
+}
+
+fn import(library: &mut Library, path: &Path) -> i64 {
+    match library.import(path).unwrap() {
+        ImportOutcome::Added { book, .. } | ImportOutcome::AlreadyInLibrary { book } => book.id,
+    }
+}
+
+/// A KRDS `.azw3f` saying the Kindle is at `position`.
+fn sidecar(position: u32) -> Vec<u8> {
+    let mut out = b"\x00\x00\x00\x00\x00\x1A\xB1\x26".to_vec();
+    let int = |out: &mut Vec<u8>, n: i32| {
+        out.push(1);
+        out.extend_from_slice(&n.to_be_bytes());
+    };
+    let utf = |out: &mut Vec<u8>, s: &str| {
+        out.push(0);
+        out.extend_from_slice(&u16::try_from(s.len()).unwrap().to_be_bytes());
+        out.extend_from_slice(s.as_bytes());
+    };
+    int(&mut out, 1);
+    int(&mut out, 1);
+    out.push(0xFE);
+    utf(&mut out, "lpr");
+    int(&mut out, 2);
+    out.push(3);
+    utf(&mut out, &position.to_string());
+    out.push(2);
+    out.extend_from_slice(&1_762_000_000_000i64.to_be_bytes());
+    out.push(0xFF);
+    out
+}
+
+#[test]
+fn send_update_sync_and_remove() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut library = Library::open(dir.path().join("library")).unwrap();
+    let id = import(&mut library, &fixture("epub/minimal.epub"));
+    let device = kindle(&dir.path().join("Kindle"));
+    let options = SendOptions {
+        converter: &EpubToAzw3,
+        page_numbers: true,
+    };
+
+    let outcomes = kindle::send_library_books(&library, &device, &options, &[id], |_| {});
+    let sent = outcomes[0].result.as_ref().unwrap().clone();
+    assert!(
+        sent.device_path.starts_with("documents/")
+            && Path::new(&sent.device_path)
+                .extension()
+                .is_some_and(|e| e == "azw3")
+    );
+    let file = dir.path().join("Kindle").join(&sent.device_path);
+    assert!(file.is_file());
+    let copies = library.device_copies(device.serial()).unwrap();
+    assert_eq!(copies.len(), 1);
+    assert_eq!(copies[0].content_id, sent.device_path);
+
+    // Sending again is refused while the copy is there.
+    let again = kindle::send_library_books(&library, &device, &options, &[id], |_| {});
+    assert!(
+        again[0]
+            .result
+            .as_ref()
+            .unwrap_err()
+            .contains("already on the Kindle")
+    );
+
+    let mut cache = MetaCache::new();
+    let books = device.books(&mut cache).unwrap();
+    assert_eq!(books.len(), 1);
+    let on = kindle::books_on_device(&library, &device, &books).unwrap();
+    assert_eq!(on.len(), 1);
+    assert_eq!(on[0].book_id, id);
+    let catalog = kindle::catalog(&books);
+    assert!(catalog[0].book.sideloaded);
+
+    // The Kindle reads halfway and highlights a line.
+    let stem = sent.device_path.trim_end_matches(".azw3");
+    let text_length = books[0].meta.text_length;
+    fs::write(
+        dir.path()
+            .join("Kindle")
+            .join(format!("{stem}.sdr/x.azw3f")),
+        sidecar(text_length / 2),
+    )
+    .unwrap();
+    let title = books[0].title();
+    fs::write(
+        dir.path().join("Kindle/documents/My Clippings.txt"),
+        format!(
+            "{title} (Someone)\n- Your Highlight on Location 1-2 | Added on Monday, 3 November 2025 21:04:10\n\nA line.\n==========\nOther Book (X)\n- Your Highlight on Location 9 | Added on Monday, 3 November 2025 21:04:10\n\nNot this one.\n==========\n"
+        ),
+    )
+    .unwrap();
+    let done = kindle::reconcile(&mut library, &device, &mut cache).unwrap();
+    assert_eq!(done.reading, 1);
+    assert_eq!(done.annotations, 1);
+    let reading = library.reading(id).unwrap().unwrap();
+    assert_eq!(reading.status, "reading");
+    assert_eq!(reading.percent, 50);
+    let notes = library.annotations(id).unwrap();
+    assert_eq!(notes.len(), 1);
+    assert_eq!(notes[0].text.as_deref(), Some("A line."));
+    assert_eq!(
+        notes[0].created.as_deref(),
+        Some("2025-11-03T21:04:10+00:00")
+    );
+
+    // Updating replaces the file in place and keeps the sidecar folder.
+    let updated = kindle::update_on_device(&library, &device, &options, &[id], |_| {});
+    assert_eq!(
+        updated[0].result.as_ref().unwrap().device_path,
+        sent.device_path
+    );
+    assert!(
+        dir.path()
+            .join("Kindle")
+            .join(format!("{stem}.sdr/x.azw3f"))
+            .is_file()
+    );
+
+    let removed = kindle::remove_from_device(
+        Some(&library),
+        &device,
+        std::slice::from_ref(&sent.device_path),
+        |_, _| {},
+    );
+    assert!(removed[0].result.is_ok());
+    assert_eq!(removed[0].book_id, Some(id));
+    assert!(!file.exists());
+    assert!(library.device_copies(device.serial()).unwrap().is_empty());
+}
+
+#[test]
+fn comics_are_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut library = Library::open(dir.path().join("library")).unwrap();
+    let cbz = dir.path().join("Comic.cbz");
+    let mut zip = zip::ZipWriter::new(fs::File::create(&cbz).unwrap());
+    zip.start_file("p1.png", zip::write::SimpleFileOptions::default())
+        .unwrap();
+    let mut png = Vec::new();
+    image::GrayImage::from_pixel(60, 90, image::Luma([90]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    std::io::Write::write_all(&mut zip, &png).unwrap();
+    zip.finish().unwrap();
+    let id = import(&mut library, &cbz);
+    let device = kindle(&dir.path().join("Kindle"));
+    let options = SendOptions {
+        converter: &EpubToAzw3,
+        page_numbers: false,
+    };
+    let outcomes = kindle::send_library_books(&library, &device, &options, &[id], |_| {});
+    assert!(outcomes[0].result.as_ref().unwrap_err().contains("comics"));
+}
+
+#[test]
+fn adds_sideloaded_books_and_skips_store_books() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut library = Library::open(dir.path().join("library")).unwrap();
+    let root = dir.path().join("Kindle");
+    let device = kindle(&root);
+    fs::copy(
+        fixture("amazon/book.azw3"),
+        root.join("documents/Sideloaded.azw3"),
+    )
+    .unwrap();
+    fs::copy(
+        fixture("amazon/book.azw3"),
+        root.join("documents/Bought-asin_B00ABCDEFG-type_EBOK-v_0.azw"),
+    )
+    .unwrap();
+    fs::write(root.join("documents/Notes.pdf"), b"%PDF-1.4").unwrap();
+
+    let books = device.books(&mut MetaCache::new()).unwrap();
+    let outcomes = kindle::import_from_device(
+        &mut library,
+        &device,
+        &books,
+        None,
+        &InProcess,
+        |_, _, _| {},
+    );
+    let by_path = |p: &str| {
+        outcomes
+            .iter()
+            .find(|o| o.content_id.ends_with(p))
+            .unwrap()
+            .result
+            .clone()
+            .unwrap()
+    };
+    let DeviceImport::Added { book_id } = by_path("Sideloaded.azw3") else {
+        panic!("not added: {:?}", by_path("Sideloaded.azw3"));
+    };
+    assert!(library.book(book_id).is_ok());
+    assert!(
+        matches!(by_path("v_0.azw"), DeviceImport::Skipped { reason } if reason.contains("Kindle Store"))
+    );
+    assert!(
+        matches!(by_path("Notes.pdf"), DeviceImport::Skipped { reason } if reason.contains(".pdf"))
+    );
+
+    // A second import links nothing new.
+    let again = kindle::import_from_device(
+        &mut library,
+        &device,
+        &books,
+        Some(&["documents/Sideloaded.azw3".into()]),
+        &InProcess,
+        |_, _, _| {},
+    );
+    assert!(
+        matches!(&again[0].result, Ok(DeviceImport::Skipped { reason }) if reason.contains("already"))
+    );
+}

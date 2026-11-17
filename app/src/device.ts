@@ -1,5 +1,12 @@
-// Pure helpers for the Kobo view.
-import type { DeviceBook, DeviceImportOutcome } from "./api";
+// Pure helpers for the device view.
+import type { DeviceBook, DeviceImportOutcome, DeviceInfo } from "./api";
+
+/** The brand to name the device by in copy: "Kindle" or "Kobo". */
+export const brand = (device: Pick<DeviceInfo, "kind"> | null | undefined) =>
+  device?.kind === "kindle" ? "Kindle" : "Kobo";
+
+export const isKindle = (device: Pick<DeviceInfo, "kind"> | null | undefined) =>
+  device?.kind === "kindle";
 import { seriesValue, surnameKey, titleKey } from "./library";
 import type { Column } from "./sort";
 

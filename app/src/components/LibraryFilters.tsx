@@ -14,8 +14,10 @@ import {
 interface Props {
   filter: LibraryFilter;
   facets: Facets;
-  /** A Kobo is connected, so its status and collections can be filtered. */
+  /** A device is connected, so its status and collections can be filtered. */
   connected: boolean;
+  /** "Kobo" or "Kindle". */
+  deviceName?: string;
   onChange: (filter: LibraryFilter) => void;
   /** Controls shown first, such as saved searches. */
   leading?: ReactNode;
@@ -72,13 +74,14 @@ export function LibraryFilters({
   filter,
   facets,
   connected,
+  deviceName = "Kobo",
   onChange,
   leading,
 }: Props) {
   const kobo: [KoboFilter, string, number][] = [
     ["all", "All", facets.kobo.all],
-    ["on", "On Kobo", facets.kobo.on],
-    ["off", "Not on Kobo", facets.kobo.off],
+    ["on", `On ${deviceName}`, facets.kobo.on],
+    ["off", `Not on ${deviceName}`, facets.kobo.off],
   ];
   if (facets.kobo.stale > 0 || filter.kobo === "stale") {
     kobo.push(["stale", "Update available", facets.kobo.stale]);
@@ -116,15 +119,17 @@ export function LibraryFilters({
               </button>
             ))}
           </div>
-          <FilterSelect
-            label="Filter by collection"
-            all="All collections"
-            none="In no collection"
-            noneCount={facets.noCollection}
-            value={filter.collection}
-            options={facets.collections}
-            onChange={(collection) => onChange({ ...filter, collection })}
-          />
+          {facets.collections.length > 0 && (
+            <FilterSelect
+              label="Filter by collection"
+              all="All collections"
+              none="In no collection"
+              noneCount={facets.noCollection}
+              value={filter.collection}
+              options={facets.collections}
+              onChange={(collection) => onChange({ ...filter, collection })}
+            />
+          )}
         </>
       )}
       <FilterSelect

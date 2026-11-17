@@ -92,7 +92,8 @@ parallax-epub = { path = "crates/epub" }
 parallax-library = { path = "crates/library" }
 parallax-metadata = { path = "crates/metadata" }
 parallax-device-kobo = { path = "crates/device-kobo" }
+parallax-device-kindle = { path = "crates/device-kindle" }
 
-# boko with two fixes that aren't released yet; see vendor/boko/VENDORED.md.
+# boko with fixes that aren't released yet; see vendor/boko/VENDORED.md.
 [patch.crates-io]
 boko = { path = "vendor/boko" }

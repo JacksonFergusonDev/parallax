@@ -3,7 +3,7 @@ import { TransferProgress } from "./TransferProgress";
 import { GeneratedCover } from "./GeneratedCover";
 import { coverSrc, type Book } from "../api";
 import {
-  deviceStateLabel,
+  deviceStateLabels,
   progressLabel,
   readState,
   sendStatusLabel,
@@ -16,6 +16,8 @@ interface Props {
   selected: boolean;
   /** Presence and changes on the connected Kobo. */
   deviceState: DeviceState;
+  /** "Kobo" or "Kindle", for the status label. */
+  deviceName?: string;
   status: SendStatus | undefined;
   onSelect: (id: number, event: React.MouseEvent) => void;
 }
@@ -24,6 +26,7 @@ export const BookCard = memo(function BookCard({
   book,
   selected,
   deviceState,
+  deviceName,
   status,
   onSelect,
 }: Props) {
@@ -37,7 +40,7 @@ export const BookCard = memo(function BookCard({
       aria-description={
         status
           ? sendStatusLabel(status)
-          : deviceState && deviceStateLabel[deviceState]
+          : deviceState && deviceStateLabels(deviceName)[deviceState]
       }
       title={status?.stage === "failed" ? status.error : undefined}
     >
@@ -72,7 +75,7 @@ export const BookCard = memo(function BookCard({
         )}
         {!status && deviceState && (
           <span className={`on-device ${deviceState}`}>
-            {deviceStateLabel[deviceState]}
+            {deviceStateLabels(deviceName)[deviceState]}
           </span>
         )}
       </div>

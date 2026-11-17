@@ -1,5 +1,7 @@
 # Kobo hardware checks
 
+For Kindles, see [Kindle hardware checks](kindle-hardware-checks.md).
+
 Run the relevant checks on a physical Kobo with test books and disposable collections. Record the app version or commit, model, firmware, database schema, steps exercised, and results in [hardware results](hardware-results.md). Save a [device report](../docs/device-support.md#share-a-device-report) for an unfamiliar model or unexpected behaviour. Fixture replay and FAT32 image tests cover the desktop side of the workflow. Use the device to observe how Nickel imports and presents changes.
 
 ## Connection and reading
@@ -48,3 +50,4 @@ After running the relevant checks on a physical device of a new model and record
 - Repeat the production comics send and update checks on the Libra 2. Verify direction, chapter presentation, series, reading position, and the final page-processing settings. Colour and older models still need their own runs.
 - Verify batch progress, pending-eject states, Library removal scopes, Library filters with a connected device, and the physical-device restore flow.
 - Collect reports and run the relevant checks on other Kobo models. Real KindleGen combo files and KFX samples are still needed for the import checks.
+- Every [Kindle hardware check](kindle-hardware-checks.md) is open.

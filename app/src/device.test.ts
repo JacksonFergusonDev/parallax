@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { DeviceBook, DeviceImportOutcome } from "./api";
 import {
+  brand,
   deviceColumns,
+  isKindle,
   filterDeviceBooks,
   shortDate,
   statusLabel,
@@ -116,5 +118,15 @@ describe("summarizeDeviceImport", () => {
       "Added 2 books to your library · matched 1 book you already had · 2 books skipped: DRM-protected · 1 book couldn't be read",
     );
     expect(summarizeDeviceImport([])).toBe("Nothing to add");
+  });
+});
+
+describe("device names in copy", () => {
+  it("names the brand, and Kobo when nothing is connected", () => {
+    expect(brand({ kind: "kindle" })).toBe("Kindle");
+    expect(brand({ kind: "kobo" })).toBe("Kobo");
+    expect(brand(null)).toBe("Kobo");
+    expect(isKindle({ kind: "kindle" })).toBe(true);
+    expect(isKindle(undefined)).toBe(false);
   });
 });

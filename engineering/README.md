@@ -9,12 +9,13 @@
 - [Kobo engineering notes](device-notes.md) cover the database, device writes, backups, and how to add a device report.
 - [Goodreads import](goodreads.md) covers the export format, re-import merging and how saved books link to the library.
 - [Releasing](releasing.md) covers cutting a release, signing keys and secrets, the site's deployment, and how the CLI is distributed.
-- [Hardware checks](hardware-checks.md) provide repeatable procedures. [Hardware results](hardware-results.md) record which device, firmware, and workflows were actually tested.
+- [Hardware checks](hardware-checks.md) provide repeatable procedures for Kobos, and [Kindle hardware checks](kindle-hardware-checks.md) for Kindles. [Hardware results](hardware-results.md) record which device, firmware, and workflows were actually tested.
 
 ## Decisions and measurements
 
 - [EPUB reader architecture](decisions/epub-reader.md)
 - [Comic preparation for Kobo](decisions/kobo-comics.md)
+- [Kindle support: drive and MTP storage, sending, sidecars and email](decisions/kindle.md)
 - [Retained views and prefetched data](decisions/retained-views.md)
 - [Archive reader benchmark on Apple Silicon](benchmarks/archive-reader-benchmark.md)
 

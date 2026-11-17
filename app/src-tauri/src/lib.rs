@@ -37,6 +37,7 @@ use tauri::{AppHandle, Emitter, Manager, State, Webview};
 mod about;
 #[cfg(feature = "e2e")]
 mod e2e;
+mod kindle;
 mod menu;
 mod reader;
 mod settings;
@@ -89,6 +90,7 @@ struct AppState {
     /// Pre-change backups of device databases.
     backup_root: PathBuf,
     upscaler: Arc<Upscaler>,
+    kindles: kindle::Shared,
 }
 
 /// Cover upscaling. One cover at a time: the model fills the GPU.
@@ -202,13 +204,18 @@ fn err(e: impl ToString) -> String {
 }
 
 #[tauri::command]
-async fn list_devices() -> CmdResult<Vec<DeviceInfo>> {
+async fn list_devices(state: State<'_, AppState>) -> CmdResult<Vec<DeviceInfo>> {
+    let kindles = state.kindles.clone();
+    let free_from_photos = kindle::free_from_photos(&state);
     // Removable-media reads can stall. Never perform them on the UI thread.
-    tauri::async_runtime::spawn_blocking(|| {
-        KoboDevice::detect(Path::new(MACOS_VOLUMES))
+    tauri::async_runtime::spawn_blocking(move || {
+        let volumes = Path::new(MACOS_VOLUMES);
+        let mut devices: Vec<DeviceInfo> = KoboDevice::detect(volumes)
             .iter()
             .map(KoboDevice::info)
-            .collect()
+            .collect();
+        devices.extend(kindle::detect(&kindles, volumes, free_from_photos));
+        devices
     })
     .await
     .map_err(err)
@@ -454,7 +461,11 @@ async fn device_restore(
 #[tauri::command]
 async fn books_on_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<Vec<OnDevice>> {
     let library = state.library.clone();
+    let kindles = state.kindles.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        if let Some(kindle) = kindle::open(&kindles, &mount) {
+            return kindle::books_on_device(&kindles, &library, &kindle);
+        }
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let lib = library
             .lock()
@@ -478,14 +489,15 @@ async fn device_books(
     app: AppHandle,
     state: State<'_, AppState>,
     mount: PathBuf,
-) -> CmdResult<Vec<KoboBook>> {
-    let cache = app
-        .path()
-        .app_cache_dir()
-        .map_err(err)?
-        .join("device-covers");
+) -> CmdResult<serde_json::Value> {
+    let cache = kindle::cover_cache(&app)?;
     let library = state.library.clone();
+    let kindles = state.kindles.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        if let Some(device) = kindle::open(&kindles, &mount) {
+            let books = kindle::device_books(&kindles, &device, &cache)?;
+            return serde_json::to_value(books).map_err(err);
+        }
         let device = KoboDevice::open(&mount).map_err(err)?;
         let library = library
             .lock()
@@ -502,7 +514,8 @@ async fn device_books(
                     .and_then(|id| device.cache_cover(id, &cache));
                 KoboBook { entry, cover }
             })
-            .collect())
+            .collect::<Vec<_>>())
+        .and_then(|books| serde_json::to_value(books).map_err(err))
     })
     .await
     .map_err(err)?
@@ -520,7 +533,28 @@ async fn remove_from_device(
     let progress = progress.map(|id| id.channel_on(webview));
     let library = state.library.clone();
     let backups = state.backup_root.clone();
+    let kindles = state.kindles.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        if let Some(kindle) = kindle::open(&kindles, &mount) {
+            if expected_serial.is_some_and(|serial| serial != kindle.serial()) {
+                return Err("A different Kindle is connected. Confirm the removal again.".into());
+            }
+            return Ok(kindle::remove(
+                &library,
+                &kindle,
+                &content_ids,
+                |completed, total| {
+                    if let Some(channel) = &progress {
+                        let _ = channel.send(BookProgress {
+                            completed,
+                            total,
+                            title: None,
+                            file_fraction: Some(0.0),
+                        });
+                    }
+                },
+            ));
+        }
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -562,7 +596,11 @@ async fn update_books(
         progress.map(|id| id.channel_on(webview));
     let library = state.library.clone();
     let backups = state.backup_root.clone();
+    let kindles = state.kindles.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        if let Some(kindle) = kindle::open(&kindles, &mount) {
+            return kindle::send(&library, &kindle, &ids, true, progress.as_ref());
+        }
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let lib = library
             .lock()
@@ -609,8 +647,12 @@ struct DeviceHistory {
 /// Saves a device report (model, firmware, database layout; no titles,
 /// serial or reading data) to `path`. Only reads the device.
 #[tauri::command]
-async fn device_report(mount: PathBuf, path: PathBuf) -> CmdResult<()> {
+async fn device_report(state: State<'_, AppState>, mount: PathBuf, path: PathBuf) -> CmdResult<()> {
+    let kindles = state.kindles.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        if let Some(kindle) = kindle::open(&kindles, &mount) {
+            return kindle::report(&kindles, &kindle, &path);
+        }
         let report = KoboDevice::open(&mount).map_err(err)?.report();
         let json = serde_json::to_string_pretty(&report).map_err(err)?;
         std::fs::write(&path, json + "\n").map_err(err)
@@ -652,6 +694,10 @@ async fn comic_transfer_estimate(
 ) -> CmdResult<Option<parallax_core::comic_send::TransferEstimate>> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        // Comics aren't sent to Kindles.
+        if kindle::is_kindle(&mount) {
+            return Ok(None);
+        }
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let lib = library
             .lock()
@@ -676,7 +722,13 @@ async fn send_books(
     let library = state.library.clone();
     let backups = state.backup_root.clone();
     let rules = !settings::is(&state, settings::KOBO_RULES, "off");
+    let kindles = state.kindles.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        // A Kindle has no collections Parallax can reach, so `collection`
+        // and grouping rules don't apply.
+        if let Some(kindle) = kindle::open(&kindles, &mount) {
+            return kindle::send(&library, &kindle, &ids, false, progress.as_ref());
+        }
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let lib = library
             .lock()
@@ -1108,7 +1160,21 @@ async fn import_from_device(
 ) -> CmdResult<Vec<DeviceImportOutcome>> {
     let progress = progress.map(|id| id.channel_on(webview));
     let library = state.library.clone();
+    let kindles = state.kindles.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        if let Some(kindle) = kindle::open(&kindles, &mount) {
+            let outcomes = kindle::import(
+                &kindles,
+                &library,
+                &kindle,
+                content_ids.as_deref(),
+                |index, total, title| {
+                    report_books(progress.as_ref(), index - 1, total, Some(title));
+                },
+            )?;
+            report_books(progress.as_ref(), outcomes.len(), outcomes.len(), None);
+            return Ok(outcomes);
+        }
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let mut lib = library
             .lock()
@@ -1148,7 +1214,7 @@ async fn reading_stats(
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(mount) = mount {
+        if let Some(mount) = mount.filter(|m| !kindle::is_kindle(m)) {
             let kobo = KoboDevice::open(&mount).map_err(err)?;
             let stats = parallax_core::stats::reading_stats(&kobo, Some(&lib)).map_err(err)?;
             let json = serde_json::to_string(&stats).map_err(err)?;
@@ -1332,7 +1398,19 @@ async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResu
     let rules = !settings::is(&state, settings::KOBO_RULES, "off");
     let positions = !settings::is(&state, settings::KOBO_POSITIONS, "off");
     let layout = settings::is(&state, parallax_core::layout::KOBO_LAYOUT, "on");
+    let kindles = state.kindles.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        if let Some(device) = kindle::open(&kindles, &mount) {
+            let done = kindle::reconcile(&kindles, &library, &device)?;
+            return Ok(Reconciled {
+                series: 0,
+                grouped: 0,
+                positions: 0,
+                layout: 0,
+                reading: done.reading,
+                annotations: done.annotations,
+            });
+        }
         let kobo = KoboDevice::open(&mount).map_err(err)?;
         let mut lib = library
             .lock()
@@ -1417,8 +1495,12 @@ async fn rules_apply(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<us
 }
 
 #[tauri::command]
-async fn eject_device(mount: PathBuf) -> CmdResult<()> {
+async fn eject_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResult<()> {
+    let kindles = state.kindles.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        if let Some(device) = kindle::open(&kindles, &mount) {
+            return kindle::eject(&kindles, &device);
+        }
         KoboDevice::open(&mount)
             .and_then(|kobo| kobo.eject())
             .map_err(err)
@@ -1718,6 +1800,7 @@ pub fn run() {
                 library: Arc::new(Mutex::new(library)),
                 backup_root: data.join("device-backups"),
                 upscaler: Arc::new(Upscaler::new(model, previews)),
+                kindles: kindle::Shared::default(),
             });
             app.manage(reader::OpenBooks::default());
             settings::apply_theme(app.handle(), settings::AppTheme::saved(&app.state()));
@@ -1737,6 +1820,9 @@ pub fn run() {
             about::about_info,
             about::about_open_repository,
             list_devices,
+            kindle::kindle_email_settings,
+            kindle::kindle_email_settings_set,
+            kindle::kindle_email_send,
             library_list,
             library_import,
             library_review,

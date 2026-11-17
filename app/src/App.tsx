@@ -4,6 +4,7 @@ import {
   SlidersHorizontal,
   Eject,
   LibraryBig,
+  Mail,
   Plus,
   RefreshCw,
   Send,
@@ -31,6 +32,8 @@ import {
   deviceBooks,
   dismissDuplicates,
   ejectDevice,
+  emailToKindle,
+  kindleEmailSettings,
   libraryDuplicates,
   getSetting,
   importBooks,
@@ -58,6 +61,7 @@ import {
   reconcileDevice,
   upscaleAvailable,
 } from "./api";
+import { brand, isKindle } from "./device";
 import {
   applyProgress,
   defaultOrder,
@@ -212,6 +216,8 @@ export default function App() {
   const setup = useSetup(loaded, books.length);
   usePresentation(appRef, loaded && detected && themed && setup.known);
   const [device, setDevice] = useState<DeviceInfo | null>(null);
+  /** "Kobo" or "Kindle", for copy about the connected device. */
+  const deviceName = brand(device);
   // Setup has its own word about an untested Kobo.
   const koboNotice = useKoboNotice(setup.open ? null : device);
   const update = useUpdate();
@@ -269,6 +275,7 @@ export default function App() {
     | "updating"
     | "ejecting"
     | "saving"
+    | "emailing"
     | null
   >(null);
   const [dragging, setDragging] = useState(false);
@@ -361,7 +368,7 @@ export default function App() {
 
   const refreshOnDevice = useCallback(
     async (d: DeviceInfo | null, reload = false) => {
-      if (!d || activeKobo.current !== d) return;
+      if (!d || d.unavailable || activeKobo.current !== d) return;
       const request = ++copyRequest.current;
       const list = await booksOnDevice(d.mount, reload).catch(() => null);
       if (list && activeKobo.current === d && copyRequest.current === request) {
@@ -391,15 +398,17 @@ export default function App() {
     let alive = true;
     activeKobo.current = device;
     void refreshOnDevice(device);
-    const shelves = device
+    const shelves = device?.capabilities.native_collections
       ? listCollections(device.mount).catch(() => [])
       : Promise.resolve([]);
     shelves.then((list) => alive && setCollections(list));
-    if (device) {
+    if (device && !device.unavailable) {
       const mount = device.mount;
-      const firmware = firmwareAsked.current.has(mount)
-        ? Promise.resolve(null)
-        : checkKoboFirmware(mount).catch(() => null);
+      const name = brand(device);
+      const firmware =
+        isKindle(device) || firmwareAsked.current.has(mount)
+          ? Promise.resolve(null)
+          : checkKoboFirmware(mount).catch(() => null);
       firmwareAsked.current.add(mount);
       reconcileDevice(mount)
         .then(async ({ series, grouped, positions, layout }) => {
@@ -429,7 +438,7 @@ export default function App() {
                 .catch(() => {});
             }
             messages.push(
-              `Parallax ${joinList(parts)} on your Kobo. Eject to see the changes.`,
+              `Parallax ${joinList(parts)} on your ${name}. Eject to see the changes.`,
             );
           }
           const update = await firmware;
@@ -451,7 +460,8 @@ export default function App() {
   }, [device, refreshOnDevice]);
 
   /** The connected Kobo, if books can be sent to it. */
-  const writable = device?.read_only === null ? device : null;
+  const writable =
+    device?.read_only === null && !device.unavailable ? device : null;
   const sendTo = useRef(writable);
   useEffect(() => {
     sendTo.current = writable;
@@ -571,7 +581,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
       if (succeeded.length && activeKobo.current === target) {
         setNotice({
           kind: "info",
-          text: `Removed ${succeeded.length} ${succeeded.length === 1 ? "book" : "books"} from Kobo. Eject to let your Kobo refresh its library.`,
+          text: `Removed ${succeeded.length} ${succeeded.length === 1 ? "book" : "books"} from your ${brand(target)}. Eject to let it refresh its library.`,
         });
       }
       if (removed.length && activeKobo.current === target) {
@@ -817,7 +827,10 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     }),
     [copyState, onDevice, catalog, device],
   );
-  const columns = useMemo(() => libraryColumns(copyState), [copyState]);
+  const columns = useMemo(
+    () => libraryColumns(copyState, deviceName),
+    [copyState, deviceName],
+  );
   const covers = useMemo(
     () =>
       books.flatMap((b) => {
@@ -1041,8 +1054,9 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
         ))
       )
         return;
-      const collection =
-        sendCollection === NEW_COLLECTION
+      const collection = !device.capabilities.native_collections
+        ? null
+        : sendCollection === NEW_COLLECTION
           ? newCollection.trim() || null
           : sendCollection || null;
       const outcomes = await runTransfer(ids, (report) =>
@@ -1082,8 +1096,8 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
               kind: "info",
               text: [
                 kind === "sending"
-                  ? "Sent. Eject your Kobo and unplug it to import the new books."
-                  : "Updated. Eject your Kobo to see the changes.",
+                  ? `Sent. Eject your ${deviceName} and unplug it to see the new books.`
+                  : `Updated. Eject your ${deviceName} to see the changes.`,
                 skippedPagesNote(outcomes),
               ]
                 .filter(Boolean)
@@ -1096,9 +1110,10 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
       await refreshOnDevice(device);
       // Even a partially failed transfer may have changed device metadata.
       setDeviceRevision((revision) => revision + 1);
-      listCollections(device.mount)
-        .then(setCollections)
-        .catch(() => {});
+      if (device.capabilities.native_collections)
+        listCollections(device.mount)
+          .then(setCollections)
+          .catch(() => {});
       setBusy(null);
     }
     if (thenEject) await eject();
@@ -1150,9 +1165,9 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     let koboCount = 0;
     if (count) {
       const libraryOnly = "Library Only";
-      const both = "Library and Kobo";
+      const both = `Library and ${brand(target)}`;
       const answer = await message(
-        `${question} ${count === 1 ? "One selected book has a copy" : `${count} selected books have copies`} on your Kobo. Removing from Kobo also removes the reading progress and highlights stored there.`,
+        `${question} ${count === 1 ? "One selected book has a copy" : `${count} selected books have copies`} on your ${brand(target)}. Removing it there also removes the reading progress and highlights stored there.`,
         {
           ...options,
           buttons: { yes: libraryOnly, no: both, cancel: "Cancel" },
@@ -1171,13 +1186,17 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     }
     const total = ids.length + koboCount;
     return {
-      starting: koboCount ? "Backing up Kobo…" : "Saving a library snapshot…",
+      starting: koboCount
+        ? isKindle(target)
+          ? "Removing from Kindle…"
+          : "Backing up Kobo…"
+        : "Saving a library snapshot…",
       run: async (report) => {
         try {
           if (target && koboCount) {
             if (activeKobo.current !== target) {
               throw new Error(
-                "The Kobo connection changed. Confirm the removal again.",
+                `The ${brand(target)} connection changed. Confirm the removal again.`,
               );
             }
             const outcomes = await removeOnKobo(
@@ -1188,7 +1207,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
             const failure = outcomes.find((outcome) => "Err" in outcome.result);
             if (failure && "Err" in failure.result) {
               throw new Error(
-                `Could not remove every selected copy from Kobo. Your library books were kept. ${failure.result.Err}`,
+                `Could not remove every selected copy from your ${brand(target)}. Your library books were kept. ${failure.result.Err}`,
               );
             }
           }
@@ -1222,6 +1241,50 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     }
   };
 
+  /** The Kindle address books are emailed to, once set in Settings. */
+  const [emailTo, setEmailTo] = useState("");
+  const hasSelection = selected.size > 0;
+  useEffect(() => {
+    // Read again when a selection starts, as Settings may have changed it.
+    if (!hasSelection) return;
+    let alive = true;
+    kindleEmailSettings()
+      .then((s) => alive && setEmailTo(s.to.trim()))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [hasSelection]);
+
+  const emailBooks = async () => {
+    const ids = [...selected];
+    if (!ids.length || busy) return;
+    setBusy("emailing");
+    setNotice(null);
+    try {
+      const outcomes = await runTransfer(ids, (report) =>
+        emailToKindle(ids, report),
+      );
+      const sent = outcomes.filter((o) => "Ok" in o.result).length;
+      const failed = outcomes.length - sent;
+      setNotice(
+        failed
+          ? {
+              kind: "error",
+              text: `${failed} of ${outcomes.length} weren't emailed. Hover a book to see why.`,
+            }
+          : {
+              kind: "info",
+              text: `Emailed ${sent} ${sent === 1 ? "book" : "books"} to ${emailTo}. Amazon delivers them to your Kindle in a few minutes.`,
+            },
+      );
+    } catch (e) {
+      setNotice({ kind: "error", text: String(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const eject = async () => {
     if (!device) return;
     setBusy("ejecting");
@@ -1232,7 +1295,9 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
       setStatuses({});
       setNotice({
         kind: "info",
-        text: "Ejected. Unplug your Kobo to let it refresh its library.",
+        text: isKindle(device)
+          ? "Ejected. You can unplug your Kindle."
+          : "Ejected. Unplug your Kobo to let it refresh its library.",
       });
     } catch (e) {
       setNotice({ kind: "error", text: String(e) });
@@ -1354,6 +1419,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
       book={b}
       selected={selected.has(b.id)}
       deviceState={deviceState(b)}
+      deviceName={deviceName}
       status={transferStatus(b.id)}
       onSelect={onSelect}
     />
@@ -1388,7 +1454,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
               <button
                 role="tab"
                 aria-selected={activeView === "device"}
-                title="On Kobo (⌘2)"
+                title={`On ${deviceName} (⌘2)`}
                 className={activeView === "device" ? "active" : ""}
                 onClick={() => {
                   setSelected(new Set());
@@ -1396,7 +1462,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                 }}
               >
                 <Tablet />
-                On Kobo
+                On {deviceName}
               </button>
             )}
             <button
@@ -1457,7 +1523,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                 active={activeView === "reading"}
                 source={readingSource}
                 onSource={setReadingSource}
-                mount={device?.mount ?? null}
+                mount={device && !isKindle(device) ? device.mount : null}
                 library={books}
                 goodreadsStamp={goodreads}
                 onGoodreadsImport={() => setFromGoodreads(true)}
@@ -1469,43 +1535,59 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
           <div
             className="tab-panel"
             role="tabpanel"
-            aria-label="On Kobo"
+            aria-label={`On ${deviceName}`}
             hidden={activeView !== "device"}
           >
-            <DeviceView
-              key={JSON.stringify([device.mount, device.serial])}
-              revision={deviceRevision}
-              device={device}
-              query={query}
-              libraryByContentId={libraryByContentId}
-              koboChanges={koboChanges}
-              onRemove={(ids, report) => removeOnKobo(device, ids, report)}
-              onUpdate={(ids) => updateOnKobo(device, ids)}
-              onLibraryChanged={refresh}
-              onBooksAdded={(ids) => {
-                void refresh().then(() => reviewAdded(ids, [], "kobo"));
-              }}
-              about={aboutOpen}
-              onAboutChange={setAboutOpen}
-              onRevert={() => setReverting("kobo")}
-              active={activeView === "device"}
-              onShow={() => setView("device")}
-              onChanged={() => {
-                refreshOnDevice(device);
-                listCollections(device.mount)
-                  .then(setCollections)
-                  .catch(() => {});
-              }}
-              onEjected={() => {
-                setDevice(null);
-                setChanges(null);
-                setStatuses({});
-                setNotice({
-                  kind: "info",
-                  text: "Ejected. Unplug your Kobo; it will refresh its library.",
-                });
-              }}
-            />
+            {device.unavailable ? (
+              <div className="body">
+                <main className="content">
+                  <div className="empty">
+                    <p>
+                      {device.model} is connected, but Parallax can't open it.
+                    </p>
+                    <p className="muted">{device.unavailable}</p>
+                  </div>
+                </main>
+              </div>
+            ) : (
+              <DeviceView
+                key={JSON.stringify([device.mount, device.serial])}
+                revision={deviceRevision}
+                device={device}
+                query={query}
+                libraryByContentId={libraryByContentId}
+                koboChanges={koboChanges}
+                onRemove={(ids, report) => removeOnKobo(device, ids, report)}
+                onUpdate={(ids) => updateOnKobo(device, ids)}
+                onLibraryChanged={refresh}
+                onBooksAdded={(ids) => {
+                  void refresh().then(() => reviewAdded(ids, [], "kobo"));
+                }}
+                about={aboutOpen}
+                onAboutChange={setAboutOpen}
+                onRevert={() => setReverting("kobo")}
+                active={activeView === "device"}
+                onShow={() => setView("device")}
+                onChanged={() => {
+                  refreshOnDevice(device);
+                  if (device.capabilities.native_collections)
+                    listCollections(device.mount)
+                      .then(setCollections)
+                      .catch(() => {});
+                }}
+                onEjected={() => {
+                  setDevice(null);
+                  setChanges(null);
+                  setStatuses({});
+                  setNotice({
+                    kind: "info",
+                    text: isKindle(device)
+                      ? "Ejected. You can unplug your Kindle."
+                      : "Ejected. Unplug your Kobo; it will refresh its library.",
+                  });
+                }}
+              />
+            )}
           </div>
         )}
         <div
@@ -1599,6 +1681,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                     filter={shownFilter}
                     facets={facets}
                     connected={device !== null}
+                    deviceName={deviceName}
                     onChange={changeFilter}
                     leading={
                       <SavedSearches
@@ -1714,6 +1797,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                             book={b}
                             selected={selected.has(b.id)}
                             deviceState={deviceState(b)}
+                            deviceName={deviceName}
                             status={transferStatus(b.id)}
                             onSelect={onSelect}
                           />
@@ -1823,6 +1907,17 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                 Remove
               </button>
             )}
+            {emailTo && selected.size > 0 && (
+              <button
+                className="secondary"
+                onClick={emailBooks}
+                disabled={busy !== null}
+                title={`Email the selected books to ${emailTo} with Send to Kindle`}
+              >
+                <Mail />
+                {busy === "emailing" ? "Emailing…" : "Email to Kindle"}
+              </button>
+            )}
             {device && hasChangesToSee && (
               <button
                 className="secondary"
@@ -1830,7 +1925,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                 disabled={busy !== null}
               >
                 <Eject />
-                {busy === "ejecting" ? "Ejecting…" : "Eject Kobo"}
+                {busy === "ejecting" ? "Ejecting…" : `Eject ${deviceName}`}
               </button>
             )}
             {toUpdate.length > 0 && (
@@ -1843,15 +1938,15 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                   )
                 }
                 disabled={!device || busy !== null}
-                title="Send your edits to the copies on your Kobo, keeping reading progress"
+                title={`Send your edits to the copies on your ${deviceName}, keeping reading progress`}
               >
                 <RefreshCw />
                 {busy === "updating"
                   ? "Updating…"
-                  : `Update ${toUpdate.length} on Kobo`}
+                  : `Update ${toUpdate.length} on ${deviceName}`}
               </button>
             )}
-            {device && toSend.length > 0 && (
+            {device?.capabilities.native_collections && toSend.length > 0 && (
               <>
                 <select
                   className="collection-select"
@@ -1879,7 +1974,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                 )}
               </>
             )}
-            {device &&
+            {device?.capabilities.native_collections &&
               device.read_only === null &&
               toSend.length === 0 &&
               alreadyOnKobo.length > 0 && (
@@ -1899,24 +1994,19 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                   toSend.map((b) => b.id),
                 )
               }
-              disabled={
-                !device ||
-                device.read_only !== null ||
-                toSend.length === 0 ||
-                busy !== null
-              }
+              disabled={!writable || toSend.length === 0 || busy !== null}
               title={
                 !device
-                  ? "Connect your Kobo to send books"
-                  : (device.read_only ?? undefined)
+                  ? "Connect your Kobo or Kindle to send books"
+                  : (device.unavailable ?? device.read_only ?? undefined)
               }
             >
               <Send />
               {busy === "sending"
                 ? "Sending…"
                 : toSend.length > 0
-                  ? `Send ${toSend.length} to Kobo`
-                  : "Send to Kobo"}
+                  ? `Send ${toSend.length} to ${deviceName}`
+                  : `Send to ${deviceName}`}
             </button>
           </footer>
         </div>
@@ -1948,10 +2038,14 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
       )}
       {tidying && (
         <TidyGenres
-          mount={device && device.read_only === null ? device.mount : null}
+          mount={
+            device && device.read_only === null && !isKindle(device)
+              ? device.mount
+              : null
+          }
           onDone={() => {
             refresh();
-            if (device) {
+            if (device && !isKindle(device)) {
               setDeviceRevision((revision) => revision + 1);
               listCollections(device.mount)
                 .then(setCollections)

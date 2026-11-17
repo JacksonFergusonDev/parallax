@@ -51,6 +51,8 @@ const device: DeviceInfo = {
   },
   screen: { width: 1264, height: 1680, colour: false, source: "model" },
   read_only: null,
+  transport: "drive",
+  unavailable: null,
   tested: true,
 };
 const localBook: Book = {
@@ -474,7 +476,9 @@ describe("book operation progress", () => {
     expect(view.querySelector(".card")).toBeNull();
     await click(button("Library"));
     await click(button("Not on Kobo 1"));
-    expect(panel("Library").textContent).toContain("Removed 1 book from Kobo");
+    expect(panel("Library").textContent).toContain(
+      "Removed 1 book from your Kobo",
+    );
     const card = panel("Library").querySelector<HTMLButtonElement>(".card")!;
     expect(card.querySelector(".on-device")?.textContent).toBe(
       "Removed from Kobo",

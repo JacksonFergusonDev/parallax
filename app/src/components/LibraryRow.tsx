@@ -4,7 +4,7 @@ import { memo } from "react";
 import { coverSrc, type Book } from "../api";
 import { shortDate } from "../device";
 import {
-  deviceStateLabel,
+  deviceStateLabels,
   progressLabel,
   sendStatusLabel,
   type DeviceState,
@@ -15,6 +15,8 @@ interface Props {
   book: Book;
   selected: boolean;
   deviceState: DeviceState;
+  /** "Kobo" or "Kindle", for the status label. */
+  deviceName?: string;
   status: SendStatus | undefined;
   onSelect: (id: number, event: React.MouseEvent) => void;
 }
@@ -23,6 +25,7 @@ export const LibraryRow = memo(function LibraryRow({
   book,
   selected,
   deviceState,
+  deviceName,
   status,
   onSelect,
 }: Props) {
@@ -85,7 +88,7 @@ export const LibraryRow = memo(function LibraryRow({
         </span>
       ) : (
         <span className={`cell end kobo-status kobo-${deviceState ?? "none"}`}>
-          {deviceState && deviceStateLabel[deviceState]}
+          {deviceState && deviceStateLabels(deviceName)[deviceState]}
         </span>
       )}
       <span className="cell end muted" data-column="added">

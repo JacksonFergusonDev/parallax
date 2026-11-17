@@ -51,6 +51,7 @@ import {
   type SendOutcome,
 } from "../api";
 import {
+  brand,
   deviceColumns,
   filterDeviceBooks,
   shortDate,
@@ -64,6 +65,7 @@ import { deviceStateLabel } from "../library";
 import { clickSelect, SELECTION_HINT } from "../selection";
 import { deviceReviewGroups } from "../duplicates";
 import { AboutKobo } from "./AboutKobo";
+import { AboutKindle } from "./AboutKindle";
 import { ActionMenu } from "./ActionMenu";
 import { KoboCheck } from "./KoboCheck";
 import { DuplicateReview, type ReviewGroup } from "./DuplicateReview";
@@ -125,6 +127,17 @@ type Dialog =
   /** Library ids of this Kobo's books, being enhanced. */
   | { kind: "enhance"; ids: number[] }
   | null;
+
+/** Collections named on the books themselves, with counts. */
+function collectionsOf(books: DeviceBook[]): Collection[] {
+  const counts = new Map<string, number>();
+  for (const b of books)
+    for (const name of b.collections)
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+  return [...counts]
+    .map(([name, book_count]) => ({ name, book_count }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
 
 /** Whether Settings › Kobo has a reading layout to set on books. */
 function useHasLayout() {
@@ -189,6 +202,9 @@ export function DeviceView({
   /** Why changes are off for this Kobo; null when they're allowed. */
   const readOnly = device.read_only;
   const locked = busy !== null || readOnly !== null;
+  /** A Kindle: Parallax can add and remove its books, nothing more. */
+  const kindle = device.kind === "kindle";
+  const name = brand(device);
   const hasLayout = useHasLayout();
   const anchor = useRef<string | null>(null);
   const request = useRef({ generation: 0 });
@@ -203,19 +219,20 @@ export function DeviceView({
     const current = ++state.generation;
     return Promise.all([
       deviceBooks(device.mount),
-      listCollections(device.mount),
+      kindle ? Promise.resolve([]) : listCollections(device.mount),
     ])
       .then(([b, c]) => {
         if (current !== state.generation) return;
         setBooks(b);
-        setCollections(c);
+        // Older Kindles list collections in a file Parallax can read.
+        setCollections(kindle ? collectionsOf(b) : c);
       })
       .catch((e) => {
         if (current === state.generation) {
           setNotice({ kind: "error", text: String(e) });
         }
       });
-  }, [device.mount]);
+  }, [device.mount, kindle]);
 
   useEffect(() => {
     const state = request.current;
@@ -351,9 +368,11 @@ export function DeviceView({
 
   const prepareRemove: PrepareRemoval<string> = async (contentIds) => {
     const ok = await ask(
-      `Remove ${plural(contentIds.length, "book")} from your Kobo? Reading progress and highlights are deleted too. A backup of the Kobo's database is made first.`,
+      kindle
+        ? `Remove ${plural(contentIds.length, "book")} from your Kindle? Its page numbers, cover and the Kindle's reading data for it are deleted too. Highlights already copied to your library stay there.`
+        : `Remove ${plural(contentIds.length, "book")} from your Kobo? Reading progress and highlights are deleted too. A backup of the Kobo's database is made first.`,
       {
-        title: "Remove from Kobo",
+        title: `Remove from ${name}`,
         kind: "warning",
         okLabel: "Remove",
         cancelLabel: "Cancel",
@@ -361,7 +380,7 @@ export function DeviceView({
     );
     if (!ok) return null;
     return {
-      starting: "Backing up Kobo…",
+      starting: kindle ? "Removing…" : "Backing up Kobo…",
       run: async (report) => {
         const outcomes = await onRemove(contentIds, report);
         const failures = outcomes.flatMap(({ result }) =>
@@ -385,7 +404,7 @@ export function DeviceView({
       } finally {
         setSelected(new Set());
       }
-      return `Removed ${plural(contentIds.length, "book")}. Eject to let your Kobo refresh its library.`;
+      return `Removed ${plural(contentIds.length, "book")}. Eject to let your ${name} refresh its library.`;
     });
   };
 
@@ -423,7 +442,7 @@ export function DeviceView({
       if (ids.size) setDialog({ kind: "enhance", ids: [...ids] });
       return ids.size
         ? summarizeDeviceImport(outcomes)
-        : "None of the books on this Kobo can be added to your library.";
+        : `None of the books on this ${name} can be added to your library.`;
     });
 
   const markAs = (
@@ -492,13 +511,22 @@ export function DeviceView({
   });
   useMenuCommands({
     "kobo.addAll": shown(() => void addToLibrary(null), busy === null),
-    "kobo.organise": shown(() => void organise(), !locked),
-    "kobo.rules": shown(() => setDialog({ kind: "rules" }), readOnly === null),
-    "kobo.folders": shown(() => setDialog({ kind: "folders" }), !locked),
-    "kobo.duplicates": shown(findDuplicates, busy === null),
-    "kobo.revert": shown(onRevert, busy === null),
-    "kobo.tidy": shown(() => void tidy(), busy === null),
-    "kobo.check": shown(() => setDialog({ kind: "check" }), busy === null),
+    "kobo.organise": shown(() => void organise(), !locked && !kindle),
+    "kobo.rules": shown(
+      () => setDialog({ kind: "rules" }),
+      readOnly === null && !kindle,
+    ),
+    "kobo.folders": shown(
+      () => setDialog({ kind: "folders" }),
+      !locked && !kindle,
+    ),
+    "kobo.duplicates": shown(findDuplicates, busy === null && !kindle),
+    "kobo.revert": shown(onRevert, busy === null && !kindle),
+    "kobo.tidy": shown(() => void tidy(), busy === null && !kindle),
+    "kobo.check": shown(
+      () => setDialog({ kind: "check" }),
+      busy === null && !kindle,
+    ),
     "kobo.about": shown(() => onAboutChange(true), true),
     ...(active && {
       "view.grid": { run: () => setMode("grid"), checked: mode === "grid" },
@@ -520,17 +548,23 @@ export function DeviceView({
           </button>
           <div className="sidebar-heading">
             Collections
-            <button
-              className="icon"
-              title="New collection"
-              disabled={readOnly !== null}
-              onClick={() => setDialog({ kind: "new", addSelected: false })}
-            >
-              +
-            </button>
+            {!kindle && (
+              <button
+                className="icon"
+                title="New collection"
+                disabled={readOnly !== null}
+                onClick={() => setDialog({ kind: "new", addSelected: false })}
+              >
+                +
+              </button>
+            )}
           </div>
           {collections.length === 0 && (
-            <p className="muted sidebar-empty">No collections yet.</p>
+            <p className="muted sidebar-empty">
+              {kindle
+                ? "Your Kindle keeps its collections where Parallax can't reach them."
+                : "No collections yet."}
+            </p>
           )}
           <div className="shelf-list">
             {collections.map((c) => (
@@ -548,12 +582,14 @@ export function DeviceView({
               </button>
             ))}
           </div>
-          <div className="sidebar-foot" aria-label="Kobo tools">
+          <div className="sidebar-foot" aria-label={`${name} tools`}>
             <section
               className="sidebar-tool-group"
               aria-labelledby="kobo-book-tools"
             >
-              <h3 id="kobo-book-tools">Books & collections</h3>
+              <h3 id="kobo-book-tools">
+                {kindle ? "Books" : "Books & collections"}
+              </h3>
               <button
                 className="link"
                 onClick={() => addToLibrary(null)}
@@ -564,73 +600,81 @@ export function DeviceView({
                 Add all to library
               </button>
 
-              <button
-                className="link"
-                onClick={organise}
-                disabled={locked}
-                title="Add this Kobo's books to your library, fill in series and genres, then make collections from them"
-              >
-                <WandSparkles />
-                Enhance and organise…
-              </button>
-              <button
-                className="link"
-                onClick={() => setDialog({ kind: "rules" })}
-                disabled={readOnly !== null}
-              >
-                <ListChecks />
-                Automatic collections…
-              </button>
-              <button
-                className="link"
-                onClick={() => setDialog({ kind: "folders" })}
-                disabled={locked}
-              >
-                <FolderTree />
-                Folders → collections…
-              </button>
-              <button
-                className="link"
-                onClick={findDuplicates}
-                disabled={busy !== null}
-              >
-                <Copy />
-                Find duplicates…
-              </button>
+              {!kindle && (
+                <>
+                  <button
+                    className="link"
+                    onClick={organise}
+                    disabled={locked}
+                    title="Add this Kobo's books to your library, fill in series and genres, then make collections from them"
+                  >
+                    <WandSparkles />
+                    Enhance and organise…
+                  </button>
+                  <button
+                    className="link"
+                    onClick={() => setDialog({ kind: "rules" })}
+                    disabled={readOnly !== null}
+                  >
+                    <ListChecks />
+                    Automatic collections…
+                  </button>
+                  <button
+                    className="link"
+                    onClick={() => setDialog({ kind: "folders" })}
+                    disabled={locked}
+                  >
+                    <FolderTree />
+                    Folders → collections…
+                  </button>
+                  <button
+                    className="link"
+                    onClick={findDuplicates}
+                    disabled={busy !== null}
+                  >
+                    <Copy />
+                    Find duplicates…
+                  </button>
+                </>
+              )}
             </section>
             <section
               className="sidebar-tool-group"
               aria-labelledby="kobo-device-tools"
             >
               <h3 id="kobo-device-tools">Device care</h3>
-              <button
-                className="link"
-                onClick={onRevert}
-                disabled={busy !== null}
-              >
-                <History />
-                Revert changes…
-              </button>
-              <button
-                className="link"
-                onClick={tidy}
-                disabled={busy !== null}
-                title="Delete hidden ._ files macOS leaves on the Kobo"
-              >
-                <Eraser />
-                Remove macOS clutter
-              </button>
-              <button
-                className="link"
-                onClick={() => setDialog({ kind: "check" })}
-                disabled={busy !== null}
-              >
-                <ShieldCheck />
-                Check this Kobo…
-              </button>
+              {!kindle && (
+                <>
+                  <button
+                    className="link"
+                    onClick={onRevert}
+                    disabled={busy !== null}
+                  >
+                    <History />
+                    Revert changes…
+                  </button>
+                  <button
+                    className="link"
+                    onClick={tidy}
+                    disabled={busy !== null}
+                    title="Delete hidden ._ files macOS leaves on the Kobo"
+                  >
+                    <Eraser />
+                    Remove macOS clutter
+                  </button>
+                  <button
+                    className="link"
+                    onClick={() => setDialog({ kind: "check" })}
+                    disabled={busy !== null}
+                  >
+                    <ShieldCheck />
+                    Check this Kobo…
+                  </button>
+                </>
+              )}
               <button className="link" onClick={() => onAboutChange(true)}>
                 <Info />
-                About this Kobo…
+                About this {name}…
               </button>
             </section>
           </div>
@@ -639,33 +683,37 @@ export function DeviceView({
         <main className="content">
           {readOnly && (
             <p className="notice notice-info read-only-banner">
-              Parallax only reads this Kobo: {readOnly}. You can browse it and
+              Parallax only reads this {name}: {readOnly}. You can browse it and
               add its books to your library. To help add support, save a device
-              report from About this Kobo.
+              report from About this {name}.
             </p>
           )}
           <div className="device-toolbar">
             {shelf ? (
               <>
                 <strong>{shelf}</strong>
-                <button
-                  className="link"
-                  onClick={() => setDialog({ kind: "rename", name: shelf })}
-                  disabled={locked}
-                >
-                  Rename
-                </button>
-                <button
-                  className="link danger"
-                  onClick={() => deleteShelf(shelf)}
-                  disabled={locked}
-                >
-                  Delete
-                </button>
+                {!kindle && (
+                  <>
+                    <button
+                      className="link"
+                      onClick={() => setDialog({ kind: "rename", name: shelf })}
+                      disabled={locked}
+                    >
+                      Rename
+                    </button>
+                    <button
+                      className="link danger"
+                      onClick={() => deleteShelf(shelf)}
+                      disabled={locked}
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
               </>
             ) : (
               <span className="muted">
-                {books ? summarize(books) : "Reading your Kobo…"}
+                {books ? summarize(books) : `Reading your ${name}…`}
               </span>
             )}
             <span className="spacer" />
@@ -690,7 +738,7 @@ export function DeviceView({
                     ? `No books match “${query}”.`
                     : shelf
                       ? "This collection is empty. Select books and use Add to collection."
-                      : "No books on this Kobo yet. Send some from your library."}
+                      : `No books on this ${name} yet. Send some from your library.`}
                 </p>
               </div>
             ) : mode === "grid" ? (
@@ -799,9 +847,9 @@ export function DeviceView({
         <span className="spacer" />
         <button className="secondary" onClick={eject} disabled={busy !== null}>
           <Eject />
-          {busy === "ejecting" ? "Ejecting…" : "Eject Kobo"}
+          {busy === "ejecting" ? "Ejecting…" : `Eject ${name}`}
         </button>
-        {shelf && (
+        {shelf && !kindle && (
           <button
             className="secondary"
             onClick={removeFromShelf}
@@ -811,48 +859,50 @@ export function DeviceView({
             Remove from collection
           </button>
         )}
-        <ActionMenu
-          label="Mark as"
-          icon={<BookmarkCheck />}
-          disabled={imported.length === 0 || locked}
-          items={[
-            {
-              label: "Finished",
-              onPick: () =>
-                markAs(
-                  "finished",
-                  false,
-                  false,
-                  `Marked ${plural(imported.length, "book")} finished.`,
-                ),
-            },
-            {
-              label: "Unread (start over)",
-              onPick: () =>
-                markAs(
-                  "unread",
-                  true,
-                  false,
-                  `Marked ${plural(imported.length, "book")} unread.`,
-                ),
-            },
-            ...(device.capabilities.reading_time
-              ? [
-                  {
-                    label: "Unread, and clear reading time",
-                    onPick: () =>
-                      markAs(
-                        "unread",
-                        true,
-                        true,
-                        `Marked ${plural(imported.length, "book")} unread and cleared reading time.`,
-                      ),
-                  },
-                ]
-              : []),
-          ]}
-        />
-        {hasLayout && (
+        {!kindle && (
+          <ActionMenu
+            label="Mark as"
+            icon={<BookmarkCheck />}
+            disabled={imported.length === 0 || locked}
+            items={[
+              {
+                label: "Finished",
+                onPick: () =>
+                  markAs(
+                    "finished",
+                    false,
+                    false,
+                    `Marked ${plural(imported.length, "book")} finished.`,
+                  ),
+              },
+              {
+                label: "Unread (start over)",
+                onPick: () =>
+                  markAs(
+                    "unread",
+                    true,
+                    false,
+                    `Marked ${plural(imported.length, "book")} unread.`,
+                  ),
+              },
+              ...(device.capabilities.reading_time
+                ? [
+                    {
+                      label: "Unread, and clear reading time",
+                      onPick: () =>
+                        markAs(
+                          "unread",
+                          true,
+                          true,
+                          `Marked ${plural(imported.length, "book")} unread and cleared reading time.`,
+                        ),
+                    },
+                  ]
+                : []),
+            ]}
+          />
+        )}
+        {hasLayout && !kindle && (
           <button
             className="secondary"
             onClick={applyLayout}
@@ -868,19 +918,21 @@ export function DeviceView({
             className="secondary"
             onClick={() => addToLibrary(ids(importable))}
             disabled={busy !== null}
-            title="Copy these books into your library as plain EPUBs"
+            title="Copy these books into your library as EPUBs"
           >
             <LibraryBig />
             {`Add ${importable.length} to library`}
           </button>
         )}
-        <CollectionMenu
-          label="Add to collection"
-          collections={collections.filter((c) => c.name !== shelf)}
-          disabled={chosen.length === 0 || locked}
-          onPick={addTo}
-          onNew={() => setDialog({ kind: "new", addSelected: true })}
-        />
+        {!kindle && (
+          <CollectionMenu
+            label="Add to collection"
+            collections={collections.filter((c) => c.name !== shelf)}
+            disabled={chosen.length === 0 || locked}
+            onPick={addTo}
+            onNew={() => setDialog({ kind: "new", addSelected: true })}
+          />
+        )}
         <button
           className="primary danger-fill"
           onClick={removeBooks}
@@ -888,8 +940,8 @@ export function DeviceView({
         >
           <Trash2 />
           {removable.length
-            ? `Remove ${removable.length} from Kobo`
-            : "Remove from Kobo"}
+            ? `Remove ${removable.length} from ${name}`
+            : `Remove from ${name}`}
         </button>
       </footer>
 
@@ -998,11 +1050,19 @@ export function DeviceView({
       {/* In the body: this panel is hidden while another tab is showing. */}
       {about &&
         createPortal(
-          <AboutKobo
-            device={device}
-            titles={new Map((books ?? []).map((b) => [b.id, b.title]))}
-            onClose={() => onAboutChange(false)}
-          />,
+          kindle ? (
+            <AboutKindle
+              device={device}
+              books={books?.length ?? null}
+              onClose={() => onAboutChange(false)}
+            />
+          ) : (
+            <AboutKobo
+              device={device}
+              titles={new Map((books ?? []).map((b) => [b.id, b.title]))}
+              onClose={() => onAboutChange(false)}
+            />
+          ),
           document.body,
         )}
       {dialog?.kind === "folders" && (

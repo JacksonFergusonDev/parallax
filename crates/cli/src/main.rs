@@ -3,6 +3,7 @@
 //! write; database writes go through the backed-up write session.
 //! `library` commands share the desktop app's library and backups.
 
+mod kindle;
 mod output;
 
 use std::path::{Path, PathBuf};
@@ -41,7 +42,7 @@ use serde::Serialize;
 #[command(
     name = "parallax-cli",
     version,
-    about = "Manage your Parallax library and Kobo from the terminal"
+    about = "Manage your Parallax library, Kobo and Kindle from the terminal"
 )]
 struct Cli {
     /// Print JSON instead of a table.
@@ -62,6 +63,9 @@ enum Command {
     /// Kobo commands.
     #[command(subcommand)]
     Kobo(KoboCommand),
+    /// Kindle commands, for Kindles on a drive or over MTP.
+    #[command(subcommand)]
+    Kindle(kindle::KindleCommand),
     /// Show an EPUB's metadata and cover details.
     EpubInfo { file: PathBuf },
     /// Convert EPUBs to KEPUB, copy them to the Kobo and eject it. Writes files.
@@ -577,10 +581,11 @@ fn main() -> Result<()> {
     }
     match cli.command {
         Command::Devices { volumes } => {
-            let infos: Vec<_> = KoboDevice::detect(&volumes)
+            let mut infos: Vec<_> = KoboDevice::detect(&volumes)
                 .iter()
                 .map(KoboDevice::info)
                 .collect();
+            infos.extend(kindle::infos(&volumes));
             if cli.json {
                 return print_json(&infos);
             }
@@ -599,6 +604,7 @@ fn main() -> Result<()> {
                 println!("{rows}");
             }
         }
+        Command::Kindle(command) => kindle::run(command, cli.json)?,
         Command::Kobo(KoboCommand::Ls(source)) => {
             let books = source.open()?.books()?;
             if cli.json {

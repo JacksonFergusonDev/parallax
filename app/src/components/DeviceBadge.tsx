@@ -1,4 +1,5 @@
 import type { DeviceInfo } from "../api";
+import { brand } from "../device";
 
 /** A tiny e-reader whose screen lights up while one is connected. */
 function ReaderIcon() {
@@ -68,11 +69,13 @@ export function DeviceBadge({
     <button
       className={`badge connected ${device.read_only ? "read-only" : ""}`}
       onClick={onOpen}
-      title={
-        device.read_only
-          ? `About this Kobo. Firmware ${device.firmware}. Read-only: ${device.read_only}`
-          : `About this Kobo. Firmware ${device.firmware}`
-      }
+      title={[
+        `About this ${brand(device)}.`,
+        device.firmware && `Firmware ${device.firmware}.`,
+        device.read_only && `Read-only: ${device.read_only}`,
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
       <ReaderIcon />
       {device.model}
@@ -82,7 +85,7 @@ export function DeviceBadge({
   ) : (
     <div
       className="badge"
-      title="Connect your Kobo with USB and tap Connect on its screen"
+      title="Connect your Kobo or Kindle with USB. On a Kobo, tap Connect on its screen."
     >
       <ReaderIcon />
       No device

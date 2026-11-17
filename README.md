@@ -7,20 +7,20 @@
   <img alt="Parallax" src="assets/readme-light.svg" width="400">
 </picture>
 
-**A desktop library for reading books and comics and organising them on a Kobo.**
+**A desktop library for reading books and comics and organising them on a Kobo or Kindle.**
 
 [![Latest version](https://img.shields.io/github/v/release/JacksonFergusonDev/parallax?style=flat-square&label=version&labelColor=0f172a&color=f5c568)](https://github.com/JacksonFergusonDev/parallax/releases/latest) ![macOS](https://img.shields.io/badge/platform-macOS-f5c568?style=flat-square&labelColor=0f172a&logo=apple&logoColor=white) [![CI](https://img.shields.io/github/actions/workflow/status/JacksonFergusonDev/parallax/ci.yml?branch=main&style=flat-square&labelColor=0f172a)](https://github.com/JacksonFergusonDev/parallax/actions/workflows/ci.yml) [![Rust](https://img.shields.io/badge/built_with-Rust-f5c568?style=flat-square&labelColor=0f172a&logo=rust&logoColor=white)](https://www.rust-lang.org/) [![Tauri](https://img.shields.io/badge/desktop-Tauri-f5c568?style=flat-square&labelColor=0f172a&logo=tauri&logoColor=white)](https://tauri.app/) [![GPLv3](https://img.shields.io/badge/license-GPLv3-f5c568?style=flat-square&labelColor=0f172a)](LICENSE)
 
-| [Using Parallax](#using-it) | [Download](https://parallax.jacksonferguson.me/download/) | [Kobo compatibility](docs/device-support.md) | [Development](#development) |
+| [Using Parallax](#using-it) | [Download](https://parallax.jacksonferguson.me/download/) | [Device support](docs/device-support.md) | [Development](#development) |
 
 </div>
 <!-- rumdl-enable MD033 MD041 -->
 
 ## Overview
 
-Import books, improve their metadata and covers, convert them to KEPUB, and manage the Kobo’s own collections. You can import DRM-free Kindle-format books. Support for Kindle devices is deferred.
+Import books, improve their metadata and covers, convert them to KEPUB, and manage the Kobo’s own collections. You can import DRM-free Kindle-format books, and send books to a Kindle by cable or email. Kindle support is new and [hasn't been tested on a Kindle yet](docs/device-support.md#kindle).
 
-Licensed under GPLv3. Device logic is ported from [calibre](https://calibre-ebook.com)'s Kobo driver; EPUB to KEPUB conversion uses [kepubify](https://pgaskin.net/kepubify/), and Amazon formats are read with [boko](https://github.com/zacharydenton/boko).
+Licensed under GPLv3. Device logic is ported from [calibre](https://calibre-ebook.com)'s Kobo, Kindle and MTP drivers; EPUB to KEPUB conversion uses [kepubify](https://pgaskin.net/kepubify/), Amazon formats are read and written with [boko](https://github.com/zacharydenton/boko), and Kindles that don't appear as a drive are reached with [mtp-rs](https://github.com/vdavid/mtp-rs).
 
 ## Installing it
 
@@ -45,6 +45,7 @@ cargo install --locked --git https://github.com/JacksonFergusonDev/parallax para
 3. Select books and **Send to Kobo**, optionally straight into a collection. Then **Eject Kobo** and unplug it so it imports them.
 4. **Read** in the side panel opens a book in its own window and remembers where you stopped. **Search** (⌘F) finds a word or line in it. Select text to highlight it or add a note, listed under the pen button with **Copy all**; footnotes open over the page; **Back** (⌘[) returns after a jump; the speaker button reads aloud; **Aa** sets theme, size, pages or scrolling, line length, margins and spacing. Books are shown with their scripts blocked and no internet access.
 5. The **On Kobo** tab (⌘2) shows what's on the device, with reading progress, and lets you manage collections, remove books, and turn folders into collections.
+6. With a Kindle, connect it by USB and unlock it, then **Send to Kindle**. Or set up Send to Kindle by email in **Settings › Kindle** and choose **Email to Kindle**, which needs no cable. See [Kindle](docs/device-support.md#kindle) for what works.
 
 Choose **Library tools › Add comic folder…** to bundle pages or chapter archives as a volume. The comic reader supports spreads, vertical scroll, zoom and bookmarks. Parallax prepares comic pages for the Kobo screen when sending. See [device support](docs/device-support.md) for hardware verification and compatibility.
 
