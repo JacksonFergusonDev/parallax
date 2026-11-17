@@ -19,7 +19,7 @@ parallax-epub.workspace = true
 parallax-library.workspace = true
 parallax-metadata.workspace = true
 image.workspace = true
-keyring = { version = "3", features = ["apple-native", "windows-native"] }
+keyring = { version = "4", features = ["apple-native", "windows-native"] }
 lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "builder", "hostname", "rustls-tls"] }
 rayon.workspace = true
 rusqlite.workspace = true
