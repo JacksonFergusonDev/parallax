@@ -917,7 +917,7 @@ async fn library_export(
             &destination,
             converter
                 .as_ref()
-                .map(|c| c as &dyn parallax_convert::Converter),
+                .map(|c| c as &(dyn parallax_convert::Converter + Sync)),
             |index, title| report_books(progress.as_ref(), index, total, Some(title)),
         )
     })

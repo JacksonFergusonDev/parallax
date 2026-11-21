@@ -357,40 +357,39 @@ fn unique(stem: &Path, ext: &str, taken: impl Fn(&Path) -> bool) -> PathBuf {
         .expect("some number is free")
 }
 
-/// Writes `book` to `out` in `format`, using `work` for a KEPUB's EPUB.
-fn write_book(
-    library: &Library,
-    book: &Book,
-    format: BookFormat,
-    converter: Option<&dyn Converter>,
-    work: &Path,
-    out: &Path,
-) -> Result<(), String> {
-    if book.format == Format::Cbz || format == BookFormat::Epub {
-        return library
-            .export(book.id, out)
-            .map(drop)
-            .map_err(|e| e.to_string());
-    }
-    let converter = converter.ok_or("KEPUB conversion isn't available")?;
-    let epub = work.join(format!("{}.epub", book.id));
-    let result = library
-        .export(book.id, &epub)
-        .map_err(|e| e.to_string())
-        .and_then(|_| converter.convert(&epub, out).map_err(|e| e.to_string()));
-    let _ = fs::remove_file(&epub);
-    result
+/// A KEPUB conversion waiting to run, and what came of it.
+struct Conversion {
+    epub: PathBuf,
+    out: PathBuf,
+    result: Result<(), String>,
+}
+
+/// One book on its way out: where it's going, and how that went so far.
+struct Job {
+    book: Book,
+    /// The final path in a folder, or the staged file for an archive.
+    out: PathBuf,
+    /// Its name inside an archive.
+    name: PathBuf,
+    result: Result<(), String>,
+    conversion: Option<Conversion>,
+}
+
+/// How many books are prepared at a time: KEPUB conversions in a batch run
+/// side by side, and an archive's staged books wait at most this many deep.
+fn batch_size() -> usize {
+    std::thread::available_parallelism().map_or(4, |n| n.get().clamp(2, 8))
 }
 
 /// Exports each book; one that fails doesn't stop the rest. `on_progress`
 /// gets the index and title of each book as it starts. `converter` is needed
-/// only for KEPUB.
+/// only for KEPUB, and converts several books at once.
 pub fn export_books(
     library: &Library,
     ids: &[i64],
     options: &ExportOptions,
     destination: &Destination,
-    converter: Option<&dyn Converter>,
+    converter: Option<&(dyn Converter + Sync)>,
     mut on_progress: impl FnMut(usize, &str),
 ) -> Result<Vec<Exported>, String> {
     check_template(&options.template)?;
@@ -399,8 +398,34 @@ pub fn export_books(
     }
     let work = tempfile::tempdir().map_err(|e| e.to_string())?;
     let mut outcomes = Vec::new();
-    let mut each = |write: &mut dyn FnMut(&Book, PathBuf, &str) -> Result<String, String>| {
-        for (index, &id) in ids.iter().enumerate() {
+    // Names given out so far: books in a batch claim theirs before any is
+    // written, so two can't take the same one.
+    let mut claimed = HashSet::from([PathBuf::from(MANIFEST)]);
+    let mut archive = match destination {
+        Destination::Folder(root) => {
+            fs::create_dir_all(root).map_err(|e| e.to_string())?;
+            None
+        }
+        Destination::Archive(path) => {
+            // Written beside the destination and moved into place, so a
+            // failed export never leaves half an archive under its name.
+            let partial = path.with_extension("zip.partial");
+            let file = File::create(&partial).map_err(|e| e.to_string())?;
+            let zip = zip::ZipWriter::new(BufWriter::with_capacity(COPY_BUFFER, file));
+            let manifest = Manifest {
+                parallax: MANIFEST_VERSION,
+                exported_at: Some(chrono::Utc::now().to_rfc3339()),
+                books: Vec::new(),
+                settings: options.settings.clone().filter(|s| !s.is_empty()),
+            };
+            Some((partial, zip, manifest))
+        }
+    };
+
+    for (batch, ids) in ids.chunks(batch_size()).enumerate() {
+        // Books are read from the library one at a time.
+        let mut jobs = Vec::new();
+        for (offset, &id) in ids.iter().enumerate() {
             let book = match library.book(id) {
                 Ok(book) => book,
                 Err(e) => {
@@ -408,89 +433,150 @@ pub fn export_books(
                     continue;
                 }
             };
-            on_progress(index, &book.title);
+            on_progress(batch * batch_size() + offset, &book.title);
             let stem = relative_stem(&options.template, &book);
-            let result = write(&book, stem, extension(&book, options.format));
+            let ext = extension(&book, options.format);
+            let (out, name) = match destination {
+                Destination::Folder(root) => {
+                    let path = unique(&root.join(&stem), ext, |p| {
+                        claimed.contains(p) || p.exists()
+                    });
+                    (path.clone(), path)
+                }
+                Destination::Archive(_) => {
+                    let name = unique(&stem, ext, |p| claimed.contains(p));
+                    (work.path().join(format!("{id}{ext}")), name)
+                }
+            };
+            claimed.insert(name.clone());
+            let mut job = Job {
+                book,
+                out,
+                name,
+                result: Ok(()),
+                conversion: None,
+            };
+            job.result = job
+                .out
+                .parent()
+                .map_or(Ok(()), fs::create_dir_all)
+                .map_err(|e| e.to_string());
+            if job.result.is_ok() {
+                let convert = options.format == BookFormat::Kepub && job.book.format != Format::Cbz;
+                let target = if convert {
+                    work.path().join(format!("{id}.epub"))
+                } else {
+                    job.out.clone()
+                };
+                job.result = library
+                    .export(id, &target)
+                    .map(drop)
+                    .map_err(|e| e.to_string());
+                if convert && job.result.is_ok() {
+                    job.conversion = Some(Conversion {
+                        epub: target,
+                        out: job.out.clone(),
+                        result: Ok(()),
+                    });
+                }
+            }
+            jobs.push(job);
+        }
+
+        // Conversions run side by side: each is a kepubify process.
+        if let Some(converter) = converter {
+            use rayon::prelude::*;
+            jobs.par_iter_mut()
+                .filter_map(|job| job.conversion.as_mut())
+                .for_each(|c| {
+                    c.result = converter
+                        .convert(&c.epub, &c.out)
+                        .map_err(|e| e.to_string());
+                    let _ = fs::remove_file(&c.epub);
+                });
+        }
+
+        for mut job in jobs {
+            if let Some(conversion) = job.conversion.take() {
+                job.result = conversion.result;
+            }
+            let result = match &mut archive {
+                None => job.result.map(|()| job.out.display().to_string()),
+                Some((_, zip, manifest)) => {
+                    let result = job.result.and_then(|()| {
+                        let entry = job.name.to_string_lossy().replace('\\', "/");
+                        zip.start_file(entry.as_str(), book_options())
+                            .map_err(|e| e.to_string())?;
+                        copy_in_large_chunks(
+                            &mut File::open(&job.out).map_err(|e| e.to_string())?,
+                            zip,
+                        )
+                        .map_err(|e| e.to_string())?;
+                        Ok(entry)
+                    });
+                    let _ = fs::remove_file(&job.out);
+                    if let Ok(entry) = &result {
+                        manifest
+                            .books
+                            .push(ManifestBook::new(entry.clone(), &job.book));
+                    }
+                    result
+                }
+            };
             outcomes.push(Exported {
-                book_id: id,
-                title: book.title,
+                book_id: job.book.id,
+                title: job.book.title,
                 result,
             });
         }
-    };
-    match destination {
-        Destination::Folder(root) => {
-            fs::create_dir_all(root).map_err(|e| e.to_string())?;
-            each(&mut |book, stem, ext| {
-                let path = unique(&root.join(stem), ext, Path::exists);
-                path.parent()
-                    .map_or(Ok(()), fs::create_dir_all)
-                    .map_err(|e| e.to_string())?;
-                write_book(library, book, options.format, converter, work.path(), &path)?;
-                Ok(path.display().to_string())
-            });
-        }
-        Destination::Archive(path) => {
-            // Written beside the destination and moved into place, so a
-            // failed export never leaves half an archive under its name.
-            let partial = path.with_extension("zip.partial");
-            let file = File::create(&partial).map_err(|e| e.to_string())?;
-            let mut zip = zip::ZipWriter::new(BufWriter::new(file));
-            let mut names = HashSet::from([PathBuf::from(MANIFEST)]);
-            let mut manifest = Manifest {
-                parallax: MANIFEST_VERSION,
-                exported_at: Some(chrono::Utc::now().to_rfc3339()),
-                books: Vec::new(),
-                settings: options.settings.clone().filter(|s| !s.is_empty()),
-            };
-            each(&mut |book, stem, ext| {
-                let name = unique(&stem, ext, |p| names.contains(p));
-                let staged = work.path().join(format!("{}{ext}", book.id));
-                let result = write_book(
-                    library,
-                    book,
-                    options.format,
-                    converter,
-                    work.path(),
-                    &staged,
-                )
-                .and_then(|()| {
-                    let entry = name.to_string_lossy().replace('\\', "/");
-                    zip.start_file(entry.as_str(), file_options())
-                        .map_err(|e| e.to_string())?;
-                    io::copy(
-                        &mut File::open(&staged).map_err(|e| e.to_string())?,
-                        &mut zip,
-                    )
-                    .map_err(|e| e.to_string())?;
-                    Ok(entry)
-                });
-                let _ = fs::remove_file(&staged);
-                if let Ok(entry) = &result {
-                    names.insert(name);
-                    manifest.books.push(ManifestBook::new(entry.clone(), book));
-                }
-                result
-            });
-            let finish = write_manifest(&mut zip, &manifest)
-                .and_then(|()| zip.finish().map_err(|e| e.to_string()))
-                .and_then(|mut w| w.flush().map_err(|e| e.to_string()))
-                .and_then(|()| fs::rename(&partial, path).map_err(|e| e.to_string()));
-            if let Err(e) = finish {
-                let _ = fs::remove_file(&partial);
-                return Err(format!("couldn't finish the archive: {e}"));
-            }
+    }
+
+    if let (Some((partial, mut zip, manifest)), Destination::Archive(path)) = (archive, destination)
+    {
+        let finish = write_manifest(&mut zip, &manifest)
+            .and_then(|()| zip.finish().map_err(|e| e.to_string()))
+            .and_then(|mut w| w.flush().map_err(|e| e.to_string()))
+            .and_then(|()| fs::rename(&partial, path).map_err(|e| e.to_string()));
+        if let Err(e) = finish {
+            let _ = fs::remove_file(&partial);
+            return Err(format!("couldn't finish the archive: {e}"));
         }
     }
     Ok(outcomes)
 }
 
-/// Books are already compressed inside (EPUBs and CBZs are ZIPs of mostly
-/// images), so harder compression only trades time for a few percent.
-/// Deflate level 6 is what Finder's Compress uses.
-fn file_options() -> SimpleFileOptions {
+/// How much of a book is read and written at a time. Each write into the
+/// archive has a fixed cost, so `io::copy`'s 8 KiB chunks made copying a
+/// 466 MB comic take 4.6 s rather than 1 s.
+const COPY_BUFFER: usize = 1024 * 1024;
+
+fn copy_in_large_chunks(from: &mut impl Read, to: &mut impl Write) -> io::Result<u64> {
+    let mut buffer = vec![0; COPY_BUFFER];
+    let mut total = 0;
+    loop {
+        let read = match from.read(&mut buffer) {
+            Ok(0) => return Ok(total),
+            Ok(read) => read,
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e),
+        };
+        to.write_all(&buffer[..read])?;
+        total += read as u64;
+    }
+}
+
+/// Books go in as they are. EPUBs, KEPUBs and CBZs are already ZIPs of
+/// compressed text and images, so compressing them again saves about 1% and
+/// takes most of the export's time: seconds for each large comic.
+fn book_options() -> SimpleFileOptions {
     SimpleFileOptions::default()
         .large_file(true)
+        .compression_method(CompressionMethod::Stored)
+}
+
+/// The manifest is text, so it's compressed.
+fn manifest_options() -> SimpleFileOptions {
+    SimpleFileOptions::default()
         .compression_method(CompressionMethod::Deflated)
         .compression_level(Some(6))
 }
@@ -499,7 +585,7 @@ fn write_manifest(
     zip: &mut zip::ZipWriter<BufWriter<File>>,
     manifest: &Manifest,
 ) -> Result<(), String> {
-    zip.start_file(MANIFEST, file_options())
+    zip.start_file(MANIFEST, manifest_options())
         .map_err(|e| e.to_string())?;
     serde_json::to_writer_pretty(&mut *zip, manifest).map_err(|e| e.to_string())
 }

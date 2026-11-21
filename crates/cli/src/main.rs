@@ -1334,7 +1334,7 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                 &destination,
                 converter
                     .as_ref()
-                    .map(|c| c as &dyn parallax_convert::Converter),
+                    .map(|c| c as &(dyn parallax_convert::Converter + Sync)),
                 |_, _| {},
             )
             .map_err(anyhow::Error::msg)?;

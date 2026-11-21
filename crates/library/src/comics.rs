@@ -4,7 +4,9 @@
 use std::fs;
 use std::path::Path;
 
-use parallax_comic::{Cbz, ComicInfo, Manga, NameInfo, Role, parse_file_name, write_comic_info};
+use parallax_comic::{
+    Cbz, ComicInfo, Manga, NameInfo, Role, copy_with_comic_info, parse_file_name,
+};
 use parallax_epub::{Contributor, Identifier};
 use rusqlite::params;
 
@@ -319,11 +321,9 @@ impl Library {
     /// ComicInfo.xml, keeping every field the library doesn't manage.
     pub(crate) fn export_comic(&self, book: &Book, out: &Path) -> Result<()> {
         let src = self.book_file(book.id);
-        let existing = Cbz::open(&src)?.comic_info().cloned();
-        fs::copy(&src, out).map_err(|e| io_err(out, e))?;
-        let mut info = existing.unwrap_or_default();
+        let mut info = Cbz::open(&src)?.comic_info().cloned().unwrap_or_default();
         apply_to_comic_info(book, &mut info);
-        write_comic_info(out, &info)?;
+        copy_with_comic_info(&src, out, &info)?;
         Ok(())
     }
 

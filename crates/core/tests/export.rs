@@ -63,7 +63,7 @@ fn export(
     id: i64,
     options: &ExportOptions,
     to: &Path,
-    kepubify: Option<&dyn Converter>,
+    kepubify: Option<&(dyn Converter + Sync)>,
 ) {
     let exported = export_books(
         library,
@@ -280,7 +280,7 @@ fn exports_books_into_folders_without_overwriting() {
 }
 
 #[test]
-fn exports_books_into_one_compressed_archive() {
+fn exports_books_into_one_archive_stored_as_they_are() {
     let dir = tempfile::tempdir().unwrap();
     let (library, ids) = library_with_two(dir.path());
     let archive = dir.path().join("Books.zip");
@@ -300,10 +300,52 @@ fn exports_books_into_one_compressed_archive() {
     let mut zip = zip::ZipArchive::new(File::open(&archive).unwrap()).unwrap();
     assert_eq!(zip.len(), 3, "two books and the manifest");
     for i in 0..zip.len() {
-        assert_eq!(
-            zip.by_index(i).unwrap().compression(),
+        let entry = zip.by_index(i).unwrap();
+        // Books are already compressed; only the manifest is worth it.
+        let expected = if entry.name().unwrap() == MANIFEST {
             zip::CompressionMethod::Deflated
-        );
+        } else {
+            zip::CompressionMethod::Stored
+        };
+        assert_eq!(entry.compression(), expected, "{:?}", entry.name());
     }
-    assert_eq!(read_manifest(&archive).unwrap().books.len(), 2);
+    let names: Vec<String> = read_manifest(&archive)
+        .unwrap()
+        .books
+        .into_iter()
+        .map(|b| b.file)
+        .collect();
+    assert_eq!(
+        names,
+        ["Parallax Test Book.epub", "Parallax Test Book (2).epub"]
+    );
+}
+
+#[test]
+fn kepub_books_convert_side_by_side_without_taking_each_others_names() {
+    let dir = tempfile::tempdir().unwrap();
+    let (library, ids) = library_with_two(dir.path());
+    let kepubify = Kepubify::locate().unwrap();
+    let folder = dir.path().join("Kobo");
+    let exported = export_books(
+        &library,
+        &ids,
+        &ExportOptions {
+            template: "{title}".into(),
+            format: BookFormat::Kepub,
+            settings: None,
+        },
+        &Destination::Folder(folder.clone()),
+        Some(&kepubify),
+        |_, _| {},
+    )
+    .unwrap();
+    let mut paths: Vec<String> = exported.iter().map(|e| e.result.clone().unwrap()).collect();
+    paths.sort();
+    assert_eq!(paths.len(), 2);
+    assert_ne!(paths[0], paths[1]);
+    for path in &paths {
+        assert!(path.ends_with(".kepub.epub"), "{path}");
+        assert!(Path::new(path).is_file());
+    }
 }
