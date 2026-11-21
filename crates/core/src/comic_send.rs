@@ -2,7 +2,9 @@
 //! The screen also sizes EPUB covers.
 
 use image::ImageFormat;
-use parallax_comic::prepare::{Metadata, Options, Prepared, Profile, Spreads, fit_cover, prepare};
+use parallax_comic::prepare::{
+    Metadata, Options, Prepared, Profile, Spreads, fit_cover, prepare, prepare_as,
+};
 use parallax_convert::Converter;
 use parallax_device::{Screen, ScreenSource};
 use parallax_device_kobo::KoboDevice;
@@ -24,12 +26,27 @@ pub(crate) struct ComicTarget {
 
 impl ComicTarget {
     pub fn new(library: &Library, device: &KoboDevice) -> parallax_library::Result<Self> {
+        Self::for_screen(library, device.version().screen(device.mount()))
+    }
+
+    /// Comics for a Kindle: the same page preparation, with every page as
+    /// JPEG for the AZW3.
+    pub fn for_kindle(
+        library: &Library,
+        device: &parallax_device_kindle::KindleDevice,
+    ) -> parallax_library::Result<Self> {
+        let mut target = Self::for_screen(library, device.info().screen)?;
+        target.options.jpeg = true;
+        Ok(target)
+    }
+
+    fn for_screen(library: &Library, screen: Screen) -> parallax_library::Result<Self> {
         let Screen {
             width,
             height,
             colour,
             source,
-        } = device.version().screen(device.mount());
+        } = screen;
         let on = |key| library.setting(key).map(|s| s.as_deref() == Some("on"));
         let not_off = |key| library.setting(key).map(|s| s.as_deref() != Some("off"));
         // A strength percentage; anything unset or unexpected is recommended.
@@ -64,6 +81,7 @@ impl ComicTarget {
                 colour_separation: percent(COMIC_COLOUR_SEPARATION)?,
                 colour_contrast: not_off(COMIC_COLOUR_CONTRAST)?,
                 midtone_darkening: percent(COMIC_MIDTONE_DARKENING)?,
+                jpeg: false,
             },
             source,
         })
@@ -102,6 +120,64 @@ impl ComicTarget {
         converter: &dyn Converter,
         progress: impl FnMut(usize, usize),
     ) -> Result<Prepared, String> {
+        Self::with_metadata(library, book, |metadata| {
+            prepare(
+                &library.book_file(book.id),
+                metadata,
+                self.profile,
+                self.options(book),
+                converter,
+                progress,
+            )
+        })
+    }
+
+    /// Prepares a comic as a fixed-layout AZW3 for a Kindle: the prepared
+    /// EPUB goes through `converter` (EPUB to AZW3, as for books), then
+    /// gains KindleGen's comic header records.
+    pub fn prepare_for_kindle(
+        &self,
+        library: &Library,
+        book: &Book,
+        converter: &dyn Converter,
+        progress: impl FnMut(usize, usize),
+    ) -> Result<Prepared, String> {
+        let options = self.options(book);
+        let layout = parallax_device_kindle::mobi::FixedLayout {
+            width: self.profile.width,
+            height: self.profile.height,
+            rtl: options.rtl,
+            portrait: options.spreads != Spreads::KeepWhole,
+        };
+        Self::with_metadata(library, book, |metadata| {
+            prepare_as(
+                &library.book_file(book.id),
+                metadata,
+                self.profile,
+                options,
+                "comic.azw3",
+                |epub, out| {
+                    converter.convert(epub, out)?;
+                    let azw3 = std::fs::read(out)?;
+                    let fixed = parallax_device_kindle::mobi::with_fixed_layout(&azw3, &layout)
+                        .ok_or_else(|| parallax_convert::Error::Amazon {
+                            input: epub.to_path_buf(),
+                            message: "the AZW3 has no header to mark as fixed layout".into(),
+                        })?;
+                    std::fs::write(out, fixed)?;
+                    Ok(())
+                },
+                progress,
+            )
+        })
+    }
+
+    /// The comic's details as preparation writes them into the book.
+    fn with_metadata(
+        library: &Library,
+        book: &Book,
+        run: impl FnOnce(&Metadata<'_>) -> Result<Prepared, parallax_comic::prepare::Error>,
+    ) -> Result<Prepared, String> {
         let identifier = format!("urn:parallax:comic:{}", book.id);
         let modified = chrono::DateTime::parse_from_rfc3339(&book.modified_at)
             .map_or_else(|_| chrono::Utc::now(), |time| time.to_utc())
@@ -139,15 +215,7 @@ impl ComicTarget {
             modified: &modified,
             custom_cover: custom_cover.as_deref(),
         };
-        prepare(
-            &library.book_file(book.id),
-            &metadata,
-            self.profile,
-            self.options(book),
-            converter,
-            progress,
-        )
-        .map_err(|e| e.to_string())
+        run(&metadata).map_err(|e| e.to_string())
     }
 
     /// A book's cover sized for this screen, keeping its media

@@ -271,27 +271,88 @@ fn send_update_sync_and_remove() {
 }
 
 #[test]
-fn comics_are_refused() {
+fn comics_are_sent_as_fixed_layout_azw3() {
+    use parallax_device_kindle::mobi;
+
     let dir = tempfile::tempdir().unwrap();
     let mut library = Library::open(dir.path().join("library")).unwrap();
     let cbz = dir.path().join("Comic.cbz");
     let mut zip = zip::ZipWriter::new(fs::File::create(&cbz).unwrap());
-    zip.start_file("p1.png", zip::write::SimpleFileOptions::default())
+    for (i, shade) in [40u8, 90, 160].into_iter().enumerate() {
+        zip.start_file(
+            format!("p{}.png", i + 1),
+            zip::write::SimpleFileOptions::default(),
+        )
         .unwrap();
-    let mut png = Vec::new();
-    image::GrayImage::from_pixel(60, 90, image::Luma([90]))
+        let mut png = Vec::new();
+        image::GrayImage::from_fn(600, 900, |x, _| {
+            image::Luma([shade.wrapping_add((x % 7) as u8)])
+        })
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .unwrap();
-    std::io::Write::write_all(&mut zip, &png).unwrap();
+        std::io::Write::write_all(&mut zip, &png).unwrap();
+    }
     zip.finish().unwrap();
+    // Comics are taken as right-to-left manga unless set otherwise.
     let id = import(&mut library, &cbz);
     let device = kindle(&dir.path().join("Kindle"));
     let options = SendOptions {
         converter: &EpubToAzw3,
-        page_numbers: false,
+        page_numbers: true,
     };
     let outcomes = kindle::send_library_books(&library, &device, &options, &[id], |_| {});
-    assert!(outcomes[0].result.as_ref().unwrap_err().contains("comics"));
+    let sent = outcomes[0].result.as_ref().unwrap();
+    assert!(
+        Path::new(&sent.device_path)
+            .extension()
+            .is_some_and(|e| e == "azw3"),
+        "{}",
+        sent.device_path
+    );
+    let bytes = fs::read(dir.path().join("Kindle").join(&sent.device_path)).unwrap();
+
+    let header = mobi::parse(&bytes).unwrap();
+    assert_eq!(header.mobi_version, 8);
+    assert_eq!(header.title.as_deref(), Some("Comic"));
+    let records = mobi::exth_records(&bytes);
+    let get = |k: u32| {
+        records
+            .iter()
+            .find(|(kind, _)| *kind == k)
+            .map(|(_, d)| String::from_utf8_lossy(d).into_owned())
+    };
+    let screen = device.info().screen;
+    assert_eq!(get(122).as_deref(), Some("true"));
+    assert_eq!(get(123).as_deref(), Some("comic"));
+    assert_eq!(
+        get(126),
+        Some(format!("{}x{}", screen.width, screen.height))
+    );
+    assert_eq!(get(527).as_deref(), Some("rtl"));
+
+    // One page document per page, each showing a JPEG.
+    let text = parallax_device_kindle::text::extract(&bytes).unwrap();
+    let html = String::from_utf8_lossy(&text);
+    assert_eq!(html.matches("<img").count(), 3, "{html}");
+    assert!(html.contains("name=\"viewport\""), "{html}");
+    let offsets = mobi::record_offsets(&bytes).unwrap();
+    let jpegs = offsets
+        .iter()
+        .filter(|&&o| bytes[o..].starts_with(&[0xFF, 0xD8]))
+        .count();
+    assert!(jpegs >= 3, "{jpegs} JPEG records");
+    // Fixed-layout pages need no page numbers.
+    let stem = sent.device_path.trim_end_matches(".azw3");
+    assert!(
+        !dir.path()
+            .join("Kindle")
+            .join(format!("{stem}.sdr"))
+            .join(format!(
+                "{}.apnx",
+                Path::new(stem).file_name().unwrap().to_string_lossy()
+            ))
+            .exists()
+    );
 }
 
 #[test]

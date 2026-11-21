@@ -18,7 +18,7 @@ Connect your Kindle by USB and unlock it. Most Kindles before 2024 appear in Fin
 
 What works:
 
-- **Send to Kindle** converts library books to AZW3, with estimated page numbers and a cover on the Kindle's home screen. Comics aren't sent yet.
+- **Send to Kindle** converts library books to AZW3, with page numbers and a cover on the Kindle's home screen. Comics and manga become full-screen AZW3 comics sized for your Kindle's screen, using the same comic settings as a Kobo, with manga turning right to left.
 - **Update on Kindle** replaces a book you edited and keeps your place and highlights.
 - **Remove from Kindle** deletes a book with its page numbers, cover and the Kindle's reading data for it.
 - **Add to library** copies DRM-free books from the Kindle into your library. Books bought from Amazon are skipped.

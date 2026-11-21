@@ -17,6 +17,7 @@ use parallax_device_kindle::transfer::file_name;
 use parallax_device_kindle::{Clipping, KindleDevice, Outgoing, clippings, text};
 use parallax_library::{Book, Format, ImportOutcome, Library, Reading};
 
+use crate::comic_send::ComicTarget;
 use crate::device::{CatalogBook, OnDevice, RemoveOutcome};
 use crate::import::{DeviceImport, DeviceImportOutcome};
 use crate::send::{Progress, SendOutcome, SentInfo, Stage, copy_progress, run_batch};
@@ -114,11 +115,6 @@ pub struct SendOptions<'a> {
     pub page_numbers: bool,
 }
 
-fn not_for_kindle(book: &Book) -> Option<String> {
-    (book.format == Format::Cbz)
-        .then(|| "comics can't be sent to a Kindle yet; send them to a Kobo instead".to_owned())
-}
-
 /// Exports a library book with its current details, converts it to AZW3 and
 /// writes it to the Kindle at `file`.
 fn deliver(
@@ -131,15 +127,33 @@ fn deliver(
 ) -> Result<SentInfo, String> {
     stage(&|index, total, file| Progress::Preparing { index, total, file });
     let work = tempfile::tempdir().map_err(|e| e.to_string())?;
-    let epub = work.path().join("book.epub");
-    let azw3 = work.path().join("book.azw3");
-    library.export(book.id, &epub).map_err(|e| e.to_string())?;
-    stage(&|index, total, file| Progress::Converting { index, total, file });
-    options
-        .converter
-        .convert(&epub, &azw3)
-        .map_err(|e| e.to_string())?;
-    let data = std::fs::read(&azw3).map_err(|e| e.to_string())?;
+    let mut skipped_pages = Vec::new();
+    let data = if book.format == Format::Cbz {
+        // Comics become fixed-layout AZW3 pages sized for the screen.
+        let target = ComicTarget::for_kindle(library, device).map_err(|e| e.to_string())?;
+        let prepared =
+            target.prepare_for_kindle(library, book, options.converter, |page, pages| {
+                stage(&|index, total, file| Progress::ProcessingComic {
+                    index,
+                    total,
+                    file,
+                    page,
+                    pages,
+                });
+            })?;
+        skipped_pages.clone_from(&prepared.skipped);
+        std::fs::read(prepared.path()).map_err(|e| e.to_string())?
+    } else {
+        let epub = work.path().join("book.epub");
+        let azw3 = work.path().join("book.azw3");
+        library.export(book.id, &epub).map_err(|e| e.to_string())?;
+        stage(&|index, total, file| Progress::Converting { index, total, file });
+        options
+            .converter
+            .convert(&epub, &azw3)
+            .map_err(|e| e.to_string())?;
+        std::fs::read(&azw3).map_err(|e| e.to_string())?
+    };
     let cover = library.cover_source(book.id).ok().flatten();
     let mut progress = copy_progress(stage);
     let sent = device
@@ -148,7 +162,8 @@ fn deliver(
                 file_name: file,
                 data: &data,
                 cover: cover.as_deref(),
-                page_numbers: options.page_numbers,
+                // A comic's pages are its page numbers.
+                page_numbers: options.page_numbers && book.format != Format::Cbz,
             },
             &mut progress,
         )
@@ -157,7 +172,7 @@ fn deliver(
         content_id: sent.path.clone(),
         device_path: sent.path,
         bytes: data.len() as u64,
-        skipped_pages: Vec::new(),
+        skipped_pages,
         details_only: false,
     })
 }
@@ -192,9 +207,6 @@ pub fn send_library_books(
     run_batch(&labels, on_progress, |i, stage| {
         let id = ids[i];
         let result = books[i].clone().and_then(|book| {
-            if let Some(reason) = not_for_kindle(&book) {
-                return Err(reason);
-            }
             let storage = device.storage();
             if let Some(copy) = existing
                 .iter()
@@ -236,9 +248,6 @@ pub fn update_on_device(
     run_batch(&labels, on_progress, |i, stage| {
         let id = ids[i];
         let result = books[i].clone().and_then(|book| {
-            if let Some(reason) = not_for_kindle(&book) {
-                return Err(reason);
-            }
             let copy = copies
                 .iter()
                 .find(|c| c.book_id == id)

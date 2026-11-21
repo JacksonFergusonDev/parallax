@@ -694,7 +694,8 @@ async fn comic_transfer_estimate(
 ) -> CmdResult<Option<parallax_core::comic_send::TransferEstimate>> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        // Comics aren't sent to Kindles.
+        // The estimate and its confirmation describe Kobo preparation;
+        // comics go to a Kindle without one.
         if kindle::is_kindle(&mount) {
             return Ok(None);
         }
