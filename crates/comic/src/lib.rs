@@ -21,6 +21,7 @@ mod entries;
 mod error;
 mod filename;
 mod natural;
+mod pdf;
 pub mod prepare;
 pub mod shape;
 
@@ -32,3 +33,4 @@ pub use entries::{MAX_ENTRIES, MAX_PAGE_BYTES, SkipReason, Skipped};
 pub use error::{Error, Result};
 pub use filename::{NameInfo, parse_file_name};
 pub use natural::natural_cmp;
+pub use pdf::{is_pdf, pdf_to_cbz};

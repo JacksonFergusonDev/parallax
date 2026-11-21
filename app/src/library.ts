@@ -181,6 +181,7 @@ export const BOOK_EXTENSIONS = [
   "cbz",
   "cbr",
   "cb7",
+  "pdf",
   ...ARCHIVE_EXTENSIONS,
 ];
 

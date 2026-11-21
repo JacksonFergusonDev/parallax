@@ -234,3 +234,57 @@ fn epubs_are_not_mistaken_for_comics() {
     // It's a broken EPUB, so the EPUB import refuses it.
     assert!(matches!(lib.import(&path), Err(Error::Epub(_))));
 }
+
+/// A one-page PDF of vector art, titled and with an author.
+fn vector_pdf(path: &Path) {
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_owned(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_owned(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] /Contents 4 0 R >>".to_owned(),
+        {
+            let data = "0 0 1 rg 20 20 160 260 re f";
+            format!("<< /Length {} >>\nstream\n{data}\nendstream", data.len())
+        },
+        "<< /Title (Moonrise) /Author (Ada Wren) >>".to_owned(),
+    ];
+    let mut out = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, body) in objects.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(b"xref\n0 6\n0000000000 65535 f \n");
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(
+        format!("trailer\n<< /Size 6 /Root 1 0 R /Info 5 0 R >>\nstartxref\n{xref}\n%%EOF\n")
+            .as_bytes(),
+    );
+    fs::write(path, out).unwrap();
+}
+
+#[test]
+fn pdfs_are_imported_as_comics() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut library = Library::open(dir.path().join("library")).unwrap();
+    library.set_setting(COMICS_KIND, Some("comic")).unwrap();
+    let src = dir.path().join("moonrise.pdf");
+    vector_pdf(&src);
+    let ImportOutcome::Added { book, .. } = library.import(&src).unwrap() else {
+        panic!("not added");
+    };
+    assert_eq!(book.format, Format::Cbz);
+    assert_eq!(book.kind, Kind::Comic);
+    assert_eq!(book.title, "Moonrise");
+    assert_eq!(book.authors, ["Ada Wren"]);
+    assert_eq!(book.pages, Some(1));
+    let stored = library.book_file(book.id);
+    assert_eq!(Cbz::open(&stored).unwrap().pages().len(), 1);
+    // The PDF identifies the book, so adding it again finds it.
+    assert!(matches!(
+        library.import(&src).unwrap(),
+        ImportOutcome::AlreadyInLibrary { .. }
+    ));
+}

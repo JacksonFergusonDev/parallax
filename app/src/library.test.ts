@@ -332,6 +332,7 @@ describe("isBookFile", () => {
       "a.cbz",
       "a.cbr",
       "a.cb7",
+      "a.pdf",
       "a.ZIP",
       "a.rar",
       "a.7z",

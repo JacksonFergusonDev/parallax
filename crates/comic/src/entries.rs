@@ -23,6 +23,8 @@ pub enum SkipReason {
     UnsafePath,
     /// Listed twice; the second copy is ignored.
     Duplicate,
+    /// A PDF page that couldn't be read or drawn.
+    Unreadable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
