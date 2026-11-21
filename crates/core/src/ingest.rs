@@ -100,11 +100,15 @@ pub fn import_file(
 /// `Dune.kepub.epub` or `Dune.kepub`, as Kobos and Parallax's KEPUB export
 /// name them.
 fn is_kepub(path: &Path) -> bool {
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().to_lowercase())
-        .unwrap_or_default();
-    name.ends_with(".kepub.epub") || name.ends_with(".kepub")
+    let kepub = |p: &Path| {
+        p.extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("kepub"))
+    };
+    kepub(path)
+        || (path
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("epub"))
+            && kepub(Path::new(path.file_stem().unwrap_or_default())))
 }
 
 /// Bundles a folder explicitly chosen as one volume and imports the resulting CBZ.

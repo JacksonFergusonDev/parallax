@@ -235,3 +235,75 @@ fn kepub_needs_a_converter() {
     .unwrap_err();
     assert!(error.contains("KEPUB"));
 }
+
+/// Two books with the same title, from slightly different files.
+fn library_with_two(dir: &Path) -> (Library, Vec<i64>) {
+    let mut library = Library::open(dir.join("lib")).unwrap();
+    let mut ids = Vec::new();
+    for extra in [0usize, 1] {
+        let copy = dir.join(format!("{extra}-minimal.epub"));
+        let mut bytes = std::fs::read(fixture()).unwrap();
+        bytes.extend_from_slice(&[0; 1][..extra]);
+        std::fs::write(&copy, bytes).unwrap();
+        let ImportOutcome::Added { book, .. } = library.import(&copy).unwrap() else {
+            panic!("expected a new book");
+        };
+        ids.push(book.id);
+    }
+    (library, ids)
+}
+
+#[test]
+fn exports_books_into_folders_without_overwriting() {
+    let dir = tempfile::tempdir().unwrap();
+    let (library, ids) = library_with_two(dir.path());
+    let out = dir.path().join("out");
+    let exported = export_books(
+        &library,
+        &ids,
+        &ExportOptions {
+            template: DEFAULT_TEMPLATE.into(),
+            ..ExportOptions::default()
+        },
+        &Destination::Folder(out.clone()),
+        None,
+        |_, _| {},
+    )
+    .unwrap();
+    let paths: Vec<String> = exported.iter().map(|e| e.result.clone().unwrap()).collect();
+    assert_ne!(paths[0], paths[1], "same title, so the second is numbered");
+    assert!(paths[1].ends_with(" (2).epub"), "{}", paths[1]);
+    for path in &paths {
+        assert!(Path::new(path).starts_with(&out));
+        parallax_epub::Epub::open(path).unwrap();
+    }
+}
+
+#[test]
+fn exports_books_into_one_compressed_archive() {
+    let dir = tempfile::tempdir().unwrap();
+    let (library, ids) = library_with_two(dir.path());
+    let archive = dir.path().join("Books.zip");
+    let exported = export_books(
+        &library,
+        &ids,
+        &ExportOptions {
+            template: "{title}".into(),
+            ..ExportOptions::default()
+        },
+        &Destination::Archive(archive.clone()),
+        None,
+        |_, _| {},
+    )
+    .unwrap();
+    assert!(exported.iter().all(|e| e.result.is_ok()), "{exported:?}");
+    let mut zip = zip::ZipArchive::new(File::open(&archive).unwrap()).unwrap();
+    assert_eq!(zip.len(), 3, "two books and the manifest");
+    for i in 0..zip.len() {
+        assert_eq!(
+            zip.by_index(i).unwrap().compression(),
+            zip::CompressionMethod::Deflated
+        );
+    }
+    assert_eq!(read_manifest(&archive).unwrap().books.len(), 2);
+}
