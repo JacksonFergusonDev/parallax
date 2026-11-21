@@ -15,7 +15,7 @@ The maintainer handoff: where things stand, what's open and what's next. Update 
 
 ## Current
 
-- 0.1.1 is released. Before the next release, add a `v*` tag rule to the `github-pages` environment, or the release's site redeploy is refused and has to be rerun from `main` ([releasing](engineering/releasing.md)). Releases are signed ad hoc until there's a Developer ID.
+- 0.1.1 is released. Releases are signed ad hoc until there's a Developer ID.
 
 ## Unresolved
 
