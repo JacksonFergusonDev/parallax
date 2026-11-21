@@ -342,7 +342,7 @@ describe("isBookFile", () => {
   });
 
   it("rejects everything else", () => {
-    for (const name of ["a.pdf", "a.txt", "azw3", "a.azw3.bak"]) {
+    for (const name of ["a.txt", "azw3", "a.azw3.bak", "a.pdf.bak"]) {
       expect(isBookFile(`/books/${name}`)).toBe(false);
     }
   });
