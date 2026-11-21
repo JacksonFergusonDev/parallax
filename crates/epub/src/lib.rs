@@ -9,6 +9,7 @@ mod extent;
 mod inspect;
 mod kepub;
 mod opf;
+pub mod positions;
 mod reading;
 
 use std::fs::File;

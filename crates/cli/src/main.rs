@@ -18,7 +18,7 @@ use parallax_core::calibre;
 use parallax_core::collections::{self, CollectionChange, folder_groups, reconcile_series};
 use parallax_core::device::{
     change_reading_status, health, merge_collections, remove_from_device, restore_positions,
-    sync_annotations, sync_reading,
+    sync_annotations, sync_reader_places, sync_reading,
 };
 use parallax_core::duplicates::{Reason, device_duplicates, library_duplicates};
 use parallax_core::enhance;
@@ -392,7 +392,8 @@ enum LibraryCommand {
         dry_run: bool,
     },
     /// Apply series to books the Kobo has imported since they were sent (writes,
-    /// with a backup), and copy reading progress into the library.
+    /// with a backup), copy reading progress into the library, and keep each
+    /// book's place the same on the Kobo and in the desktop reader.
     Reconcile {
         #[arg(long)]
         mount: Option<PathBuf>,
@@ -1816,6 +1817,11 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
             println!(
                 "updated reading progress for {} books",
                 sync_reading(lib, &kobo)?
+            );
+            let places = sync_reader_places(lib, &kobo, &backup_root()?)?;
+            println!(
+                "moved the place in {} books to the Kobo's and {} to the desktop reader's",
+                places.to_reader, places.to_kobo
             );
             println!(
                 "copied {} new or changed highlights, notes and bookmarks",

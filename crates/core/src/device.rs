@@ -348,6 +348,133 @@ pub fn restore_positions(
     Ok(restored?.len())
 }
 
+/// What [`sync_reader_places`] moved, by direction.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct PlacesSynced {
+    /// Books whose desktop reader place now follows the Kobo.
+    pub to_reader: usize,
+    /// Books whose Kobo place now follows the desktop reader.
+    pub to_kobo: usize,
+}
+
+/// Seconds the newer side must lead by. Both clocks are to the second, and
+/// the Kobo's may drift a little from the computer's.
+const PLACE_SLACK_SECS: i64 = 60;
+
+/// Keeps your place the same on a Kobo and in the desktop reader: for each
+/// library EPUB on the Kobo, whichever was read last wins. The Kobo's place
+/// (a chapter and `koboSpan`) is found in the KEPUB on the Kobo and matched
+/// by its text to a CFI in the library EPUB; the reader's place is matched
+/// the other way by the text it starts with. Run it after [`sync_reading`].
+pub fn sync_reader_places(
+    library: &Library,
+    device: &KoboDevice,
+    backup_root: &Path,
+) -> parallax_device_kobo::Result<PlacesSynced> {
+    use parallax_epub::positions::{
+        cfi_for_quote, kobo_place_for_quote, kobo_span_text, split_kobo_place,
+    };
+
+    let serial = device.version().serial.clone();
+    let copies = library.device_copies(&serial).unwrap_or_default();
+    if copies.is_empty() {
+        return Ok(PlacesSynced::default());
+    }
+    let db = device.open_db()?;
+    let chapters = db.bookmarked_chapters()?;
+    let kobo_books = db.books()?;
+    drop(db);
+    let time = |s: &str| {
+        chrono::DateTime::parse_from_rfc3339(s)
+            .ok()
+            .map(|d| d.to_utc())
+    };
+    let mut synced = PlacesSynced::default();
+    let mut to_kobo = Vec::new();
+    for copy in &copies {
+        let Ok(book) = library.book(copy.book_id) else {
+            continue;
+        };
+        let kepub = device.mount().join(&copy.device_path);
+        if book.format != Format::Epub || !kepub.is_file() {
+            continue;
+        }
+        let Some(on_kobo) = kobo_books.iter().find(|b| b.id == copy.content_id) else {
+            continue;
+        };
+        let reader = library.reader_position(copy.book_id).ok().flatten();
+        let reader_at = library
+            .reader_position_saved_at(copy.book_id)
+            .ok()
+            .flatten()
+            .as_deref()
+            .and_then(time);
+        let kobo_at = on_kobo.last_read;
+        let kobo_place = chapters
+            .get(&copy.content_id)
+            .and_then(|c| split_kobo_place(c));
+        let newer = |a: Option<chrono::DateTime<chrono::Utc>>,
+                     b: Option<chrono::DateTime<chrono::Utc>>| match (a, b) {
+            (Some(a), Some(b)) => (a - b).num_seconds() > PLACE_SLACK_SECS,
+            (Some(_), None) => true,
+            _ => false,
+        };
+        if newer(kobo_at, reader_at)
+            && on_kobo.read_status == ReadStatus::Reading
+            && let Some((chapter, span)) = kobo_place
+        {
+            let library_file = library.book_file(copy.book_id);
+            let Some(quote) = kobo_span_text(&kepub, chapter, span).ok().flatten() else {
+                continue;
+            };
+            let Some(cfi) = cfi_for_quote(&library_file, chapter, &quote).ok().flatten() else {
+                continue;
+            };
+            let at = kobo_at
+                .unwrap_or_else(chrono::Utc::now)
+                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+            let position = parallax_library::ReaderPosition {
+                href: chapter.to_owned(),
+                cfi,
+                fraction: f64::from(on_kobo.percent_read) / 100.0,
+                quote: Some(quote),
+            };
+            if library
+                .set_reader_position_at(copy.book_id, &position, &at)
+                .is_ok()
+            {
+                synced.to_reader += 1;
+            }
+        } else if newer(reader_at, kobo_at)
+            && let Some(reader) = reader
+            && let Some(quote) = reader.quote.as_deref()
+            && let Some(place) = kobo_place_for_quote(&kepub, &reader.href, quote)
+                .ok()
+                .flatten()
+        {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let percent = (reader.fraction.clamp(0.0, 1.0) * 100.0).round() as u8;
+            to_kobo.push((
+                copy.content_id.clone(),
+                Position {
+                    chapter: Some(place),
+                    status: 1,
+                    percent: percent.max(1),
+                    last_read: reader_at.map(|d| d.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+                    time_spent_secs: on_kobo.reading_time_secs,
+                },
+            ));
+        }
+    }
+    if !to_kobo.is_empty() {
+        let mut writer = device.open_writer(backup_root)?;
+        let moved = parallax_device_kobo::move_positions(&mut writer, &to_kobo);
+        writer.close()?;
+        synced.to_kobo = moved?.len();
+    }
+    Ok(synced)
+}
+
 /// What "Check this Kobo" found. Only reads the device.
 #[derive(Debug, Clone, Serialize)]
 pub struct Health {

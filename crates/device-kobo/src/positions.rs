@@ -50,6 +50,34 @@ pub fn restore_positions(
     writer: &mut DeviceWriter,
     positions: &[(String, Position)],
 ) -> Result<Vec<String>> {
+    write_positions(
+        writer,
+        positions,
+        true,
+        LogEntry::new("restore positions").detail("put back where books were open"),
+    )
+}
+
+/// Sets where books are open, whatever Nickel shows now: the place read
+/// last in the desktop reader. Returns the ContentIDs that were changed.
+pub fn move_positions(
+    writer: &mut DeviceWriter,
+    positions: &[(String, Position)],
+) -> Result<Vec<String>> {
+    write_positions(
+        writer,
+        positions,
+        false,
+        LogEntry::new("move positions").detail("moved to where the desktop reader was"),
+    )
+}
+
+fn write_positions(
+    writer: &mut DeviceWriter,
+    positions: &[(String, Position)],
+    only_untouched: bool,
+    entry: LogEntry,
+) -> Result<Vec<String>> {
     let restored = writer.transaction(|tx| {
         let cols = columns(tx, "content")?;
         let has = |c: &str| cols.contains(&c.to_ascii_lowercase());
@@ -70,7 +98,9 @@ pub fn restore_positions(
                     |r| r.get(0),
                 )
                 .optional()?;
-            if untouched != Some(true) {
+            // Missing from the database, or opened when only untouched
+            // books may change.
+            if untouched.is_none() || (only_untouched && untouched != Some(true)) {
                 continue;
             }
             tx.execute(
@@ -110,11 +140,7 @@ pub fn restore_positions(
         Ok(done)
     })?;
     if !restored.is_empty() {
-        writer.log(
-            LogEntry::new("restore positions")
-                .ids(restored.iter().cloned())
-                .detail("put back where books were open"),
-        );
+        writer.log(entry.ids(restored.iter().cloned()));
     }
     Ok(restored)
 }
