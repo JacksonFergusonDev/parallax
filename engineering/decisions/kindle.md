@@ -48,7 +48,7 @@ Library books are exported as EPUB with their current details, converted to AZW3
 Two files go beside each book, as calibre writes them:
 
 - **Cover thumbnail.** A Kindle shows `system/thumbnails/thumbnail_{ASIN}_{cdetype}_portrait.jpg` for a sideloaded book, from EXTH 113 and 501. boko wrote the same placeholder ASIN into every book, so all books shared one thumbnail; the vendored copy now uses the book's UUID or a derived one ([boko#40](https://github.com/zacharydenton/boko/pull/40)). Amazon replaces these thumbnails with generic ones when the Kindle goes online, so each is also kept in `amazon-cover-bug/` and restored on every connect, with an index file per book so removal can find it.
-- **Page numbers.** An APNX file in `documents/<name>.sdr/` with a page every 2,300 characters of text, calibre's default "fast" method. calibre's "accurate" and "pagebreak" methods need the decompressed text and weren't ported.
+- **Page numbers.** An APNX file in `documents/<name>.sdr/`. Page starts follow calibre's "accurate" method: `text.rs` decompresses the book's PalmDOC text records, a line starts at each paragraph and after every 70 characters of paragraph text, and every 32nd line starts a page. This tracks print pages more closely than calibre's default "fast" method, a page every 2,300 characters, which is still used when the text can't be read (HUFF/CDIC compression, or a book with no `<p>` tags). calibre's "pagebreak" method isn't ported.
 
 Updating a book writes the same file name, so the Kindle keeps its `.sdr` folder and with it the reading position and highlights.
 
