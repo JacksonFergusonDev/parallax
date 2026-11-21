@@ -105,15 +105,12 @@ fn decode_entities(s: &str) -> String {
             }?;
             Some((ch, semi))
         });
-        match decoded {
-            Some((ch, semi)) => {
-                out.push(ch);
-                rest = &after[semi + 1..];
-            }
-            None => {
-                out.push('&');
-                rest = &after[1..];
-            }
+        if let Some((ch, semi)) = decoded {
+            out.push(ch);
+            rest = &after[semi + 1..];
+        } else {
+            out.push('&');
+            rest = &after[1..];
         }
     }
     out.push_str(rest);
