@@ -22,7 +22,7 @@ What works:
 - **Update on Kindle** replaces a book you edited and keeps your place and highlights.
 - **Remove from Kindle** deletes a book with its page numbers, cover and the Kindle's reading data for it.
 - **Add to library** copies DRM-free books from the Kindle into your library. Books bought from Amazon are skipped.
-- When your Kindle connects, its reading progress and the highlights, notes and bookmarks in its `My Clippings.txt` are copied into your library. Progress is worked out from where you are in the book, so it can differ a little from the Kindle's own percentage, and a book counts as finished once you reach the end.
+- When your Kindle connects, its reading progress and the highlights, notes and bookmarks in its `My Clippings.txt` are copied into your library. Highlights the clippings file doesn't have, such as ones from before it was cleared, are found in the book's own reading data, and their text is read from the book on your Kindle. Progress is worked out from where you are in the book, so it can differ a little from the Kindle's own percentage, and a book counts as finished once you reach the end.
 - When a Kindle goes online, Amazon can replace the covers of books you sent with generic ones. Parallax puts them back each time the Kindle connects, as calibre does.
 
 What doesn't: a Kindle keeps its collections and its read status where Parallax can't reach them, so they aren't shown or changed. Older Kindles that list collections in a file show them, read-only.

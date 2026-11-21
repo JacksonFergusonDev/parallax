@@ -63,6 +63,112 @@ fn sidecar(position: u32) -> Vec<u8> {
     out
 }
 
+/// A KRDS `.azw3r` holding highlights over these (start, end) ranges.
+fn highlights(ranges: &[(usize, usize)]) -> Vec<u8> {
+    let mut out = b"\x00\x00\x00\x00\x00\x1A\xB1\x26".to_vec();
+    let int = |out: &mut Vec<u8>, n: i32| {
+        out.push(1);
+        out.extend_from_slice(&n.to_be_bytes());
+    };
+    let long = |out: &mut Vec<u8>, n: i64| {
+        out.push(2);
+        out.extend_from_slice(&n.to_be_bytes());
+    };
+    let utf = |out: &mut Vec<u8>, s: &str| {
+        out.push(0);
+        out.extend_from_slice(&u16::try_from(s.len()).unwrap().to_be_bytes());
+        out.extend_from_slice(s.as_bytes());
+    };
+    let text = |out: &mut Vec<u8>, s: &str| {
+        out.push(3);
+        utf(out, s);
+    };
+    int(&mut out, 1);
+    int(&mut out, 1);
+    out.push(0xFE);
+    utf(&mut out, "annotation.cache.object");
+    int(&mut out, 1);
+    int(&mut out, 1);
+    out.push(0xFE);
+    utf(&mut out, "saved.avl.interval.tree");
+    int(&mut out, i32::try_from(ranges.len()).unwrap());
+    for (start, end) in ranges {
+        out.push(0xFE);
+        utf(&mut out, "annotation.personal.highlight");
+        text(&mut out, &start.to_string());
+        text(&mut out, &end.to_string());
+        long(&mut out, 1_762_000_000_000);
+        long(&mut out, 1_762_000_000_000);
+        text(&mut out, "");
+        out.push(0xFF);
+    }
+    out.push(0xFF);
+    out.push(0xFF);
+    out.push(0xFF);
+    out
+}
+
+#[test]
+fn highlights_missing_from_clippings_take_their_text_from_the_book() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut library = Library::open(dir.path().join("library")).unwrap();
+    let id = import(&mut library, &fixture("epub/minimal.epub"));
+    let device = kindle(&dir.path().join("Kindle"));
+    let options = SendOptions {
+        converter: &EpubToAzw3,
+        page_numbers: true,
+    };
+    let outcomes = kindle::send_library_books(&library, &device, &options, &[id], |_| {});
+    let sent = outcomes[0].result.as_ref().unwrap().clone();
+    let file = dir.path().join("Kindle").join(&sent.device_path);
+    let text = parallax_device_kindle::text::extract(&fs::read(&file).unwrap()).unwrap();
+    let html = String::from_utf8_lossy(&text).into_owned();
+    // The text of the book's first paragraph, from the Kindle's own copy.
+    let p = html.find("<p").unwrap();
+    let start = p + html[p..].find('>').unwrap() + 1;
+    let end = start + html[start..].find("</p>").unwrap() - 1;
+    let expected = parallax_device_kindle::text::passage(&text, start as u64, end as u64).unwrap();
+    assert!(!expected.is_empty());
+
+    let stem = sent.device_path.trim_end_matches(".azw3");
+    let sdr = dir.path().join("Kindle").join(format!("{stem}.sdr"));
+    fs::create_dir_all(&sdr).unwrap();
+    fs::write(sdr.join("x.azw3r"), highlights(&[(start, end)])).unwrap();
+    let mut cache = MetaCache::new();
+    let done = kindle::reconcile(&mut library, &device, &mut cache).unwrap();
+    assert_eq!(done.annotations, 1);
+    let notes = library.annotations(id).unwrap();
+    assert_eq!(notes.len(), 1);
+    assert_eq!(notes[0].kind, "highlight");
+    assert_eq!(notes[0].text.as_deref(), Some(expected.as_str()));
+    assert_eq!(
+        notes[0].position,
+        f64::from(parallax_device_kindle::text::location(start as u64))
+    );
+
+    // Once My Clippings has the same highlight, only its entry is kept.
+    let books = device.books(&mut cache).unwrap();
+    let location = parallax_device_kindle::text::location(start as u64);
+    fs::write(
+        dir.path().join("Kindle/documents/My Clippings.txt"),
+        format!(
+            "{} (Someone)\n- Your Highlight on Location {location}-{} | Added on Monday, 3 November 2025 21:04:10\n\nFrom clippings.\n==========\n",
+            books[0].title(),
+            location + 1
+        ),
+    )
+    .unwrap();
+    kindle::reconcile(&mut library, &device, &mut cache).unwrap();
+    let on_device: Vec<_> = library
+        .annotations(id)
+        .unwrap()
+        .into_iter()
+        .filter(|a| a.on_device)
+        .collect();
+    assert_eq!(on_device.len(), 1);
+    assert_eq!(on_device[0].text.as_deref(), Some("From clippings."));
+}
+
 #[test]
 fn send_update_sync_and_remove() {
     let dir = tempfile::tempdir().unwrap();

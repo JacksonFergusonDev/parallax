@@ -14,7 +14,7 @@ use parallax_convert::Converter;
 use parallax_device::{DeviceBook, ReadStatus};
 use parallax_device_kindle::books::{self, KindleBook, MetaCache};
 use parallax_device_kindle::transfer::file_name;
-use parallax_device_kindle::{Clipping, KindleDevice, Outgoing, clippings};
+use parallax_device_kindle::{Clipping, KindleDevice, Outgoing, clippings, text};
 use parallax_library::{Book, Format, ImportOutcome, Library, Reading};
 
 use crate::device::{CatalogBook, OnDevice, RemoveOutcome};
@@ -478,9 +478,75 @@ fn annotation(serial: &str, clip: &Clipping) -> parallax_library::Annotation {
     }
 }
 
-/// Copies highlights, notes and bookmarks from `My Clippings.txt` into the
-/// library for books sent from it, matching entries by title. Returns how
-/// many were new or changed.
+/// Highlights, notes and bookmarks the book's KRDS sidecar holds that
+/// `My Clippings.txt` doesn't, such as ones made before the file was
+/// cleared, or in a language whose clippings can't be told apart. KRDS
+/// gives positions only, so a highlight's text is read from the book on the
+/// Kindle, once: later syncs reuse the text the library already has.
+fn krds_annotations(
+    device: &KindleDevice,
+    book: &KindleBook,
+    serial: &str,
+    clips: &[&Clipping],
+    known: &[parallax_library::Annotation],
+) -> Vec<parallax_library::Annotation> {
+    let mut book_text: Option<Option<Vec<u8>>> = None;
+    let mut out = Vec::new();
+    for a in &book.reading.annotations {
+        if !matches!(a.kind.as_str(), "highlight" | "note" | "bookmark") {
+            continue;
+        }
+        // KFX positions aren't byte offsets; only MOBI and KF8 ones are.
+        let (Ok(start), Ok(end)) = (a.start.trim().parse::<u64>(), a.end.trim().parse::<u64>())
+        else {
+            continue;
+        };
+        let location = text::location(start);
+        let in_clippings = clips
+            .iter()
+            .any(|c| c.kind == a.kind && c.location.is_some_and(|l| l.abs_diff(location) <= 1));
+        if in_clippings {
+            continue;
+        }
+        let id = a.id();
+        let text = if a.kind == "highlight" {
+            known
+                .iter()
+                .find(|k| k.id == id && k.device_serial == serial)
+                .and_then(|k| k.text.clone())
+                .or_else(|| {
+                    book_text
+                        .get_or_insert_with(|| {
+                            device.read(&book.path).ok().and_then(|b| text::extract(&b))
+                        })
+                        .as_deref()
+                        .and_then(|t| text::passage(t, start, end))
+                })
+        } else {
+            None
+        };
+        out.push(parallax_library::Annotation {
+            id,
+            device_serial: serial.to_owned(),
+            kind: a.kind.clone(),
+            text,
+            note: a.note.clone(),
+            chapter: None,
+            position: f64::from(location),
+            created: a
+                .created_ms
+                .and_then(DateTime::<Utc>::from_timestamp_millis)
+                .map(|d| d.to_rfc3339()),
+            modified: None,
+            on_device: true,
+        });
+    }
+    out
+}
+
+/// Copies highlights, notes and bookmarks into the library for books sent
+/// from it: from `My Clippings.txt`, matching entries by title, then any
+/// more the book's KRDS sidecar holds. Returns how many were new or changed.
 pub fn sync_annotations(
     library: &mut Library,
     device: &KindleDevice,
@@ -501,11 +567,13 @@ pub fn sync_annotations(
             Some(book.title()),
             library.book(copy.book_id).ok().map(|b| b.title),
         ];
-        let items: Vec<_> = clips
+        let book_clips: Vec<&Clipping> = clips
             .iter()
             .filter(|c| titles.iter().flatten().any(|t| same_title(t, &c.title)))
-            .map(|c| annotation(&serial, c))
             .collect();
+        let mut items: Vec<_> = book_clips.iter().map(|c| annotation(&serial, c)).collect();
+        let known = library.annotations(copy.book_id).unwrap_or_default();
+        items.extend(krds_annotations(device, book, &serial, &book_clips, &known));
         let mut seen = std::collections::HashSet::new();
         let items: Vec<_> = items
             .into_iter()

@@ -46,7 +46,7 @@ Do the MTP checks if the Kindle is MTP, the Drive checks if it's a drive, and ev
 
 ## Updating, progress and highlights
 
-12. **Either.** On the Kindle, read about a third of a sent book. Highlight a sentence, add a note to another, and add a bookmark. Connect to Parallax. In the library, the book's progress should be close to the Kindle's percentage. Open its highlights: the highlight, the note and the bookmark should be there with their text and dates. Record any that are missing or wrong.
+12. **Either.** On the Kindle, read about a third of a sent book. Highlight a sentence, add a note to another, and add a bookmark. Connect to Parallax. In the library, the book's progress should be close to the Kindle's percentage. Open its highlights: the highlight, the note and the bookmark should be there with their text and dates. Record any that are missing or wrong. Then delete `documents/My Clippings.txt` from the Kindle with Parallax closed (on MTP, use OpenMTP or Android File Transfer), then connect to Parallax. The highlight from check 12 should still be there, now read from the book: compare its text word for word with what you highlighted, and note any missing or extra words at either end. The note's own text should be there too.
 13. **Either.** Change the book's title and cover in Parallax and choose **Update on Kindle**. Eject. The book should open where you left it, with its highlights, and show the new title and cover.
 14. **Either.** Finish a book on the Kindle, or mark it as read there. Connect and record what Parallax shows for it. Parallax estimates "finished" from the position, so a book marked read without reaching the end will likely still show as reading.
 

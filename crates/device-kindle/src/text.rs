@@ -42,6 +42,84 @@ pub fn extract(bytes: &[u8]) -> Option<Vec<u8>> {
     Some(text)
 }
 
+/// The Kindle location of a position, as the Kindle and calibre number
+/// them: one every 150 bytes of text, starting at 1.
+pub fn location(position: u64) -> u32 {
+    u32::try_from(position / 150 + 1).unwrap_or(u32::MAX)
+}
+
+/// The words between two positions, as a reader would see them: markup
+/// dropped, character references decoded and whitespace collapsed. `end` is
+/// the last byte, as KRDS annotations give it. `None` when nothing's left.
+pub fn passage(text: &[u8], start: u64, end: u64) -> Option<String> {
+    let start = usize::try_from(start).ok()?;
+    let end = usize::try_from(end).ok()?.saturating_add(1).min(text.len());
+    let mut bytes = text.get(start..end)?;
+    // A passage that starts inside a tag begins after it.
+    if let Some(close) = bytes.iter().position(|&b| b == b'>')
+        && !bytes[..close].contains(&b'<')
+    {
+        bytes = &bytes[close + 1..];
+    }
+    let mut plain = String::new();
+    let mut in_tag = false;
+    for ch in String::from_utf8_lossy(bytes).chars() {
+        match ch {
+            '<' => {
+                in_tag = true;
+                plain.push(' ');
+            }
+            '>' => in_tag = false,
+            _ if !in_tag => plain.push(ch),
+            _ => {}
+        }
+    }
+    let plain = decode_entities(&plain);
+    // A cut through a multibyte character leaves a replacement character.
+    let plain = plain.replace('\u{FFFD}', "");
+    let words: Vec<&str> = plain.split_whitespace().collect();
+    (!words.is_empty()).then(|| words.join(" "))
+}
+
+fn decode_entities(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(amp) = rest.find('&') {
+        out.push_str(&rest[..amp]);
+        let after = &rest[amp..];
+        let decoded = after.find(';').filter(|&semi| semi <= 10).and_then(|semi| {
+            let name = &after[1..semi];
+            let ch = match name {
+                "amp" => Some('&'),
+                "lt" => Some('<'),
+                "gt" => Some('>'),
+                "quot" => Some('"'),
+                "apos" => Some('\''),
+                "nbsp" => Some(' '),
+                _ => name
+                    .strip_prefix("#x")
+                    .or_else(|| name.strip_prefix("#X"))
+                    .and_then(|h| u32::from_str_radix(h, 16).ok())
+                    .or_else(|| name.strip_prefix('#').and_then(|d| d.parse().ok()))
+                    .and_then(char::from_u32),
+            }?;
+            Some((ch, semi))
+        });
+        match decoded {
+            Some((ch, semi)) => {
+                out.push(ch);
+                rest = &after[semi + 1..];
+            }
+            None => {
+                out.push('&');
+                rest = &after[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 /// The MOBI header's extra data flags, which say what trails each record.
 fn extra_flags(r0: &[u8]) -> u16 {
     let header_len = u32_at(r0, 20).unwrap_or(0) as usize;
@@ -170,6 +248,27 @@ mod tests {
         assert_eq!(out, b"abcabc\x80\x81 A");
         assert!(palmdoc(&[0x80]).is_none());
         assert!(palmdoc(&[0x80, 0x18]).is_none());
+    }
+
+    #[test]
+    fn passages_read_like_the_page() {
+        let text = b"<p class=\"a\">It was the <i>best</i> of&nbsp;times &amp; the\n worst.</p><p>Next</p>";
+        let start = 13; // the `I` of "It"
+        let end = text.iter().position(|&b| b == b'.').unwrap() as u64;
+        assert_eq!(
+            passage(text, start, end).unwrap(),
+            "It was the best of times & the worst."
+        );
+        // Starting inside a tag skips the rest of it.
+        assert_eq!(passage(text, 5, 18).unwrap(), "It was");
+        assert_eq!(passage(text, 0, 12), None);
+        assert_eq!(passage(text, 500, 600), None);
+        assert_eq!(
+            decode_entities("&#8217;&#x2014;&bogus &"),
+            "\u{2019}\u{2014}&bogus &"
+        );
+        assert_eq!(location(0), 1);
+        assert_eq!(location(1499), 10);
     }
 
     #[test]
