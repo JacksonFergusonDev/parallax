@@ -9,6 +9,10 @@ What changed in each release of Parallax, for people using it. The release workf
 - On a Mac, macOS's photo import service grabs recent Kindles as they connect, which keeps other apps out. Parallax stops it while it opens your Kindle, and macOS starts it again when it's needed. Turn this off with **Free your Kindle from photo import** in Settings › Kindle.
 - The library's labels and filters name the device you've connected, such as **On Kindle** and **Send to Kindle**.
 - `parallax-cli kindle` lists, sends, updates, removes and adds books, syncs progress and highlights, emails books and ejects, for Kindles as drives or over MTP. `parallax-cli devices` lists Kindles too.
+- **Export Library…** replaces Save to Disk (File menu, ⇧⌘S, and Library tools). It saves the selected books, or every book shown, with your edits and covers into one ZIP file, with a folder for each author. Choose **Customise** to save to a folder instead, organise books by author and series, genre, series or not at all, or use your own template, and export as KEPUB for a Kobo. A ZIP file can also include your Parallax settings, never your reading history, passwords or keys. Your choices are remembered for next time.
+- Adding a ZIP file exported from Parallax brings back each book's identifiers, publisher, description and language, and whether a comic is manga. If the file includes settings, Parallax asks before using them.
+- KEPUB files you add, such as `Dune.kepub.epub`, are stored as plain EPUBs, as books added from a Kobo are.
+- `parallax-cli library save` takes `--organise` and `--format kepub`, and its ZIP files carry the same details for importing. `--compression` is gone: ZIP files always use normal compression.
 
 ## 0.1.3 (2026-11-14)
 

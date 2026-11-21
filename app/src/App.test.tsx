@@ -2,7 +2,7 @@
 import { StrictMode, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ask, message } from "@tauri-apps/plugin-dialog";
+import { ask, message, open, save } from "@tauri-apps/plugin-dialog";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import App from "./App";
 import { readCache } from "./readCache";
@@ -620,7 +620,7 @@ describe("library toolbar", () => {
       "Import from calibre…",
       "Import from Goodreads…",
       "Tidy genres…",
-      "Save to disk…",
+      "Export library…",
       "Find metadata…",
     ]);
     await act(async () => {
@@ -641,6 +641,97 @@ describe("library toolbar", () => {
     expect(panel("Library").querySelector('[role="menu"]')).toBeNull();
     // StrictMode runs the dialog's mount effect twice.
     expect(calls("library_snapshots")).toHaveLength(2);
+  });
+});
+
+describe("exporting the library", () => {
+  async function openExport() {
+    await render();
+    await click(button("Library tools ▾"));
+    await click(
+      [
+        ...panel("Library").querySelectorAll<HTMLButtonElement>(
+          '[role="menuitem"]',
+        ),
+      ].find((el) => el.textContent === "Export library…")!,
+    );
+  }
+
+  it("exports one ZIP file of EPUBs by author unless you customise it", async () => {
+    vi.mocked(save).mockResolvedValueOnce("/out/Library.zip");
+    await openExport();
+    expect(container.textContent).toContain(
+      "One ZIP file with a folder for each author, as EPUB.",
+    );
+    await click(button("Export…"));
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaultPath: expect.stringMatching(/^Parallax Library .+\.zip$/),
+      }),
+    );
+    expect(calls("library_export").at(-1)?.[1]).toMatchObject({
+      ids: [1],
+      destination: "/out/Library.zip",
+      request: {
+        archive: true,
+        template: "{author}/[{series} {series_index} - ]{title}",
+        format: "epub",
+        settings: false,
+      },
+    });
+  });
+
+  it("saves to a folder as KEPUB, and remembers the choices", async () => {
+    vi.mocked(open).mockResolvedValueOnce("/out");
+    await openExport();
+    await click(button("Customise…"));
+    await click(button("Folder"));
+    await click(button("KEPUB"));
+    const settings = [
+      ...container.querySelectorAll<HTMLInputElement>("input[type=checkbox]"),
+    ].find((el) => el.closest("label")?.textContent?.includes("settings"))!;
+    expect(settings.disabled).toBe(true);
+    await click(button("Export…"));
+    expect(calls("library_export").at(-1)?.[1]).toMatchObject({
+      destination: "/out",
+      request: { archive: false, format: "kepub", settings: false },
+    });
+    expect(
+      calls("setting_set").find(
+        ([, args]) => (args as { key: string }).key === "export_options",
+      )?.[1],
+    ).toEqual({
+      key: "export_options",
+      value: JSON.stringify({
+        archive: false,
+        organize: "author",
+        template: "{author}/[{series} {series_index} - ]{title}",
+        format: "kepub",
+      }),
+    });
+  });
+
+  it("asks before using the settings in an imported archive", async () => {
+    const normal = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(async (command, args) =>
+      command === "archive_settings"
+        ? 4
+        : command === "archive_use_settings"
+          ? 4
+          : normal(command, args),
+    );
+    vi.mocked(open).mockResolvedValueOnce(["/in/Library.zip"]);
+    vi.mocked(ask).mockResolvedValueOnce(true);
+    await render();
+    await click(button("Add books…"));
+    await act(async () => vi.advanceTimersByTimeAsync(50));
+    expect(ask).toHaveBeenCalledWith(
+      expect.stringContaining("passwords and keys stay"),
+      expect.objectContaining({ title: "Use the settings in this file?" }),
+    );
+    expect(calls("archive_use_settings")).toEqual([
+      ["archive_use_settings", { path: "/in/Library.zip" }],
+    ]);
   });
 });
 

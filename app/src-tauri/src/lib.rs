@@ -30,7 +30,7 @@ use parallax_library::{
     SnapshotRestore,
 };
 use parallax_upscale::CoreMl;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::ipc::{Channel, JavaScriptChannelId};
 use tauri::{AppHandle, Emitter, Manager, State, Webview};
 
@@ -856,42 +856,103 @@ async fn merge_collections(state: State<'_, AppState>, mount: PathBuf) -> CmdRes
     .map_err(err)?
 }
 
-/// Saves books to `destination`, a folder or, when Settings says to save
-/// archives, a ZIP file, named by the template in Settings.
+/// How the Export Library dialog asks for books to be exported.
+#[derive(Debug, Deserialize)]
+struct ExportRequest {
+    /// `true` for one ZIP archive, `false` for a folder.
+    archive: bool,
+    template: String,
+    format: parallax_core::export::BookFormat,
+    /// Put your settings in the archive's manifest.
+    #[serde(default)]
+    settings: bool,
+}
+
+/// Exports these books, with their edits and covers, into a ZIP archive or
+/// a folder.
 #[tauri::command]
-async fn library_save(
+async fn library_export(
     webview: Webview,
     progress: Option<JavaScriptChannelId>,
     state: State<'_, AppState>,
     ids: Vec<i64>,
     destination: PathBuf,
-) -> CmdResult<Vec<parallax_core::save::Saved>> {
-    use parallax_core::save::{
-        Compression, DEFAULT_TEMPLATE, Destination, SAVE_ARCHIVE, SAVE_COMPRESSION, SAVE_TEMPLATE,
-    };
+    request: ExportRequest,
+) -> CmdResult<Vec<parallax_core::export::Exported>> {
+    use parallax_core::export::{BookFormat, Destination, ExportOptions, export_books};
     let progress = progress.map(|id| id.channel_on(webview));
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let get = |key| lib.setting(key).ok().flatten();
-        let template = get(SAVE_TEMPLATE).unwrap_or_else(|| DEFAULT_TEMPLATE.to_owned());
-        let destination = if get(SAVE_ARCHIVE).as_deref() == Some("on") {
-            Destination::Archive(
-                destination,
-                Compression::parse(get(SAVE_COMPRESSION).as_deref()),
-            )
+        let settings = if request.archive && request.settings {
+            Some(settings::portable_settings(&lib)?)
+        } else {
+            None
+        };
+        let converter = match request.format {
+            BookFormat::Kepub => Some(
+                Kepubify::locate()
+                    .map_err(err)?
+                    .with_options(parallax_core::send::kepub_options(&lib)),
+            ),
+            BookFormat::Epub => None,
+        };
+        let destination = if request.archive {
+            Destination::Archive(destination)
         } else {
             Destination::Folder(destination)
         };
+        let options = ExportOptions {
+            template: request.template,
+            format: request.format,
+            settings,
+        };
         let total = ids.len();
-        parallax_core::save::save_books(&lib, &ids, &template, &destination, |index, title| {
-            report_books(progress.as_ref(), index, total, Some(title));
-        })
+        export_books(
+            &lib,
+            &ids,
+            &options,
+            &destination,
+            converter
+                .as_ref()
+                .map(|c| c as &dyn parallax_convert::Converter),
+            |index, title| report_books(progress.as_ref(), index, total, Some(title)),
+        )
     })
     .await
     .map_err(err)?
+}
+
+/// How many settings an archive exported from Parallax carries, so the
+/// import can offer to use them.
+#[tauri::command]
+async fn archive_settings(path: PathBuf) -> CmdResult<usize> {
+    tauri::async_runtime::spawn_blocking(move || {
+        parallax_core::export::read_manifest(&path)
+            .and_then(|m| m.settings)
+            .map_or(0, |s| s.len())
+    })
+    .await
+    .map_err(err)
+}
+
+/// Uses the settings an exported archive carries in place of yours.
+#[tauri::command]
+async fn archive_use_settings(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: PathBuf,
+) -> CmdResult<usize> {
+    let manifest =
+        tauri::async_runtime::spawn_blocking(move || parallax_core::export::read_manifest(&path))
+            .await
+            .map_err(err)?;
+    let settings = manifest
+        .and_then(|m| m.settings)
+        .ok_or("This archive has no settings.")?;
+    settings::apply_portable(&app, &state, settings).await
 }
 
 /// Asks Kobo whether newer software is available for this Kobo, when
@@ -1866,7 +1927,9 @@ pub fn run() {
             merge_collections,
             set_reading_status,
             set_reading_layout,
-            library_save,
+            library_export,
+            archive_settings,
+            archive_use_settings,
             kobo_firmware_check,
             watch::watch_folder_added,
             enhance_apply,

@@ -27,7 +27,10 @@ import {
   onWatchFolderFound,
   checkKoboFirmware,
   type FirmwareUpdate,
-  saveBooks,
+  exportBooks,
+  archiveSettings,
+  applyArchiveSettings,
+  type ExportRequest,
   watchFolderAdded,
   deviceBooks,
   dismissDuplicates,
@@ -94,6 +97,7 @@ import {
 import { BatchTransferBar } from "./components/BatchTransferBar";
 import { BookCard } from "./components/BookCard";
 import { CalibreImport } from "./components/CalibreImport";
+import { ExportLibrary } from "./components/ExportLibrary";
 import { GoodreadsImport } from "./components/GoodreadsImport";
 import { goodreadsSummary } from "./goodreads";
 import {
@@ -250,6 +254,10 @@ export default function App() {
   const [newCollection, setNewCollection] = useState("");
   /** Naming a new collection for selected books already on the Kobo. */
   const [naming, setNaming] = useState(false);
+  const [exporting, setExporting] = useState<{
+    ids: number[];
+    selection: boolean;
+  } | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [query, setQuery] = useState("");
   const [bySeries, setBySeries] = useState(false);
@@ -274,7 +282,7 @@ export default function App() {
     | "sending"
     | "updating"
     | "ejecting"
-    | "saving"
+    | "exporting"
     | "emailing"
     | null
   >(null);
@@ -700,8 +708,37 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     [],
   );
 
+  /** Asks whether to use the settings in the first archive exported from
+   * Parallax that carries them. Nothing changes unless you say so. */
+  const offerArchiveSettings = useCallback(async (paths: string[]) => {
+    for (const path of paths.filter((p) => /\.zip$/i.test(p))) {
+      const count = await archiveSettings(path).catch(() => 0);
+      if (count === 0) continue;
+      const use = await ask(
+        "Using them replaces your theme, Kobo, comic and reader settings with the ones in the file. Your passwords and keys stay as they are.",
+        {
+          title: "Use the settings in this file?",
+          kind: "info",
+          okLabel: "Use Settings",
+          cancelLabel: "Keep Mine",
+        },
+      );
+      if (!use) return;
+      try {
+        const used = await applyArchiveSettings(path);
+        setNotice({
+          kind: "info",
+          text: `Using ${used === 1 ? "1 setting" : `${used} settings`} from the file.`,
+        });
+      } catch (e) {
+        setNotice({ kind: "error", text: String(e) });
+      }
+      return;
+    }
+  }, []);
+
   const doImport = useCallback(
-    async (paths: string[], comicFolder = false) => {
+    async (paths: string[], comicFolder = false, offerSettings = true) => {
       const files = comicFolder ? paths : paths.filter(isBookFile);
       if (files.length === 0) {
         setNotice({
@@ -719,6 +756,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
         setNotice({ kind: "info", text: summarizeImport(results) });
         await refresh();
         void reviewAdded(addedIds(results), failedFiles(results));
+        if (offerSettings && !comicFolder) void offerArchiveSettings(files);
         return results;
       } catch (e) {
         setNotice({ kind: "error", text: String(e) });
@@ -726,7 +764,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
         setBusy(null);
       }
     },
-    [refresh, reviewAdded, runBookOperation],
+    [offerArchiveSettings, refresh, reviewAdded, runBookOperation],
   );
 
   // Books from the watched folder are added like dropped ones, one batch at
@@ -741,7 +779,7 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     queue.adding = true;
     const paths = queue.waiting.splice(0);
     try {
-      const results = await doImport(paths);
+      const results = await doImport(paths, false, false);
       const done = (results ?? [])
         .filter((r) => "Ok" in r.outcome)
         .map((r) => r.path);
@@ -937,41 +975,40 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     if (picked) doImport(Array.isArray(picked) ? picked : [picked]);
   }, [doImport]);
 
-  /** Saves the selected books, or every book shown, to a folder or a ZIP
-   * archive, as Settings › Library says. */
-  const saveToDisk = async () => {
-    const ids = selected.size ? [...selected] : visible.map((b) => b.id);
-    if (ids.length === 0) return;
-    const archive =
-      (await getSetting("save_archive").catch(() => null)) === "on";
-    const destination = archive
+  /** Exports the selected books, or every book shown, as the Export Library
+   * dialog chose: into one ZIP file or a folder. */
+  const runExport = async (ids: number[], request: ExportRequest) => {
+    setExporting(null);
+    const books = ids.length === 1 ? "1 book" : `${ids.length} books`;
+    const date = new Date().toISOString().slice(0, 10);
+    const destination = request.archive
       ? await saveDialog({
-          title: `Save ${ids.length === 1 ? "1 book" : `${ids.length} books`} as an archive`,
-          defaultPath: "Parallax Books.zip",
-          filters: [{ name: "ZIP archive", extensions: ["zip"] }],
+          title: `Export ${books}`,
+          defaultPath: `Parallax Library ${date}.zip`,
+          filters: [{ name: "ZIP file", extensions: ["zip"] }],
         })
       : await open({
           directory: true,
-          title: `Save ${ids.length === 1 ? "1 book" : `${ids.length} books`} to a folder`,
+          title: `Export ${books} to a folder`,
         });
     if (typeof destination !== "string") return;
     setNotice(null);
     try {
-      const saved = await runBookOperation("Saving", (report) => {
-        setBusy("saving");
-        return saveBooks(ids, destination, report);
+      const exported = await runBookOperation("Exporting", (report) => {
+        setBusy("exporting");
+        return exportBooks(ids, destination, request, report);
       });
-      const failed = saved.filter((s) => "Err" in s.result);
-      const done = saved.length - failed.length;
+      const failed = exported.filter((s) => "Err" in s.result);
+      const done = exported.length - failed.length;
       setNotice(
         failed.length
           ? {
               kind: "error",
-              text: `Saved ${done} of ${saved.length}. ${failed[0].title}: ${"Err" in failed[0].result ? failed[0].result.Err : ""}`,
+              text: `Exported ${done} of ${exported.length}. ${failed[0].title}: ${"Err" in failed[0].result ? failed[0].result.Err : ""}`,
             }
           : {
               kind: "info",
-              text: `Saved ${done === 1 ? "1 book" : `${done} books`} ${archive ? "to the archive" : "to the folder"}.`,
+              text: `Exported ${done === 1 ? "1 book" : `${done} books`} ${request.archive ? "to the ZIP file" : "to the folder"}.`,
             },
       );
     } catch (e) {
@@ -979,6 +1016,10 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     } finally {
       setBusy(null);
     }
+  };
+  const exportLibrary = () => {
+    const ids = selected.size ? [...selected] : visible.map((b) => b.id);
+    if (ids.length > 0) setExporting({ ids, selection: selected.size > 0 });
   };
 
   const chooseComicFolder = async () => {
@@ -1330,8 +1371,8 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
     "file.add": { run: () => void chooseFiles() },
     "file.calibre": { run: () => setFromCalibre(true) },
     "file.goodreads": { run: () => setFromGoodreads(true) },
-    "file.save": {
-      run: fromLibrary(() => void saveToDisk()),
+    "file.export": {
+      run: fromLibrary(exportLibrary),
       enabled: books.length > 0 && busy === null,
     },
     "edit.find": {
@@ -1644,9 +1685,9 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
                         },
                         {
                           label: selected.size
-                            ? `Save ${selected.size} to disk…`
-                            : "Save to disk…",
-                          onPick: () => void saveToDisk(),
+                            ? `Export ${selected.size}…`
+                            : "Export library…",
+                          onPick: exportLibrary,
                           disabled: busy !== null || books.length === 0,
                         },
                         {
@@ -2053,6 +2094,14 @@ The pages and cover on your Kobo stay as they are, so comic page settings and co
             }
           }}
           onClose={() => setTidying(false)}
+        />
+      )}
+      {exporting && (
+        <ExportLibrary
+          count={exporting.ids.length}
+          selection={exporting.selection}
+          onExport={(request) => void runExport(exporting.ids, request)}
+          onClose={() => setExporting(null)}
         />
       )}
       {fromCalibre && (
