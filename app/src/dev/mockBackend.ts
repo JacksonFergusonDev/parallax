@@ -453,9 +453,7 @@ const SETTING_KEYS = [
   "kepub_css",
   "library_saved_searches",
   "saved_searches",
-  "save_template",
-  "save_archive",
-  "save_compression",
+  "export_options",
   "watch_folder",
   "watch_folder_trash",
   "kobo_layout",
@@ -650,12 +648,16 @@ export function installMockBackend(label = "main") {
             },
           }));
         }
-        case "library_save":
+        case "library_export":
           return (a.ids as number[]).map((id) => ({
             book_id: id,
             title: `Book ${id}`,
             result: { Ok: `${a.destination}/Book ${id}.epub` },
           }));
+        case "archive_settings":
+          return 0;
+        case "archive_use_settings":
+          return 0;
         case "watch_folder_added":
           return null;
         case "set_reading_layout":

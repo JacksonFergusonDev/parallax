@@ -591,22 +591,40 @@ export const importBooks = (
     { paths, ...(comicFolder ? { comicFolder } : {}), ...progressArgs(report) },
     ["library", "plans"],
   );
-export interface Saved {
+export interface Exported {
   book_id: number;
   title: string;
   result: { Ok: string } | { Err: string };
 }
-/** Saves books to a folder, or a ZIP archive when Settings says so. */
-export const saveBooks = (
+/** How Export Library writes books. */
+export interface ExportRequest {
+  /** One ZIP archive, or a folder of files. */
+  archive: boolean;
+  /** How books are named, folders separated by `/`. */
+  template: string;
+  format: "epub" | "kepub";
+  /** Put your settings in the archive. */
+  settings: boolean;
+}
+/** Exports books, with their edits and covers, to a ZIP archive or folder. */
+export const exportBooks = (
   ids: number[],
   destination: string,
+  request: ExportRequest,
   report?: ReportBookProgress,
 ) =>
-  invoke<Saved[]>("library_save", {
+  invoke<Exported[]>("library_export", {
     ids,
     destination,
+    request,
     ...progressArgs(report),
   });
+/** How many settings an archive exported from Parallax carries. */
+export const archiveSettings = (path: string) =>
+  invoke<number>("archive_settings", { path });
+/** Uses an exported archive's settings in place of yours. */
+export const applyArchiveSettings = (path: string) =>
+  invoke<number>("archive_use_settings", { path });
 export const setComicKind = (
   id: number,
   kind: Book["kind"],
@@ -1020,9 +1038,7 @@ export type SettingKey =
   | "kepub_css"
   | "library_saved_searches"
   | "saved_searches"
-  | "save_template"
-  | "save_archive"
-  | "save_compression"
+  | "export_options"
   | "watch_folder"
   | "watch_folder_trash"
   | "kobo_layout"

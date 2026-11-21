@@ -20,7 +20,7 @@ use crate::settings::{self, AppTheme};
 use crate::{AppState, CmdResult, err};
 
 pub const LABEL_PREFIX: &str = "reader-";
-const SETTINGS_KEY: &str = "reader";
+pub(crate) const SETTINGS_KEY: &str = "reader";
 
 enum OpenBook {
     Epub(Box<BookFile>),

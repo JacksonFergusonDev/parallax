@@ -90,7 +90,7 @@ const FILE: &[Command] = &[
     command("file.calibre", "Import from calibre…", Main),
     command("file.goodreads", "Import from Goodreads…", Main),
     key(
-        command("file.save", "Save to Disk…", Main),
+        command("file.export", "Export Library…", Main),
         "CmdOrCtrl+Shift+S",
     ),
     command("kobo.addAll", "Add All from Kobo to Library", Main),

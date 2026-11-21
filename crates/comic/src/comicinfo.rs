@@ -338,10 +338,27 @@ fn escape(s: &str) -> String {
 /// swapped in only when complete.
 pub fn write_comic_info(cbz: &Path, info: &ComicInfo) -> Result<()> {
     let dir = cbz.parent().unwrap_or(Path::new("."));
+    let tmp = tempfile::NamedTempFile::new_in(dir).map_err(io(dir))?;
+    copy_into(cbz, tmp.as_file(), info)?;
+    tmp.as_file().sync_all().map_err(io(cbz))?;
+    tmp.persist(cbz).map_err(|e| Error::Io {
+        path: cbz.to_path_buf(),
+        source: e.error,
+    })?;
+    Ok(())
+}
+
+/// Writes a copy of the CBZ at `src` to `out` with `info` as its
+/// ComicInfo.xml, in one pass: every other entry is copied byte for byte.
+pub fn copy_with_comic_info(src: &Path, out: &Path, info: &ComicInfo) -> Result<()> {
+    let file = File::create(out).map_err(io(out))?;
+    copy_into(src, &file, info)
+}
+
+fn copy_into(cbz: &Path, out: &File, info: &ComicInfo) -> Result<()> {
     let mut src =
         ZipArchive::new(BufReader::new(File::open(cbz).map_err(io(cbz))?)).map_err(damaged(cbz))?;
-    let tmp = tempfile::NamedTempFile::new_in(dir).map_err(io(dir))?;
-    let mut dst = ZipWriter::new(BufWriter::new(tmp.as_file()));
+    let mut dst = ZipWriter::new(BufWriter::new(out));
     let mut target = "ComicInfo.xml".to_owned();
     // Keep an existing file's place, if it's at the top or in the wrapper.
     for i in 0..src.len() {
@@ -370,12 +387,6 @@ pub fn write_comic_info(cbz: &Path, info: &ComicInfo) -> Result<()> {
         .map_err(damaged(cbz))?
         .flush()
         .map_err(io(cbz))?;
-    tmp.as_file().sync_all().map_err(io(cbz))?;
-    drop(src);
-    tmp.persist(cbz).map_err(|e| Error::Io {
-        path: cbz.to_path_buf(),
-        source: e.error,
-    })?;
     Ok(())
 }
 

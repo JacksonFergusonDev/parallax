@@ -214,19 +214,6 @@ describe("Settings window", () => {
     expect(labelled("Move added files to the Trash").checked).toBe(false);
   });
 
-  it("saves to folders unless you choose an archive", async () => {
-    await tab("Library");
-    expect(host.textContent).not.toContain("Compression");
-    const archive = labelled("Save as a compressed archive");
-    expect(archive.checked).toBe(false);
-    await click(archive);
-    expect(calls("setting_set").at(-1)?.[1]).toEqual({
-      key: "save_archive",
-      value: "on",
-    });
-    expect(select("Compression").value).toBe("normal");
-  });
-
   it("tunes comic pages and resets them to recommended", async () => {
     await tab("Comics");
     const reset = button("Using recommended settings");

@@ -26,7 +26,7 @@ pub mod shape;
 
 pub use bundle::{Bundled, FolderKind, chapters_to_cbz, classify_folder, folder_to_cbz};
 pub use cbz::{Cbz, Chapter, Format, Page, sniff};
-pub use comicinfo::{ComicInfo, Credit, Manga, Role, write_comic_info};
+pub use comicinfo::{ComicInfo, Credit, Manga, Role, copy_with_comic_info, write_comic_info};
 pub use convert::{Converted, convert_to_cbz};
 pub use entries::{MAX_ENTRIES, MAX_PAGE_BYTES, SkipReason, Skipped};
 pub use error::{Error, Result};

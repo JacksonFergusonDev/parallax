@@ -64,7 +64,7 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 51] = [
+const SETTINGS: [(&str, Allowed); 49] = [
     (parallax_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (parallax_core::enhance::METRON_TOKEN, Allowed::Text(256)),
     (
@@ -117,12 +117,7 @@ const SETTINGS: [(&str, Allowed); 51] = [
     (KEPUB_CSS, Allowed::Text(4000)),
     (SAVED_SEARCHES_ON, Allowed::OneOf(&["on"])),
     (SAVED_SEARCHES, Allowed::Text(20_000)),
-    (parallax_core::save::SAVE_TEMPLATE, Allowed::Text(300)),
-    (parallax_core::save::SAVE_ARCHIVE, Allowed::OneOf(&["on"])),
-    (
-        parallax_core::save::SAVE_COMPRESSION,
-        Allowed::OneOf(&parallax_core::save::SAVE_COMPRESSIONS),
-    ),
+    (parallax_core::export::EXPORT_OPTIONS, Allowed::Text(1000)),
     (parallax_core::watch::WATCH_FOLDER, Allowed::Text(1024)),
     (
         parallax_core::watch::WATCH_FOLDER_TRASH,
@@ -149,7 +144,7 @@ const SETTINGS: [(&str, Allowed); 51] = [
 ];
 
 /// Settings that are preferences, which Reset puts back. Credentials stay.
-const PREFERENCES: [&str; 38] = [
+const PREFERENCES: [&str; 36] = [
     parallax_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
@@ -179,9 +174,7 @@ const PREFERENCES: [&str; 38] = [
     parallax_core::watch::WATCH_FOLDER,
     parallax_core::watch::WATCH_FOLDER_TRASH,
     SAVED_SEARCHES_ON,
-    parallax_core::save::SAVE_TEMPLATE,
-    parallax_core::save::SAVE_ARCHIVE,
-    parallax_core::save::SAVE_COMPRESSION,
+    parallax_core::export::EXPORT_OPTIONS,
     layout::KOBO_LAYOUT,
     layout::KOBO_LAYOUT_FONT,
     layout::KOBO_LAYOUT_SIZE,
@@ -197,11 +190,6 @@ fn checked(key: &str, value: Option<String>) -> CmdResult<Option<String>> {
         .find(|(k, _)| *k == key)
         .ok_or_else(|| format!("unknown setting {key}"))?;
     let value = value.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty());
-    if key == parallax_core::save::SAVE_TEMPLATE
-        && let Some(template) = &value
-    {
-        parallax_core::save::check_template(template)?;
-    }
     match (allowed, &value) {
         (_, None) => Ok(None),
         (Allowed::Text(max), Some(v)) if v.chars().count() <= *max => Ok(value),
@@ -358,6 +346,59 @@ pub async fn settings_reset(app: AppHandle, state: State<'_, AppState>) -> CmdRe
         .map_err(err)
 }
 
+/// Whether an exported archive may carry `key`: a preference, but not a
+/// folder on this Mac or which view was open last. Credentials aren't
+/// preferences, so they never leave.
+fn portable(key: &str) -> bool {
+    (PREFERENCES.contains(&key) && key != parallax_core::watch::WATCH_FOLDER && key != LAST_VIEW)
+        || key == SAVED_SEARCHES
+        || key == reader::SETTINGS_KEY
+}
+
+/// The settings an export carries: each portable one you've changed from
+/// its default, the reader's appearance included.
+pub fn portable_settings(lib: &parallax_library::Library) -> CmdResult<BTreeMap<String, String>> {
+    let mut out = BTreeMap::new();
+    for key in PREFERENCES
+        .iter()
+        .chain(&[SAVED_SEARCHES, reader::SETTINGS_KEY])
+        .filter(|k| portable(k))
+    {
+        if let Some(value) = lib.setting(key).map_err(err)? {
+            out.insert((*key).to_owned(), value);
+        }
+    }
+    Ok(out)
+}
+
+/// Uses settings from an exported archive, each checked as if you'd chosen
+/// it. Ones this version doesn't know or can't take are skipped; the rest
+/// replace yours. Returns how many were used.
+pub async fn apply_portable(
+    app: &AppHandle,
+    state: &AppState,
+    settings: BTreeMap<String, String>,
+) -> CmdResult<usize> {
+    let mut used = 0;
+    for (key, value) in settings {
+        if !portable(&key) {
+            continue;
+        }
+        if key == reader::SETTINGS_KEY {
+            if let Ok(reader) = serde_json::from_str::<ReaderSettings>(&value)
+                && reader::store_settings(app, state, reader, None)
+                    .await
+                    .is_ok()
+            {
+                used += 1;
+            }
+        } else if store(app, state, &key, Some(value)).is_ok() {
+            used += 1;
+        }
+    }
+    Ok(used)
+}
+
 #[derive(Serialize)]
 pub struct BackupSettings {
     policy: BackupPolicy,
@@ -476,6 +517,26 @@ pub fn is(state: &AppState, key: &str, value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exports_carry_preferences_but_not_credentials_or_paths() {
+        assert!(portable(THEME));
+        assert!(portable(reader::SETTINGS_KEY));
+        assert!(portable(SAVED_SEARCHES));
+        assert!(portable(KEPUB_CSS));
+        for key in [
+            parallax_core::enhance::GOOGLE_BOOKS_KEY,
+            parallax_core::enhance::METRON_TOKEN,
+            kindle_email::SMTP_USER,
+            kindle_email::KINDLE_EMAIL_TO,
+            parallax_core::watch::WATCH_FOLDER,
+            LAST_VIEW,
+            SETUP,
+            crate::updates::SKIPPED,
+        ] {
+            assert!(!portable(key), "{key}");
+        }
+    }
 
     #[test]
     fn settings_hold_only_what_they_allow() {

@@ -298,22 +298,26 @@ enum LibraryCommand {
     },
     /// Write a book with its edits applied (what a device receives, before KEPUB conversion).
     Export { id: i64, out: PathBuf },
-    /// Save books with their edits to a folder, or one ZIP archive, named by
-    /// a template (the app's Save to Disk). No ids saves every book.
+    /// Save books with their edits to a folder, or one ZIP archive that
+    /// Parallax can import again (the app's Export Library). No ids saves
+    /// every book.
     Save {
         ids: Vec<i64>,
         /// The folder, or with --zip the archive file, to save to.
         #[arg(long)]
         to: PathBuf,
-        /// File names, such as "{author}/{title}". Defaults to the app's setting.
+        /// How to organise books: author, author-series, genre, series or flat.
+        #[arg(long, default_value = "author", conflicts_with = "template")]
+        organise: String,
+        /// File names, such as "{genre}/{author}/{title}", in place of --organise.
         #[arg(long)]
         template: Option<String>,
+        /// epub, or kepub to convert books as they are for a Kobo. Comics stay CBZ.
+        #[arg(long, default_value = "epub")]
+        format: String,
         /// Save into one ZIP archive at --to.
         #[arg(long)]
         zip: bool,
-        /// Archive compression: store, fast, normal or best.
-        #[arg(long, default_value = "normal")]
-        compression: String,
     },
     /// Automatic grouping rules (series/tag/author → collection).
     #[command(subcommand)]
@@ -1285,28 +1289,55 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
         LibraryCommand::Save {
             ids,
             to,
+            organise,
             template,
+            format,
             zip,
-            compression,
         } => {
-            use parallax_core::save::{
-                Compression, DEFAULT_TEMPLATE, Destination, SAVE_TEMPLATE, save_books,
+            use parallax_core::export::{
+                BookFormat, Destination, ExportOptions, PRESETS, export_books, preset,
             };
             let ids = if ids.is_empty() {
                 lib.books()?.iter().map(|b| b.id).collect()
             } else {
                 ids
             };
-            let template = template
-                .or(lib.setting(SAVE_TEMPLATE)?)
-                .unwrap_or_else(|| DEFAULT_TEMPLATE.to_owned());
+            let template = match template {
+                Some(template) => template,
+                None => preset(&organise)
+                    .ok_or_else(|| {
+                        let names: Vec<&str> = PRESETS.iter().map(|(n, _)| *n).collect();
+                        anyhow::anyhow!("--organise is one of {}", names.join(", "))
+                    })?
+                    .to_owned(),
+            };
+            let format = BookFormat::parse(&format)
+                .ok_or_else(|| anyhow::anyhow!("--format is epub or kepub"))?;
+            let converter = match format {
+                BookFormat::Kepub => Some(Kepubify::locate()?.with_options(kepub_options(lib))),
+                BookFormat::Epub => None,
+            };
             let destination = if zip {
-                Destination::Archive(to, Compression::parse(Some(compression.as_str())))
+                Destination::Archive(to)
             } else {
                 Destination::Folder(to)
             };
-            let saved = save_books(lib, &ids, &template, &destination, |_, _| {})
-                .map_err(anyhow::Error::msg)?;
+            let options = ExportOptions {
+                template,
+                format,
+                settings: None,
+            };
+            let saved = export_books(
+                lib,
+                &ids,
+                &options,
+                &destination,
+                converter
+                    .as_ref()
+                    .map(|c| c as &(dyn parallax_convert::Converter + Sync)),
+                |_, _| {},
+            )
+            .map_err(anyhow::Error::msg)?;
             if json {
                 return print_json(&saved);
             }
