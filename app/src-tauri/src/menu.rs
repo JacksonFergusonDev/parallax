@@ -124,7 +124,7 @@ const TEXT_SIZE: &[Command] = &[
 ];
 
 const LIBRARY_TOOLS: &[Command] = &[
-    command("library.enhance", "Find Series & Genres…", Main),
+    command("library.enhance", "Find Metadata…", Main),
     command("library.duplicates", "Find Duplicates…", Main),
     command("library.check", "Check Library…", Main),
     command("library.tidy", "Tidy Genres…", Main),

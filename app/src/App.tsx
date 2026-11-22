@@ -292,7 +292,7 @@ export default function App() {
   const [duplicates, setDuplicates] = useState<Promise<ReviewGroup[]> | null>(
     null,
   );
-  /** Books being looked up for series and genres. */
+  /** Books being looked up for series, genres and descriptions. */
   const [enhancing, setEnhancing] = useState<number[] | null>(null);
   const [checking, setChecking] = useState(false);
   const [reverting, setReverting] = useState<RevertScope | null>(null);

@@ -400,7 +400,8 @@ export interface Proposal {
   book_id: number;
   series: ProposedSeries | null;
   genres: ProposedGenre[];
-  details?: ComicDetails & { confident: boolean };
+  /** A comic's details, or only a description for a book. */
+  details?: ComicDetails & { confident: boolean; source?: string };
   record?: CatalogRecord;
   issues?: { id: number; title: string }[];
   /** Sources that couldn't be asked. */

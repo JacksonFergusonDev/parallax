@@ -1566,6 +1566,16 @@ export function installMockBackend(label = "main") {
                       confident: true,
                     },
               genres,
+              ...(!b.description && {
+                details: {
+                  authors: [],
+                  contributors: [],
+                  publisher: null,
+                  description: `<p>The story of <i>${b.title}</i>, told from the first page to the last.</p>`,
+                  confident: true,
+                  source: "Apple Books",
+                },
+              }),
               problems: id === ids[0] ? ["Google Books: not set up"] : [],
             });
           }

@@ -319,10 +319,13 @@ export function ProposalChanges({
               onChange={onToggleDetails}
             />
             <span className="enhance-field">
-              {record?.catalog === "mangainfo"
-                ? "Manga details"
-                : "Issue details"}
+              {!record
+                ? "Description"
+                : record.catalog === "mangainfo"
+                  ? "Manga details"
+                  : "Issue details"}
             </span>
+            {details.source && <span className="muted">{details.source}</span>}
             {!details.confident && <span className="unsure">Review</span>}
           </label>
           {details.authors.length > 0 && (
@@ -342,7 +345,13 @@ export function ProposalChanges({
                 aria-expanded={showSynopsis}
                 onClick={() => setShowSynopsis(!showSynopsis)}
               >
-                {showSynopsis ? "Hide synopsis" : "Read synopsis"}
+                {record
+                  ? showSynopsis
+                    ? "Hide synopsis"
+                    : "Read synopsis"
+                  : showSynopsis
+                    ? "Hide description"
+                    : "Read description"}
               </button>
               {showSynopsis && <p>{description}</p>}
             </>
@@ -478,7 +487,7 @@ function GoogleKey() {
       <p className="muted enhance-key">
         {saved
           ? "Google Books is used with your API key. "
-          : "Add a free Google Books API key to look up categories for more books. "}
+          : "Add a free Google Books API key to find genres and descriptions for more books. "}
         <button className="link" onClick={() => setOpen(true)}>
           {saved ? "Change key" : "Add key"}
         </button>

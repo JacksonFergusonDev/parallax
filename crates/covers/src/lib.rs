@@ -142,6 +142,7 @@ pub fn this_book(q: &CoverQuery, listings: Vec<Listing>) -> Vec<Candidate> {
         title: q.title.clone(),
         authors: q.author.iter().cloned().collect(),
         isbn: None,
+        description: false,
     };
     listings
         .into_iter()

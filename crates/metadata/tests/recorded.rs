@@ -58,6 +58,7 @@ fn query(title: &str, author: &str) -> Query {
         title: title.into(),
         authors: vec![author.into()],
         isbn: None,
+        description: false,
     }
 }
 
@@ -117,6 +118,39 @@ fn nonfiction_without_series() {
     // Wikidata only knows novels called Endurance by other authors.
     assert_eq!(found.series, None);
     assert_eq!(genres(&found)[0], "Travel & Exploration");
+}
+
+#[test]
+fn a_description_is_found_only_when_asked_for() {
+    let fetch = Recorded::new();
+    let found = lookup(
+        &fetch,
+        &query("Endurance", "Alfred Lansing"),
+        &Options::default(),
+    );
+    assert_eq!(found.description, None);
+
+    let fetch = Recorded::new();
+    let wanted = Query {
+        description: true,
+        ..query("The Color of Magic", "Pratchett, Terry")
+    };
+    let found = lookup(&fetch, &wanted, &Options::default());
+    // Apple is asked for the description although others knew the genres.
+    assert!(fetch.hosts().iter().any(|h| h.starts_with("apple")));
+    let description = found.description.unwrap();
+    assert_eq!(
+        (description.source, description.confidence),
+        (Source::AppleBooks, Confidence::High)
+    );
+    // The book itself, not the edition with bonus material listed next.
+    assert!(
+        description
+            .text
+            .starts_with("In a world supported on the back of a giant turtle"),
+        "{}",
+        description.text
+    );
 }
 
 #[test]

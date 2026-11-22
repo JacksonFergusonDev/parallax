@@ -1474,7 +1474,16 @@ fn library_command(lib: &mut Library, command: LibraryCommand, json: bool) -> Re
                         println!("  {detail_mark} publisher  {publisher}");
                     }
                     if let Some(description) = &values.description {
-                        println!("  {detail_mark} synopsis  {description}");
+                        let label = if p.record.is_some() {
+                            "synopsis"
+                        } else {
+                            "description"
+                        };
+                        let source = details
+                            .source
+                            .as_deref()
+                            .map_or_default(|s| format!("  ({s})"));
+                        println!("  {detail_mark} {label}  {}{source}", preview(description));
                     }
                 }
                 if let Some(record) = &p.record {
@@ -2189,4 +2198,27 @@ fn goodreads_command(
 fn print_json<T: Serialize>(value: &T) -> Result<()> {
     println!("{}", serde_json::to_string_pretty(value)?);
     Ok(())
+}
+
+/// The start of a description as plain text, for a line of output.
+fn preview(html: &str) -> String {
+    let mut text = String::new();
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => {
+                in_tag = true;
+                text.push(' ');
+            }
+            '>' => in_tag = false,
+            _ if !in_tag => text.push(c),
+            _ => {}
+        }
+    }
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let text = words.join(" ");
+    match text.char_indices().nth(100) {
+        Some((at, _)) => format!("{}…", text[..at].trim_end()),
+        None => text,
+    }
 }

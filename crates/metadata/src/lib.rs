@@ -1,12 +1,14 @@
-//! Filling in a book's series and genres from public sources (PLAN §7.4).
+//! Filling in a book's series, genres and description from public sources
+//! (PLAN §7.4).
 //!
 //! Sources, each optional and independent (a failing one is noted and
 //! skipped):
 //! - Wikidata (SPARQL): series and number, genres;
 //! - Open Library search: subjects;
-//! - Google Books, with the user's API key: categories;
-//! - Apple Books search: genres, asked only when the others found none
-//!   because it allows about 20 requests a minute.
+//! - Google Books, with the user's API key: categories, description;
+//! - Apple Books search: genres and description, asked only when the others
+//!   found no genre or the book needs a description, because it allows about
+//!   20 requests a minute.
 //!
 //! Results are matched to the book by ISBN, or by title (subtitles,
 //! "(Series #1)" and spelling variants like Color/Colour tolerated) plus the
@@ -31,6 +33,8 @@ pub struct Query {
     pub title: String,
     pub authors: Vec<String>,
     pub isbn: Option<String>,
+    /// Look for a description too: the book has none.
+    pub description: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -89,11 +93,21 @@ pub struct GenreFound {
     pub confidence: Confidence,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct DescriptionFound {
+    /// As the source gives it, which may be HTML.
+    pub text: String,
+    pub source: Source,
+    pub confidence: Confidence,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct Lookup {
     pub series: Option<SeriesFound>,
     /// Best first; at most two specific genres, or one broad one.
     pub genres: Vec<GenreFound>,
+    /// Only looked for when the query asks.
+    pub description: Option<DescriptionFound>,
     /// Sources that failed, with why.
     pub problems: Vec<String>,
 }
@@ -107,6 +121,7 @@ pub struct Hit {
     /// (Wikidata id, name, number) of each series it's in.
     pub series: Vec<(String, String, Option<String>)>,
     pub subjects: Vec<String>,
+    pub description: Option<String>,
 }
 
 /// Asks the sources about one book.
@@ -144,14 +159,39 @@ pub fn lookup(fetch: &dyn Fetch, query: &Query, options: &Options) -> Lookup {
     for (source, result) in results {
         absorb(query, source, result, &mut matched, &mut out);
     }
-    if !has_specific_genre(&matched) {
+    if !has_specific_genre(&matched) || (query.description && !has_description(&matched)) {
         let result = ask(Source::AppleBooks);
         absorb(query, Source::AppleBooks, result, &mut matched, &mut out);
     }
 
     out.series = pick_series(fetch, &matched);
     out.genres = pick_genres(&matched);
+    if query.description {
+        out.description = pick_description(&matched);
+    }
     out
+}
+
+fn has_description(matched: &[(Source, Confidence, Hit)]) -> bool {
+    matched
+        .iter()
+        .any(|(_, c, h)| *c == Confidence::High && h.description.is_some())
+}
+
+/// The description from the surest match, Google Books before Apple Books
+/// when both are sure.
+fn pick_description(matched: &[(Source, Confidence, Hit)]) -> Option<DescriptionFound> {
+    matched
+        .iter()
+        .filter_map(|(source, confidence, hit)| {
+            let text = hit.description.as_deref()?.trim();
+            (!text.is_empty()).then(|| DescriptionFound {
+                text: text.to_owned(),
+                source: *source,
+                confidence: *confidence,
+            })
+        })
+        .min_by_key(|d| (std::cmp::Reverse(d.confidence), d.source))
 }
 
 /// Keeps the hits that are this book; notes a failed source.
@@ -563,6 +603,7 @@ pub fn parse_google_books(json: &Value) -> Vec<Hit> {
                 .filter_map(|id| id.get("identifier")?.as_str().map(str::to_owned))
                 .collect(),
             subjects: strings(v, "categories"),
+            description: text_at(v, "description"),
             ..Hit::default()
         })
         .collect()
@@ -590,6 +631,7 @@ pub fn parse_apple_books(json: &Value) -> Vec<Hit> {
                 .and_then(Value::as_str)
                 .map_or_default(|a| a.split(" & ").map(str::to_owned).collect()),
             subjects: strings(r, "genres"),
+            description: text_at(r, "description"),
             ..Hit::default()
         })
         .collect()
@@ -614,6 +656,14 @@ fn str_at(v: &Value, key: &str) -> String {
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_owned()
+}
+
+fn text_at(v: &Value, key: &str) -> Option<String> {
+    v.get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
 }
 
 fn strings(v: &Value, key: &str) -> Vec<String> {
@@ -642,6 +692,7 @@ mod tests {
             title: title.into(),
             authors: vec![author.into()],
             isbn: None,
+            description: false,
         }
     }
 

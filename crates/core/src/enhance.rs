@@ -2,7 +2,8 @@
 //! and applying the ones the user accepts.
 //!
 //! Proposals only fill gaps: a series when the book has none (or its number
-//! when only that is missing) and genres the book isn't already tagged with.
+//! when only that is missing), genres the book isn't already tagged with and
+//! a description when it has none.
 //! Local clues come first: the series Nickel shows on a connected Kobo and
 //! the Kobo folder a book sits in ("KEpub/Fantasy/…"). Then the online
 //! sources in `parallax-metadata`. Genres always use the standard names
@@ -97,6 +98,10 @@ pub struct ProposedDetails {
     #[serde(flatten)]
     pub values: Details,
     pub confident: bool,
+    /// Where a book's description came from: "Apple Books"… Comics name
+    /// their catalog record instead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// What the user accepted for one book.
@@ -234,11 +239,18 @@ pub fn has_genre(book: &Book) -> bool {
     book.tags.iter().any(|t| genres::from_label(t).is_some())
 }
 
+fn lacks_description(book: &Book) -> bool {
+    book.description
+        .as_deref()
+        .is_none_or(|d| d.trim().is_empty())
+}
+
 /// Whether there are still gaps an online lookup might fill.
 fn needs_lookup(book: &Book) -> bool {
     book.series.is_none()
         || book.series_index.is_none()
         || !has_genre(book)
+        || (book.kind == Kind::Book && lacks_description(book))
         || (book.kind != Kind::Book
             && (book.authors.is_empty()
                 || book.description.is_none()
@@ -343,6 +355,7 @@ fn propose_book(
                         // Manga credits and synopses describe the series. Review
                         // them before applying them to an individual volume.
                         confident: found.confidence == Confidence::High && book.kind == Kind::Comic,
+                        source: None,
                     });
                 }
                 if result.details.is_some()
@@ -392,11 +405,28 @@ fn propose_book(
                 title: book.title.clone(),
                 authors: book.authors.clone(),
                 isbn: isbn.map(str::to_owned),
+                description: book.kind == Kind::Book && lacks_description(book),
             },
             &options.general,
         )
     });
     let mut result = proposal(book, clues, lookup.as_ref());
+    if let Some(found) = lookup.and_then(|l| l.description) {
+        result.details = Some(ProposedDetails {
+            values: Details {
+                description: Some(found.text),
+                ..Details::default()
+            },
+            // The stores answer in their own language; a book in another
+            // one is reviewed before its description is used.
+            confident: found.confidence == Confidence::High
+                && book
+                    .language
+                    .as_deref()
+                    .is_none_or(|l| l.to_ascii_lowercase().starts_with("en")),
+            source: Some(found.source.label().to_owned()),
+        });
+    }
     result.problems.extend(problem);
     result
 }
@@ -469,7 +499,14 @@ pub fn apply(library: &mut Library, accepted: &[Accepted]) -> parallax_library::
             }
         }
         if book.kind == Kind::Book {
-            updated.push(library.update(a.book_id, &edit)?);
+            // A book takes only a description from the details.
+            let description = a.details.as_ref().and_then(|d| d.description.as_deref());
+            updated.push(match description {
+                Some(description) => {
+                    library.update_with_details(a.book_id, &edit, &[], None, Some(description))?
+                }
+                None => library.update(a.book_id, &edit)?,
+            });
             continue;
         }
         let details = a.details.as_ref();
@@ -582,6 +619,7 @@ mod tests {
                     confidence: *confidence,
                 })
                 .collect(),
+            description: None,
             problems: vec![],
         }
     }
@@ -642,8 +680,11 @@ mod tests {
             Some(("Dune", "2")),
             &[("Science Fiction", Confidence::High)],
         );
-        // Already has a series and a genre tag under another name.
-        let full = book(1, Some("Dune"), Some("2"), &["sci-fi"]);
+        // Already has a series, a genre tag under another name and a
+        // description.
+        let mut full = book(1, Some("Dune"), Some("2"), &["sci-fi"]);
+        assert!(needs_lookup(&full), "a missing description is a gap");
+        full.description = Some("<p>Spice.</p>".into());
         assert!(!needs_lookup(&full));
         assert!(proposal(&full, &clues, Some(&found)).is_empty());
         // Same series without a number: only the number is proposed.
