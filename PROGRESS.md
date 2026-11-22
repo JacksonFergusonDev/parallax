@@ -29,7 +29,8 @@ The maintainer handoff: where things stand, what's open and what's next. Update 
 
 - Run the outstanding release hardware checks and collect reports from additional Kobo models.
 - Bring the user-facing pages in `docs/` onto the site. Add app screenshots to the site's landing page.
-- Run the Kindle hardware checks, then add tested models to `TESTED_MODELS` in `crates/device-kindle/src/models.rs`. Optional Hardcover metadata is waiting on an OAuth app registered on Hardcover: its API terms rule out asking users to paste a personal token. Additional comic processing remains future work.
+- Run the Kindle hardware checks, then add tested models to `TESTED_MODELS` in `crates/device-kindle/src/models.rs`. Additional comic processing remains future work.
+- Look up missing descriptions from Apple Books and Google Books, which already return them. Hardcover metadata was dropped in November 2026: on a 99-book library it filled about 6 real series that the current sources missed, with noisy genres, and it needs an account and OAuth.
 
 ## Postponed
 
