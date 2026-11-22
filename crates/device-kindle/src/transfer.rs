@@ -95,7 +95,7 @@ pub fn send(storage: &dyn Storage, book: &Outgoing, progress: Progress) -> Resul
     };
     if book.page_numbers && APNX_EXTENSIONS.contains(&extension(&path).as_str()) {
         let guid = apnx::guid_for(header.asin.as_deref().unwrap_or(book.file_name));
-        if let Some(data) = apnx::build(&header, &guid) {
+        if let Some(data) = apnx::build(&header, &apnx::pages(book.data, &header), &guid) {
             let sdr = sidecar_dir(&path);
             let (_, stem) = split(&sdr);
             let stem = stem.trim_end_matches(".sdr");

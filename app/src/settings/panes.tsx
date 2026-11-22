@@ -670,6 +670,13 @@ export function KoboPane(props: PaneProps) {
         </Check>
         <Check
           {...props}
+          name="kobo_reader_sync"
+          hint="Books open where you last read them, on your Kobo or in Parallax, whichever was more recent."
+        >
+          Keep your place the same on your Kobo and in Parallax
+        </Check>
+        <Check
+          {...props}
           name="kobo_firmware_check"
           defaultOn={false}
           hint="Asks Kobo once each time you connect. Kobo is told your model and software version, not your serial number."

@@ -58,6 +58,10 @@ pub struct Options {
     /// their mid-tones darkened, as a percentage of the recommended amount.
     #[serde(skip_serializing_if = "is_recommended_percent")]
     pub midtone_darkening: u8,
+    /// Grey pages and the cover as JPEG rather than 4-bit PNG, for Kindles.
+    /// Left out of the serialised form while off.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub jpeg: bool,
 }
 
 /// The recommended strength for percentage options.
@@ -75,6 +79,7 @@ impl Default for Options {
             colour_separation: RECOMMENDED_PERCENT,
             colour_contrast: true,
             midtone_darkening: RECOMMENDED_PERCENT,
+            jpeg: false,
         }
     }
 }
@@ -177,6 +182,29 @@ pub fn prepare(
     profile: Profile,
     options: Options,
     converter: &dyn Converter,
+    progress: impl FnMut(usize, usize),
+) -> Result<Prepared, Error> {
+    prepare_as(
+        source,
+        metadata,
+        profile,
+        options,
+        "comic.kepub.epub",
+        |epub, out| converter.convert_fixed_layout(epub, out),
+        progress,
+    )
+}
+
+/// Prepare a fixed-layout EPUB and pass it to `finish`, which writes the
+/// final file (named `name`) from it, such as an AZW3 for a Kindle. Use
+/// [`Options::jpeg`] for readers that need JPEG pages.
+pub fn prepare_as(
+    source: &Path,
+    metadata: &Metadata<'_>,
+    profile: Profile,
+    options: Options,
+    name: &str,
+    finish: impl FnOnce(&Path, &Path) -> Result<(), parallax_convert::Error>,
     mut progress: impl FnMut(usize, usize),
 ) -> Result<Prepared, Error> {
     if profile.width == 0
@@ -187,7 +215,7 @@ pub fn prepare(
     }
     let work = tempfile::tempdir()?;
     let epub_path = work.path().join("comic.epub");
-    let path = work.path().join("comic.kepub.epub");
+    let path = work.path().join(name);
     let mut source = Cbz::open(source)?;
     let total = source.pages().len();
     progress(0, total);
@@ -195,7 +223,7 @@ pub fn prepare(
     let mut chapters = source.chapters().into_iter().peekable();
     let mut output_chapters = Vec::new();
     let mut output_pages = 0;
-    let mut epub = epub::FixedLayout::new(&epub_path)?;
+    let mut epub = epub::FixedLayout::new(&epub_path, options.jpeg)?;
     if let Some(bytes) = metadata.custom_cover {
         let fitted = fit_cover(bytes, profile).ok().flatten();
         epub.add_cover(fitted.as_deref().unwrap_or(bytes), "custom cover")?;
@@ -283,7 +311,7 @@ pub fn prepare(
         return Err(Error::NoReadablePages);
     }
     let pages = epub.finish(metadata, &output_chapters, profile, options)?;
-    converter.convert_fixed_layout(&epub_path, &path)?;
+    finish(&epub_path, &path)?;
     Ok(Prepared {
         _work: work,
         path,

@@ -907,3 +907,87 @@ fn puts_back_the_place_in_a_book_sent_again() {
     sync_reading(&library, &kobo).unwrap();
     assert_eq!(restore_positions(&library, &kobo, &backups).unwrap(), 0);
 }
+
+#[test]
+fn keeps_the_place_the_same_on_the_kobo_and_in_the_reader() {
+    use parallax_core::device::{sync_reader_places, sync_reading};
+    use parallax_library::ReaderPosition;
+    use rusqlite::Connection;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mount = dir.path().join("KOBOeReader");
+    fs::create_dir_all(mount.join(".kobo")).unwrap();
+    fs::write(mount.join(".kobo/version"), VERSION).unwrap();
+    let db = mount.join(".kobo/KoboReader.sqlite");
+    empty_database(&mount);
+    let kobo = KoboDevice::open(&mount).unwrap();
+    let backups = dir.path().join("backups");
+    let mut library = Library::open(dir.path().join("lib")).unwrap();
+    let ImportOutcome::Added { book, .. } = library.import(&fixture("minimal.epub")).unwrap()
+    else {
+        panic!();
+    };
+    let converter = Kepubify::locate().unwrap();
+    let id = send_library_books(&library, &kobo, &converter, &[book.id], |_| {})[0]
+        .result
+        .as_ref()
+        .unwrap()
+        .content_id
+        .clone();
+    let sql = |q: &str| Connection::open(&db).unwrap().execute(q, [&id]).unwrap();
+    sql("INSERT INTO content (ContentID, ContentType, MimeType, ___UserID, Title, Accessibility, IsDownloaded, ReadStatus, ___PercentRead)
+         VALUES (?1, 6, 'application/x-kobo-epub+zip', 'kepub_user', 'Parallax Test Book', -1, 'true', 0, 0)");
+
+    // Read on the Kobo, to the second sentence of chapter 2's last paragraph.
+    sql(
+        "UPDATE content SET ReadStatus = 1, ___PercentRead = 80, ChapterIDBookmarked = 'c2.xhtml#kobo.3.2', DateLastRead = '2026-11-01T20:00:00Z' WHERE ContentID = ?1",
+    );
+    sync_reading(&library, &kobo).unwrap();
+    let synced = sync_reader_places(&library, &kobo, &backups).unwrap();
+    assert_eq!((synced.to_reader, synced.to_kobo), (1, 0));
+    let position = library.reader_position(book.id).unwrap().unwrap();
+    // The second chapter's third element: its last paragraph.
+    assert_eq!(position.cfi, "epubcfi(/6/4!/4/6)");
+    assert_eq!(position.href, "c2.xhtml");
+    assert!((position.fraction - 0.8).abs() < 1e-9);
+    assert!(
+        position
+            .quote
+            .as_deref()
+            .unwrap()
+            .starts_with("Kepubify wraps sentences in spans.")
+    );
+    // Nothing more to do until one side reads again.
+    let again = sync_reader_places(&library, &kobo, &backups).unwrap();
+    assert_eq!((again.to_reader, again.to_kobo), (0, 0));
+
+    // Then read further on the desktop: the Kobo follows.
+    library
+        .set_reader_position_at(
+            book.id,
+            &ReaderPosition {
+                href: "c1.xhtml".into(),
+                cfi: "epubcfi(/6/2!/4/6)".into(),
+                fraction: 0.3,
+                quote: Some("Kepubify wraps sentences in spans. That lets the Kobo".into()),
+            },
+            "2026-11-02T09:00:00Z",
+        )
+        .unwrap();
+    let synced = sync_reader_places(&library, &kobo, &backups).unwrap();
+    assert_eq!((synced.to_reader, synced.to_kobo), (0, 1));
+    let (chapter, percent, last_read): (String, i64, String) = Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT ChapterIDBookmarked, ___PercentRead, DateLastRead FROM content WHERE ContentID = ?1",
+            [&id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(chapter, "c1.xhtml#kobo.3.2");
+    assert_eq!(percent, 30);
+    assert_eq!(last_read, "2026-11-02T09:00:00Z");
+    sync_reading(&library, &kobo).unwrap();
+    let again = sync_reader_places(&library, &kobo, &backups).unwrap();
+    assert_eq!((again.to_reader, again.to_kobo), (0, 0));
+}

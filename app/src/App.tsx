@@ -419,8 +419,12 @@ export default function App() {
           : checkKoboFirmware(mount).catch(() => null);
       firmwareAsked.current.add(mount);
       reconcileDevice(mount)
-        .then(async ({ series, grouped, positions, layout }) => {
+        .then(async ({ series, grouped, positions, layout, places }) => {
           const parts = [];
+          if (places.to_kobo)
+            parts.push(
+              `moved your place in ${places.to_kobo} ${places.to_kobo === 1 ? "book" : "books"} to where you stopped reading in Parallax`,
+            );
           if (layout)
             parts.push(
               `set your reading layout on ${layout} ${layout === 1 ? "book" : "books"}`,

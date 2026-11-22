@@ -174,9 +174,32 @@ impl Library {
             .optional()?)
     }
 
+    /// When the reader's place in a book was last saved, as RFC 3339.
+    pub fn reader_position_saved_at(&self, book_id: i64) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT updated_at FROM reader_positions WHERE book_id = ?1",
+                [book_id],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
     /// Remembers `position`. Very short books can report more than 1, so the
     /// fraction is clamped here for everything that reads it later.
     pub fn set_reader_position(&self, book_id: i64, position: &ReaderPosition) -> Result<()> {
+        self.set_reader_position_at(book_id, position, &now())
+    }
+
+    /// Remembers `position` as saved at `at` (RFC 3339), such as a place
+    /// brought over from a device, dated when it was read there.
+    pub fn set_reader_position_at(
+        &self,
+        book_id: i64,
+        position: &ReaderPosition,
+        at: &str,
+    ) -> Result<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO reader_positions
                  (book_id, href, cfi, fraction, quote, updated_at)
@@ -187,7 +210,7 @@ impl Library {
                 position.cfi,
                 position.fraction.clamp(0.0, 1.0),
                 position.quote,
-                now(),
+                at,
             ],
         )?;
         Ok(())

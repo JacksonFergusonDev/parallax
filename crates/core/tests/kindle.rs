@@ -63,6 +63,112 @@ fn sidecar(position: u32) -> Vec<u8> {
     out
 }
 
+/// A KRDS `.azw3r` holding highlights over these (start, end) ranges.
+fn highlights(ranges: &[(usize, usize)]) -> Vec<u8> {
+    let mut out = b"\x00\x00\x00\x00\x00\x1A\xB1\x26".to_vec();
+    let int = |out: &mut Vec<u8>, n: i32| {
+        out.push(1);
+        out.extend_from_slice(&n.to_be_bytes());
+    };
+    let long = |out: &mut Vec<u8>, n: i64| {
+        out.push(2);
+        out.extend_from_slice(&n.to_be_bytes());
+    };
+    let utf = |out: &mut Vec<u8>, s: &str| {
+        out.push(0);
+        out.extend_from_slice(&u16::try_from(s.len()).unwrap().to_be_bytes());
+        out.extend_from_slice(s.as_bytes());
+    };
+    let text = |out: &mut Vec<u8>, s: &str| {
+        out.push(3);
+        utf(out, s);
+    };
+    int(&mut out, 1);
+    int(&mut out, 1);
+    out.push(0xFE);
+    utf(&mut out, "annotation.cache.object");
+    int(&mut out, 1);
+    int(&mut out, 1);
+    out.push(0xFE);
+    utf(&mut out, "saved.avl.interval.tree");
+    int(&mut out, i32::try_from(ranges.len()).unwrap());
+    for (start, end) in ranges {
+        out.push(0xFE);
+        utf(&mut out, "annotation.personal.highlight");
+        text(&mut out, &start.to_string());
+        text(&mut out, &end.to_string());
+        long(&mut out, 1_762_000_000_000);
+        long(&mut out, 1_762_000_000_000);
+        text(&mut out, "");
+        out.push(0xFF);
+    }
+    out.push(0xFF);
+    out.push(0xFF);
+    out.push(0xFF);
+    out
+}
+
+#[test]
+fn highlights_missing_from_clippings_take_their_text_from_the_book() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut library = Library::open(dir.path().join("library")).unwrap();
+    let id = import(&mut library, &fixture("epub/minimal.epub"));
+    let device = kindle(&dir.path().join("Kindle"));
+    let options = SendOptions {
+        converter: &EpubToAzw3,
+        page_numbers: true,
+    };
+    let outcomes = kindle::send_library_books(&library, &device, &options, &[id], |_| {});
+    let sent = outcomes[0].result.as_ref().unwrap().clone();
+    let file = dir.path().join("Kindle").join(&sent.device_path);
+    let text = parallax_device_kindle::text::extract(&fs::read(&file).unwrap()).unwrap();
+    let html = String::from_utf8_lossy(&text).into_owned();
+    // The text of the book's first paragraph, from the Kindle's own copy.
+    let p = html.find("<p").unwrap();
+    let start = p + html[p..].find('>').unwrap() + 1;
+    let end = start + html[start..].find("</p>").unwrap() - 1;
+    let expected = parallax_device_kindle::text::passage(&text, start as u64, end as u64).unwrap();
+    assert!(!expected.is_empty());
+
+    let stem = sent.device_path.trim_end_matches(".azw3");
+    let sdr = dir.path().join("Kindle").join(format!("{stem}.sdr"));
+    fs::create_dir_all(&sdr).unwrap();
+    fs::write(sdr.join("x.azw3r"), highlights(&[(start, end)])).unwrap();
+    let mut cache = MetaCache::new();
+    let done = kindle::reconcile(&mut library, &device, &mut cache).unwrap();
+    assert_eq!(done.annotations, 1);
+    let notes = library.annotations(id).unwrap();
+    assert_eq!(notes.len(), 1);
+    assert_eq!(notes[0].kind, "highlight");
+    assert_eq!(notes[0].text.as_deref(), Some(expected.as_str()));
+    assert_eq!(
+        notes[0].position,
+        f64::from(parallax_device_kindle::text::location(start as u64))
+    );
+
+    // Once My Clippings has the same highlight, only its entry is kept.
+    let books = device.books(&mut cache).unwrap();
+    let location = parallax_device_kindle::text::location(start as u64);
+    fs::write(
+        dir.path().join("Kindle/documents/My Clippings.txt"),
+        format!(
+            "{} (Someone)\n- Your Highlight on Location {location}-{} | Added on Monday, 3 November 2025 21:04:10\n\nFrom clippings.\n==========\n",
+            books[0].title(),
+            location + 1
+        ),
+    )
+    .unwrap();
+    kindle::reconcile(&mut library, &device, &mut cache).unwrap();
+    let on_device: Vec<_> = library
+        .annotations(id)
+        .unwrap()
+        .into_iter()
+        .filter(|a| a.on_device)
+        .collect();
+    assert_eq!(on_device.len(), 1);
+    assert_eq!(on_device[0].text.as_deref(), Some("From clippings."));
+}
+
 #[test]
 fn send_update_sync_and_remove() {
     let dir = tempfile::tempdir().unwrap();
@@ -165,27 +271,88 @@ fn send_update_sync_and_remove() {
 }
 
 #[test]
-fn comics_are_refused() {
+fn comics_are_sent_as_fixed_layout_azw3() {
+    use parallax_device_kindle::mobi;
+
     let dir = tempfile::tempdir().unwrap();
     let mut library = Library::open(dir.path().join("library")).unwrap();
     let cbz = dir.path().join("Comic.cbz");
     let mut zip = zip::ZipWriter::new(fs::File::create(&cbz).unwrap());
-    zip.start_file("p1.png", zip::write::SimpleFileOptions::default())
+    for (i, shade) in [40u8, 90, 160].into_iter().enumerate() {
+        zip.start_file(
+            format!("p{}.png", i + 1),
+            zip::write::SimpleFileOptions::default(),
+        )
         .unwrap();
-    let mut png = Vec::new();
-    image::GrayImage::from_pixel(60, 90, image::Luma([90]))
+        let mut png = Vec::new();
+        image::GrayImage::from_fn(600, 900, |x, _| {
+            image::Luma([shade.wrapping_add((x % 7) as u8)])
+        })
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .unwrap();
-    std::io::Write::write_all(&mut zip, &png).unwrap();
+        std::io::Write::write_all(&mut zip, &png).unwrap();
+    }
     zip.finish().unwrap();
+    // Comics are taken as right-to-left manga unless set otherwise.
     let id = import(&mut library, &cbz);
     let device = kindle(&dir.path().join("Kindle"));
     let options = SendOptions {
         converter: &EpubToAzw3,
-        page_numbers: false,
+        page_numbers: true,
     };
     let outcomes = kindle::send_library_books(&library, &device, &options, &[id], |_| {});
-    assert!(outcomes[0].result.as_ref().unwrap_err().contains("comics"));
+    let sent = outcomes[0].result.as_ref().unwrap();
+    assert!(
+        Path::new(&sent.device_path)
+            .extension()
+            .is_some_and(|e| e == "azw3"),
+        "{}",
+        sent.device_path
+    );
+    let bytes = fs::read(dir.path().join("Kindle").join(&sent.device_path)).unwrap();
+
+    let header = mobi::parse(&bytes).unwrap();
+    assert_eq!(header.mobi_version, 8);
+    assert_eq!(header.title.as_deref(), Some("Comic"));
+    let records = mobi::exth_records(&bytes);
+    let get = |k: u32| {
+        records
+            .iter()
+            .find(|(kind, _)| *kind == k)
+            .map(|(_, d)| String::from_utf8_lossy(d).into_owned())
+    };
+    let screen = device.info().screen;
+    assert_eq!(get(122).as_deref(), Some("true"));
+    assert_eq!(get(123).as_deref(), Some("comic"));
+    assert_eq!(
+        get(126),
+        Some(format!("{}x{}", screen.width, screen.height))
+    );
+    assert_eq!(get(527).as_deref(), Some("rtl"));
+
+    // One page document per page, each showing a JPEG.
+    let text = parallax_device_kindle::text::extract(&bytes).unwrap();
+    let html = String::from_utf8_lossy(&text);
+    assert_eq!(html.matches("<img").count(), 3, "{html}");
+    assert!(html.contains("name=\"viewport\""), "{html}");
+    let offsets = mobi::record_offsets(&bytes).unwrap();
+    let jpegs = offsets
+        .iter()
+        .filter(|&&o| bytes[o..].starts_with(&[0xFF, 0xD8]))
+        .count();
+    assert!(jpegs >= 3, "{jpegs} JPEG records");
+    // Fixed-layout pages need no page numbers.
+    let stem = sent.device_path.trim_end_matches(".azw3");
+    assert!(
+        !dir.path()
+            .join("Kindle")
+            .join(format!("{stem}.sdr"))
+            .join(format!(
+                "{}.apnx",
+                Path::new(stem).file_name().unwrap().to_string_lossy()
+            ))
+            .exists()
+    );
 }
 
 #[test]

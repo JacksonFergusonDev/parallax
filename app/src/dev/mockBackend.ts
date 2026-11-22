@@ -443,6 +443,7 @@ const SETTING_KEYS = [
   "kobo_series",
   "kobo_rules",
   "kobo_positions",
+  "kobo_reader_sync",
   "kobo_firmware_check",
   "eject_after_send",
   "updates_auto",
@@ -605,7 +606,15 @@ export function installMockBackend(label = "main") {
             { folder: "Classics", content_ids: [contentId(5)] },
           ];
         case "reconcile_device":
-          return { series: 0, grouped: 0 };
+          return {
+            series: 0,
+            grouped: 0,
+            positions: 0,
+            layout: 0,
+            places: { to_reader: 0, to_kobo: 0 },
+            reading: 0,
+            annotations: 0,
+          };
         case "kobo_firmware_check":
           return null;
         case "kindle_email_settings":

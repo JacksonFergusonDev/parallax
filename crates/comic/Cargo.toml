@@ -10,6 +10,7 @@ license.workspace = true
 compress-tools.workspace = true
 parallax-convert.workspace = true
 fast_image_resize = "6.1"
+hayro = "0.9"
 png = "0.18"
 rayon.workspace = true
 serde.workspace = true

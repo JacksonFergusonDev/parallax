@@ -154,7 +154,11 @@ beforeEach(() => {
         case "device_books":
           return currentBooks;
         case "reconcile_device":
-          return { series: 0, grouped: 0 };
+          return {
+            series: 0,
+            grouped: 0,
+            places: { to_reader: 0, to_kobo: 0 },
+          };
         case "device_history":
           return {
             device: null,
@@ -1102,7 +1106,11 @@ describe("retained app screens", () => {
 
   it("keeps newer data when an earlier read completes after reconciliation", async () => {
     let finishOld!: (books: DeviceBook[]) => void;
-    let finishReconcile!: (result: { series: number; grouped: number }) => void;
+    let finishReconcile!: (result: {
+      series: number;
+      grouped: number;
+      places: { to_reader: number; to_kobo: number };
+    }) => void;
     const normal = vi.mocked(invoke).getMockImplementation()!;
     let first = true;
     vi.mocked(invoke).mockImplementation((command, args) => {
@@ -1121,7 +1129,13 @@ describe("retained app screens", () => {
     });
     await render();
     currentBooks = [{ ...koboBook, title: "Fresh metadata" }];
-    await act(async () => finishReconcile({ series: 1, grouped: 0 }));
+    await act(async () =>
+      finishReconcile({
+        series: 1,
+        grouped: 0,
+        places: { to_reader: 0, to_kobo: 0 },
+      }),
+    );
     expect(panel("On Kobo").textContent).toContain("Fresh metadata");
     await act(async () => finishOld([koboBook]));
     expect(panel("On Kobo").textContent).toContain("Fresh metadata");

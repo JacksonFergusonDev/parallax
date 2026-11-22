@@ -178,13 +178,21 @@ fn encode(
                 .map(|&value| LEVELS[usize::from(value)])
                 .collect()
         };
-        png_4bit(width, height, &levels).map_err(|e| e.to_string())?
+        if options.jpeg {
+            let mut bytes = Vec::new();
+            JpegEncoder::new_with_quality(&mut bytes, 90)
+                .encode(&levels, width, height, image::ExtendedColorType::L8)
+                .map_err(|e| e.to_string())?;
+            bytes
+        } else {
+            png_4bit(width, height, &levels).map_err(|e| e.to_string())?
+        }
     };
     Ok(Raster {
         width,
         height,
         bytes,
-        jpeg: colour,
+        jpeg: colour || options.jpeg,
         side,
     })
 }

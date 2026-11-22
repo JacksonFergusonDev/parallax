@@ -195,6 +195,18 @@ pub struct Annotation {
     pub note: Option<String>,
 }
 
+impl Annotation {
+    /// A stable id for the annotation, from its kind and range, so syncing
+    /// again updates it instead of adding a copy.
+    pub fn id(&self) -> String {
+        let key = format!("{}\n{}\n{}", self.kind, self.start, self.end);
+        format!(
+            "krds-{}",
+            &sha1_smol::Sha1::from(key).digest().to_string()[..16]
+        )
+    }
+}
+
 const ANNOTATION_KINDS: &[(i64, &str)] = &[
     (0, "bookmark"),
     (1, "highlight"),

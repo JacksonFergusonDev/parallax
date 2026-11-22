@@ -211,6 +211,19 @@ impl Library {
         self.import_comic(&cbz, path)
     }
 
+    /// Imports a PDF as a comic: its pages become a CBZ, and the PDF
+    /// identifies the book.
+    pub(crate) fn import_pdf_comic(&mut self, path: &Path) -> Result<ImportOutcome> {
+        let (hash, _) = hash_file(path)?;
+        if let Some(book) = self.find_by_hash(&hash)? {
+            return Ok(ImportOutcome::AlreadyInLibrary { book });
+        }
+        let work = tempfile::tempdir().map_err(|e| io_err(path, e))?;
+        let cbz = work.path().join("book.cbz");
+        parallax_comic::pdf_to_cbz(path, &cbz)?;
+        self.import_comic(&cbz, path)
+    }
+
     /// Imports the CBZ at `cbz`, identified by `original` (a CBR or CB7 it
     /// was converted from, or itself), whose name is shown and parsed for
     /// metadata.

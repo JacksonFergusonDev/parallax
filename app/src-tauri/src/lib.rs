@@ -694,7 +694,8 @@ async fn comic_transfer_estimate(
 ) -> CmdResult<Option<parallax_core::comic_send::TransferEstimate>> {
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        // Comics aren't sent to Kindles.
+        // The estimate and its confirmation describe Kobo preparation;
+        // comics go to a Kindle without one.
         if kindle::is_kindle(&mount) {
             return Ok(None);
         }
@@ -1441,6 +1442,8 @@ struct Reconciled {
     positions: usize,
     /// Books given the reading layout from Settings.
     layout: usize,
+    /// Books whose place moved between the Kobo and the desktop reader.
+    places: parallax_core::device::PlacesSynced,
     /// Library books whose reading progress changed.
     reading: usize,
     /// Highlights, notes and bookmarks new, changed or removed on the device.
@@ -1458,6 +1461,7 @@ async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResu
     let series = !settings::is(&state, settings::KOBO_SERIES, "off");
     let rules = !settings::is(&state, settings::KOBO_RULES, "off");
     let positions = !settings::is(&state, settings::KOBO_POSITIONS, "off");
+    let places = !settings::is(&state, settings::KOBO_READER_SYNC, "off");
     let layout = settings::is(&state, parallax_core::layout::KOBO_LAYOUT, "on");
     let kindles = state.kindles.clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -1468,6 +1472,7 @@ async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResu
                 grouped: 0,
                 positions: 0,
                 layout: 0,
+                places: parallax_core::device::PlacesSynced::default(),
                 reading: done.reading,
                 annotations: done.annotations,
             });
@@ -1476,30 +1481,42 @@ async fn reconcile_device(state: State<'_, AppState>, mount: PathBuf) -> CmdResu
         let mut lib = library
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let series = if series {
+            parallax_core::collections::reconcile_series(&lib, &kobo, &backups).map_err(err)?
+        } else {
+            0
+        };
+        let grouped = if rules {
+            parallax_core::rules::run(&lib, &kobo, &backups, Trigger::Automatic).map_err(err)?
+        } else {
+            0
+        };
+        // Before reading progress is synced, which would record a book
+        // sent again as unread.
+        let positions = if positions {
+            parallax_core::device::restore_positions(&lib, &kobo, &backups).map_err(err)?
+        } else {
+            0
+        };
+        let layout = if layout {
+            parallax_core::layout::apply_to_new(&lib, &kobo, &backups).map_err(err)?
+        } else {
+            0
+        };
+        let reading = parallax_core::device::sync_reading(&lib, &kobo).map_err(err)?;
+        // After reading progress, so the place the Kobo reports is current.
+        let places = if places {
+            parallax_core::device::sync_reader_places(&lib, &kobo, &backups).map_err(err)?
+        } else {
+            parallax_core::device::PlacesSynced::default()
+        };
         Ok(Reconciled {
-            series: if series {
-                parallax_core::collections::reconcile_series(&lib, &kobo, &backups).map_err(err)?
-            } else {
-                0
-            },
-            grouped: if rules {
-                parallax_core::rules::run(&lib, &kobo, &backups, Trigger::Automatic).map_err(err)?
-            } else {
-                0
-            },
-            // Before reading progress is synced, which would record a book
-            // sent again as unread.
-            positions: if positions {
-                parallax_core::device::restore_positions(&lib, &kobo, &backups).map_err(err)?
-            } else {
-                0
-            },
-            layout: if layout {
-                parallax_core::layout::apply_to_new(&lib, &kobo, &backups).map_err(err)?
-            } else {
-                0
-            },
-            reading: parallax_core::device::sync_reading(&lib, &kobo).map_err(err)?,
+            series,
+            grouped,
+            positions,
+            layout,
+            places,
+            reading,
             annotations: parallax_core::device::sync_annotations(&mut lib, &kobo).map_err(err)?,
         })
     })

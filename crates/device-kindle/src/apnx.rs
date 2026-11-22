@@ -1,8 +1,9 @@
 //! APNX page-number files, ported from calibre (`devices/kindle/apnx.py` and
-//! `apnx_page_generator/generators/fast_page_generator.py`). The pages are an
-//! estimate, not a print edition's: one every 2,300 characters of
-//! uncompressed text, calibre's default "fast" method. calibre's slower
-//! methods need the decompressed book text and aren't ported.
+//! `apnx_page_generator/generators/`). The pages are an estimate, not a print
+//! edition's. When the book's text can be read, pages follow calibre's
+//! "accurate" method, which lays the text out in lines of paragraphs and
+//! starts a page every 32 lines. Otherwise there's a page every 2,300
+//! characters, calibre's "fast" method.
 
 use crate::mobi::MobiHeader;
 
@@ -14,10 +15,78 @@ pub fn fast_pages(text_length: u32) -> Vec<u32> {
     (0..text_length).step_by(CHARS_PER_PAGE as usize).collect()
 }
 
+/// Characters in a line of a paragraph, calibre's accurate method.
+const CHARS_PER_LINE: u32 = 70;
+/// Lines on a page, calibre's accurate method.
+const LINES_PER_PAGE: usize = 32;
+
+/// Page start positions from the book's decompressed text, as calibre's
+/// `accurate_page_generator.py`. A line starts just before each `<p` and after every
+/// 70 characters of paragraph text outside tags; every 32nd line starts a
+/// page. Like calibre, the character count runs on across paragraphs.
+pub fn accurate_pages(text: &[u8]) -> Vec<u32> {
+    let mut lines = Vec::new();
+    let (mut in_tag, mut in_p, mut check_p, mut closing) = (false, false, false, false);
+    let mut chars = 0;
+    for (pos, &c) in text.iter().enumerate() {
+        let c = c.to_ascii_lowercase();
+        if check_p {
+            if c == b'/' {
+                closing = true;
+                continue;
+            }
+            if c == b'p' {
+                if closing {
+                    in_p = false;
+                } else {
+                    in_p = true;
+                    lines.push(pos.saturating_sub(2));
+                }
+            }
+            check_p = false;
+            closing = false;
+            continue;
+        }
+        match c {
+            b'<' => {
+                in_tag = true;
+                check_p = true;
+                continue;
+            }
+            b'>' => {
+                in_tag = false;
+                check_p = false;
+                continue;
+            }
+            _ => {}
+        }
+        if in_p && !in_tag {
+            chars += 1;
+            if chars == CHARS_PER_LINE {
+                lines.push(pos);
+                chars = 0;
+            }
+        }
+    }
+    lines
+        .into_iter()
+        .step_by(LINES_PER_PAGE)
+        .filter_map(|p| u32::try_from(p).ok())
+        .collect()
+}
+
+/// Page starts for a whole book file: the accurate method when its text can
+/// be read and has paragraphs, otherwise the fast one.
+pub fn pages(book: &[u8], header: &MobiHeader) -> Vec<u32> {
+    crate::text::extract(book)
+        .map(|text| accurate_pages(&text))
+        .filter(|pages| !pages.is_empty())
+        .unwrap_or_else(|| fast_pages(header.text_length))
+}
+
 /// The APNX file for a book, or `None` when it has no text to number.
 /// `guid` is the 8-character content GUID; calibre uses a random one.
-pub fn build(header: &MobiHeader, guid: &str) -> Option<Vec<u8>> {
-    let pages = fast_pages(header.text_length);
+pub fn build(header: &MobiHeader, pages: &[u32], guid: &str) -> Option<Vec<u8>> {
     if pages.is_empty() {
         return None;
     }
@@ -94,7 +163,7 @@ mod tests {
     /// The same bytes calibre's `generate_apnx` writes for these inputs.
     #[test]
     fn matches_calibre_layout() {
-        let apnx = build(&header(8, 5000), "abcdef01").unwrap();
+        let apnx = build(&header(8, 5000), &fast_pages(5000), "abcdef01").unwrap();
         let content = r#"{"contentGuid":"abcdef01","asin":"0b1e1f8a-3c2d-4e5f-8a9b-0c1d2e3f4a5b","cdeType":"EBOK","format":"MOBI_8","fileRevisionId":"1","acr":"Book"}"#;
         let page = r#"{"asin":"0b1e1f8a-3c2d-4e5f-8a9b-0c1d2e3f4a5b","pageMap":"(1,a,1)"}"#;
         let mut expected = Vec::new();
@@ -113,12 +182,43 @@ mod tests {
     }
 
     #[test]
+    fn accurate_pages_count_paragraph_lines() {
+        // 40 paragraphs of 100 characters: each is a line at `<p` and one
+        // more after 70 characters (the count runs on, so some get two).
+        let para = format!("<p class=\"x\">{}</p>", "a".repeat(100));
+        let html = format!("<html><body>{}</body></html>", para.repeat(40));
+        let pages = accurate_pages(html.as_bytes());
+        let lines: usize = 40 + 40 * 100 / 70;
+        assert_eq!(pages.len(), lines.div_ceil(32));
+        // calibre records a line two bytes before the `p`, one before `<`.
+        assert_eq!(pages[0] as usize, html.find("<p").unwrap() - 1);
+        // Text outside paragraphs and inside tags isn't counted.
+        assert!(accurate_pages(b"<div>no paragraphs here</div>").is_empty());
+        assert_eq!(accurate_pages(b"<P>Upper</P>"), [0]);
+    }
+
+    #[test]
+    fn whole_book_uses_the_accurate_method() {
+        let bytes = std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../tests/fixtures/amazon/book.azw3"),
+        )
+        .unwrap();
+        let header = crate::mobi::parse(&bytes).unwrap();
+        let text = crate::text::extract(&bytes).unwrap();
+        assert_eq!(pages(&bytes, &header), accurate_pages(&text));
+        assert!(!pages(&bytes, &header).is_empty());
+        // Not a readable book: the fast method from the header's length.
+        assert_eq!(pages(b"junk", &header), fast_pages(header.text_length));
+    }
+
+    #[test]
     fn older_mobi_gets_the_simple_header() {
-        let apnx = build(&header(6, 100), "abcdef01").unwrap();
+        let apnx = build(&header(6, 100), &fast_pages(100), "abcdef01").unwrap();
         let text = String::from_utf8_lossy(&apnx);
         assert!(!text.contains("MOBI_8"));
         assert!(text.contains(r#""cdeType":"EBOK","fileRevisionId":"1"}"#));
-        assert!(build(&header(8, 0), "x").is_none());
+        assert!(build(&header(8, 0), &[], "x").is_none());
         assert_eq!(guid_for("a"), guid_for("a"));
         assert_eq!(guid_for("a").len(), 8);
     }

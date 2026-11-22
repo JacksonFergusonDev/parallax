@@ -21,6 +21,7 @@ pub mod mobi;
 pub mod models;
 pub mod mtp;
 pub mod storage;
+pub mod text;
 pub mod thumbnails;
 pub mod transfer;
 

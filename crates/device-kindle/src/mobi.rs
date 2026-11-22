@@ -148,6 +148,151 @@ fn read_exth(exth: &[u8], header: &mut MobiHeader, first_image: Option<usize>) {
     header.authors.retain(|a| !a.is_empty());
 }
 
+/// How a fixed-layout book (a comic) should be shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FixedLayout {
+    /// The page size the book was made for, in pixels.
+    pub width: u32,
+    pub height: u32,
+    /// Pages turn right to left, as in manga.
+    pub rtl: bool,
+    /// Keep the Kindle upright; off when pages are wide spreads.
+    pub portrait: bool,
+}
+
+impl FixedLayout {
+    /// The EXTH records KindleGen writes for a comic from the OPF metadata
+    /// KCC sets (`comic2ebook.py`, `buildOPF`), numbered as KindleUnpack
+    /// reads them (`mobi_header.py`, `id_map_strings`).
+    fn records(&self) -> Vec<(u32, Vec<u8>)> {
+        let text = |s: &str| s.as_bytes().to_vec();
+        vec![
+            (122, text("true")),
+            (123, text("comic")),
+            (124, text(if self.portrait { "portrait" } else { "none" })),
+            (126, text(&format!("{}x{}", self.width, self.height))),
+            (127, text("true")),
+            (128, text("true")),
+            (132, text("false")),
+            (
+                525,
+                text(if self.rtl {
+                    "horizontal-rl"
+                } else {
+                    "horizontal-lr"
+                }),
+            ),
+            (527, text(if self.rtl { "rtl" } else { "ltr" })),
+        ]
+    }
+}
+
+/// Marks a KF8 book as fixed layout by adding KindleGen's comic records to
+/// its EXTH header, replacing any of the same kind. Record 0 grows, so every
+/// later record moves and the PDB record list is rewritten to match. `None`
+/// when `bytes` isn't a MOBI/AZW3 with an EXTH header.
+pub fn with_fixed_layout(bytes: &[u8], layout: &FixedLayout) -> Option<Vec<u8>> {
+    let offsets = record_offsets(bytes)?;
+    let r0_start = *offsets.first()?;
+    let r0_end = offsets.get(1).copied().unwrap_or(bytes.len());
+    let r0 = bytes.get(r0_start..r0_end)?;
+    if r0.get(16..20) != Some(b"MOBI") || u32_at(r0, 128)? & 0x40 == 0 {
+        return None;
+    }
+    let exth_start = 16 + u32_at(r0, 20)? as usize;
+    let exth = r0.get(exth_start..)?;
+    if exth.get(..4) != Some(b"EXTH") {
+        return None;
+    }
+    let exth_len = u32_at(exth, 4)? as usize;
+    let count = u32_at(exth, 8)?;
+    let padded = |len: usize| len + (4 - len % 4) % 4;
+    let old_end = exth_start + padded(exth_len);
+
+    let new = layout.records();
+    let mut kept = Vec::new();
+    let mut p = 12;
+    for _ in 0..count {
+        let kind = u32_at(exth, p)?;
+        let len = u32_at(exth, p + 4)? as usize;
+        let record = exth.get(p..p + len).filter(|_| len >= 8)?;
+        if !new.iter().any(|(k, _)| *k == kind) {
+            kept.push(record);
+        }
+        p += len;
+    }
+    let mut body = Vec::new();
+    for record in &kept {
+        body.extend_from_slice(record);
+    }
+    for (kind, data) in &new {
+        body.extend_from_slice(&kind.to_be_bytes());
+        body.extend_from_slice(&u32::try_from(data.len() + 8).ok()?.to_be_bytes());
+        body.extend_from_slice(data);
+    }
+    let new_len = 12 + body.len();
+    let mut new_exth = Vec::with_capacity(padded(new_len));
+    new_exth.extend_from_slice(b"EXTH");
+    new_exth.extend_from_slice(&u32::try_from(new_len).ok()?.to_be_bytes());
+    new_exth.extend_from_slice(&u32::try_from(kept.len() + new.len()).ok()?.to_be_bytes());
+    new_exth.extend_from_slice(&body);
+    new_exth.resize(padded(new_len), 0);
+
+    let mut record0 = r0[..exth_start].to_vec();
+    record0.extend_from_slice(&new_exth);
+    record0.extend_from_slice(r0.get(old_end..)?);
+    let delta = i64::try_from(record0.len()).ok()? - i64::try_from(r0.len()).ok()?;
+    // The full title follows the EXTH header and is found by its offset.
+    let name_offset = u32_at(r0, 84)? as usize;
+    if name_offset >= old_end {
+        let moved = u32::try_from(i64::try_from(name_offset).ok()? + delta).ok()?;
+        record0[84..88].copy_from_slice(&moved.to_be_bytes());
+    }
+
+    let mut out = bytes[..r0_start].to_vec();
+    for (i, &offset) in offsets.iter().enumerate().skip(1) {
+        let moved = u32::try_from(i64::try_from(offset).ok()? + delta).ok()?;
+        let at = PDB_HEADER_LEN + i * 8;
+        out[at..at + 4].copy_from_slice(&moved.to_be_bytes());
+    }
+    out.extend_from_slice(&record0);
+    out.extend_from_slice(&bytes[r0_end..]);
+    Some(out)
+}
+
+/// The EXTH records of a book's header, in order, for checking a book.
+pub fn exth_records(bytes: &[u8]) -> Vec<(u32, Vec<u8>)> {
+    let mut out = Vec::new();
+    let Some(offsets) = record_offsets(bytes) else {
+        return out;
+    };
+    let (Some(&start), end) = (offsets.first(), offsets.get(1).copied()) else {
+        return out;
+    };
+    let Some(r0) = bytes.get(start..end.unwrap_or(bytes.len())) else {
+        return out;
+    };
+    let Some(exth) = u32_at(r0, 20).and_then(|l| r0.get(16 + l as usize..)) else {
+        return out;
+    };
+    if exth.get(..4) != Some(b"EXTH") {
+        return out;
+    }
+    let mut p = 12;
+    for _ in 0..u32_at(exth, 8).unwrap_or(0) {
+        let (Some(kind), Some(len)) = (u32_at(exth, p), u32_at(exth, p + 4)) else {
+            break;
+        };
+        let len = len as usize;
+        let Some(data) = exth.get(p + 8..p + len).filter(|_| len >= 8) else {
+            break;
+        };
+        out.push((kind, data.to_vec()));
+        p += len;
+    }
+    out
+}
+
 /// The cover image's bytes from a whole MOBI/AZW3 file.
 pub fn cover(bytes: &[u8], header: &MobiHeader) -> Option<Vec<u8>> {
     let offsets = record_offsets(bytes)?;
@@ -196,6 +341,65 @@ mod tests {
         let h = parse(&fixture("old.mobi")).unwrap();
         assert!(h.mobi_version < 8);
         assert!(h.title.is_some());
+    }
+
+    #[test]
+    fn marks_a_book_as_fixed_layout() {
+        let bytes = fixture("book.azw3");
+        let before = parse(&bytes).unwrap();
+        let text = crate::text::extract(&bytes).unwrap();
+        let layout = FixedLayout {
+            width: 1264,
+            height: 1680,
+            rtl: true,
+            portrait: true,
+        };
+        let out = with_fixed_layout(&bytes, &layout).unwrap();
+        // Everything else reads the same: title, ASIN, cover and text.
+        let after = parse(&out).unwrap();
+        assert_eq!(after.title, before.title);
+        assert_eq!(after.asin, before.asin);
+        assert_eq!(after.authors, before.authors);
+        assert_eq!(after.cover_record, before.cover_record);
+        assert_eq!(crate::text::extract(&out).unwrap(), text);
+        if before.cover_record.is_some() {
+            assert_eq!(cover(&out, &after), cover(&bytes, &before));
+        }
+        // The full name the header points at is the same as before.
+        let full_name = |b: &[u8]| {
+            let offsets = record_offsets(b).unwrap();
+            let r0 = &b[offsets[0]..offsets[1]];
+            let off = u32_at(r0, 84).unwrap() as usize;
+            let len = u32_at(r0, 88).unwrap() as usize;
+            r0[off..off + len].to_vec()
+        };
+        assert_eq!(full_name(&out), full_name(&bytes));
+
+        let records = exth_records(&out);
+        let get = |k: u32| {
+            records
+                .iter()
+                .find(|(kind, _)| *kind == k)
+                .map(|(_, d)| String::from_utf8_lossy(d).into_owned())
+        };
+        assert_eq!(get(122).as_deref(), Some("true"));
+        assert_eq!(get(123).as_deref(), Some("comic"));
+        assert_eq!(get(126).as_deref(), Some("1264x1680"));
+        assert_eq!(get(525).as_deref(), Some("horizontal-rl"));
+        assert_eq!(get(527).as_deref(), Some("rtl"));
+        // Applying it again replaces rather than repeats the records.
+        let again = with_fixed_layout(
+            &out,
+            &FixedLayout {
+                rtl: false,
+                ..layout
+            },
+        )
+        .unwrap();
+        let records = exth_records(&again);
+        assert_eq!(records.iter().filter(|(k, _)| *k == 527).count(), 1);
+        assert_eq!(records.iter().find(|(k, _)| *k == 527).unwrap().1, b"ltr");
+        assert!(with_fixed_layout(b"not a book", &layout).is_none());
     }
 
     #[test]

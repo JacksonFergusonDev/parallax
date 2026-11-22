@@ -22,14 +22,17 @@ pub(super) struct FixedLayout {
     zip: ZipWriter<BufWriter<File>>,
     manifest: String,
     sides: Vec<Option<Side>>,
+    /// Every image as JPEG, for readers that take no other format well.
+    jpeg_only: bool,
 }
 
 impl FixedLayout {
-    pub fn new(path: &Path) -> Result<Self, Error> {
+    pub fn new(path: &Path, jpeg_only: bool) -> Result<Self, Error> {
         let mut epub = Self {
             zip: ZipWriter::new(BufWriter::new(File::create(path)?)),
             manifest: String::new(),
             sides: Vec::new(),
+            jpeg_only,
         };
         epub.write("mimetype", b"application/epub+zip", STORED)?;
         epub.write("META-INF/container.xml", br#"<?xml version="1.0" encoding="UTF-8"?>
@@ -57,6 +60,16 @@ impl FixedLayout {
         let format = image::guess_format(bytes).map_err(|e| error(e.to_string()))?;
         let (data, extension, mime) = match format {
             ImageFormat::Jpeg => (Cow::Borrowed(bytes), "jpg", "image/jpeg"),
+            _ if self.jpeg_only => {
+                let cover = image::load_from_memory_with_format(bytes, format)
+                    .map_err(|e| error(e.to_string()))?
+                    .to_rgb8();
+                let mut jpeg = Cursor::new(Vec::new());
+                image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 90)
+                    .encode_image(&cover)
+                    .map_err(|e| error(e.to_string()))?;
+                (Cow::Owned(jpeg.into_inner()), "jpg", "image/jpeg")
+            }
             ImageFormat::Png => (Cow::Borrowed(bytes), "png", "image/png"),
             _ => {
                 let cover = image::load_from_memory_with_format(bytes, format)

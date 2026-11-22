@@ -33,6 +33,8 @@ pub const KOBO_SERIES: &str = "kobo_series";
 pub const KOBO_RULES: &str = "kobo_rules";
 /// `off` to leave books sent again at the start rather than where they were.
 pub const KOBO_POSITIONS: &str = "kobo_positions";
+/// `off` to keep the Kobo's place and the desktop reader's apart.
+pub const KOBO_READER_SYNC: &str = "kobo_reader_sync";
 /// `on` to eject the Kobo once books are sent.
 pub const EJECT_AFTER_SEND: &str = "eject_after_send";
 /// Where first-run setup stands: `started` once shown, then `skipped` or
@@ -64,7 +66,7 @@ enum Allowed {
 }
 
 /// Settings the app may read and change, and what each may be.
-const SETTINGS: [(&str, Allowed); 49] = [
+const SETTINGS: [(&str, Allowed); 50] = [
     (parallax_core::enhance::GOOGLE_BOOKS_KEY, Allowed::Text(200)),
     (parallax_core::enhance::METRON_TOKEN, Allowed::Text(256)),
     (
@@ -89,6 +91,7 @@ const SETTINGS: [(&str, Allowed); 49] = [
     (kindle_email::SMTP_SECURITY, Allowed::OneOf(&["tls"])),
     (KOBO_RULES, Allowed::OneOf(&["off"])),
     (KOBO_POSITIONS, Allowed::OneOf(&["off"])),
+    (KOBO_READER_SYNC, Allowed::OneOf(&["off"])),
     (
         parallax_core::firmware::KOBO_FIRMWARE_CHECK,
         Allowed::OneOf(&["on"]),
@@ -144,7 +147,7 @@ const SETTINGS: [(&str, Allowed); 49] = [
 ];
 
 /// Settings that are preferences, which Reset puts back. Credentials stay.
-const PREFERENCES: [&str; 36] = [
+const PREFERENCES: [&str; 37] = [
     parallax_core::review::REVIEW_ON_ADD,
     THEME,
     OPEN_VIEW,
@@ -153,6 +156,7 @@ const PREFERENCES: [&str; 36] = [
     KOBO_SERIES,
     KOBO_RULES,
     KOBO_POSITIONS,
+    KOBO_READER_SYNC,
     parallax_core::firmware::KOBO_FIRMWARE_CHECK,
     EJECT_AFTER_SEND,
     kindle::KINDLE_PAGE_NUMBERS,

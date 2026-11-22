@@ -1016,6 +1016,7 @@ export type SettingKey =
   | "kobo_series"
   | "kobo_rules"
   | "kobo_positions"
+  | "kobo_reader_sync"
   | "kobo_firmware_check"
   | "eject_after_send"
   | "setup"
@@ -1314,10 +1315,17 @@ export async function reconcileDevice(mount: string) {
       grouped: number;
       positions: number;
       layout: number;
+      places: { to_reader: number; to_kobo: number };
       reading: number;
       annotations: number;
     }>("reconcile_device", { mount });
-    if (result.series || result.grouped || result.positions || result.layout)
+    if (
+      result.series ||
+      result.grouped ||
+      result.positions ||
+      result.layout ||
+      result.places.to_kobo
+    )
       readCache.invalidate(deviceTag(mount));
     if (result.reading || result.annotations) readCache.invalidate("library");
     return result;

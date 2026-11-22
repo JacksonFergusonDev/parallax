@@ -14,9 +14,10 @@ use parallax_convert::Converter;
 use parallax_device::{DeviceBook, ReadStatus};
 use parallax_device_kindle::books::{self, KindleBook, MetaCache};
 use parallax_device_kindle::transfer::file_name;
-use parallax_device_kindle::{Clipping, KindleDevice, Outgoing, clippings};
+use parallax_device_kindle::{Clipping, KindleDevice, Outgoing, clippings, text};
 use parallax_library::{Book, Format, ImportOutcome, Library, Reading};
 
+use crate::comic_send::ComicTarget;
 use crate::device::{CatalogBook, OnDevice, RemoveOutcome};
 use crate::import::{DeviceImport, DeviceImportOutcome};
 use crate::send::{Progress, SendOutcome, SentInfo, Stage, copy_progress, run_batch};
@@ -114,11 +115,6 @@ pub struct SendOptions<'a> {
     pub page_numbers: bool,
 }
 
-fn not_for_kindle(book: &Book) -> Option<String> {
-    (book.format == Format::Cbz)
-        .then(|| "comics can't be sent to a Kindle yet; send them to a Kobo instead".to_owned())
-}
-
 /// Exports a library book with its current details, converts it to AZW3 and
 /// writes it to the Kindle at `file`.
 fn deliver(
@@ -131,15 +127,33 @@ fn deliver(
 ) -> Result<SentInfo, String> {
     stage(&|index, total, file| Progress::Preparing { index, total, file });
     let work = tempfile::tempdir().map_err(|e| e.to_string())?;
-    let epub = work.path().join("book.epub");
-    let azw3 = work.path().join("book.azw3");
-    library.export(book.id, &epub).map_err(|e| e.to_string())?;
-    stage(&|index, total, file| Progress::Converting { index, total, file });
-    options
-        .converter
-        .convert(&epub, &azw3)
-        .map_err(|e| e.to_string())?;
-    let data = std::fs::read(&azw3).map_err(|e| e.to_string())?;
+    let mut skipped_pages = Vec::new();
+    let data = if book.format == Format::Cbz {
+        // Comics become fixed-layout AZW3 pages sized for the screen.
+        let target = ComicTarget::for_kindle(library, device).map_err(|e| e.to_string())?;
+        let prepared =
+            target.prepare_for_kindle(library, book, options.converter, |page, pages| {
+                stage(&|index, total, file| Progress::ProcessingComic {
+                    index,
+                    total,
+                    file,
+                    page,
+                    pages,
+                });
+            })?;
+        skipped_pages.clone_from(&prepared.skipped);
+        std::fs::read(prepared.path()).map_err(|e| e.to_string())?
+    } else {
+        let epub = work.path().join("book.epub");
+        let azw3 = work.path().join("book.azw3");
+        library.export(book.id, &epub).map_err(|e| e.to_string())?;
+        stage(&|index, total, file| Progress::Converting { index, total, file });
+        options
+            .converter
+            .convert(&epub, &azw3)
+            .map_err(|e| e.to_string())?;
+        std::fs::read(&azw3).map_err(|e| e.to_string())?
+    };
     let cover = library.cover_source(book.id).ok().flatten();
     let mut progress = copy_progress(stage);
     let sent = device
@@ -148,7 +162,8 @@ fn deliver(
                 file_name: file,
                 data: &data,
                 cover: cover.as_deref(),
-                page_numbers: options.page_numbers,
+                // A comic's pages are its page numbers.
+                page_numbers: options.page_numbers && book.format != Format::Cbz,
             },
             &mut progress,
         )
@@ -157,7 +172,7 @@ fn deliver(
         content_id: sent.path.clone(),
         device_path: sent.path,
         bytes: data.len() as u64,
-        skipped_pages: Vec::new(),
+        skipped_pages,
         details_only: false,
     })
 }
@@ -192,9 +207,6 @@ pub fn send_library_books(
     run_batch(&labels, on_progress, |i, stage| {
         let id = ids[i];
         let result = books[i].clone().and_then(|book| {
-            if let Some(reason) = not_for_kindle(&book) {
-                return Err(reason);
-            }
             let storage = device.storage();
             if let Some(copy) = existing
                 .iter()
@@ -236,9 +248,6 @@ pub fn update_on_device(
     run_batch(&labels, on_progress, |i, stage| {
         let id = ids[i];
         let result = books[i].clone().and_then(|book| {
-            if let Some(reason) = not_for_kindle(&book) {
-                return Err(reason);
-            }
             let copy = copies
                 .iter()
                 .find(|c| c.book_id == id)
@@ -478,9 +487,75 @@ fn annotation(serial: &str, clip: &Clipping) -> parallax_library::Annotation {
     }
 }
 
-/// Copies highlights, notes and bookmarks from `My Clippings.txt` into the
-/// library for books sent from it, matching entries by title. Returns how
-/// many were new or changed.
+/// Highlights, notes and bookmarks the book's KRDS sidecar holds that
+/// `My Clippings.txt` doesn't, such as ones made before the file was
+/// cleared, or in a language whose clippings can't be told apart. KRDS
+/// gives positions only, so a highlight's text is read from the book on the
+/// Kindle, once: later syncs reuse the text the library already has.
+fn krds_annotations(
+    device: &KindleDevice,
+    book: &KindleBook,
+    serial: &str,
+    clips: &[&Clipping],
+    known: &[parallax_library::Annotation],
+) -> Vec<parallax_library::Annotation> {
+    let mut book_text: Option<Option<Vec<u8>>> = None;
+    let mut out = Vec::new();
+    for a in &book.reading.annotations {
+        if !matches!(a.kind.as_str(), "highlight" | "note" | "bookmark") {
+            continue;
+        }
+        // KFX positions aren't byte offsets; only MOBI and KF8 ones are.
+        let (Ok(start), Ok(end)) = (a.start.trim().parse::<u64>(), a.end.trim().parse::<u64>())
+        else {
+            continue;
+        };
+        let location = text::location(start);
+        let in_clippings = clips
+            .iter()
+            .any(|c| c.kind == a.kind && c.location.is_some_and(|l| l.abs_diff(location) <= 1));
+        if in_clippings {
+            continue;
+        }
+        let id = a.id();
+        let text = if a.kind == "highlight" {
+            known
+                .iter()
+                .find(|k| k.id == id && k.device_serial == serial)
+                .and_then(|k| k.text.clone())
+                .or_else(|| {
+                    book_text
+                        .get_or_insert_with(|| {
+                            device.read(&book.path).ok().and_then(|b| text::extract(&b))
+                        })
+                        .as_deref()
+                        .and_then(|t| text::passage(t, start, end))
+                })
+        } else {
+            None
+        };
+        out.push(parallax_library::Annotation {
+            id,
+            device_serial: serial.to_owned(),
+            kind: a.kind.clone(),
+            text,
+            note: a.note.clone(),
+            chapter: None,
+            position: f64::from(location),
+            created: a
+                .created_ms
+                .and_then(DateTime::<Utc>::from_timestamp_millis)
+                .map(|d| d.to_rfc3339()),
+            modified: None,
+            on_device: true,
+        });
+    }
+    out
+}
+
+/// Copies highlights, notes and bookmarks into the library for books sent
+/// from it: from `My Clippings.txt`, matching entries by title, then any
+/// more the book's KRDS sidecar holds. Returns how many were new or changed.
 pub fn sync_annotations(
     library: &mut Library,
     device: &KindleDevice,
@@ -501,11 +576,13 @@ pub fn sync_annotations(
             Some(book.title()),
             library.book(copy.book_id).ok().map(|b| b.title),
         ];
-        let items: Vec<_> = clips
+        let book_clips: Vec<&Clipping> = clips
             .iter()
             .filter(|c| titles.iter().flatten().any(|t| same_title(t, &c.title)))
-            .map(|c| annotation(&serial, c))
             .collect();
+        let mut items: Vec<_> = book_clips.iter().map(|c| annotation(&serial, c)).collect();
+        let known = library.annotations(copy.book_id).unwrap_or_default();
+        items.extend(krds_annotations(device, book, &serial, &book_clips, &known));
         let mut seen = std::collections::HashSet::new();
         let items: Vec<_> = items
             .into_iter()

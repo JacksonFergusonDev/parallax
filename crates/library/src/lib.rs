@@ -289,8 +289,12 @@ impl Library {
         &self.root
     }
 
-    /// Imports an EPUB, or a comic (CBZ, CBR or CB7, which is kept as CBZ).
+    /// Imports an EPUB, or a comic (CBZ, or CBR, CB7 or PDF, which are kept
+    /// as CBZ).
     pub fn import(&mut self, path: &Path) -> Result<ImportOutcome> {
+        if parallax_comic::is_pdf(path) {
+            return self.import_pdf_comic(path);
+        }
         if let Some(format) = comics::comic_format(path) {
             return self.import_any_comic(path, format);
         }
