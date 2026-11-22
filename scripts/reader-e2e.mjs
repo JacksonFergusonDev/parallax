@@ -327,13 +327,28 @@ scenario("desktop", "menu commands reach the reader in front", async () => {
     JSON.stringify({ fontSize: 100, theme: "light" }),
   );
   db.close();
-  // View › Larger Text twice, then Book › Contents, which a step checks.
-  await read(ids.Long, [
-    "menu:book.larger",
-    "menu:book.larger",
-    "menu:book.contents",
-    `if (!document.getElementById("toc").hidden) document.getElementById("larger").click()`,
-  ]);
+  // View › Larger Text twice, then Book › Contents, which the last step waits
+  // for before making the text larger once more.
+  await read(
+    ids.Long,
+    [
+      "menu:book.larger",
+      "menu:book.larger",
+      "menu:book.contents",
+      `void (async () => {
+        const deadline = performance.now() + 10000;
+        while (document.getElementById("toc").hidden) {
+          if (performance.now() > deadline) throw new Error("Book › Contents didn't open the contents");
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        document.getElementById("larger").click();
+        location.hash = "e2e-done";
+      })().catch((error) => {
+        location.hash = "e2e-failed:" + encodeURIComponent(error?.message ?? String(error));
+      })`,
+    ],
+    { PARALLAX_E2E_WAIT: "1", PARALLAX_E2E_SECS: "30" },
+  );
   assert.match(readerSettings() ?? "", /"fontSize":135/, "the menu didn't reach the reader");
 });
 

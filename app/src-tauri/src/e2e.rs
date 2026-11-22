@@ -5,7 +5,8 @@
 //! - `PARALLAX_E2E_SETTINGS=1`: open the Settings window instead, also alone.
 //! - `PARALLAX_E2E_STEPS`: scripts to run in that window, separated by `@@`, two
 //!   seconds apart. They stand in for a person turning pages. A step
-//!   `menu:<id>` chooses that menu command instead.
+//!   `menu:<id>` chooses that menu command instead. A reader's steps start
+//!   once it shows its place, and it sets `location.hash` to `#e2e-ready`.
 //! - `PARALLAX_E2E_SECS`: how long to wait after the last step before quitting.
 //! - `PARALLAX_E2E_WAIT=1`: treat `PARALLAX_E2E_SECS` as a backstop instead. Quit
 //!   once a step sets `location.hash` to `#e2e-done`, or exit with status 1 and
@@ -62,6 +63,9 @@ pub fn start(app: &App) {
             .unwrap_or(5);
         tauri::async_runtime::spawn_blocking(move || {
             sleep(Duration::from_secs(4));
+            if book.is_some() {
+                wait_for_reader(&app, &label);
+            }
             for step in steps.split("@@").filter(|s| !s.is_empty()) {
                 if let Some(id) = step.strip_prefix("menu:") {
                     crate::menu::run(&app, id);
@@ -102,6 +106,37 @@ pub fn start(app: &App) {
         });
     });
 }
+
+/// Waits until the reader shows where it is, which it does once it listens
+/// for menu commands, so a slow runner doesn't drop a step's command. Gives
+/// up after a while and lets the steps run, so a failure says what broke.
+fn wait_for_reader<R: Runtime>(app: &tauri::AppHandle<R>, label: &str) {
+    const READY: &str = "e2e-ready";
+    let deadline = Instant::now() + Duration::from_secs(READY_SECS);
+    while Instant::now() < deadline {
+        let Some(window) = app.get_webview_window(label) else {
+            sleep(Duration::from_millis(250));
+            continue;
+        };
+        if window
+            .url()
+            .ok()
+            .and_then(|u| u.fragment().map(str::to_owned))
+            .as_deref()
+            == Some(READY)
+        {
+            return;
+        }
+        let _ = window.eval(format!(
+            "if (document.getElementById('progress')?.textContent) location.hash = '{READY}'"
+        ));
+        sleep(Duration::from_millis(250));
+    }
+    eprintln!("e2e: the reader wasn't ready within {READY_SECS}s");
+}
+
+/// How long the reader gets to open before the steps run anyway.
+const READY_SECS: u64 = 30;
 
 fn percent_decode(text: &str) -> String {
     let bytes = text.as_bytes();
