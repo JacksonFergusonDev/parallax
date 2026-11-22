@@ -15,7 +15,7 @@ The maintainer handoff: where things stand, what's open and what's next. Update 
 
 ## Current
 
-- 0.1.1 is released. Releases are signed ad hoc until there's a Developer ID.
+- 0.1.3 is released. Unreleased: Kindle support, Export Library, PDF comics and Kobo place sync. Releases are signed ad hoc until there's a Developer ID.
 
 ## Unresolved
 
