@@ -34,7 +34,6 @@ on:
       - "scripts/release.py"
       - "scripts/fetch_kepubify.py"
       - "scripts/build_upscale_model.py"
-      - "scripts/homebrew_formula.py"
       - "app/src-tauri/tauri*.conf.json"
 
 permissions: {}
@@ -381,67 +380,20 @@ jobs:
       id-token: write
     uses: ./.github/workflows/site.yml # zizmor: ignore[self-repository] actionlint resolves the local workflow with this syntax.
 
-  # A dry run writes the formula and keeps it as an artifact, without pushing.
+  # A dry run updates the formula and keeps it as an artifact, without pushing.
   homebrew:
     name: Update the Homebrew formula
     needs: [ verify, publish ]
     if: needs.verify.outputs.prerelease == 'false'
-    runs-on: ubuntu-26.04-arm
-    timeout-minutes: 10
-    permissions: {}
-    env:
-      VERSION: ${{ needs.verify.outputs.version }}
-      TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          pattern: cli-*
-          path: ${{ runner.temp }}/cli
-          merge-multiple: true
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          enable-cache: false
-
-      - name: Write the formula
-        run: |
-          uv run --directory scripts --no-project python homebrew_formula.py \
-            "$VERSION" "$RUNNER_TEMP/cli" "$RUNNER_TEMP/formula/parallax-cli.rb"
-          cat "$RUNNER_TEMP/formula/parallax-cli.rb"
-
-      - name: Keep the dry run's formula
-        if: env.DRY_RUN == 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: dry-run-formula
-          path: ${{ runner.temp }}/formula/parallax-cli.rb
-          if-no-files-found: error
-
-      - name: Skip without a tap token
-        if: env.DRY_RUN != 'true' && env.TAP_TOKEN == ''
-        run: echo "::warning::TAP_GITHUB_TOKEN isn't set, so the Homebrew formula wasn't updated."
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: env.DRY_RUN != 'true' && env.TAP_TOKEN != ''
-        with:
-          repository: JacksonFergusonDev/homebrew-tap
-          token: ${{ secrets.TAP_GITHUB_TOKEN }}
-          path: tap
-          persist-credentials: true # zizmor: ignore[artipacked] the push below needs it; nothing uploads this checkout.
-
-      - name: Push the formula
-        if: env.DRY_RUN != 'true' && env.TAP_TOKEN != ''
-        run: |
-          cp "$RUNNER_TEMP/formula/parallax-cli.rb" tap/Formula/parallax-cli.rb
-          cd tap
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Formula/parallax-cli.rb
-          git diff --cached --quiet && exit 0
-          git commit -m "feat(parallax-cli): update to ${VERSION}"
-          git push
+    permissions:
+      contents: read
+    uses: JacksonFergusonDev/ci-cd-release-infrastructure/.github/workflows/update-homebrew-binary.yml@2f79e0f1ed0d45b5582d3b11092fe21c1a61d396 # feat/rust-release-and-binary-homebrew
+    with:
+      tag: v${{ needs.verify.outputs.version }}
+      formula_path: Formula/parallax-cli.rb
+      artifact_pattern: cli-*
+      archive_template: parallax-cli-{version}-{target}.tar.gz
+      targets: aarch64-apple-darwin,x86_64-apple-darwin
+      dry_run: ${{ github.event_name != 'push' }}
+    secrets:
+      TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
