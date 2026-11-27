@@ -3,6 +3,7 @@ import Icon from 'house-style/astro/Icon.astro';
 import JumpLinks from 'house-style/astro/JumpLinks.astro';
 import SectionMarker from 'house-style/astro/SectionMarker.astro';
 import DownloadButton from '../components/DownloadButton.astro';
+import FeatureIcon from '../components/FeatureIcon.astro';
 import InstallCli from '../components/InstallCli.astro';
 import StarField from '../components/StarField.astro';
 import Base from '../layouts/Base.astro';
@@ -43,21 +44,30 @@ import AppLaptop from '../components/AppLaptop.astro';
     </p>
     <ul class="outputs">
       <li>
-        <h3>Import almost anything</h3>
+        <h3>
+          <FeatureIcon name="import" />
+          Import almost anything
+        </h3>
         <p>
           EPUB, KEPUB, DRM-free Kindle formats (AZW3, MOBI, AZW, PRC, KFX), and comics (CBZ, CBR,
           CB7, PDF). ZIP, RAR and 7z bundles can hold folders of books.
         </p>
       </li>
       <li>
-        <h3>Fix titles, series and covers</h3>
+        <h3>
+          <FeatureIcon name="metadata" />
+          Fix titles, series and covers
+        </h3>
         <p>
           Edit details in the side panel, look up series, genres and descriptions from public
           sources, and search five cover sources. Small covers can be upscaled on the Mac.
         </p>
       </li>
       <li>
-        <h3>Read on the Mac</h3>
+        <h3>
+          <FeatureIcon name="reader" />
+          Read on the Mac
+        </h3>
         <p>
           Each book opens in its own window and remembers where you stopped. Search, highlight, add
           notes, and set the theme, size and margins. Books run with their scripts blocked and no
@@ -65,7 +75,10 @@ import AppLaptop from '../components/AppLaptop.astro';
         </p>
       </li>
       <li>
-        <h3>Comics, prepared for the screen</h3>
+        <h3>
+          <FeatureIcon name="comics" />
+          Comics, prepared for the screen
+        </h3>
         <p>
           The comic reader handles spreads, vertical scroll, zoom and bookmarks. When sending,
           Parallax resizes and adjusts the pages for the Kobo's screen.

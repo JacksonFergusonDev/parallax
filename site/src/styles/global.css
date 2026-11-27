@@ -187,11 +187,12 @@ h3 {
   font-family: var(--mono);
   font-size: var(--fs-label);
 }
-/* The build pack's files: a list of panels, two to a row. */
+/* Feature panels, two to a row. */
 .outputs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
+  gap: 36px 48px;
+  max-width: 928px;
   margin: 40px 0;
   padding: 0;
   list-style: none;
@@ -201,6 +202,18 @@ h3 {
   border: 1px solid var(--line);
   border-radius: 5px;
   background: var(--panel);
+}
+.outputs h3 {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.outputs h3 svg {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 0.14em;
+  color: var(--accent);
 }
 .chips {
   display: flex;
@@ -255,6 +268,9 @@ h3 {
   .steps,
   .outputs {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .outputs {
+    gap: 28px;
   }
 }
 @media (max-width: 560px) {

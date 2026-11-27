@@ -4,6 +4,7 @@ What changed in each release of Parallax, for people using it. The release workf
 
 ## Unreleased
 
+- The site's feature cards are narrower with more space between them, and each heading now carries an icon.
 - **Find metadata** now fills in missing descriptions too, from Apple Books, or Google Books when you've added a key. Books that already have a description keep it, and a description is only ticked for you when the match is sure and the book is in English. The menu item is now **Library › Find Metadata…**, matching the toolbar.
 - Your place in a book is kept the same on your Kobo and in Parallax's reader. When your Kobo connects, each book opens where you last read it, on either one. Turn this off with **Keep your place the same on your Kobo and in Parallax** in Settings › Kobo. `parallax-cli library reconcile` does the same.
 - **PDF comics** can be added like any other comic. Scanned pages are kept exactly as they are, and other pages are drawn as images. Each PDF becomes a CBZ in your library, so you can read it in Parallax and send it to your Kobo, and its title and author come along.
