@@ -38,7 +38,7 @@ jobs:
           cache-dependency-path: app/pnpm-lock.yaml
 
       - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           enable-cache: false
 
@@ -52,7 +52,7 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Lint Markdown
-        uses: rvben/rumdl@1e0f1d13c87418c31e0d59dacddd98f27a02efcc # v0.3.2
+        uses: rvben/rumdl@ba563d6780c6119bd526c869a730b492c1ad54e5 # v0.3.5
         with:
           version: "0.3.2"
           report-type: annotations
@@ -174,7 +174,7 @@ jobs:
           toolchain: 1.100.0-aarch64-apple-darwin
 
       - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           enable-cache: false
 
